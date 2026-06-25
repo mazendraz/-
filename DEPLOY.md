@@ -141,14 +141,17 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
 
 ## 7. تحسينات الإنتاج (مهمة قبل ضغط حقيقي)
 
-- [ ] **Rate limiting:** التنفيذ الحالي in-memory ومش بيشتغل على serverless متعدد
-      النسخ. اربط **Upstash Redis** عن طريق `UPSTASH_REDIS_URL` وحدّث
-      [`api/src/lib/middleware/rateLimit.ts`](api/src/lib/middleware/rateLimit.ts).
+- [ ] **Rate limiting (لو هتشغّل أكتر من نسخة / serverless):** الافتراضي in-memory
+      وكفاية لنسخة واحدة (PM2 fork). للنسخ المتعددة حط `UPSTASH_REDIS_REST_URL` +
+      `UPSTASH_REDIS_REST_TOKEN` — الكود بيتحوّل لـ Redis تلقائيًا وبيرجع لـ in-memory
+      لو Redis وقع. (مفيش تعديل كود مطلوب.)
 - [ ] **إيميلات الإشعارات (اختياري):** حط `RESEND_API_KEY` + `RESEND_FROM` (sender
       موثّق) علشان مزوّد الخدمة ياخد إيميل مع كل طلب جديد. من غيرها الطلبات بتتسجّل عادي.
-- [ ] **reCAPTCHA (اختياري):** `RECAPTCHA_SECRET_KEY` لحماية فورم الطلب من السبام.
-- [ ] **مراقبة الأخطاء (اختياري):** Sentry أو ما شابه.
-- [ ] `JWT_TTL` قصير في الإنتاج، و`JWT_SECRET` قوي وسري.
+- [ ] **CAPTCHA (اختياري):** حط `TURNSTILE_SECRET_KEY` (أو `RECAPTCHA_SECRET_KEY`)
+      لتفعيل الحماية على فورمات الطلب/التقييم. **مهم:** تفعيله بيتطلّب إضافة الـ widget
+      في الفرونت وإرسال الـ token، وإلا كل الطلبات هتترفض.
+- [ ] **مراقبة الأخطاء (اختياري):** حط `SENTRY_DSN` علشان الأخطاء (500) تتبعت لـ Sentry.
+- [ ] `JWT_TTL` قصير في الإنتاج (الافتراضي دلوقتي `1d`)، و`JWT_SECRET` قوي وسري.
 
 ---
 

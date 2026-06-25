@@ -3,6 +3,7 @@ import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
+import { verifyCaptcha } from "@/lib/middleware/captcha";
 import { createLeadSchema } from "@/lib/validation/leads";
 import * as leadsService from "@/lib/services/leads.service";
 
@@ -13,7 +14,7 @@ const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 // POST /api/leads → 201 + RAW ApiLead. Resolves the company by slug (must be ACTIVE).
 export const POST = withErrors(async (request: NextRequest) => {
-  const rl = rateLimit(`leads:${clientIp(request)}`, RATE_LIMIT);
+  const rl = await rateLimit(`leads:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
     throw new RateLimitError(`Too many requests. Try again in ${seconds}s.`);
@@ -29,6 +30,9 @@ export const POST = withErrors(async (request: NextRequest) => {
     (raw as { website: string }).website.trim() !== "") {
     throw new ValidationError("Submission rejected");
   }
+
+  // CAPTCHA (no-op unless a secret is configured).
+  await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
 
   const payload = createLeadSchema.parse(raw);
   const lead = await leadsService.create(payload);
