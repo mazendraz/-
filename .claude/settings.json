@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(curl -s -A \"Mozilla/5.0\" -o /dev/null -w \"%{http_code} %{content_type}\\\\n\" \"https://upload.wikimedia.org/wikipedia/commons/thumb/1/17/Iconic_Tower_Egypt%2818-6-2023%29_%28cropped%29.jpg/1200px-Iconic_Tower_Egypt%2818-6-2023%29_%28cropped%29.jpg\")"
+    ]
+  }
+}

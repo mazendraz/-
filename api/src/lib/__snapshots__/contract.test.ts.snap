@@ -1,0 +1,160 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`response envelope contract shapes > ApiErrorBody (fail) 1`] = `
+{
+  "code": "VALIDATION_ERROR",
+  "details": {
+    "phone": [
+      "Invalid Egyptian mobile number",
+    ],
+  },
+  "message": "Phone number is invalid",
+}
+`;
+
+exports[`response envelope contract shapes > ApiPage<T> (page) 1`] = `
+{
+  "data": [
+    {
+      "about": "We design homes.",
+      "badges": [
+        "Licensed",
+      ],
+      "category": "interior-design",
+      "categoryLabel": "Interior Design",
+      "completedProjects": 87,
+      "cover": "/img/cover.jpg",
+      "featured": true,
+      "gallery": [
+        "/img/g1.jpg",
+      ],
+      "id": "co-1",
+      "location": "New Cairo",
+      "logo": "/img/logo.jpg",
+      "name": "Aura Interiors",
+      "phone": "0223456789",
+      "projects": [
+        {
+          "description": "Full villa",
+          "img": "/img/p1.jpg",
+          "title": "Villa R7",
+          "year": "2024",
+        },
+      ],
+      "rating": 4.8,
+      "responseTime": "within 2 hours",
+      "reviewCount": 1,
+      "reviews": [
+        {
+          "author": "Sara",
+          "avatar": "S",
+          "date": "March 2024",
+          "district": "R7 District",
+          "rating": 5,
+          "text": "Great work",
+        },
+      ],
+      "services": [
+        "Interior Design",
+        "Fit-out",
+      ],
+      "slug": "aura-interiors",
+      "tagline": "Calm, considered interiors",
+      "verified": true,
+      "verifiedSince": "2021",
+      "yearsExperience": 8,
+    },
+  ],
+  "meta": {
+    "page": 1,
+    "pageSize": 20,
+    "total": 1,
+  },
+}
+`;
+
+exports[`response envelope contract shapes > raw single item (ok) 1`] = `
+{
+  "budget": "EGP 150,000 – 500,000",
+  "companyName": "Aura Interiors",
+  "companySlug": "aura-interiors",
+  "createdAt": 1767225600000,
+  "description": "Need a full fit-out",
+  "district": "R7 District",
+  "id": "lead-1",
+  "name": "Mona Adel",
+  "phone": "01012345678",
+  "refNumber": "AA-20260101-7F3K",
+  "service": "Full Interior Design",
+  "status": "New",
+}
+`;
+
+exports[`serializer contract shapes > ApiCompany (raw profile) 1`] = `
+{
+  "about": "We design homes.",
+  "badges": [
+    "Licensed",
+  ],
+  "category": "interior-design",
+  "categoryLabel": "Interior Design",
+  "completedProjects": 87,
+  "cover": "/img/cover.jpg",
+  "featured": true,
+  "gallery": [
+    "/img/g1.jpg",
+  ],
+  "id": "co-1",
+  "location": "New Cairo",
+  "logo": "/img/logo.jpg",
+  "name": "Aura Interiors",
+  "phone": "0223456789",
+  "projects": [
+    {
+      "description": "Full villa",
+      "img": "/img/p1.jpg",
+      "title": "Villa R7",
+      "year": "2024",
+    },
+  ],
+  "rating": 4.8,
+  "responseTime": "within 2 hours",
+  "reviewCount": 1,
+  "reviews": [
+    {
+      "author": "Sara",
+      "avatar": "S",
+      "date": "March 2024",
+      "district": "R7 District",
+      "rating": 5,
+      "text": "Great work",
+    },
+  ],
+  "services": [
+    "Interior Design",
+    "Fit-out",
+  ],
+  "slug": "aura-interiors",
+  "tagline": "Calm, considered interiors",
+  "verified": true,
+  "verifiedSince": "2021",
+  "yearsExperience": 8,
+}
+`;
+
+exports[`serializer contract shapes > ApiLead (createdAt as epoch ms) 1`] = `
+{
+  "budget": "EGP 150,000 – 500,000",
+  "companyName": "Aura Interiors",
+  "companySlug": "aura-interiors",
+  "createdAt": 1767225600000,
+  "description": "Need a full fit-out",
+  "district": "R7 District",
+  "id": "lead-1",
+  "name": "Mona Adel",
+  "phone": "01012345678",
+  "refNumber": "AA-20260101-7F3K",
+  "service": "Full Interior Design",
+  "status": "New",
+}
+`;

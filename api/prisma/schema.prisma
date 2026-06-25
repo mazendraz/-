@@ -1,0 +1,189 @@
+// Al Assema — Prisma schema
+// Contract source of truth: ../backend-plan.md §3 + app/src/lib/apiTypes.ts
+// Stack: Next.js API Routes · Supabase (Postgres) · Prisma 7
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  // Prisma 7: the connection URL lives in prisma.config.ts (for Migrate) and is
+  // passed to the PrismaClient constructor via a driver adapter (see src/lib/prisma.ts).
+  provider = "postgresql"
+}
+
+// Company visibility — controlled by admins. The public UI shows ACTIVE only.
+enum CompanyStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+// Values map (at the API boundary) to the frontend LeadStatus:
+// "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled"
+enum LeadStatus {
+  NEW
+  CONTACTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum UserRole {
+  ADMIN
+  PROVIDER
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  slug        String   @unique
+  label       String // the frontend calls it label, not name
+  description String   @db.Text
+  icon        String // Material Symbols icon name
+  cover       String? // ApiCategory.cover — category cover image
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companies Company[]
+
+  // count in the frontend = number of ACTIVE companies, computed live (not stored).
+
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Company {
+  id                String        @id @default(uuid())
+  categoryId        String
+  slug              String        @unique
+  name              String
+  tagline           String // short one-liner
+  about             String        @db.Text
+  logo              String
+  cover             String // large cover image
+  services          String[] // Postgres text[]
+  gallery           String[] // gallery image URLs
+  badges            String[] // ["Licensed", "Award-Winning"]
+  phone             String
+  location          String
+  yearsExperience   Int           @default(0)
+  responseTime      String // "within 2 hours"
+  verifiedSince     String // "2021"
+  completedProjects Int           @default(0) // manual admin number (!= projects.length)
+  // aggregate cache — recomputed from Review on any change
+  rating            Float         @default(0)
+  reviewCount       Int           @default(0)
+  featured          Boolean       @default(true)
+  verified          Boolean       @default(false)
+  status            CompanyStatus @default(ACTIVE)
+  // internal contact fields for notifications — NOT returned in the public payload
+  email             String?
+  whatsapp          String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  projects Project[]
+  reviews  Review[]
+  leads    Lead[]
+  users    User[]
+
+  @@index([slug])
+  @@index([categoryId])
+  @@index([status])
+  @@index([featured])
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  companyId   String
+  title       String
+  img         String // matches ApiProject.img + data.ts
+  description String   @db.Text
+  year        String // display string e.g. "2024"
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  companyId String
+  author    String // matches ApiReview.author
+  avatar    String // initial letter as fallback
+  rating    Int // 1..5
+  text      String   @db.Text
+  date      String // "March 2024" (display string)
+  district  String // matches ApiReview.district
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+model Lead {
+  id           String     @id @default(uuid())
+  refNumber    String     @unique // AA-YYYYMMDD-XXXX — generated server-side
+  companyId    String
+  service      String // requested service (text)
+  customerName String // ApiLead.name
+  phone        String
+  district     String
+  budget       String
+  description  String     @db.Text
+  status       LeadStatus @default(NEW)
+  createdAt    DateTime   @default(now()) // returned as epoch ms (Number) in the API
+  updatedAt    DateTime   @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // companySlug + companyName are returned derived from this relation.
+
+  @@index([companyId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(PROVIDER)
+  companyId    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([companyId])
+}
+
+// Visitor-submitted platform testimonials shown on the homepage. New submissions
+// are held (visible=false) for admin moderation before they appear publicly.
+model SiteReview {
+  id        String   @id @default(uuid())
+  name      String
+  district  String
+  rating    Int // 1..5
+  text      String   @db.Text
+  visible   Boolean  @default(false)
+  createdAt DateTime @default(now()) // returned as epoch ms in the API
+
+  @@index([visible])
+  @@index([createdAt])
+}
+
+// Simple key/value store for global toggles (e.g. site_reviews_enabled).
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

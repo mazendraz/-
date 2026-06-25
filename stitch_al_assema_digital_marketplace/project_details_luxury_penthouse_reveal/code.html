@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Project Details - Capital Digital</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#001e2e",
+                        "on-tertiary-fixed": "#2b1700",
+                        "inverse-on-surface": "#eff1f5",
+                        "on-primary-container": "#cfeaff",
+                        "surface-container-high": "#e6e8ec",
+                        "surface-bright": "#f7f9fd",
+                        "inverse-surface": "#2d3134",
+                        "surface": "#f7f9fd",
+                        "surface-container": "#eceef2",
+                        "on-background": "#181c1f",
+                        "on-tertiary-fixed-variant": "#663e00",
+                        "on-secondary-container": "#795a03",
+                        "on-surface-variant": "#40484e",
+                        "inverse-primary": "#84cfff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "outline": "#70787f",
+                        "tertiary-fixed-dim": "#ffb962",
+                        "surface-container-low": "#f1f4f8",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#d8dade",
+                        "on-secondary-fixed-variant": "#5b4300",
+                        "primary-fixed-dim": "#84cfff",
+                        "tertiary-container": "#915b06",
+                        "on-tertiary-container": "#ffe1c3",
+                        "surface-container-highest": "#e0e3e6",
+                        "surface-variant": "#e0e3e6",
+                        "on-primary-fixed-variant": "#004c6c",
+                        "tertiary-fixed": "#ffddb9",
+                        "surface-tint": "#00658e",
+                        "primary": "#005578",
+                        "secondary-fixed": "#ffdf9d",
+                        "primary-container": "#0b6e99",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#714500",
+                        "error-container": "#ffdad6",
+                        "background": "#f7f9fd",
+                        "outline-variant": "#bfc7cf",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#251a00",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#eac167",
+                        "secondary-container": "#ffd578",
+                        "secondary": "#785a02",
+                        "on-surface": "#181c1f",
+                        "primary-fixed": "#c7e7ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-xl": "64px",
+                        "container-max": "1280px",
+                        "stack-md": "16px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit": "4px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-xl-mobile": ["Plus Jakarta Sans"],
+                        "display-xl": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-xl-mobile": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "display-xl": ["60px", { "lineHeight": "72px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .soft-shadow {
+            box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+        }
+        .soft-shadow-hover:hover {
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased flex flex-col min-h-screen">
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 bg-surface/90 dark:bg-surface-dim/90 backdrop-blur-xl shadow-sm dark:shadow-none hidden md:block">
+<div class="max-w-container-max mx-auto px-margin-desktop flex justify-between items-center h-20">
+<div class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">
+                Capital Digital
+            </div>
+<!-- Navigation Links -->
+<div class="flex gap-8">
+<a class="text-primary dark:text-primary-fixed-dim border-b-2 border-primary font-bold pb-1 font-label-md text-label-md scale-95 active:scale-90 transition-transform duration-200" href="#">Projects</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md scale-95 active:scale-90 transition-transform duration-200" href="#">Services</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md scale-95 active:scale-90 transition-transform duration-200" href="#">Directory</a>
+<a class="text-on-surface-variant dark:text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md scale-95 active:scale-90 transition-transform duration-200" href="#">Investment</a>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-4">
+<button class="font-label-md text-label-md text-primary hover:bg-surface-container-low dark:hover:bg-surface-container-highest transition-all px-4 py-2 rounded-lg scale-95 active:scale-90 duration-200">
+                    Log In
+                </button>
+<button class="bg-primary text-on-primary font-label-md text-label-md px-6 py-2 rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-all scale-95 active:scale-90 duration-200">
+                    Get Started
+                </button>
+</div>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop pt-24 pb-stack-xl mt-16 md:mt-24 w-full">
+<!-- Back Link & Header -->
+<div class="mb-stack-lg">
+<a class="inline-flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md mb-stack-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+                Back to Projects
+            </a>
+<div class="flex flex-col md:flex-row md:justify-between md:items-end gap-stack-md">
+<div>
+<div class="flex items-center gap-3 mb-3">
+<span class="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full font-label-sm text-label-sm">Completed 2023</span>
+<span class="bg-surface-container-high text-on-surface px-3 py-1 rounded-full font-label-sm text-label-sm">Commercial</span>
+</div>
+<h1 class="font-display-xl-mobile md:font-display-xl text-display-xl-mobile md:text-display-xl text-on-surface mb-2">The Apex Tower Renovation</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-3xl">A comprehensive modernization of a landmark commercial space, focusing on sustainable materials and an open-plan aesthetic to foster collaboration.</p>
+</div>
+</div>
+</div>
+<!-- Bento Grid Hero Gallery -->
+<div class="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-stack-sm md:gap-stack-md h-[600px] mb-stack-xl">
+<div class="md:col-span-3 md:row-span-2 rounded-xl overflow-hidden relative group soft-shadow">
+<img alt="Main interior view" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A wide angle photograph of a modern corporate lobby interior. The space is vast and minimalist, featuring polished concrete floors, soaring ceilings, and large glass windows letting in abundant natural light. The aesthetic is high-end corporate modern with a clean white and deep blue color palette, accented by subtle gold details in the lighting fixtures. The mood is professional, visionary, and expansive." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQh5oYpdfqWjFNVWn3GbwIs11yxDCH9WBXgJbCRjG2pBCA7uZJ57INY3pIUicZ2cL-hHZ2k86DXDm_FBJMwwfWjqni-vEpsZtcqwrkkmT_AOfxp3GN59KlKo_n9yv7MntrodRmJxQL_bJiKmaxziY7paffE-8E-cgdvOTITRitOW0SdBCJGUSX7Byr91fZqZUU_riqD6yoY9ZodbXKju6JoBfeDcOft2SUAwdLKzkbafvZnw7L2TjlEyaVl-ImBP-7QKvJfWvQMGQ"/>
+</div>
+<div class="hidden md:block rounded-xl overflow-hidden relative group soft-shadow">
+<img alt="Detail view" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="A close-up photograph of a modern office meeting room. The focus is on a sleek wooden conference table surrounded by ergonomic chairs. The walls are a mix of white and glass, reflecting a corporate modern aesthetic. Soft, natural light creates a warm yet professional atmosphere, with subtle gold accents visible in the table's structural elements." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFO-0rfnIoQJZcDOb7ZKLMN8kWKMjy_iXDMjjU7mcnif_SwTvjyYMPR11IZK8zrjWgJyEqxRMPPYN7VsVL28gZf6Oyes9k4k_41upDg3DnWyDhcSFn8T7h_xUiknfta-kMHXorP50g57TbfI2oitiNJplqpGJRW8huEpwPG0wn5wkcUQXAHK8zSKQwlhBcOnce4kPrBeOWfF9yiu1nkmYM-fp1n-6l_H-Y3pCMlVlmI0GNRQpxg8RxY7davO216akTB59XJeST5ds"/>
+</div>
+<div class="hidden md:block rounded-xl overflow-hidden relative group soft-shadow bg-surface-container-low flex items-center justify-center cursor-pointer hover:bg-surface-container-high transition-colors">
+<div class="text-center">
+<span class="material-symbols-outlined text-4xl text-primary mb-2" style="font-variation-settings: 'FILL' 0;">collections</span>
+<p class="font-label-md text-label-md text-on-surface-variant">View All 24 Photos</p>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-stack-xl">
+<!-- Left Column: Content -->
+<div class="lg:col-span-8">
+<!-- Description -->
+<section class="mb-stack-xl">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-stack-md">Project Overview</h2>
+<div class="prose prose-lg text-on-surface-variant font-body-md text-body-md space-y-4">
+<p>The Apex Tower Renovation represents a milestone in sustainable urban development within the New Administrative Capital. Our goal was to transform a dated 1990s structure into a beacon of modern corporate efficiency and aesthetic elegance.</p>
+<p>By stripping back the artificial partitions, we exposed the original architectural bones, integrating a high-end minimalist design language. The use of vast glass expanses and localized natural lighting significantly reduces the building's carbon footprint while creating an inviting atmosphere for high-net-worth tenants.</p>
+</div>
+</section>
+<!-- Materials & Design Choices -->
+<section class="mb-stack-xl">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-stack-md">Design &amp; Materials</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-stack-md">
+<div class="p-stack-md rounded-xl bg-surface-container-lowest soft-shadow">
+<span class="material-symbols-outlined text-tertiary mb-3 text-3xl" style="font-variation-settings: 'FILL' 1;">eco</span>
+<h3 class="font-label-md text-label-md text-on-surface mb-2">Sustainable Sourcing</h3>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">All timber used in the lobby and executive suites was reclaimed and locally sourced, adhering to strict LEED certification standards.</p>
+</div>
+<div class="p-stack-md rounded-xl bg-surface-container-lowest soft-shadow">
+<span class="material-symbols-outlined text-primary mb-3 text-3xl" style="font-variation-settings: 'FILL' 1;">light_mode</span>
+<h3 class="font-label-md text-label-md text-on-surface mb-2">Dynamic Lighting</h3>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Automated circadian lighting systems adjust color temperature throughout the day to enhance occupant well-being and productivity.</p>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Sidebar -->
+<div class="lg:col-span-4 space-y-stack-md">
+<!-- Provider Info Card -->
+<div class="bg-surface-container-lowest rounded-xl p-stack-lg soft-shadow border border-outline-variant/30">
+<div class="flex items-center gap-4 mb-stack-md">
+<div class="w-16 h-16 rounded-full bg-surface-container-high overflow-hidden">
+<img alt="Provider Logo" class="w-full h-full object-cover" data-alt="A clean, minimalist corporate logo featuring geometric abstract shapes in deep blue and royal gold on a crisp white background. The design is sleek, modern, and highly professional, reflecting a premium architectural or tech firm identity." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9dk9ao6dITyj9oxAccbbd9BpoeECRw_jzkilnndXyjwBbLhnhsRs_nIW8LU6NqbxBY4-j7vlg3Rix34dr0LMYwvhY4diU4-CkQ6_d_UjIo-pQ7H--GZR7WQRJECZ6_6ke3iERZhktxR-iOlrGb0RdmR5mbhzqbwQ2XcvcRej7NfelTvpF4_qIrFu1nveNBAG16IFFKyFGZH95MS4FG0p_0jZdxtjq8WIVDdGeOvRy9PN5SoiuosvqZW6cVmrRDbVpMoyc8NpoHlk"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface text-xl">Nexus Architecture</h3>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">verified</span>
+                                Verified Premium Partner
+                            </p>
+</div>
+</div>
+<div class="space-y-3 mb-stack-md font-body-md text-body-md text-sm text-on-surface-variant">
+<div class="flex justify-between">
+<span>Project Budget:</span>
+<span class="font-label-md text-label-md text-on-surface">$2.5M - $4M</span>
+</div>
+<div class="flex justify-between">
+<span>Duration:</span>
+<span class="font-label-md text-label-md text-on-surface">14 Months</span>
+</div>
+<div class="flex justify-between">
+<span>Location:</span>
+<span class="font-label-md text-label-md text-on-surface">Financial District, NAC</span>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm">
+                        Contact Provider
+                    </button>
+</div>
+<!-- CTA Card -->
+<div class="bg-primary-container rounded-xl p-stack-lg soft-shadow text-center">
+<span class="material-symbols-outlined text-on-primary-container text-4xl mb-2" style="font-variation-settings: 'FILL' 0;">domain_add</span>
+<h3 class="font-headline-md text-headline-md text-on-primary-container text-xl mb-2">Inspired by this space?</h3>
+<p class="font-body-md text-body-md text-on-primary-container/80 text-sm mb-stack-md">Start a similar project with our curated network of premium partners.</p>
+<button class="w-full bg-surface-container-lowest text-primary font-label-md text-label-md py-3 rounded-lg hover:bg-surface transition-colors shadow-sm">
+                        Request Similar Project
+                    </button>
+</div>
+</div>
+</div>
+</main>
+<!-- Sticky Bottom CTA (Mobile mostly, but kept for conversion) -->
+<div class="fixed bottom-0 left-0 w-full bg-surface/90 backdrop-blur-xl border-t border-outline-variant/20 p-stack-sm md:hidden z-40 soft-shadow">
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-4 rounded-lg shadow-md active:scale-95 transition-transform">
+            Request Service
+        </button>
+</div>
+<!-- Footer -->
+<footer class="w-full py-stack-xl mt-auto bg-surface-container-highest dark:bg-surface-container-lowest border-t border-outline-variant flat no shadows">
+<div class="max-w-container-max mx-auto px-margin-desktop grid grid-cols-1 md:grid-cols-4 gap-gutter">
+<div class="col-span-1 md:col-span-2">
+<div class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim mb-4">
+                    Capital Digital
+                </div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-4">© 2024 New Administrative Capital Digital Marketplace. All rights reserved.</p>
+</div>
+<div class="col-span-1 md:col-span-2 flex flex-col md:flex-row gap-8 md:justify-end">
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors hover:opacity-80 transition-opacity" href="#">Privacy Policy</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors hover:opacity-80 transition-opacity" href="#">Terms of Service</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors hover:opacity-80 transition-opacity" href="#">Investor Relations</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-primary transition-colors hover:opacity-80 transition-opacity" href="#">Contact Us</a>
+</div>
+</div>
+</footer>
+</body></html>

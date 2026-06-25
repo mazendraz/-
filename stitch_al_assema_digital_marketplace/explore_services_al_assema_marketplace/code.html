@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Explore Services - Al Assema</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#001e2e",
+                        "on-tertiary-fixed": "#2b1700",
+                        "inverse-on-surface": "#eff1f5",
+                        "on-primary-container": "#cfeaff",
+                        "surface-container-high": "#e6e8ec",
+                        "surface-bright": "#f7f9fd",
+                        "inverse-surface": "#2d3134",
+                        "surface": "#f7f9fd",
+                        "surface-container": "#eceef2",
+                        "on-background": "#181c1f",
+                        "on-tertiary-fixed-variant": "#663e00",
+                        "on-secondary-container": "#795a03",
+                        "on-surface-variant": "#40484e",
+                        "inverse-primary": "#84cfff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "outline": "#70787f",
+                        "tertiary-fixed-dim": "#ffb962",
+                        "surface-container-low": "#f1f4f8",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#d8dade",
+                        "on-secondary-fixed-variant": "#5b4300",
+                        "primary-fixed-dim": "#84cfff",
+                        "tertiary-container": "#915b06",
+                        "on-tertiary-container": "#ffe1c3",
+                        "surface-container-highest": "#e0e3e6",
+                        "surface-variant": "#e0e3e6",
+                        "on-primary-fixed-variant": "#004c6c",
+                        "tertiary-fixed": "#ffddb9",
+                        "surface-tint": "#00658e",
+                        "primary": "#005578",
+                        "secondary-fixed": "#ffdf9d",
+                        "primary-container": "#0b6e99",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#714500",
+                        "error-container": "#ffdad6",
+                        "background": "#f7f9fd",
+                        "outline-variant": "#bfc7cf",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#251a00",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#eac167",
+                        "secondary-container": "#ffd578",
+                        "secondary": "#785a02",
+                        "on-surface": "#181c1f",
+                        "primary-fixed": "#c7e7ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-xl": "64px",
+                        "container-max": "1280px",
+                        "stack-md": "16px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit": "4px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-xl-mobile": ["Plus Jakarta Sans"],
+                        "display-xl": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-xl-mobile": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "display-xl": ["60px", { "lineHeight": "72px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Plus+Jakarta+Sans:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+        .bg-gold-gradient {
+            background: linear-gradient(135deg, #ffd578 0%, #eac167 100%);
+        }
+        .soft-bloom {
+            box-shadow: 0 10px 40px -10px rgba(0, 85, 120, 0.08);
+        }
+        .soft-bloom-hover:hover {
+            box-shadow: 0 20px 50px -10px rgba(0, 85, 120, 0.12);
+            transform: translateY(-4px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased">
+<!-- TopNavBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-desktop py-stack-md max-w-container-max mx-auto bg-white/90 dark:bg-inverse-surface/90 backdrop-blur-xl shadow-sm shadow-bloom dark:bg-inverse-surface/95 hidden md:flex">
+<div class="text-headline-md font-headline-md font-bold text-primary dark:text-primary-fixed-dim tracking-tight">
+            Al Assema
+        </div>
+<nav class="flex items-center gap-stack-lg">
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors duration-200 text-label-md font-label-md" href="#">Home</a>
+<a class="text-primary dark:text-primary-fixed-dim border-b-2 border-secondary font-bold pb-1 text-label-md font-label-md" href="#">Services</a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors duration-200 text-label-md font-label-md" href="#">Projects</a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors duration-200 text-label-md font-label-md" href="#">Partners</a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors duration-200 text-label-md font-label-md" href="#">Reviews</a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors duration-200 text-label-md font-label-md" href="#">About</a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:text-primary transition-colors duration-200 text-label-md font-label-md" href="#">Contact</a>
+</nav>
+<div class="flex items-center gap-stack-md">
+<button class="text-label-md font-label-md text-primary font-semibold hover:bg-surface-container-low px-4 py-2 rounded-lg transition-colors">Login</button>
+<button class="bg-primary text-white text-label-md font-label-md px-6 py-2.5 rounded-lg hover:bg-primary-container transition-colors shadow-sm">Become a Partner</button>
+</div>
+</header>
+<!-- Mobile Nav Anchor (Simplified for structure) -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-margin-mobile py-stack-md bg-white/90 backdrop-blur-xl shadow-sm md:hidden">
+<div class="text-headline-md font-headline-md font-bold text-primary tracking-tight">
+            Al Assema
+        </div>
+<button class="text-primary">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow pt-24 md:pt-32 pb-stack-xl max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop w-full">
+<!-- Hero Search Section -->
+<section class="mb-stack-xl relative rounded-2xl overflow-hidden bg-surface-container-lowest soft-bloom">
+<div class="absolute inset-0 bg-primary/5 z-0"></div>
+<div class="relative z-10 py-16 md:py-24 px-8 text-center flex flex-col items-center justify-center">
+<h1 class="text-display-xl-mobile md:text-display-xl font-display-xl-mobile md:font-display-xl text-primary mb-stack-sm">
+                    Discover Premium Services
+                </h1>
+<p class="text-body-lg font-body-lg text-on-surface-variant max-w-2xl mb-stack-lg">
+                    Elevate your property in the New Administrative Capital with our curated selection of world-class service providers.
+                </p>
+<!-- Search Pill -->
+<div class="w-full max-w-3xl bg-white rounded-full p-2 flex items-center shadow-lg mb-stack-lg border border-outline-variant/30 focus-within:border-secondary focus-within:ring-2 focus-within:ring-secondary/20 transition-all">
+<span class="material-symbols-outlined text-outline ml-4" data-icon="search">search</span>
+<input class="flex-grow border-none focus:ring-0 text-body-md font-body-md text-on-surface bg-transparent px-4 py-3 placeholder:text-outline" placeholder="Search for interior design, landscaping, smart home..." type="text"/>
+<button class="bg-primary text-white text-label-md font-label-md px-8 py-3 rounded-full hover:bg-primary-container transition-colors">Search</button>
+</div>
+<!-- Category Chips -->
+<div class="flex flex-wrap justify-center gap-stack-sm">
+<button class="px-5 py-2 rounded-full bg-secondary-container text-on-secondary-container text-label-md font-label-md border border-secondary/20 hover:bg-secondary/20 transition-colors">All Categories</button>
+<button class="px-5 py-2 rounded-full bg-surface text-on-surface-variant text-label-md font-label-md border border-outline-variant/50 hover:bg-surface-container-high transition-colors">Interior &amp; Finishing</button>
+<button class="px-5 py-2 rounded-full bg-surface text-on-surface-variant text-label-md font-label-md border border-outline-variant/50 hover:bg-surface-container-high transition-colors">Smart Home</button>
+<button class="px-5 py-2 rounded-full bg-surface text-on-surface-variant text-label-md font-label-md border border-outline-variant/50 hover:bg-surface-container-high transition-colors">Landscape</button>
+<button class="px-5 py-2 rounded-full bg-surface text-on-surface-variant text-label-md font-label-md border border-outline-variant/50 hover:bg-surface-container-high transition-colors">Maintenance</button>
+</div>
+</div>
+</section>
+<!-- Popular Services Grid -->
+<section class="mb-stack-xl">
+<div class="flex justify-between items-end mb-stack-lg">
+<div>
+<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg-mobile md:font-headline-lg text-primary mb-2">Popular Services</h2>
+<p class="text-body-md font-body-md text-on-surface-variant">Top-rated providers trusted by NAC residents.</p>
+</div>
+<a class="text-label-md font-label-md text-secondary hover:text-secondary-fixed-dim transition-colors flex items-center gap-1" href="#">
+                    View All <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Service Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden soft-bloom soft-bloom-hover transition-all duration-300 border border-outline-variant/20 flex flex-col">
+<div class="relative h-48 bg-surface-container overflow-hidden">
+<img alt="Luxurious modern living room with large windows, elegant contemporary furniture, a sleek marble coffee table, and soft, warm ambient lighting. The space feels open, airy, and sophisticated, reflecting high-end interior design suitable for a premium residential property. The color palette is neutral with subtle gold and deep blue accents." class="w-full h-full object-cover" data-alt="Luxurious modern living room with large windows, elegant contemporary furniture, a sleek marble coffee table, and soft, warm ambient lighting. The space feels open, airy, and sophisticated, reflecting high-end interior design suitable for a premium residential property. The color palette is neutral with subtle gold and deep blue accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbJTtO8P2wPPIFYAgstWIGoK7EwHKL6zeKg-SQnXXJ89mbp9p6rfZqnJMulEpHcj9Ofj8ubFLkzXh5AzSKZMx8RIMHo77RcBxNVUC_AXmEOj87aGGtWXTsgXI8yBqlid0fISbfI3r-US1cMo1vPASPIy2gOJLoZz9VD-sUbTvnbkqTQUqhnoOTdlJV2ORUKhhHW1Yns8KZVkl7NGvThuVE5y0GXLCpz15NqWNYo0eLFOaVjxPzlRC8DWFIYV_iKKPWGz2fsGdALXY"/>
+<div class="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-label-sm font-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="star" style="font-variation-settings: 'FILL' 1; color: #ffd578;">star</span> 4.9
+                        </div>
+</div>
+<div class="p-stack-md flex flex-col flex-grow">
+<div class="flex items-start justify-between mb-2">
+<h3 class="text-headline-md font-headline-md text-on-background">Aura Interiors</h3>
+<div class="p-2 bg-surface rounded-full text-secondary">
+<span class="material-symbols-outlined" data-icon="chair">chair</span>
+</div>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant mb-4 flex-grow">Bespoke interior finishing and contemporary furniture curation for luxury apartments and villas.</p>
+<div class="pt-4 border-t border-outline-variant/30 flex justify-between items-center">
+<span class="text-label-sm font-label-sm text-outline">Starting from EGP 5,000/sqm</span>
+<button class="text-label-md font-label-md text-primary font-semibold hover:text-primary-container flex items-center gap-1">
+                                View Details <span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Service Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden soft-bloom soft-bloom-hover transition-all duration-300 border border-outline-variant/20 flex flex-col">
+<div class="relative h-48 bg-surface-container overflow-hidden">
+<img alt="High-tech smart home control panel mounted on a pristine white wall, with a hand interacting with the touchscreen interface. The background softly blurs into a modern, minimalist kitchen area with sleek cabinetry. The lighting is crisp and bright, emphasizing a clean, advanced, and secure lifestyle." class="w-full h-full object-cover" data-alt="High-tech smart home control panel mounted on a pristine white wall, with a hand interacting with the touchscreen interface. The background softly blurs into a modern, minimalist kitchen area with sleek cabinetry. The lighting is crisp and bright, emphasizing a clean, advanced, and secure lifestyle." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUtrBVXD4UE9QgjCAbRltaYFK9dEdCdnuJpvXdmsv-naPnxAQrP_4Vws_rFs6bUXDYElOQM5f-oK7K2mlcAbp1HN1PlrIGgE36QtdFfNPQRuoRofeZWu98xjZNOnyudoG1X6uD8tbLcoJ2M3hkyeaCiQKx4rY0Uo2FXNpalw1-R5L6D62qfP8L6Ex059Eh1hOOFP9S_7O3PLKhPhZ9Be5nQqwjy1EcbzX5KjO9MtLntxmfB_myHwqH4V0f1srzmYFZjTM_KRHlcjc"/>
+<div class="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-label-sm font-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="star" style="font-variation-settings: 'FILL' 1; color: #ffd578;">star</span> 4.8
+                        </div>
+</div>
+<div class="p-stack-md flex flex-col flex-grow">
+<div class="flex items-start justify-between mb-2">
+<h3 class="text-headline-md font-headline-md text-on-background">NexTech Living</h3>
+<div class="p-2 bg-surface rounded-full text-secondary">
+<span class="material-symbols-outlined" data-icon="router">router</span>
+</div>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant mb-4 flex-grow">Comprehensive smart home integration, security systems, and automated climate control.</p>
+<div class="pt-4 border-t border-outline-variant/30 flex justify-between items-center">
+<span class="text-label-sm font-label-sm text-outline">Custom Quotes</span>
+<button class="text-label-md font-label-md text-primary font-semibold hover:text-primary-container flex items-center gap-1">
+                                View Details <span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Service Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl overflow-hidden soft-bloom soft-bloom-hover transition-all duration-300 border border-outline-variant/20 flex flex-col">
+<div class="relative h-48 bg-surface-container overflow-hidden">
+<img alt="Beautifully landscaped residential garden featuring a manicured lawn, structured modern planters, a subtle water feature, and strategic outdoor lighting. The scene is captured during golden hour, casting a warm, inviting glow over the greenery and highlighting the precise, premium nature of the landscaping work." class="w-full h-full object-cover" data-alt="Beautifully landscaped residential garden featuring a manicured lawn, structured modern planters, a subtle water feature, and strategic outdoor lighting. The scene is captured during golden hour, casting a warm, inviting glow over the greenery and highlighting the precise, premium nature of the landscaping work." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3GjKOZxqwE_i3Lf6DDs3dipvSQbbxUVvLDheKFvHVgBFanH9w0ObgNvSzvEMbLiPm5OmOXLA5L6zm-2wF8WiwYGRcGJ1yQyJOtToBjMRxYgGsVjvpunK66WA6ocJmN9bQrAXOl3Ha1plnndQw0SLOf-vARq31_qWNuiGlDI1JPgOPYlAGXA0_qaZrTE0XI4O4_mQaCojhtYy-YS7xM0LdcgIaGX174TTGw6ouS7x2tVpRAZD7cuVq0HZWmRU99jNUv5igTUZW2zU"/>
+<div class="absolute top-4 left-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-label-sm font-label-sm text-primary flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[16px]" data-icon="star" style="font-variation-settings: 'FILL' 1; color: #ffd578;">star</span> 5.0
+                        </div>
+<div class="absolute top-4 right-4 bg-gold-gradient text-on-secondary-fixed px-3 py-1 rounded-full text-label-sm font-label-sm font-bold shadow-sm">
+                            Premium
+                        </div>
+</div>
+<div class="p-stack-md flex flex-col flex-grow">
+<div class="flex items-start justify-between mb-2">
+<h3 class="text-headline-md font-headline-md text-on-background">Eden Landscapes</h3>
+<div class="p-2 bg-surface rounded-full text-secondary">
+<span class="material-symbols-outlined" data-icon="yard">yard</span>
+</div>
+</div>
+<p class="text-body-md font-body-md text-on-surface-variant mb-4 flex-grow">Award-winning landscape architecture, pool design, and sustainable outdoor living spaces.</p>
+<div class="pt-4 border-t border-outline-variant/30 flex justify-between items-center">
+<span class="text-label-sm font-label-sm text-outline">Starting from EGP 50k</span>
+<button class="text-label-md font-label-md text-primary font-semibold hover:text-primary-container flex items-center gap-1">
+                                View Details <span class="material-symbols-outlined text-[18px]" data-icon="chevron_right">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="w-full px-margin-desktop py-stack-xl flex flex-col items-center justify-center space-y-stack-lg bg-inverse-surface dark:bg-surface-container-lowest mt-auto border-t-0">
+<div class="text-headline-md font-headline-md font-black text-on-primary-container dark:text-primary">
+            Al Assema
+        </div>
+<nav class="flex flex-wrap justify-center gap-stack-lg">
+<a class="text-outline-variant hover:text-white transition-colors text-label-md font-label-md" href="#">Quick Links</a>
+<a class="text-tertiary-fixed font-bold underline text-label-md font-label-md" href="#">Services</a>
+<a class="text-outline-variant hover:text-white transition-colors text-label-md font-label-md" href="#">Projects</a>
+<a class="text-outline-variant hover:text-white transition-colors text-label-md font-label-md" href="#">Partners</a>
+<a class="text-outline-variant hover:text-white transition-colors text-label-md font-label-md" href="#">Socials</a>
+</nav>
+<div class="text-body-md font-body-md text-outline-variant text-center">
+            © 2024 Al Assema. Egypt's New Administrative Capital Digital Marketplace.
+        </div>
+</footer>
+</body></html>

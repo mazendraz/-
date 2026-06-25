@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Service Request</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-primary-fixed": "#001e2e",
+                        "on-tertiary-fixed": "#2b1700",
+                        "inverse-on-surface": "#eff1f5",
+                        "on-primary-container": "#cfeaff",
+                        "surface-container-high": "#e6e8ec",
+                        "surface-bright": "#f7f9fd",
+                        "inverse-surface": "#2d3134",
+                        "surface": "#f7f9fd",
+                        "surface-container": "#eceef2",
+                        "on-background": "#181c1f",
+                        "on-tertiary-fixed-variant": "#663e00",
+                        "on-secondary-container": "#795a03",
+                        "on-surface-variant": "#40484e",
+                        "inverse-primary": "#84cfff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error": "#ffffff",
+                        "outline": "#70787f",
+                        "tertiary-fixed-dim": "#ffb962",
+                        "surface-container-low": "#f1f4f8",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#d8dade",
+                        "on-secondary-fixed-variant": "#5b4300",
+                        "primary-fixed-dim": "#84cfff",
+                        "tertiary-container": "#915b06",
+                        "on-tertiary-container": "#ffe1c3",
+                        "surface-container-highest": "#e0e3e6",
+                        "surface-variant": "#e0e3e6",
+                        "on-primary-fixed-variant": "#004c6c",
+                        "tertiary-fixed": "#ffddb9",
+                        "surface-tint": "#00658e",
+                        "primary": "#005578",
+                        "secondary-fixed": "#ffdf9d",
+                        "primary-container": "#0b6e99",
+                        "on-primary": "#ffffff",
+                        "tertiary": "#714500",
+                        "error-container": "#ffdad6",
+                        "background": "#f7f9fd",
+                        "outline-variant": "#bfc7cf",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-fixed": "#251a00",
+                        "on-secondary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed-dim": "#eac167",
+                        "secondary-container": "#ffd578",
+                        "secondary": "#785a02",
+                        "on-surface": "#181c1f",
+                        "primary-fixed": "#c7e7ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-xl": "64px",
+                        "container-max": "1280px",
+                        "stack-md": "16px",
+                        "stack-lg": "32px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px",
+                        "gutter": "24px",
+                        "unit": "4px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "label-sm": ["Plus Jakarta Sans"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "display-xl-mobile": ["Plus Jakarta Sans"],
+                        "display-xl": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-xl-mobile": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "display-xl": ["60px", { "lineHeight": "72px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        .shadow-soft {
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04), 0 0 3px rgba(0, 0, 0, 0.02);
+        }
+        .shadow-soft-hover:hover {
+            box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.08), 0 0 4px rgba(0, 0, 0, 0.03);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen flex flex-col font-body-md text-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- Navbar: Linear/Transactional Intent -> TopNavBar suppressed per "Automatic Suppression" rule -->
+<main class="flex-grow flex flex-col items-center justify-center py-stack-xl px-margin-mobile md:px-margin-desktop">
+<!-- Wizard Container -->
+<div class="w-full max-w-[800px] bg-surface-container-lowest rounded-xl shadow-soft p-stack-lg md:p-stack-xl border border-outline-variant/30">
+<!-- Header & Progress -->
+<div class="mb-stack-lg text-center">
+<h1 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-unit">What type of service do you need?</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Select a primary category to get started.</p>
+</div>
+<!-- Progress Indicator -->
+<div class="flex items-center justify-center mb-stack-xl">
+<div class="flex items-center w-full max-w-[500px]">
+<div class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-label-md text-label-md z-10 ring-4 ring-surface-container-lowest">1</div>
+<div class="flex-grow h-1 bg-surface-container-highest mx-[-4px]"></div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center font-label-md text-label-md z-10 ring-4 ring-surface-container-lowest">2</div>
+<div class="flex-grow h-1 bg-surface-container-highest mx-[-4px]"></div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center font-label-md text-label-md z-10 ring-4 ring-surface-container-lowest">3</div>
+<div class="flex-grow h-1 bg-surface-container-highest mx-[-4px]"></div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest text-on-surface-variant flex items-center justify-center font-label-md text-label-md z-10 ring-4 ring-surface-container-lowest">4</div>
+</div>
+</div>
+<!-- Selection Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-gutter mb-stack-xl">
+<!-- Option 1 -->
+<button class="flex flex-col items-center justify-center p-stack-lg rounded-xl border-2 border-outline-variant/50 hover:border-primary hover:bg-surface-bright transition-all shadow-soft-hover group relative overflow-hidden bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-primary mb-stack-sm group-hover:scale-110 transition-transform">architecture</span>
+<span class="font-label-md text-label-md text-on-surface">Architecture</span>
+</button>
+<!-- Option 2 (Active state demo) -->
+<button class="flex flex-col items-center justify-center p-stack-lg rounded-xl border-2 border-primary bg-primary-container/10 transition-all shadow-soft group relative overflow-hidden ring-2 ring-primary/20 ring-offset-2 ring-offset-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-primary mb-stack-sm">home_repair_service</span>
+<span class="font-label-md text-label-md text-on-surface font-bold">Renovation</span>
+<div class="absolute top-3 right-3 text-primary">
+<span class="material-symbols-outlined fill text-xl">check_circle</span>
+</div>
+</button>
+<!-- Option 3 -->
+<button class="flex flex-col items-center justify-center p-stack-lg rounded-xl border-2 border-outline-variant/50 hover:border-primary hover:bg-surface-bright transition-all shadow-soft-hover group relative overflow-hidden bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-primary mb-stack-sm group-hover:scale-110 transition-transform">engineering</span>
+<span class="font-label-md text-label-md text-on-surface">Consulting</span>
+</button>
+<!-- Option 4 -->
+<button class="flex flex-col items-center justify-center p-stack-lg rounded-xl border-2 border-outline-variant/50 hover:border-primary hover:bg-surface-bright transition-all shadow-soft-hover group relative overflow-hidden bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-primary mb-stack-sm group-hover:scale-110 transition-transform">handyman</span>
+<span class="font-label-md text-label-md text-on-surface">Maintenance</span>
+</button>
+<!-- Option 5 -->
+<button class="flex flex-col items-center justify-center p-stack-lg rounded-xl border-2 border-outline-variant/50 hover:border-primary hover:bg-surface-bright transition-all shadow-soft-hover group relative overflow-hidden bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-primary mb-stack-sm group-hover:scale-110 transition-transform">landscape</span>
+<span class="font-label-md text-label-md text-on-surface">Landscaping</span>
+</button>
+<!-- Option 6 -->
+<button class="flex flex-col items-center justify-center p-stack-lg rounded-xl border-2 border-outline-variant/50 hover:border-primary hover:bg-surface-bright transition-all shadow-soft-hover group relative overflow-hidden bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-primary mb-stack-sm group-hover:scale-110 transition-transform">format_paint</span>
+<span class="font-label-md text-label-md text-on-surface">Interior Design</span>
+</button>
+</div>
+<!-- Trust Message -->
+<div class="flex items-center justify-center gap-3 p-4 bg-surface-container-low rounded-lg mb-stack-xl border border-surface-container-high">
+<span class="material-symbols-outlined text-secondary">verified_user</span>
+<p class="font-label-md text-label-md text-on-surface-variant">All our service providers are vetted and certified professionals.</p>
+</div>
+<!-- Actions -->
+<div class="flex justify-between items-center border-t border-outline-variant/30 pt-stack-md mt-auto">
+<button class="font-label-md text-label-md text-on-surface-variant hover:text-primary transition-colors py-2 px-4 rounded-lg">
+                    Back
+                </button>
+<button class="bg-primary text-on-primary font-label-md text-label-md py-3 px-8 rounded-lg shadow-sm hover:bg-primary-container hover:text-on-primary-container transition-colors flex items-center gap-2">
+                    Continue
+                    <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Footer: Linear intent -> Footer suppressed -->
+</body></html>
