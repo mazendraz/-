@@ -6,13 +6,13 @@
 //
 // Run: npm run seed
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { createPgAdapter } from "../src/lib/dbAdapter";
 import { COMPANIES, SERVICE_CATEGORIES } from "../../app/src/lib/data";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const prisma = new PrismaClient({ adapter: createPgAdapter(connectionString) });
 
 function aggregate(reviews: { rating: number }[]): {
   rating: number;

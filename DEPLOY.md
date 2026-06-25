@@ -31,10 +31,20 @@ git push -u origin main
 ## 1. قاعدة البيانات (Supabase)
 
 1. اعمل مشروع جديد في Supabase.
-2. من **Project Settings → Database → Connection string** خد رابطين:
-   - **Pooled** (Transaction, منفذ 6543) → `DATABASE_URL`
-   - **Direct** (Session, منفذ 5432) → `DIRECT_URL`
-3. لو هتستخدم الـ pooler في الإنتاج، فعّل `directUrl` في
+2. لو الاستضافة **serverful** (VPS / عملية Node شغالة طول الوقت، زي قسم
+   "بديل: استضافة على VPS" تحت): استخدم **Session pooler** (منفذ 5432) لكل
+   من `DATABASE_URL` و`DIRECT_URL` بنفس القيمة. السبب: الاتصال الـ Direct
+   (`db.[PROJECT-REF].supabase.co`) IPv6-only وأغلب الـ VPS مش بيوصلّه، والـ
+   Session pooler بيدعم IPv4 وبيتصرف كاتصال مباشر تقريبًا (آمن لـ
+   `prisma migrate`)، على عكس الـ Transaction pooler (6543) اللي بيكسر
+   prepared statements.
+   - من **Settings → Database → Session pooler** خد الـ host بالكامل
+     (الصيغة: `aws-0-[region].pooler.supabase.com` — ممكن يكون `aws-1-` في
+     بعض المشاريع، فالأضمن تنسخه من اللوحة مباشرة).
+   - اليوزر هنا لازم يبقى `postgres.[PROJECT-REF]` (مش `postgres` بس).
+3. لو الاستضافة **serverless** (Vercel functions): استخدم **Transaction
+   pooler** (منفذ 6543) لـ `DATABASE_URL` والـ **Direct** (5432) لـ
+   `DIRECT_URL`، وفعّل `directUrl` في
    [`api/prisma/schema.prisma`](api/prisma/schema.prisma).
 
 ---

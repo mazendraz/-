@@ -12,15 +12,15 @@
 // In production set these as one-off env vars; never commit real credentials.
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
+import { createPgAdapter } from "../src/lib/dbAdapter";
 
 // Keep in sync with BCRYPT_ROUNDS in src/lib/auth.ts.
 const BCRYPT_ROUNDS = 12;
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is not set");
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const prisma = new PrismaClient({ adapter: createPgAdapter(connectionString) });
 
 /** Read a `--flag value` pair from argv, falling back to undefined. */
 function arg(flag: string): string | undefined {

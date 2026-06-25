@@ -11,7 +11,10 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "seed": "tsx prisma/seed.ts",
-    "create-admin": "tsx prisma/create-admin.ts"
+    "create-admin": "tsx prisma/create-admin.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",
