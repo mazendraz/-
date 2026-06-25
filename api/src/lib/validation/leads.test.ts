@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createLeadSchema } from "@/lib/validation/leads";
+import { createLeadSchema, trackLeadSchema } from "@/lib/validation/leads";
 
 const base = {
   companySlug: "aura-interiors",
@@ -50,5 +50,19 @@ describe("createLeadSchema fields", () => {
   it("ignores unknown keys like the honeypot field", () => {
     const parsed = createLeadSchema.parse({ ...base, website: "spam" });
     expect(parsed).not.toHaveProperty("website");
+  });
+});
+
+describe("trackLeadSchema", () => {
+  it("accepts a ref + valid phone", () => {
+    expect(
+      trackLeadSchema.safeParse({ ref: "AA-20260101-7F3K", phone: "01012345678" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a missing ref or invalid phone", () => {
+    expect(trackLeadSchema.safeParse({ ref: "", phone: "01012345678" }).success).toBe(false);
+    expect(trackLeadSchema.safeParse({ ref: "AA-1", phone: "123" }).success).toBe(false);
+    expect(trackLeadSchema.safeParse({ ref: "AA-1", phone: null }).success).toBe(false);
   });
 });

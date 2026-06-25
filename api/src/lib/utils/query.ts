@@ -8,7 +8,8 @@ import type {
   AdminLeadListQuery,
   LeadListQuery,
 } from "@/lib/services/leads.service";
-import type { ApiLeadStatus } from "@/lib/apiTypes";
+import type { AdminUserListQuery } from "@/lib/services/users.service";
+import type { ApiLeadStatus, ApiUserRole } from "@/lib/apiTypes";
 
 const SORTS: readonly CompanySort[] = [
   "recommended",
@@ -87,5 +88,22 @@ export function parseAdminLeadListQuery(
     companyId: searchParams.get("companyId")?.trim() || undefined,
     from: toDate(searchParams.get("from")),
     to: toDate(searchParams.get("to")),
+  };
+}
+
+const USER_ROLES: readonly ApiUserRole[] = ["ADMIN", "PROVIDER"];
+
+export function parseAdminUserListQuery(
+  searchParams: URLSearchParams,
+): AdminUserListQuery {
+  const roleParam = searchParams.get("role");
+  const role = USER_ROLES.includes(roleParam as ApiUserRole)
+    ? (roleParam as ApiUserRole)
+    : undefined;
+  return {
+    page: toInt(searchParams.get("page")),
+    pageSize: toInt(searchParams.get("pageSize")),
+    role,
+    search: searchParams.get("search")?.trim() || undefined,
   };
 }

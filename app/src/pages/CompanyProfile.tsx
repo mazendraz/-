@@ -283,7 +283,7 @@ export default function CompanyProfile() {
                   {[
                     { icon: "star", label: t(locale, "profile_stat_rating"), val: `${company.rating} / 5.0` },
                     { icon: "reviews", label: t(locale, "profile_stat_reviews"), val: `${company.reviewCount}` },
-                    { icon: "construction", label: t(locale, "profile_stat_completed"), val: `${company.completedProjects}` },
+                    { icon: "construction", label: t(locale, "profile_stat_completed"), val: `${company.completedProjects}`, note: t(locale, "profile_self_reported") },
                     { icon: "workspace_premium", label: t(locale, "profile_stat_experience"), val: `${company.yearsExperience} ${t(locale, "profile_years")}` },
                     { icon: "bolt", label: t(locale, "profile_stat_response"), val: company.responseTime },
                     { icon: "location_on", label: t(locale, "profile_stat_location"), val: company.location },
@@ -291,7 +291,12 @@ export default function CompanyProfile() {
                     <div key={s.label} className="flex items-center gap-3 py-2.5 border-b border-outline-variant/20 last:border-0">
                       <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
                       <div>
-                        <p className="text-[12px] text-outline">{s.label}</p>
+                        <p className="text-[12px] text-outline flex items-center gap-1">
+                          {s.label}
+                          {s.note && (
+                            <span className="material-symbols-outlined text-outline/60 text-[13px] cursor-help" title={s.note}>info</span>
+                          )}
+                        </p>
                         <p className="text-[14px] font-bold text-on-surface">{s.val}</p>
                       </div>
                     </div>

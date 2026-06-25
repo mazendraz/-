@@ -82,6 +82,7 @@ export function serializeReview(r: Review): ApiReview {
     text: r.text,
     date: r.date,
     district: r.district,
+    verified: r.verified,
   };
 }
 
@@ -147,6 +148,7 @@ export function serializeLead(l: LeadWithCompany): ApiLead {
     budget: l.budget,
     description: l.description,
     status: leadStatusToLabel(l.status),
+    reviewed: l.reviewedAt != null, // true only when a review date is set
     createdAt: toEpochMs(l.createdAt),
   };
 }

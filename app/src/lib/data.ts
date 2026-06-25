@@ -8,6 +8,7 @@ export type Review = {
   text: string;
   date: string;
   district: string;
+  verified?: boolean; // true = submitted by a real customer on a completed lead
 };
 
 export type Project = {

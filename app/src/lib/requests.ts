@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiFetch, apiGet, apiPatch, apiDelete, isApiConfigured } from "./api";
+import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type LeadStatus = "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled";
@@ -17,6 +17,7 @@ export interface Lead {
   budget: string;
   description: string;
   status: LeadStatus;
+  reviewed?: boolean; // true once the customer has left a review for this lead
   createdAt: number;
 }
 
@@ -104,6 +105,62 @@ export async function hydrateLeadsFromApi(): Promise<void> {
   } catch (err) {
     console.error("Leads hydration from API failed:", err);
   }
+}
+
+// ── Customer status tracking ─────────────────────────────────────────────────
+// Unauthenticated customers have no account, but they CAN re-fetch the live
+// status of their own submissions via the public track endpoint, gated by the
+// reference number + the phone they used (a shared secret). This keeps the "My
+// Requests" view in sync with the provider/admin pipeline instead of frozen at
+// "New" forever. Runs once per session (statuses change on a human timescale).
+let myLeadsHydrated = false;
+
+async function trackLead(refNumber: string, phone: string): Promise<Lead | null> {
+  try {
+    return await apiGet<Lead>(
+      `/leads/track?ref=${encodeURIComponent(refNumber)}&phone=${encodeURIComponent(phone)}`,
+    );
+  } catch {
+    return null; // 404 (not found / phone mismatch) or network — keep local copy
+  }
+}
+
+export async function refreshMyLeadsFromApi(): Promise<void> {
+  // Admins/providers already get the authoritative list via hydrateLeadsFromApi.
+  if (!isApiConfigured() || isAuthenticated()) return;
+  const mineIds = new Set(readMine());
+  const mine = read().filter((l) => mineIds.has(l.id));
+  if (mine.length === 0) return;
+
+  const results = await Promise.allSettled(
+    mine.map((l) => trackLead(l.refNumber, l.phone)),
+  );
+  const byRef = new Map<string, Lead>();
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) byRef.set(r.value.refNumber, r.value);
+  }
+  if (byRef.size === 0) return;
+
+  // Merge server truth over the local copy, keyed by the stable reference number.
+  write(read().map((l) => byRef.get(l.refNumber) ?? l));
+}
+
+/**
+ * Customer submits a review for a COMPLETED request of theirs. Gated server-side
+ * by ref + phone; on success the lead is marked reviewed locally so the prompt
+ * disappears. In demo mode (no API) it just marks locally.
+ */
+export async function submitReview(
+  refNumber: string,
+  phone: string,
+  rating: number,
+  text: string,
+  honeypot = "",
+): Promise<void> {
+  if (isApiConfigured()) {
+    await apiPost("/reviews", { ref: refNumber, phone, rating, text, website: honeypot });
+  }
+  write(read().map((l) => (l.refNumber === refNumber ? { ...l, reviewed: true } : l)));
 }
 
 export function getLeads(): Lead[] {
@@ -229,6 +286,11 @@ export function useMyLeads(): Lead[] {
     const refresh = () => setMineIds(new Set(readMine()));
     window.addEventListener(EVENT, refresh);
     window.addEventListener("storage", refresh);
+    // Pull live status for this device's submissions (once per session).
+    if (!myLeadsHydrated) {
+      myLeadsHydrated = true;
+      void refreshMyLeadsFromApi();
+    }
     return () => {
       window.removeEventListener(EVENT, refresh);
       window.removeEventListener("storage", refresh);

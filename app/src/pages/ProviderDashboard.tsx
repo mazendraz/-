@@ -267,10 +267,18 @@ export default function ProviderDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
                 {filteredReviews.map((r) => (
                   <div key={r.author} className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom flex flex-col">
-                    <div className="flex items-center gap-0.5 mb-3">
-                      {[1,2,3,4,5].map((i) => (
-                        <span key={i} className="material-symbols-outlined text-secondary text-[14px]" style={{ fontVariationSettings: i <= r.rating ? "'FILL' 1" : "'FILL' 0" }}>star</span>
-                      ))}
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-0.5">
+                        {[1,2,3,4,5].map((i) => (
+                          <span key={i} className="material-symbols-outlined text-secondary text-[14px]" style={{ fontVariationSettings: i <= r.rating ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                        ))}
+                      </div>
+                      {r.verified && (
+                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full" title="Submitted by a verified customer">
+                          <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                          Verified
+                        </span>
+                      )}
                     </div>
                     <p className="text-body-md font-body-md text-on-surface-variant leading-relaxed flex-grow mb-4">"{r.text}"</p>
                     <div className="flex items-center gap-3 pt-3 border-t border-outline-variant/20">

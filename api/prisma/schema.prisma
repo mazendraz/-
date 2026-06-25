@@ -120,6 +120,9 @@ model Review {
   text      String   @db.Text
   date      String // "March 2024" (display string)
   district  String // matches ApiReview.district
+  // true = submitted by a real customer on a COMPLETED lead (shows a "Verified"
+  // badge). false = curated/seeded by an admin. See reviews.service submitFromLead.
+  verified  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -138,6 +141,9 @@ model Lead {
   budget       String
   description  String     @db.Text
   status       LeadStatus @default(NEW)
+  // Set once the customer leaves a (verified) review for this lead — gates the
+  // one-time review flow so a completed request can be reviewed exactly once.
+  reviewedAt   DateTime?
   createdAt    DateTime   @default(now()) // returned as epoch ms (Number) in the API
   updatedAt    DateTime   @updatedAt
 

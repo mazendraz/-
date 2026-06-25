@@ -24,3 +24,10 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 export const leadStatusSchema = z.object({
   status: z.enum(["New", "Contacted", "In Progress", "Completed", "Cancelled"]),
 });
+
+// Public lead tracking (GET /leads/track?ref=&phone=). Both required; the phone
+// must be a valid Egyptian mobile (it's the shared secret that gates the lookup).
+export const trackLeadSchema = z.object({
+  ref: z.string().trim().min(1),
+  phone: z.string().trim().regex(egyptianPhone, "Invalid Egyptian mobile number"),
+});

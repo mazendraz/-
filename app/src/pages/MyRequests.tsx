@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useMyLeads, type LeadStatus } from "../lib/requests";
+import { useMyLeads, submitReview, type Lead, type LeadStatus } from "../lib/requests";
 import { getCompany } from "../lib/catalog";
 import PersonalTabs from "../components/PersonalTabs";
 import SearchInput from "../components/SearchInput";
@@ -31,6 +31,7 @@ export default function MyRequests() {
   const { locale } = useLocale();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "All">("All");
+  const [reviewing, setReviewing] = useState<Lead | null>(null);
 
   const q = query.trim().toLowerCase();
   const leads = all.filter((l) => {
@@ -128,15 +129,34 @@ export default function MyRequests() {
                   </div>
 
                   {/* Footer actions */}
-                  {company && (
-                    <div className="px-4 pb-4">
-                      <Link
-                        to={`/companies/${company.slug}`}
-                        className="w-full flex items-center justify-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors py-2.5 rounded-xl text-[13px] font-bold text-on-surface touch-press"
-                      >
-                        {t(locale, "requests_view")} {company.name}
-                        <span className="material-symbols-outlined text-[15px] rtl-flip">arrow_forward</span>
-                      </Link>
+                  {(company || lead.status === "Completed") && (
+                    <div className="px-4 pb-4 flex flex-col gap-2">
+                      {/* Verified-review prompt for completed requests */}
+                      {lead.status === "Completed" && (
+                        lead.reviewed ? (
+                          <div className="w-full flex items-center justify-center gap-1.5 bg-green-50 text-green-700 py-2.5 rounded-xl text-[13px] font-bold">
+                            <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                            {t(locale, "requests_reviewed")}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setReviewing(lead)}
+                            className="w-full flex items-center justify-center gap-1.5 bg-primary text-on-primary hover:bg-primary-container transition-colors py-2.5 rounded-xl text-[13px] font-bold touch-press btn-press"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">rate_review</span>
+                            {t(locale, "requests_review_cta")}
+                          </button>
+                        )
+                      )}
+                      {company && (
+                        <Link
+                          to={`/companies/${company.slug}`}
+                          className="w-full flex items-center justify-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors py-2.5 rounded-xl text-[13px] font-bold text-on-surface touch-press"
+                        >
+                          {t(locale, "requests_view")} {company.name}
+                          <span className="material-symbols-outlined text-[15px] rtl-flip">arrow_forward</span>
+                        </Link>
+                      )}
                     </div>
                   )}
                 </div>
@@ -151,6 +171,86 @@ export default function MyRequests() {
               </p>
             </div>
           </div>
+        )}
+      </div>
+
+      {reviewing && (
+        <ReviewModal lead={reviewing} locale={locale} onClose={() => setReviewing(null)} />
+      )}
+    </div>
+  );
+}
+
+function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar"; onClose: () => void }) {
+  const [rating, setRating] = useState(0);
+  const [hover, setHover] = useState(0);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    if (rating < 1 || !text.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      await submitReview(lead.refNumber, lead.phone, rating, text.trim());
+      setDone(true);
+      setTimeout(onClose, 1400);
+    } catch {
+      setError(t(locale, "lead_review_error"));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" role="dialog" aria-modal>
+      <div className="bg-surface-container-lowest w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl p-6">
+        {done ? (
+          <div className="text-center py-6">
+            <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-green-600 text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+            </div>
+            <p className="font-bold text-[17px] text-on-surface">{t(locale, "lead_review_thanks")}</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h2 className="font-bold text-[18px] text-on-surface">{t(locale, "lead_review_title")}</h2>
+              <button onClick={onClose} className="p-1.5 -mr-1.5 rounded-lg hover:bg-surface-container transition-colors">
+                <span className="material-symbols-outlined text-outline">close</span>
+              </button>
+            </div>
+            <p className="text-[13px] text-outline mb-1">{lead.companyName}</p>
+            <p className="text-[13px] text-on-surface-variant mb-5">{t(locale, "lead_review_sub")}</p>
+
+            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "lead_review_rating")}</label>
+            <div className="flex items-center gap-1 mb-5" onMouseLeave={() => setHover(0)}>
+              {[1, 2, 3, 4, 5].map((i) => (
+                <button key={i} type="button" onClick={() => setRating(i)} onMouseEnter={() => setHover(i)}
+                  className="p-0.5 touch-press" aria-label={`${i} star${i > 1 ? "s" : ""}`}>
+                  <span className="material-symbols-outlined text-secondary text-[32px]"
+                    style={{ fontVariationSettings: i <= (hover || rating) ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                </button>
+              ))}
+            </div>
+
+            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "lead_review_text_label")}</label>
+            <textarea
+              className="field-input resize-none w-full" rows={4} maxLength={2000}
+              value={text} onChange={(e) => setText(e.target.value)}
+              placeholder={t(locale, "lead_review_text_ph")}
+            />
+
+            {error && <p className="text-[13px] text-error font-medium bg-error/8 rounded-lg px-3 py-2 mt-3">{error}</p>}
+
+            <button
+              onClick={submit} disabled={busy || rating < 1 || !text.trim()}
+              className="w-full mt-5 bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {busy ? t(locale, "lead_review_submitting") : t(locale, "lead_review_submit")}
+            </button>
+          </>
         )}
       </div>
     </div>
