@@ -19,7 +19,13 @@ your-domain.com {
 
 	# API → Next.js backend (PM2 on :3000)
 	handle /api/* {
-		reverse_proxy localhost:3000
+		reverse_proxy localhost:3000 {
+			# Strip any client-supplied X-Forwarded-For and re-set it from the real
+			# peer, so the app can't be tricked into trusting a spoofed client IP
+			# (the per-IP rate limiter reads the rightmost hop — see rateLimit.ts).
+			# Keep TRUSTED_PROXY_HOPS=1 in api/.env to match this single hop.
+			header_up X-Forwarded-For {remote_host}
+		}
 	}
 
 	# Everything else → static SPA with client-side routing fallback

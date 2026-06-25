@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   useLeads, updateLeadStatus, deleteLead, clearAllLeads,
@@ -19,6 +19,10 @@ import {
   useFeedbacks, markFeedbackRead, deleteFeedback, useUnreadFeedbackCount,
   type Feedback, FEEDBACK_TYPE_LABELS, FEEDBACK_TYPE_ICONS, FEEDBACK_TYPE_COLORS,
 } from "../lib/feedback";
+import {
+  useAdminUsers, canManageUsers, createUser, updateUser, deleteUser,
+  type AdminUser, type Role,
+} from "../lib/users";
 import { loadDemoLeads } from "../lib/demo";
 import { logout, isAuthenticated } from "../lib/auth";
 import { uploadImage, isDataUrl, type UploadBucket } from "../lib/image";
@@ -31,13 +35,14 @@ import {
   KpiCard, ChartCard, AreaLineChart, DonutChart, FunnelChart, BarList,
 } from "../components/Charts";
 
-type AdminTab = "overview" | "leads" | "companies" | "services" | "reviews" | "settings";
+type AdminTab = "overview" | "leads" | "companies" | "services" | "team" | "reviews" | "settings";
 
 const NAV: { id: AdminTab; icon: string; label: string }[] = [
   { id: "overview", icon: "dashboard", label: "Overview" },
   { id: "leads", icon: "inbox", label: "Leads" },
   { id: "companies", icon: "business", label: "Companies" },
   { id: "services", icon: "category", label: "Services" },
+  { id: "team", icon: "badge", label: "Team" },
   { id: "reviews", icon: "reviews", label: "Reviews" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
@@ -49,6 +54,8 @@ export default function AdminDashboard() {
   const unreadFeedback = useUnreadFeedbackCount();
   const [tab, setTab] = useState<AdminTab>("overview");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // When set, the Team tab auto-opens a new-user editor with this company linked.
+  const [teamPrefillCompany, setTeamPrefillCompany] = useState<string | null>(null);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [filterStatus, setFilterStatus] = useState<LeadStatus | "All">("All");
@@ -216,6 +223,13 @@ export default function AdminDashboard() {
                         <Link to={`/companies/${c.slug}`} target="_blank" className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-primary transition-colors">
                           <span className="material-symbols-outlined text-[14px]">open_in_new</span> View
                         </Link>
+                        {canManageUsers() && (
+                          <button onClick={() => { setTeamPrefillCompany(c.id); setTab("team"); }}
+                            title="Create a provider login linked to this company"
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-primary transition-colors">
+                            <span className="material-symbols-outlined text-[14px]">person_add</span> Login
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -258,6 +272,15 @@ export default function AdminDashboard() {
               </div>
               )}
             </div>
+          )}
+
+          {/* ── Team (login accounts) ── */}
+          {tab === "team" && (
+            <TeamTab
+              companies={companies}
+              initialCompanyId={teamPrefillCompany}
+              onConsumeInitial={() => setTeamPrefillCompany(null)}
+            />
           )}
 
           {/* ── Reviews & Feedback ── */}
@@ -731,6 +754,254 @@ function FeedbackDetailModal({ feedback: f, onClose, onDelete }: { feedback: Fee
             </div>
           </div>
         )}
+      </div>
+    </ModalShell>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  TEAM — login accounts (ADMIN + PROVIDER). API-only; no localStorage analog.
+// ══════════════════════════════════════════════════════════════════════════
+function TeamTab({ companies, initialCompanyId, onConsumeInitial }: {
+  companies: Company[];
+  initialCompanyId?: string | null;
+  onConsumeInitial?: () => void;
+}) {
+  const { users, status, reload } = useAdminUsers();
+  const [editing, setEditing] = useState<{ user: AdminUser | null; companyId?: string } | null>(null);
+  const [query, setQuery] = useState("");
+
+  // Deep-link from a company card: open a new-user editor pre-linked to it.
+  useEffect(() => {
+    if (initialCompanyId && canManageUsers()) {
+      setEditing({ user: null, companyId: initialCompanyId });
+      onConsumeInitial?.();
+    }
+  }, [initialCompanyId, onConsumeInitial]);
+
+  // Accounts live only on the server — they can't be managed in demo mode.
+  if (!canManageUsers()) {
+    return (
+      <div className="max-w-lg mx-auto mt-6 bg-surface-container-lowest rounded-2xl shadow-bloom p-8 text-center">
+        <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
+          <span className="material-symbols-outlined text-[28px]">badge</span>
+        </div>
+        <h2 className="font-bold text-[18px] text-on-surface mb-1.5">Team accounts need the live API</h2>
+        <p className="text-[14px] text-outline leading-relaxed">
+          Provider and admin logins are stored on the server. Connect the backend
+          (<span className="font-mono text-[13px]">VITE_API_URL</span>) and sign in
+          as an admin to create and manage accounts here.
+        </p>
+      </div>
+    );
+  }
+
+  const q = query.trim().toLowerCase();
+  const filtered = users.filter(
+    (u) => !q || [u.name, u.email, u.companyName ?? ""].some((v) => v.toLowerCase().includes(q)),
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-bold text-[16px] text-on-surface">Login accounts</h2>
+          <p className="text-[12px] text-outline mt-0.5">
+            Create provider logins and link them to a company, or manage admins.
+          </p>
+        </div>
+        <button onClick={() => setEditing({ user: null })}
+          className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press btn-press">
+          <span className="material-symbols-outlined text-[18px]">person_add</span> Add User
+        </button>
+      </div>
+
+      <SearchInput value={query} onChange={setQuery} placeholder="Search by name, email, company…" />
+
+      {status === "loading" && (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center text-[14px] text-outline">
+          <span className="spinner spinner-primary mx-auto mb-3 block" /> Loading accounts…
+        </div>
+      )}
+      {status === "error" && (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+          <EmptyState msg="Couldn't load accounts. Check the API connection and try again." icon="cloud_off" />
+        </div>
+      )}
+      {status === "ready" && filtered.length === 0 && (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+          <EmptyState msg={q ? "No accounts match your search." : "No accounts yet. Add your first provider login."} icon="badge" />
+        </div>
+      )}
+
+      {status === "ready" && filtered.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filtered.map((u) => (
+            <div key={u.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex items-center gap-4">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[16px] flex-shrink-0
+                ${u.role === "ADMIN" ? "bg-secondary/15 text-secondary" : "bg-primary/10 text-primary"}`}>
+                {u.name.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-[15px] text-on-surface truncate">{u.name}</p>
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0
+                    ${u.role === "ADMIN" ? "bg-secondary/15 text-secondary" : "bg-primary/10 text-primary"}`}>{u.role}</span>
+                  {!u.isActive && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-surface-container text-outline flex-shrink-0">Inactive</span>}
+                </div>
+                <p className="text-[12px] text-outline truncate">{u.email}</p>
+                <p className="text-[11px] text-outline mt-0.5 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px]">{u.companyName ? "business" : "block"}</span>
+                  {u.companyName ?? "No company linked"}
+                </p>
+              </div>
+              <button onClick={() => setEditing({ user: u })}
+                className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0">
+                <span className="material-symbols-outlined text-[14px]">edit</span> Manage
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <UserEditor
+          user={editing.user}
+          initialCompanyId={editing.companyId}
+          companies={companies}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); void reload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function UserEditor({ user, initialCompanyId, companies, onClose, onSaved }: {
+  user: AdminUser | null;
+  initialCompanyId?: string;
+  companies: Company[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isNew = !user;
+  const [name, setName] = useState(user?.name ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<Role>(user?.role ?? "PROVIDER");
+  const [companyId, setCompanyId] = useState(user?.companyId ?? initialCompanyId ?? "");
+  const [isActive, setIsActive] = useState(user?.isActive ?? true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function save() {
+    setError("");
+    if (name.trim().length < 2) { setError("Name must be at least 2 characters."); return; }
+    if (isNew && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError("Enter a valid email address."); return; }
+    if (isNew && password.length < 8) { setError("Password must be at least 8 characters."); return; }
+    if (!isNew && password && password.length < 8) { setError("Password must be at least 8 characters."); return; }
+
+    setBusy(true);
+    try {
+      if (isNew) {
+        await createUser({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          role,
+          companyId: companyId || null,
+        });
+      } else {
+        await updateUser(user!.id, {
+          name: name.trim(),
+          role,
+          companyId: companyId || null,
+          isActive,
+          ...(password ? { password } : {}),
+        });
+      }
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save the account.");
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteUser(user!.id);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't delete the account.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ModalShell title={isNew ? "Add User" : `Manage — ${user!.name}`} onClose={onClose}>
+      <div className="space-y-4">
+        <LField label="Full name" required>
+          <input className="field-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ahmed Hassan" />
+        </LField>
+
+        <LField label="Email" required>
+          <input className="field-input disabled:opacity-60" type="email" value={email}
+            onChange={(e) => setEmail(e.target.value)} disabled={!isNew}
+            placeholder="provider@example.com" autoComplete="off" />
+          {!isNew && <p className="text-[11px] text-outline mt-1">Email is the login ID and can't be changed.</p>}
+        </LField>
+
+        <LField label={isNew ? "Password" : "Reset password"} required={isNew}>
+          <input className="field-input" type="password" value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={isNew ? "At least 8 characters" : "Leave blank to keep current"}
+            autoComplete="new-password" />
+        </LField>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <LField label="Role">
+            <select className="field-input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <option value="PROVIDER">Provider</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </LField>
+          <LField label="Linked company">
+            <select className="field-input" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+              <option value="">— None —</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </LField>
+        </div>
+        {role === "PROVIDER" && !companyId && (
+          <p className="text-[12px] text-secondary bg-secondary/10 rounded-lg px-3 py-2 flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[16px]">info</span>
+            A provider with no linked company won't see any leads.
+          </p>
+        )}
+
+        {!isNew && (
+          <label className="flex items-center gap-3 bg-surface-container rounded-xl p-3.5 cursor-pointer">
+            <input type="checkbox" className="w-5 h-5 accent-primary" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            <div>
+              <p className="font-bold text-[14px] text-on-surface">Active</p>
+              <p className="text-[12px] text-outline">Turning this off revokes access immediately (signs them out on the next request).</p>
+            </div>
+          </label>
+        )}
+
+        {error && <p className="text-[13px] text-error font-medium bg-error/8 rounded-lg px-3 py-2">{error}</p>}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 mt-6 pt-5 border-t border-outline-variant/20">
+        {!isNew ? <ConfirmDelete onConfirm={remove} label="user" big /> : <span />}
+        <div className="flex gap-2.5 ml-auto">
+          <button onClick={onClose} disabled={busy} className="px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-[14px] text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">Cancel</button>
+          <button onClick={save} disabled={busy} className="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60">
+            {busy ? "Saving…" : isNew ? "Create account" : "Save changes"}
+          </button>
+        </div>
       </div>
     </ModalShell>
   );

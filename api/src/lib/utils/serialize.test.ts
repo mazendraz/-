@@ -68,6 +68,7 @@ describe("serializeLead", () => {
       budget: "EGP 150,000 – 500,000",
       description: "Need a full fit-out",
       status: "New",
+      reviewed: false,
       createdAt: createdAt.getTime(),
     });
   });
@@ -150,6 +151,7 @@ describe("serializeCompany", () => {
           text: "Great work",
           date: "March 2024",
           district: "R7 District",
+          verified: false,
           createdAt: now,
         },
       ],
@@ -174,6 +176,7 @@ describe("serializeCompany", () => {
         text: "Great work",
         date: "March 2024",
         district: "R7 District",
+        verified: false,
       },
     ]);
     // internal fields (email/whatsapp/status) must not leak into the payload

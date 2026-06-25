@@ -15,7 +15,7 @@ const LOGIN_RATE_LIMIT = { limit: 10, windowMs: 60_000 };
 
 // POST /api/auth/login → { token, user }. Token is returned in the body.
 export const POST = withErrors(async (request: NextRequest) => {
-  const rl = rateLimit(`login:${clientIp(request)}`, LOGIN_RATE_LIMIT);
+  const rl = await rateLimit(`login:${clientIp(request)}`, LOGIN_RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
     throw new RateLimitError(`Too many attempts. Try again in ${seconds}s.`);

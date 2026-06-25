@@ -4,6 +4,7 @@
 import { ZodError } from "zod";
 import { AppError } from "@/lib/utils/errors";
 import { fail } from "@/lib/utils/response";
+import { captureException } from "@/lib/observability/report";
 
 // Next.js route handlers: (request, context) => Response | Promise<Response>.
 type RouteHandler<Args extends unknown[]> = (
@@ -62,8 +63,10 @@ export function withErrors<Args extends unknown[]>(
         return fail("CONFLICT", "A record with this value already exists", 409);
       }
 
-      // Unknown — log server-side (Sentry in production), return generic 500.
-      console.error("[withErrors] unhandled error:", error);
+      // Unknown — log + report (Sentry when SENTRY_DSN is set), return generic 500.
+      // Fire-and-forget so reporting never delays or fails the response.
+      const req = args[0] as { url?: string } | undefined;
+      void captureException(error, { route: req?.url, source: "withErrors" });
       return fail("INTERNAL_ERROR", "Something went wrong", 500);
     }
   };

@@ -3,6 +3,7 @@ import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
 import { ForbiddenError, RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
+import { verifyCaptcha } from "@/lib/middleware/captcha";
 import { createSiteReviewSchema } from "@/lib/validation/siteReviews";
 import * as service from "@/lib/services/siteReviews.service";
 
@@ -18,7 +19,7 @@ export const GET = withErrors(async () => {
 
 // POST /api/site-reviews → 201 + ApiSiteReview, held for moderation (visible=false).
 export const POST = withErrors(async (request: NextRequest) => {
-  const rl = rateLimit(`site-reviews:${clientIp(request)}`, RATE_LIMIT);
+  const rl = await rateLimit(`site-reviews:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
     throw new RateLimitError(`Too many requests. Try again in ${seconds}s.`);
@@ -38,6 +39,9 @@ export const POST = withErrors(async (request: NextRequest) => {
     (raw as { website: string }).website.trim() !== "") {
     throw new ValidationError("Submission rejected");
   }
+
+  // CAPTCHA (no-op unless a secret is configured).
+  await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
 
   const payload = createSiteReviewSchema.parse(raw);
   return ok(await service.create(payload), 201);

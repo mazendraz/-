@@ -1,5 +1,6 @@
 import { useState, useId } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { isApiConfigured } from "../lib/api";
 import { DISTRICTS, BUDGETS, addLead, getMyLeads, type Lead } from "../lib/requests";
 import { getCompany } from "../lib/catalog";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -119,6 +120,14 @@ export default function RequestForm() {
 
   if (step === "success" && submittedLead) {
     return <SuccessScreen lead={submittedLead} companyName={companyName} locale={locale} />;
+  }
+
+  // A lead must attach to a real company the platform can route it to. When the
+  // API is live and no company was selected, there's no server-side "general"
+  // company to receive it — so guide the user to pick one instead of rendering a
+  // form that would fail on submit. Demo mode (no API) keeps the offline flow.
+  if (!companySlug && isApiConfigured()) {
+    return <ChooseCompanyPrompt locale={locale} />;
   }
 
   return (
@@ -403,6 +412,40 @@ function Field({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+// ── Choose-a-company prompt ───────────────────────────────────────────────
+// Shown when the form is opened with no company and the live API is in use: a
+// lead must attach to a real company, so we send the user to the directory.
+function ChooseCompanyPrompt({ locale }: { locale: Locale }) {
+  return (
+    <div className="bg-surface min-h-screen pt-20 pb-16 px-5 flex items-center justify-center">
+      <div className="max-w-md w-full text-center">
+        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 shadow-bloom">
+          <span className="material-symbols-outlined text-primary text-[44px]"
+            style={{ fontVariationSettings: "'FILL' 1" }}>storefront</span>
+        </div>
+        <h1 className="font-black text-[26px] text-on-surface mb-2 tracking-tight">
+          {t(locale, "form_pick_company_title")}
+        </h1>
+        <p className="text-[15px] text-outline mb-7 leading-relaxed max-w-sm mx-auto">
+          {t(locale, "form_pick_company_sub")}
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link to="/companies"
+            className="flex-1 bg-primary text-on-primary py-3.5 rounded-xl font-bold text-[15px]
+                       hover:bg-primary-container transition-colors text-center touch-press btn-press">
+            {t(locale, "common_browse_companies")}
+          </Link>
+          <Link to="/"
+            className="flex-1 bg-surface-container-lowest text-on-surface py-3.5 rounded-xl font-bold text-[15px]
+                       hover:bg-surface-container-low transition-colors text-center border border-outline-variant/25 touch-press">
+            {t(locale, "common_back_to_home")}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

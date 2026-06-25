@@ -52,6 +52,7 @@ exports[`response envelope contract shapes > ApiPage<T> (page) 1`] = `
           "district": "R7 District",
           "rating": 5,
           "text": "Great work",
+          "verified": false,
         },
       ],
       "services": [
@@ -85,6 +86,7 @@ exports[`response envelope contract shapes > raw single item (ok) 1`] = `
   "name": "Mona Adel",
   "phone": "01012345678",
   "refNumber": "AA-20260101-7F3K",
+  "reviewed": false,
   "service": "Full Interior Design",
   "status": "New",
 }
@@ -128,6 +130,7 @@ exports[`serializer contract shapes > ApiCompany (raw profile) 1`] = `
       "district": "R7 District",
       "rating": 5,
       "text": "Great work",
+      "verified": false,
     },
   ],
   "services": [
@@ -154,6 +157,7 @@ exports[`serializer contract shapes > ApiLead (createdAt as epoch ms) 1`] = `
   "name": "Mona Adel",
   "phone": "01012345678",
   "refNumber": "AA-20260101-7F3K",
+  "reviewed": false,
   "service": "Full Interior Design",
   "status": "New",
 }

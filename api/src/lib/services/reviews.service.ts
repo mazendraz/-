@@ -3,8 +3,11 @@
 // app/src/lib/catalog.ts: rating = round(avg, 1 decimal), 0 when empty).
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { LeadStatus } from "@/generated/prisma/enums";
 import { serializeReview } from "@/lib/utils/serialize";
-import { NotFoundError } from "@/lib/utils/errors";
+import { phoneTail } from "@/lib/utils/phone";
+import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import type { SubmitReviewInput } from "@/lib/validation/reviews";
 import type { ApiReview } from "@/lib/apiTypes";
 
 export interface ReviewInput {
@@ -88,4 +91,59 @@ export async function remove(
 /** Recompute a company's aggregate outside an add/delete (e.g. data fixes). */
 export async function recomputeAggregate(companyId: string): Promise<void> {
   await prisma.$transaction((tx) => recompute(tx, companyId));
+}
+
+/**
+ * Public: a customer submits a VERIFIED review for their own completed lead.
+ * Gated by refNumber + matching phone (the same shared secret as lead tracking).
+ * One review per lead: the lead's reviewedAt is stamped in the same transaction.
+ * author/date/district are taken from the lead, so reviews can't be spoofed for
+ * an arbitrary company. Recomputes the company aggregate like the admin path.
+ */
+export async function submitFromLead(input: SubmitReviewInput): Promise<ApiReview> {
+  const lead = await prisma.lead.findUnique({
+    where: { refNumber: input.ref },
+    select: {
+      id: true,
+      companyId: true,
+      customerName: true,
+      district: true,
+      phone: true,
+      status: true,
+      reviewedAt: true,
+    },
+  });
+  // Missing ref and phone mismatch both return 404 — don't reveal valid refs.
+  if (!lead || phoneTail(lead.phone) !== phoneTail(input.phone)) {
+    throw new NotFoundError("Lead");
+  }
+  if (lead.status !== LeadStatus.COMPLETED) {
+    throw new ConflictError("Only completed requests can be reviewed.");
+  }
+  if (lead.reviewedAt) {
+    throw new ConflictError("This request has already been reviewed.");
+  }
+
+  const avatar = lead.customerName.trim().charAt(0).toUpperCase() || "?";
+  const date = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const review = await prisma.$transaction(async (tx) => {
+    const created = await tx.review.create({
+      data: {
+        companyId: lead.companyId,
+        author: lead.customerName,
+        avatar,
+        rating: input.rating,
+        text: input.text,
+        date,
+        district: lead.district,
+        verified: true,
+      },
+    });
+    await tx.lead.update({ where: { id: lead.id }, data: { reviewedAt: new Date() } });
+    await recompute(tx, lead.companyId);
+    return created;
+  });
+
+  return serializeReview(review);
 }

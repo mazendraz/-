@@ -35,6 +35,15 @@ export interface ApiReview {
   text: string;
   date: string;
   district: string;
+  verified: boolean; // true = real customer on a completed lead; false = curated
+}
+
+/** POST /reviews — public, customer-submitted review for a completed lead. */
+export interface ApiReviewSubmitPayload {
+  ref: string; // lead reference number
+  phone: string; // must match the lead's phone (shared secret)
+  rating: number; // 1..5
+  text: string;
 }
 
 export interface ApiCompany {
@@ -106,6 +115,7 @@ export interface ApiLead {
   budget: string;
   description: string;
   status: ApiLeadStatus;
+  reviewed: boolean; // true once the customer has left a review for this lead
   createdAt: number; // epoch ms
 }
 
@@ -148,6 +158,39 @@ export interface ApiLoginPayload {
 export interface ApiAuthResponse {
   token: string;
   user: ApiUser;
+}
+
+// ── Admin: user management ──────────────────────────────────────────────────
+// Admin-only views/payloads for managing login accounts (ADMIN + PROVIDER).
+// passwordHash is NEVER serialized into any of these shapes.
+
+export interface ApiAdminUser {
+  id: string;
+  name: string;
+  email: string;
+  role: ApiUserRole;
+  companyId: string | null;
+  companyName: string | null; // resolved from the linked company, for display
+  isActive: boolean;
+  createdAt: number; // epoch ms
+}
+
+/** POST /admin/users — create an account (defaults to PROVIDER). */
+export interface ApiAdminUserCreatePayload {
+  name: string;
+  email: string;
+  password: string;
+  role?: ApiUserRole;
+  companyId?: string | null;
+}
+
+/** PATCH /admin/users/:id — partial update (any subset). */
+export interface ApiAdminUserUpdatePayload {
+  name?: string;
+  password?: string; // reset password
+  role?: ApiUserRole;
+  companyId?: string | null; // null unlinks from the company
+  isActive?: boolean; // false = revoke access (also kills active sessions)
 }
 
 // ── Site reviews (platform testimonials) ──────────────────────────────────────

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { generateRefNumber } from "@/lib/utils/refNumber";
+import { phoneTail } from "@/lib/utils/phone";
 import { leadStatusFromLabel, serializeLead } from "@/lib/utils/serialize";
 import { notifyNewLead } from "@/lib/services/notifications.service";
 import { NotFoundError } from "@/lib/utils/errors";
@@ -136,6 +137,26 @@ export async function listAll(
     };
   }
   return listWhere(where, query);
+}
+
+/**
+ * Public: look up a single lead by its reference number, gated by a matching
+ * phone (a shared secret only the submitter knows). Returns the customer's own
+ * lead so they can track its status without an account. Both a missing ref and a
+ * phone mismatch throw the SAME 404 — never reveal which refNumbers exist.
+ */
+export async function trackByRefAndPhone(
+  refNumber: string,
+  phone: string,
+): Promise<ApiLead> {
+  const lead = await prisma.lead.findUnique({
+    where: { refNumber },
+    include: leadInclude,
+  });
+  if (!lead || phoneTail(lead.phone) !== phoneTail(phone)) {
+    throw new NotFoundError("Lead");
+  }
+  return serializeLead(lead);
 }
 
 /** Returns a lead's owning companyId, or throws 404. (For ownership checks.) */

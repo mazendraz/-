@@ -14,6 +14,7 @@ const lead: ApiLead = {
   budget: "EGP 150,000 – 500,000",
   description: "Need a full fit-out",
   status: "New",
+  reviewed: false,
   createdAt: Date.UTC(2026, 0, 1),
 };
 
