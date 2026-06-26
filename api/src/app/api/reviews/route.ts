@@ -26,9 +26,11 @@ export const POST = withErrors(async (request: NextRequest) => {
     throw new ValidationError("Request body must be a JSON object");
   }
 
-  // Honeypot: real clients never fill `website`; bots auto-fill every field.
-  if (typeof (raw as { website?: unknown }).website === "string" &&
-    (raw as { website: string }).website.trim() !== "") {
+  // Honeypot: real clients never fill `hp_field`; bots auto-fill every field.
+  // (Named generically, NOT "website"/"email", so browser password managers don't
+  // autofill it and falsely flag a real user — see the matching frontend input.)
+  if (typeof (raw as { hp_field?: unknown }).hp_field === "string" &&
+    (raw as { hp_field: string }).hp_field.trim() !== "") {
     throw new ValidationError("Submission rejected");
   }
 

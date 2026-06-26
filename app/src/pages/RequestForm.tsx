@@ -368,13 +368,19 @@ export default function RequestForm() {
           </p>
 
           {/* Honeypot — hidden from real users; bots auto-fill it and the server
-              rejects the submission. Kept out of the tab order + a11y tree. */}
+              rejects the submission. Kept out of the tab order + a11y tree. The
+              data-*-ignore attrs stop password managers (1Password/LastPass/
+              Bitwarden) from autofilling it, which would falsely flag a real user. */}
           <input
             type="text"
-            name="website"
+            name="hp_field"
             tabIndex={-1}
             autoComplete="off"
             aria-hidden="true"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-bwignore="true"
+            data-form-type="other"
             value={honeypot}
             onChange={(e) => setHoneypot(e.target.value)}
             className="absolute -left-[9999px] top-0 w-px h-px opacity-0"

@@ -48,8 +48,8 @@ describe("createLeadSchema fields", () => {
   });
 
   it("ignores unknown keys like the honeypot field", () => {
-    const parsed = createLeadSchema.parse({ ...base, website: "spam" });
-    expect(parsed).not.toHaveProperty("website");
+    const parsed = createLeadSchema.parse({ ...base, hp_field: "spam" });
+    expect(parsed).not.toHaveProperty("hp_field");
   });
 });
 
