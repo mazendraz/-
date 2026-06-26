@@ -217,3 +217,28 @@ export interface ApiSiteReviewPayload {
 export interface ApiSiteReviewSettings {
   enabled: boolean;
 }
+
+// ── Feedback (company "Report a problem" / suggestion / inquiry) ───────────────
+
+export type ApiFeedbackType = "problem" | "suggestion" | "inquiry";
+
+export interface ApiFeedback {
+  id: string;
+  companySlug: string;
+  companyName: string;
+  type: ApiFeedbackType;
+  name: string | null;
+  phone: string | null;
+  message: string;
+  isRead: boolean;
+  createdAt: number; // epoch ms
+}
+
+/** POST /feedback — public submit body */
+export interface ApiFeedbackPayload {
+  companySlug: string;
+  type: ApiFeedbackType;
+  name?: string;
+  phone?: string;
+  message: string;
+}

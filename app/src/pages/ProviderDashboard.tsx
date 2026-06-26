@@ -60,7 +60,7 @@ export default function ProviderDashboard() {
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 pt-20">
         <span className="material-symbols-outlined text-outline text-[64px]">business_center</span>
         <p className="font-headline-md text-headline-md text-on-surface">No company found.</p>
-        <Link to="/admin" className="text-primary font-label-md text-label-md hover:underline">← Admin Dashboard</Link>
+        <Link to="/" className="text-primary font-label-md text-label-md hover:underline">← Back to site</Link>
       </div>
     );
   }
@@ -224,8 +224,7 @@ export default function ProviderDashboard() {
               </div>
               )}
               <div className="mt-6 bg-surface-container-lowest rounded-2xl p-6 text-center shadow-bloom">
-                <p className="text-body-md font-body-md text-outline mb-3">Want to add or update projects? Contact the Al Assema admin team.</p>
-                <Link to="/admin" className="text-primary font-label-md text-label-md hover:underline">Go to Admin Dashboard</Link>
+                <p className="text-body-md font-body-md text-outline">Want to add or update projects? Contact the Al Assema admin team.</p>
               </div>
             </div>
           )}
@@ -405,13 +404,9 @@ export default function ProviderDashboard() {
 
               <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom">
                 <h3 className="font-headline-md text-headline-md text-on-surface mb-4">Account</h3>
-                <p className="text-body-md font-body-md text-outline text-sm mb-4">
+                <p className="text-body-md font-body-md text-outline text-sm">
                   Provider accounts are managed by the Al Assema admin team. Contact admin to make changes.
                 </p>
-                <Link to="/admin" className="inline-flex items-center gap-2 text-primary font-label-md text-label-md hover:underline">
-                  <span className="material-symbols-outlined text-[16px]">admin_panel_settings</span>
-                  Contact Admin
-                </Link>
               </div>
             </div>
           )}
@@ -531,9 +526,6 @@ function ProviderSidebarBody({
       </nav>
 
       <div className="p-4 border-t border-outline-variant/15 space-y-1">
-        <Link to="/admin" className="flex items-center gap-2 px-2 py-2 text-[13px] font-bold text-outline hover:text-primary transition-colors">
-          <span className="material-symbols-outlined text-[18px]">admin_panel_settings</span> Admin Dashboard
-        </Link>
         <Link to="/" className="flex items-center gap-2 px-2 py-2 text-[13px] font-bold text-outline hover:text-on-surface transition-colors">
           <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to site
         </Link>

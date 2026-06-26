@@ -4,18 +4,17 @@ import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
-import { submitReviewSchema } from "@/lib/validation/reviews";
-import * as reviewsService from "@/lib/services/reviews.service";
+import { createFeedbackSchema } from "@/lib/validation/feedback";
+import * as feedbackService from "@/lib/services/feedback.service";
 
 export const dynamic = "force-dynamic";
 
 // Public submit is rate-limited per IP (bot/abuse protection).
 const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
-// POST /api/reviews → 201 + ApiReview. Customer review for their own completed
-// lead, gated by ref + phone. Curated/admin reviews use /admin/companies/[id]/reviews.
+// POST /api/feedback → 201 + ApiFeedback. Resolves the company by slug (404 if none).
 export const POST = withErrors(async (request: NextRequest) => {
-  const rl = await rateLimit(`reviews:${clientIp(request)}`, RATE_LIMIT);
+  const rl = await rateLimit(`feedback:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
     throw new RateLimitError(`Too many requests. Try again in ${seconds}s.`);
@@ -37,6 +36,7 @@ export const POST = withErrors(async (request: NextRequest) => {
   // CAPTCHA (no-op unless a secret is configured).
   await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
 
-  const payload = submitReviewSchema.parse(raw);
-  return ok(await reviewsService.submitFromLead(payload), 201);
+  const payload = createFeedbackSchema.parse(raw);
+  const feedback = await feedbackService.create(payload);
+  return ok(feedback, 201);
 });

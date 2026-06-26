@@ -106,7 +106,7 @@ export async function addSiteReview(
   // must surface (don't fake success). New reviews are held for moderation, so
   // they won't appear on the homepage until an admin approves them.
   if (isApiConfigured()) {
-    const created = await apiPost<SiteReview>("/site-reviews", { ...data, website: honeypot });
+    const created = await apiPost<SiteReview>("/site-reviews", { ...data, hp_field: honeypot });
     write([created, ...read()]);
     return created;
   }

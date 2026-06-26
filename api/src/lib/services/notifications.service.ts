@@ -13,7 +13,7 @@ export interface LeadNotificationTarget {
 }
 
 export interface BuiltEmail {
-  to: string;
+  to: string | string[];
   subject: string;
   text: string;
   html: string;
@@ -113,6 +113,75 @@ export async function notifyNewLead(
     return true;
   } catch (err) {
     console.error(`[notify] failed for lead ${lead.refNumber}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Build the admin-alert email body (without `to`), or null if there are no rows.
+ * Same data as the provider email, framed for an admin watching all companies.
+ */
+export function buildAdminAlertEmail(
+  lead: ApiLead,
+  companyName: string,
+): Omit<BuiltEmail, "to"> {
+  const subject = `New lead — ${companyName} — ${lead.refNumber}`;
+  const rows: [string, string][] = [
+    ["Company", companyName],
+    ["Reference", lead.refNumber],
+    ["Service", lead.service],
+    ["Customer", lead.name],
+    ["Phone", lead.phone],
+    ["District", lead.district],
+    ["Budget", lead.budget],
+    ["Details", lead.description],
+  ];
+
+  const text =
+    `A new lead was submitted on Al Assema.\n\n` +
+    rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
+    `\n\nReceived: ${new Date(lead.createdAt).toISOString()}`;
+
+  const html =
+    `<h2>New lead — ${escapeHtml(companyName)}</h2><table>` +
+    rows
+      .map(
+        ([k, v]) =>
+          `<tr><td><strong>${escapeHtml(k)}</strong></td><td>${escapeHtml(v)}</td></tr>`,
+      )
+      .join("") +
+    `</table>`;
+
+  return { subject, text, html };
+}
+
+/**
+ * Notify all admins of a new lead, in one email with multiple recipients. Never
+ * throws. Returns true if an email was dispatched, false if skipped (no key / no
+ * recipients). Same fail-open philosophy as notifyNewLead.
+ */
+export async function notifyAdmins(
+  lead: ApiLead,
+  companyName: string,
+  adminEmails: (string | null | undefined)[],
+): Promise<boolean> {
+  try {
+    const recipients = [...new Set(adminEmails.filter((e): e is string => !!e))];
+    if (recipients.length === 0) return false;
+
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info(
+        `[notify] RESEND_API_KEY not set — skipping admin alert for lead ${lead.refNumber}`,
+      );
+      return false;
+    }
+
+    const body = buildAdminAlertEmail(lead, companyName);
+    await sendViaResend(apiKey, { to: recipients, ...body });
+    return true;
+  } catch (err) {
+    console.error(`[notify] admin alert failed for lead ${lead.refNumber}:`, err);
     return false;
   }
 }

@@ -158,7 +158,7 @@ export async function submitReview(
   honeypot = "",
 ): Promise<void> {
   if (isApiConfigured()) {
-    await apiPost("/reviews", { ref: refNumber, phone, rating, text, website: honeypot });
+    await apiPost("/reviews", { ref: refNumber, phone, rating, text, hp_field: honeypot });
   }
   write(read().map((l) => (l.refNumber === refNumber ? { ...l, reviewed: true } : l)));
 }
@@ -185,7 +185,7 @@ export async function addLead(
   if (isApiConfigured()) {
     const created = await apiFetch<Lead>("/leads", {
       method: "POST",
-      body: JSON.stringify({ ...data, website: honeypot }),
+      body: JSON.stringify({ ...data, hp_field: honeypot }),
     });
     write([created, ...read()]);
     rememberMyRequest(created.id);
