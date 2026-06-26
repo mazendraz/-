@@ -35,6 +35,15 @@ enum UserRole {
   PROVIDER
 }
 
+// Visitor messages submitted from a company page ("Report a problem" / suggestion
+// / general inquiry). Maps (at the API boundary) to the frontend FeedbackType:
+// "problem" | "suggestion" | "inquiry".
+enum FeedbackType {
+  PROBLEM
+  SUGGESTION
+  INQUIRY
+}
+
 model Category {
   id          String   @id @default(uuid())
   slug        String   @unique
@@ -84,11 +93,12 @@ model Company {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  category Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  projects Project[]
-  reviews  Review[]
-  leads    Lead[]
-  users    User[]
+  category  Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  projects  Project[]
+  reviews   Review[]
+  leads     Lead[]
+  users     User[]
+  feedbacks Feedback[]
 
   @@index([slug])
   @@index([categoryId])
@@ -184,6 +194,26 @@ model SiteReview {
   createdAt DateTime @default(now()) // returned as epoch ms in the API
 
   @@index([visible])
+  @@index([createdAt])
+}
+
+// Visitor-submitted messages tied to a specific company ("Report a problem" /
+// suggestion / inquiry from the company page). Surfaced to admins for triage;
+// isRead marks whether an admin has seen it.
+model Feedback {
+  id        String       @id @default(uuid())
+  companyId String
+  type      FeedbackType @default(PROBLEM)
+  name      String?
+  phone     String?
+  message   String       @db.Text
+  isRead    Boolean      @default(false)
+  createdAt DateTime     @default(now()) // returned as epoch ms in the API
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([isRead])
   @@index([createdAt])
 }
 
