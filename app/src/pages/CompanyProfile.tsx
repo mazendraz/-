@@ -316,15 +316,6 @@ export default function CompanyProfile() {
                   </Link>
                 </div>
 
-                {/* Contact */}
-                <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
-                  <h3 className="font-label-md text-label-md text-outline mb-3 uppercase tracking-wider">{t(locale, "profile_contact")}</h3>
-                  <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>phone</span>
-                    <span className="text-body-md font-body-md text-on-surface">{company.phone}</span>
-                  </div>
-                </div>
-
                 {/* Report a problem */}
                 <button
                   onClick={() => setFeedbackOpen(true)}
@@ -486,13 +477,26 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
   const { containerRef, trapTab } = useDialogA11y(true, onClose);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!message.trim()) { setError(t(locale, "feedback_err")); return; }
-    addFeedback({ type, name: name.trim(), phone: phone.trim(), companySlug, companyName, message: message.trim() });
-    setSubmitted(true);
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await addFeedback(
+        { type, name: name.trim(), phone: phone.trim(), companySlug, companyName, message: message.trim() },
+        honeypot,
+      );
+      setSubmitted(true);
+    } catch {
+      // API mode surfaces real failures — don't fake success.
+      setError(t(locale, "feedback_err_submit"));
+      setIsSubmitting(false);
+    }
   }
 
   const typeLabels: Record<FeedbackType, string> = {
@@ -585,10 +589,31 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
 
               <button
                 type="submit"
-                className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press"
+                disabled={isSubmitting}
+                className={`w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] transition-colors touch-press
+                  ${isSubmitting ? "opacity-80 cursor-not-allowed" : "hover:bg-primary-container btn-press"}`}
               >
                 {t(locale, "feedback_send")}
               </button>
+
+              {/* Honeypot — hidden from real users; bots auto-fill it and the
+                  server rejects the submission. Kept out of the tab order. The
+                  data-*-ignore attrs stop password managers (1Password/LastPass/
+                  Bitwarden) from autofilling it, which would falsely flag a real user. */}
+              <input
+                type="text"
+                name="hp_field"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+              />
             </form>
           )}
         </div>
