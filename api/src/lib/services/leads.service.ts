@@ -6,7 +6,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { generateRefNumber } from "@/lib/utils/refNumber";
 import { phoneTail } from "@/lib/utils/phone";
 import { leadStatusFromLabel, serializeLead } from "@/lib/utils/serialize";
-import { notifyNewLead } from "@/lib/services/notifications.service";
+import { notifyNewLead, notifyAdmins } from "@/lib/services/notifications.service";
 import { NotFoundError } from "@/lib/utils/errors";
 import type {
   ApiLead,
@@ -89,6 +89,16 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
         whatsapp: company.whatsapp,
         companyName: company.name,
       });
+
+      // Notify all active admins too — sourced from the User table so it tracks
+      // the Team tab automatically (no env var to keep in sync). Also fail-open.
+      void prisma.user
+        .findMany({
+          where: { role: "ADMIN", isActive: true },
+          select: { email: true },
+        })
+        .then((admins) => notifyAdmins(serialized, company.name, admins.map((a) => a.email)))
+        .catch((err) => console.error(`[notify] admin lookup failed for lead ${serialized.refNumber}:`, err));
 
       return serialized;
     } catch (err) {
