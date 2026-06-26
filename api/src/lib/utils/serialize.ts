@@ -159,6 +159,19 @@ export function serializeCompany(c: CompanyWithRelations): ApiCompany {
   };
 }
 
+/**
+ * Admin view: the full company PLUS the internal contact fields (email/whatsapp)
+ * that the public serializers deliberately omit. Used only by admin endpoints so
+ * the company editor can display and round-trip them (lead notifications go here).
+ */
+export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
+  return {
+    ...serializeCompany(c),
+    email: c.email ?? null,
+    whatsapp: c.whatsapp ?? null,
+  };
+}
+
 export function serializeLead(l: LeadWithCompany): ApiLead {
   return {
     id: l.id,

@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { CompanyStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { serializeCompany, serializeCompanyCard } from "@/lib/utils/serialize";
+import { serializeCompany, serializeCompanyAdmin, serializeCompanyCard } from "@/lib/utils/serialize";
 import { uniqueSlug } from "@/lib/utils/slug";
 import { NotFoundError } from "@/lib/utils/errors";
 import type { ApiCompany, ApiPage } from "@/lib/apiTypes";
@@ -225,7 +225,7 @@ export async function listAll(
       take: pageSize,
     }),
   ]);
-  return { data: rows.map(serializeCompany), meta: { total, page, pageSize } };
+  return { data: rows.map(serializeCompanyAdmin), meta: { total, page, pageSize } };
 }
 
 /** Admin: create a company. Slug is auto-generated from the name. */
@@ -264,7 +264,7 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
     },
     include: companyInclude,
   });
-  return serializeCompany(company);
+  return serializeCompanyAdmin(company);
 }
 
 /** Admin: update a company. The slug stays stable to preserve existing links. */
@@ -320,7 +320,7 @@ export async function update(
         include: companyInclude,
       });
 
-  return serializeCompany(company);
+  return serializeCompanyAdmin(company);
 }
 
 /** Admin: delete a company (cascades projects/reviews/leads). */
@@ -349,5 +349,5 @@ export async function setStatus(
     data: { status },
     include: companyInclude,
   });
-  return serializeCompany(company);
+  return serializeCompanyAdmin(company);
 }

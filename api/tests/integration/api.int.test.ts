@@ -11,6 +11,7 @@ import { PATCH as leadPATCH } from "@/app/api/leads/[id]/route";
 import { GET as providerLeadsGET } from "@/app/api/provider/leads/route";
 import { GET as companyGET } from "@/app/api/companies/[slug]/route";
 import { GET as companiesListGET } from "@/app/api/companies/route";
+import { GET as adminCompaniesGET } from "@/app/api/admin/companies/route";
 import { DELETE as categoryDELETE } from "@/app/api/admin/categories/[id]/route";
 import { POST as reviewPOST } from "@/app/api/admin/companies/[id]/reviews/route";
 import { POST as customerReviewPOST } from "@/app/api/reviews/route";
@@ -279,6 +280,34 @@ describe("lead tracking (token replaces phone as the secret)", () => {
       req(`/api/leads/track?ref=${created.refNumber}&token=not-the-real-token`, { ip: "10.0.77.4" }),
     );
     expect(badRes.status).toBe(404);
+  });
+});
+
+describe("company contact fields (admin-only)", () => {
+  it("returns email/whatsapp to admins but never in the public payload", async () => {
+    const company = await prisma.company.create({
+      data: {
+        ...companyData(`${tag}-contact`, "ACTIVE", categoryId),
+        email: "owner@contact.test",
+        whatsapp: "201000000000",
+      },
+    });
+
+    // Admin list includes the internal contact fields (so the editor can edit them).
+    const adminRes = await adminCompaniesGET(
+      req(`/api/admin/companies?pageSize=200`, { token: adminToken }),
+      undefined as never,
+    );
+    const adminCard = (await adminRes.json()).data.find(
+      (c: { slug: string }) => c.slug === `${tag}-contact`,
+    );
+    expect(adminCard.email).toBe("owner@contact.test");
+    expect(adminCard.whatsapp).toBe("201000000000");
+
+    // Public profile must NOT leak them.
+    const pub = await (await companyGET(req(`/api/companies/${tag}-contact`), ctx({ slug: `${tag}-contact` }))).json();
+    expect(pub.email).toBeUndefined();
+    expect(pub.whatsapp).toBeUndefined();
   });
 });
 

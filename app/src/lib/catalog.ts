@@ -167,6 +167,10 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
     completedProjects: c.completedProjects,
     featured: c.featured ?? true,
     verified: c.verified ?? false,
+    // Internal contact for lead notifications. Send "" as undefined so an empty
+    // field clears the value rather than the API treating it as "leave unchanged".
+    email: c.email?.trim() || undefined,
+    whatsapp: c.whatsapp?.trim() || undefined,
     projects: c.projects.map((p) => ({
       title: p.title,
       img: p.img,
@@ -236,6 +240,8 @@ const EMPTY_COMPANY: CompanyDraft = {
   badges: [],
   featured: true,
   verified: false,
+  email: "",
+  whatsapp: "",
 };
 
 export function emptyCompany(): CompanyDraft {

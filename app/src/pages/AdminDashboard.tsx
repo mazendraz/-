@@ -494,6 +494,25 @@ function CompanyEditor({ company, categories, onClose }: {
             <LField label="Phone"><input className="field-input" value={draft.phone} onChange={(e) => set("phone", e.target.value)} placeholder="+20 100 …" /></LField>
             <LField label="Location"><input className="field-input" value={draft.location} onChange={(e) => set("location", e.target.value)} /></LField>
           </div>
+
+          {/* Internal lead-notification contact — NOT shown publicly. New-lead
+              emails are sent to this address; leave blank to disable email alerts
+              for this company. */}
+          <div className="bg-surface-container rounded-xl p-3.5 space-y-4">
+            <p className="text-[12px] font-bold text-outline flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px]">notifications</span>
+              Lead notifications (private — not shown on the public profile)
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <LField label="Notification email">
+                <input className="field-input" type="email" value={draft.email ?? ""} onChange={(e) => set("email", e.target.value)} placeholder="owner@company.com" />
+              </LField>
+              <LField label="WhatsApp (optional)">
+                <input className="field-input" value={draft.whatsapp ?? ""} onChange={(e) => set("whatsapp", e.target.value)} placeholder="+20 100 …" />
+              </LField>
+            </div>
+          </div>
+
           <TagField label="Services Offered" tags={draft.services} onChange={(t) => set("services", t)} placeholder="Add a service…" />
           {/* Trust numbers. Rating + Reviews are NOT editable here: the server
               ignores them (they're derived from the Review table). Show read-only

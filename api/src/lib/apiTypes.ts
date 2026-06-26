@@ -71,6 +71,10 @@ export interface ApiCompany {
   badges: string[];
   featured: boolean;
   verified: boolean;
+  // Internal contact fields — lead notifications are sent here. Returned ONLY in
+  // admin payloads (so the editor can round-trip them); omitted from public ones.
+  email?: string | null;
+  whatsapp?: string | null;
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────

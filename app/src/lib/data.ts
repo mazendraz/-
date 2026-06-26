@@ -44,6 +44,9 @@ export type Company = {
   badges: string[];       // e.g. ["Licensed", "Award-Winning"]
   featured?: boolean;     // show in home "Featured Companies" (default: true)
   verified?: boolean;     // admin-controlled verified badge (default: false for new companies)
+  // Internal contact for lead notifications — admin-only (not shown publicly).
+  email?: string;         // where new-lead emails are sent
+  whatsapp?: string;      // provider WhatsApp number (optional channel)
 };
 
 export type ServiceCategory = {
