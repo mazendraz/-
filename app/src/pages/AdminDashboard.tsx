@@ -24,6 +24,7 @@ import {
   type AdminUser, type Role,
 } from "../lib/users";
 import { loadDemoLeads } from "../lib/demo";
+import { isApiConfigured } from "../lib/api";
 import { logout, isAuthenticated } from "../lib/auth";
 import { uploadImage, isDataUrl, type UploadBucket } from "../lib/image";
 import SearchInput from "../components/SearchInput";
@@ -494,13 +495,24 @@ function CompanyEditor({ company, categories, onClose }: {
             <LField label="Location"><input className="field-input" value={draft.location} onChange={(e) => set("location", e.target.value)} /></LField>
           </div>
           <TagField label="Services Offered" tags={draft.services} onChange={(t) => set("services", t)} placeholder="Add a service…" />
-          {/* Trust numbers */}
+          {/* Trust numbers. Rating + Reviews are NOT editable here: the server
+              ignores them (they're derived from the Review table). Show read-only
+              so admins don't think they're saving a value that vanishes. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <LField label="Rating"><input type="number" step="0.1" min="0" max="5" className="field-input" value={draft.rating} onChange={(e) => set("rating", Number(e.target.value))} /></LField>
-            <LField label="Reviews"><input type="number" min="0" className="field-input" value={draft.reviewCount} onChange={(e) => set("reviewCount", Number(e.target.value))} /></LField>
+            <LField label="Rating">
+              <div className="field-input bg-surface-container/50 text-on-surface-variant cursor-not-allowed flex items-center" title="Auto-calculated from real customer reviews">
+                {Number(draft.rating ?? 0).toFixed(1)}
+              </div>
+            </LField>
+            <LField label="Reviews">
+              <div className="field-input bg-surface-container/50 text-on-surface-variant cursor-not-allowed flex items-center" title="Auto-calculated from real customer reviews">
+                {draft.reviewCount ?? 0}
+              </div>
+            </LField>
             <LField label="Projects"><input type="number" min="0" className="field-input" value={draft.completedProjects} onChange={(e) => set("completedProjects", Number(e.target.value))} /></LField>
             <LField label="Years Exp."><input type="number" min="0" className="field-input" value={draft.yearsExperience} onChange={(e) => set("yearsExperience", Number(e.target.value))} /></LField>
           </div>
+          <p className="text-[12px] text-outline -mt-1">Rating &amp; Reviews are calculated automatically from real customer reviews.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <LField label="Response Time"><input className="field-input" value={draft.responseTime} onChange={(e) => set("responseTime", e.target.value)} placeholder="within 2 hours" /></LField>
             <LField label="Verified Since"><input className="field-input" value={draft.verifiedSince} onChange={(e) => set("verifiedSince", e.target.value)} placeholder="2021" /></LField>
@@ -1070,27 +1082,47 @@ function SettingsTab({ leadCount }: { leadCount: number }) {
     file.text().then((txt) => flash(importCatalog(txt) ? "Catalog imported." : "Import failed — invalid file."));
   }
 
+  // These tools write to localStorage only — meaningful in demo mode, but in
+  // production (API configured) the data comes from the real database, so they'd
+  // be misleading (inject fake leads / appear to reset, then vanish on next sync).
+  const demoMode = !isApiConfigured();
+
   return (
     <div className="max-w-2xl space-y-5">
       {msg && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-[13px] font-bold">{msg}</div>}
 
-      {/* Demo data */}
-      <SettingCard icon="science" title="Demo Data" desc="Populate the dashboards with realistic sample leads spread across the past 4 weeks so you can preview the analytics. This adds leads only — it never touches your companies.">
-        <button onClick={() => flash(`Added ${loadDemoLeads()} demo leads.`)} className="bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press">Load demo leads</button>
-        <ConfirmAction label={`Clear all ${leadCount} leads`} onConfirm={() => { clearAllLeads(); flash("All leads cleared."); }} danger />
-      </SettingCard>
+      {demoMode ? (
+        <>
+          {/* Demo data */}
+          <SettingCard icon="science" title="Demo Data" desc="Populate the dashboards with realistic sample leads spread across the past 4 weeks so you can preview the analytics. This adds leads only — it never touches your companies.">
+            <button onClick={() => flash(`Added ${loadDemoLeads()} demo leads.`)} className="bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press">Load demo leads</button>
+            <ConfirmAction label={`Clear all ${leadCount} leads`} onConfirm={() => { clearAllLeads(); flash("All leads cleared."); }} danger />
+          </SettingCard>
 
-      {/* Catalog backup */}
-      <SettingCard icon="backup" title="Catalog Backup" desc="Export the full catalog (companies + categories) as a JSON file, or import a previously exported file.">
-        <button onClick={doExport} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors">Export JSON</button>
-        <button onClick={() => fileRef.current?.click()} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors">Import JSON</button>
-        <input ref={fileRef} type="file" accept="application/json" hidden onChange={doImport} />
-      </SettingCard>
+          {/* Catalog backup */}
+          <SettingCard icon="backup" title="Catalog Backup" desc="Export the full catalog (companies + categories) as a JSON file, or import a previously exported file.">
+            <button onClick={doExport} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors">Export JSON</button>
+            <button onClick={() => fileRef.current?.click()} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors">Import JSON</button>
+            <input ref={fileRef} type="file" accept="application/json" hidden onChange={doImport} />
+          </SettingCard>
 
-      {/* Reset */}
-      <SettingCard icon="restart_alt" title="Reset Catalog" desc="Restore the companies and categories to the original seed data. This permanently discards your edits to the catalog (leads are not affected).">
-        <ConfirmAction label="Reset to defaults" onConfirm={() => { resetCatalog(); flash("Catalog reset to defaults."); }} danger />
-      </SettingCard>
+          {/* Reset */}
+          <SettingCard icon="restart_alt" title="Reset Catalog" desc="Restore the companies and categories to the original seed data. This permanently discards your edits to the catalog (leads are not affected).">
+            <ConfirmAction label="Reset to defaults" onConfirm={() => { resetCatalog(); flash("Catalog reset to defaults."); }} danger />
+          </SettingCard>
+        </>
+      ) : (
+        <div className="flex items-start gap-3 bg-surface-container rounded-2xl p-5 border border-outline-variant/20">
+          <span className="material-symbols-outlined text-outline text-[22px] flex-shrink-0 mt-0.5">cloud_done</span>
+          <div>
+            <p className="font-bold text-[14px] text-on-surface mb-1">Live data</p>
+            <p className="text-[13px] text-on-surface-variant leading-relaxed">
+              Demo &amp; backup tools are available only in preview mode (no API). In production your
+              leads and catalog come from the real database — manage them from their own tabs.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1161,9 +1193,6 @@ function SidebarBody({ tab, onSelect, newCount, reviewBadge, onClose }: {
         })}
       </nav>
       <div className="p-4 border-t border-outline-variant/15 space-y-1">
-        <Link to="/provider" className="flex items-center gap-2 px-2 py-2 text-[13px] font-bold text-outline hover:text-primary transition-colors">
-          <span className="material-symbols-outlined text-[18px]">storefront</span> Provider Portal
-        </Link>
         <Link to="/" className="flex items-center gap-2 px-2 py-2 text-[13px] font-bold text-outline hover:text-on-surface transition-colors">
           <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to site
         </Link>
