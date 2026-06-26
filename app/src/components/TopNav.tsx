@@ -4,6 +4,7 @@ import { useSaved } from "../hooks/useSaved";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
+import Logo from "./Logo";
 
 const NAV_LINKS: { to: string; key: StringKey }[] = [
   { to: "/services", key: "nav_services" },
@@ -106,7 +107,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       >
         <div className="flex items-center gap-stack-lg">
           <Link to="/" className="flex items-center gap-3 flex-shrink-0" aria-label="Al Assemah — Home">
-            <img src="/logo.png" alt="Al Assemah" className="h-14 w-14 object-contain rounded-xl"
+            <Logo className="h-14 w-14 object-contain rounded-xl"
               style={{ filter: solidBg ? "none" : "drop-shadow(0 2px 8px rgba(0,0,0,0.35))" }} />
             <span
               className={`text-[22px] font-black leading-none select-none transition-colors
@@ -183,7 +184,7 @@ export default function TopNav({ onOpenSearch }: Props) {
           className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 flex-shrink-0"
           aria-label="Al Assemah — Home"
         >
-          <img src="/logo.png" alt="Al Assemah" className="h-9 w-9 object-contain rounded-lg"
+          <Logo className="h-9 w-9 object-contain rounded-lg"
             style={{ filter: solidBg ? "none" : "drop-shadow(0 2px 8px rgba(0,0,0,0.4))" }} />
           <span
             className={`text-[19px] font-black leading-none select-none transition-colors
@@ -219,7 +220,7 @@ export default function TopNav({ onOpenSearch }: Props) {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/15">
               <Link to="/" onClick={() => setDrawerOpen(false)} className="flex items-center gap-2.5">
-                <img src="/logo.png" alt="Al Assemah" className="h-11 w-11 object-contain rounded-xl" />
+                <Logo className="h-11 w-11 object-contain rounded-xl" />
                 <span className="font-display font-black text-[17px] text-on-surface">Al Assema</span>
               </Link>
               <button onClick={() => setDrawerOpen(false)} className="p-2 rounded-lg hover:bg-surface-container-low transition-colors" aria-label="Close menu">

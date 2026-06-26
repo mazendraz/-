@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   COMPANIES as SEED_COMPANIES,
   SERVICE_CATEGORIES as SEED_CATEGORIES,
+  FEATURED_PROJECTS,
   type Company,
   type ServiceCategory,
   type Project,
@@ -167,6 +168,8 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
     completedProjects: c.completedProjects,
     featured: c.featured ?? true,
     verified: c.verified ?? false,
+    metaTitle: c.metaTitle?.trim() || undefined,
+    metaDescription: c.metaDescription?.trim() || undefined,
     // Internal contact for lead notifications. Send "" as undefined so an empty
     // field clears the value rather than the API treating it as "leave unchanged".
     email: c.email?.trim() || undefined,
@@ -176,6 +179,7 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
       img: p.img,
       description: p.description,
       year: p.year,
+      featured: p.featured ?? false,
     })),
   };
 }
@@ -242,6 +246,8 @@ const EMPTY_COMPANY: CompanyDraft = {
   verified: false,
   email: "",
   whatsapp: "",
+  metaTitle: "",
+  metaDescription: "",
 };
 
 export function emptyCompany(): CompanyDraft {
@@ -363,6 +369,8 @@ export function addCategory(cat: Omit<ServiceCategory, "count">): ServiceCategor
       description: cat.description,
       icon: cat.icon,
       cover: cat.cover || undefined,
+      metaTitle: cat.metaTitle?.trim() || undefined,
+      metaDescription: cat.metaDescription?.trim() || undefined,
     })
       .catch((err) => console.error("Create category failed:", err))
       .finally(() => refreshCatalogFromApi());
@@ -380,6 +388,8 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
         description: patch.description,
         icon: patch.icon,
         cover: patch.cover || undefined,
+        metaTitle: patch.metaTitle?.trim() || undefined,
+        metaDescription: patch.metaDescription?.trim() || undefined,
       })
         .catch((err) => console.error("Update category failed:", err))
         .finally(() => refreshCatalogFromApi());
@@ -494,4 +504,29 @@ export function useCompanyDetail(slug: string): { company: Company | undefined; 
 /** Reactive hydration status (loading/ready/error) for loading & error UI. */
 export function useCatalogStatus(): CatalogStatus {
   return useCatalogValue(getCatalogStatus);
+}
+
+export interface FeaturedProject {
+  title: string;
+  img: string;
+  company: string;
+  category: string;
+}
+
+/**
+ * Homepage "Featured Projects" showcase. In API mode, the admin-curated featured
+ * projects (Project.featured) of ACTIVE companies; falls back to the seed list
+ * when none are flagged or the API is unavailable, so the section never looks empty.
+ */
+export function useFeaturedProjects(): FeaturedProject[] {
+  const [list, setList] = useState<FeaturedProject[]>(FEATURED_PROJECTS);
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let active = true;
+    apiGet<FeaturedProject[]>("/projects/featured")
+      .then((rows) => { if (active && rows.length > 0) setList(rows); })
+      .catch(() => { /* keep the seed fallback */ });
+    return () => { active = false; };
+  }, []);
+  return list;
 }

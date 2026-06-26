@@ -52,6 +52,10 @@ model Category {
   icon        String // Material Symbols icon name
   cover       String? // ApiCategory.cover — category cover image
   isActive    Boolean  @default(true)
+  // Optional per-page SEO overrides (admin-set). Null → frontend falls back to
+  // the label/description-derived defaults.
+  metaTitle       String?
+  metaDescription String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -90,6 +94,10 @@ model Company {
   // internal contact fields for notifications — NOT returned in the public payload
   email             String?
   whatsapp          String?
+  // Optional per-page SEO overrides (admin-set). Null → frontend falls back to
+  // the name/tagline-derived defaults.
+  metaTitle         String?
+  metaDescription   String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
@@ -114,11 +122,14 @@ model Project {
   description String   @db.Text
   year        String // display string e.g. "2024"
   sortOrder   Int      @default(0)
+  // Curated for the homepage "Featured Projects" showcase (admin-set).
+  featured    Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
+  @@index([featured])
 }
 
 model Review {

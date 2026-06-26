@@ -19,8 +19,8 @@ export default function ServiceCategoryPage() {
   const status = useCatalogStatus();
   const cat = category ? categories.find((c) => c.slug === category) : undefined;
   usePageMeta(
-    cat ? `${cat.label} in New Capital | Al Assema` : "Services | Al Assema",
-    cat?.description
+    cat?.metaTitle || (cat ? `${cat.label} in New Capital | Al Assema` : "Services | Al Assema"),
+    cat?.metaDescription || cat?.description
   );
   const [query, setQuery] = useState("");
   const inCategory = category ? allCompaniesRaw.filter((c) => c.category === category) : allCompaniesRaw;

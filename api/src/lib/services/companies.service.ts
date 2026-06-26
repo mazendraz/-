@@ -160,6 +160,8 @@ export interface CompanyInput {
   completedProjects?: number;
   featured?: boolean;
   verified?: boolean;
+  metaTitle?: string;
+  metaDescription?: string;
   email?: string;
   whatsapp?: string;
   // When provided, the company's project list is replaced with these.
@@ -171,6 +173,7 @@ export interface CompanyProjectInput {
   img: string;
   description: string;
   year: string;
+  featured?: boolean;
 }
 
 function projectCreateData(projects: CompanyProjectInput[]) {
@@ -180,6 +183,7 @@ function projectCreateData(projects: CompanyProjectInput[]) {
     description: p.description,
     year: p.year,
     sortOrder: i,
+    featured: p.featured ?? false,
   }));
 }
 
@@ -256,6 +260,8 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
       completedProjects: input.completedProjects ?? 0,
       featured: input.featured ?? true,
       verified: input.verified ?? false,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
       email: input.email ?? null,
       whatsapp: input.whatsapp ?? null,
       ...(input.projects
@@ -297,6 +303,8 @@ export async function update(
     completedProjects: input.completedProjects ?? undefined,
     featured: input.featured ?? undefined,
     verified: input.verified ?? undefined,
+    metaTitle: input.metaTitle === undefined ? undefined : input.metaTitle,
+    metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,
     email: input.email === undefined ? undefined : input.email,
     whatsapp: input.whatsapp === undefined ? undefined : input.whatsapp,
   };

@@ -12,6 +12,13 @@ import { GET as providerLeadsGET } from "@/app/api/provider/leads/route";
 import { GET as companyGET } from "@/app/api/companies/[slug]/route";
 import { GET as companiesListGET } from "@/app/api/companies/route";
 import { GET as adminCompaniesGET } from "@/app/api/admin/companies/route";
+import { GET as settingsGET } from "@/app/api/settings/route";
+import { PUT as adminSettingsPUT } from "@/app/api/admin/settings/route";
+import { GET as emailTemplatesGET, PUT as emailTemplatesPUT } from "@/app/api/admin/email-templates/route";
+import { GET as pagesGET } from "@/app/api/pages/route";
+import { PUT as adminPagesPUT } from "@/app/api/admin/pages/route";
+import { GET as sitemapGET } from "@/app/api/sitemap/route";
+import { GET as featuredProjectsGET } from "@/app/api/projects/featured/route";
 import { DELETE as categoryDELETE } from "@/app/api/admin/categories/[id]/route";
 import { POST as reviewPOST } from "@/app/api/admin/companies/[id]/reviews/route";
 import { POST as customerReviewPOST } from "@/app/api/reviews/route";
@@ -308,6 +315,162 @@ describe("company contact fields (admin-only)", () => {
     const pub = await (await companyGET(req(`/api/companies/${tag}-contact`), ctx({ slug: `${tag}-contact` }))).json();
     expect(pub.email).toBeUndefined();
     expect(pub.whatsapp).toBeUndefined();
+  });
+});
+
+describe("featured projects (homepage showcase)", () => {
+  it("returns featured projects of ACTIVE companies only, with company + category", async () => {
+    await prisma.project.create({
+      data: { companyId: activeId, title: `${tag}-Feat`, img: "/img/x.jpg", description: "d", year: "2025", sortOrder: 0, featured: true },
+    });
+    await prisma.project.create({
+      data: { companyId: activeId, title: `${tag}-Plain`, img: "/img/y.jpg", description: "d", year: "2025", sortOrder: 1, featured: false },
+    });
+    const susp = await prisma.company.findFirst({ where: { slug: suspendedSlug }, select: { id: true } });
+    await prisma.project.create({
+      data: { companyId: susp!.id, title: `${tag}-SuspFeat`, img: "/img/z.jpg", description: "d", year: "2025", sortOrder: 0, featured: true },
+    });
+
+    const list = (await (await featuredProjectsGET()).json()) as Array<{ title: string; company: string; category: string }>;
+    const titles = list.map((p) => p.title);
+    expect(titles).toContain(`${tag}-Feat`);
+    expect(titles).not.toContain(`${tag}-Plain`); // not featured
+    expect(titles).not.toContain(`${tag}-SuspFeat`); // company suspended
+    const mine = list.find((p) => p.title === `${tag}-Feat`)!;
+    expect(mine.company).toBe(`Co ${tag}-active`); // companyData name = `Co ${slug}`
+    expect(mine.category).toBe("Int Cat"); // the test category label
+  });
+});
+
+describe("dynamic sitemap", () => {
+  it("lists ACTIVE companies + active categories, excludes suspended, serves XML", async () => {
+    const res = await sitemapGET();
+    expect(res.headers.get("content-type")).toContain("xml");
+    const body = await res.text();
+    expect(body).toContain("/companies/" + activeSlug); // ACTIVE company present
+    expect(body).toContain("/services/" + `${tag}-cat`); // active category present
+    expect(body).not.toContain("/companies/" + suspendedSlug); // suspended excluded
+    expect(body).toContain("<loc>"); // well-formed urlset
+  });
+});
+
+describe("platform settings", () => {
+  it("public GET; admin PUT persists & reflects publicly; invalid rejected; provider 403", async () => {
+    // Snapshot the keys this test mutates so the shared DB is restored afterwards.
+    const keys = ["support_email", "social_facebook", "districts"];
+    const before = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+    try {
+      const pub1 = await (await settingsGET()).json();
+      expect(typeof pub1.site_name).toBe("string"); // default "Al Assema" when unset
+      expect(pub1.districts).toBe(""); // newline list — blank = frontend defaults
+
+      const putRes = await adminSettingsPUT(
+        req("/api/admin/settings", {
+          method: "PUT",
+          body: {
+            support_email: "help@int.test",
+            social_facebook: "https://facebook.com/int",
+            districts: "Zone A\nZone B",
+          },
+          token: adminToken,
+        }),
+        undefined as never,
+      );
+      expect(putRes.status).toBe(200);
+      expect((await putRes.json()).support_email).toBe("help@int.test");
+
+      // Public endpoint reflects the changes.
+      const pub2 = await (await settingsGET()).json();
+      expect(pub2.support_email).toBe("help@int.test");
+      expect(pub2.districts).toBe("Zone A\nZone B");
+
+      // Invalid email → 400.
+      const bad = await adminSettingsPUT(
+        req("/api/admin/settings", { method: "PUT", body: { support_email: "not-an-email" }, token: adminToken }),
+        undefined as never,
+      );
+      expect(bad.status).toBe(400);
+
+      // Providers can't change platform settings.
+      const prov = await adminSettingsPUT(
+        req("/api/admin/settings", { method: "PUT", body: { site_name: "Hijack" }, token: providerToken }),
+        undefined as never,
+      );
+      expect(prov.status).toBe(403);
+    } finally {
+      for (const key of keys) {
+        const orig = before.find((r) => r.key === key);
+        if (orig) {
+          await prisma.appSetting.upsert({ where: { key }, create: { key, value: orig.value }, update: { value: orig.value } });
+        } else {
+          await prisma.appSetting.deleteMany({ where: { key } });
+        }
+      }
+    }
+  });
+});
+
+describe("legal pages", () => {
+  it("public GET; admin PUT persists & reflects publicly; provider 403; self-restores", async () => {
+    const keys = ["legal_terms"];
+    const before = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+    try {
+      const pub1 = await (await pagesGET()).json();
+      expect(pub1).toHaveProperty("terms");
+
+      const put = await adminPagesPUT(
+        req("/api/admin/pages", { method: "PUT", body: { terms: "Our terms apply." }, token: adminToken }),
+        undefined as never,
+      );
+      expect(put.status).toBe(200);
+
+      const pub2 = await (await pagesGET()).json();
+      expect(pub2.terms).toBe("Our terms apply.");
+
+      const prov = await adminPagesPUT(
+        req("/api/admin/pages", { method: "PUT", body: { terms: "x" }, token: providerToken }),
+        undefined as never,
+      );
+      expect(prov.status).toBe(403);
+    } finally {
+      for (const key of keys) {
+        const o = before.find((r) => r.key === key);
+        if (o) await prisma.appSetting.upsert({ where: { key }, create: { key, value: o.value }, update: { value: o.value } });
+        else await prisma.appSetting.deleteMany({ where: { key } });
+      }
+    }
+  });
+});
+
+describe("email templates", () => {
+  it("admin GET returns the shape; PUT persists; provider 403; self-restores", async () => {
+    const keys = ["email_provider_subject"];
+    const before = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+    try {
+      const got = await (await emailTemplatesGET(
+        req("/api/admin/email-templates", { token: adminToken }), undefined as never,
+      )).json();
+      expect(got).toHaveProperty("providerSubject"); // blank by default
+
+      const put = await emailTemplatesPUT(
+        req("/api/admin/email-templates", { method: "PUT", body: { providerSubject: "Hi {{refNumber}}" }, token: adminToken }),
+        undefined as never,
+      );
+      expect(put.status).toBe(200);
+      expect((await put.json()).providerSubject).toBe("Hi {{refNumber}}");
+
+      const prov = await emailTemplatesPUT(
+        req("/api/admin/email-templates", { method: "PUT", body: { providerSubject: "x" }, token: providerToken }),
+        undefined as never,
+      );
+      expect(prov.status).toBe(403);
+    } finally {
+      for (const key of keys) {
+        const o = before.find((r) => r.key === key);
+        if (o) await prisma.appSetting.upsert({ where: { key }, create: { key, value: o.value }, update: { value: o.value } });
+        else await prisma.appSetting.deleteMany({ where: { key } });
+      }
+    }
   });
 });
 

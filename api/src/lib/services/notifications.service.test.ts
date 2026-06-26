@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAdminAlertEmail,
+  buildFromTemplate,
   buildNewLeadEmail,
   notifyNewLead,
 } from "@/lib/services/notifications.service";
@@ -63,6 +64,23 @@ describe("buildAdminAlertEmail (PII-minimized)", () => {
       expect(body).not.toContain("EGP 150,000 – 500,000");
       expect(body).not.toContain("Need a full fit-out");
     }
+  });
+});
+
+describe("buildFromTemplate", () => {
+  it("substitutes {{tokens}} and HTML-escapes the body", () => {
+    const out = buildFromTemplate("Lead {{refNumber}}", "Hi {{customer}}\n{{details}}", {
+      refNumber: "AA-1",
+      customer: "Mona",
+      details: "<b>x</b>",
+    });
+    expect(out.subject).toBe("Lead AA-1");
+    expect(out.text).toBe("Hi Mona\n<b>x</b>");
+    expect(out.html).toBe("Hi Mona<br>&lt;b&gt;x&lt;/b&gt;");
+  });
+
+  it("collapses unknown tokens to empty", () => {
+    expect(buildFromTemplate("{{nope}}", "a{{nope}}b", {}).text).toBe("ab");
   });
 });
 

@@ -28,8 +28,8 @@ export default function CompanyProfile() {
   const { company, loading: detailLoading } = useCompanyDetail(slug ?? "");
   const status = useCatalogStatus();
   usePageMeta(
-    company ? `${company.name} | Al Assema` : "Company | Al Assema",
-    company?.tagline
+    company?.metaTitle || (company ? `${company.name} | Al Assema` : "Company | Al Assema"),
+    company?.metaDescription || company?.tagline
   );
   const [tab, setTab] = useState<Tab>("Overview");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);

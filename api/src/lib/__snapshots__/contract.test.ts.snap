@@ -31,11 +31,14 @@ exports[`response envelope contract shapes > ApiPage<T> (page) 1`] = `
       "id": "co-1",
       "location": "New Cairo",
       "logo": "/img/logo.jpg",
+      "metaDescription": null,
+      "metaTitle": null,
       "name": "Aura Interiors",
       "phone": "0223456789",
       "projects": [
         {
           "description": "Full villa",
+          "featured": false,
           "img": "/img/p1.jpg",
           "title": "Villa R7",
           "year": "2024",
@@ -109,11 +112,14 @@ exports[`serializer contract shapes > ApiCompany (raw profile) 1`] = `
   "id": "co-1",
   "location": "New Cairo",
   "logo": "/img/logo.jpg",
+  "metaDescription": null,
+  "metaTitle": null,
   "name": "Aura Interiors",
   "phone": "0223456789",
   "projects": [
     {
       "description": "Full villa",
+      "featured": false,
       "img": "/img/p1.jpg",
       "title": "Villa R7",
       "year": "2024",
@@ -162,6 +168,8 @@ exports[`serializer contract shapes > ApiCompany card (list view — empty proje
   "id": "co-1",
   "location": "New Cairo",
   "logo": "/img/logo.jpg",
+  "metaDescription": null,
+  "metaTitle": null,
   "name": "Aura Interiors",
   "phone": "0223456789",
   "projects": [],

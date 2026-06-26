@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { stripHtml } from "@/lib/utils/sanitize";
+import { stripHtml, sanitizedOptionalText } from "@/lib/utils/sanitize";
 import { imageRef } from "@/lib/validation/shared";
 
 export const upsertCategorySchema = z.object({
@@ -12,6 +12,8 @@ export const upsertCategorySchema = z.object({
   icon: z.string().trim().min(1).max(60),
   cover: imageRef.optional(),
   isActive: z.boolean().default(true),
+  metaTitle: sanitizedOptionalText(120).optional(),
+  metaDescription: sanitizedOptionalText(320).optional(),
 });
 
 export type UpsertCategoryInput = z.infer<typeof upsertCategorySchema>;

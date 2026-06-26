@@ -10,6 +10,7 @@ import {
   KpiCard, ChartCard, AreaLineChart, DonutChart, FunnelChart, BarChart,
 } from "../components/Charts";
 import SearchInput from "../components/SearchInput";
+import Logo from "../components/Logo";
 
 type ProviderTab = "overview" | "leads" | "projects" | "reviews" | "analytics" | "profile" | "settings";
 
@@ -119,7 +120,7 @@ export default function ProviderDashboard() {
             <span className="material-symbols-outlined text-on-surface text-[26px]">menu</span>
           </button>
           <Link to="/" className="md:hidden flex-shrink-0">
-            <img src="/logo.png" alt="Al Assemah" className="h-9 w-9 object-contain rounded-lg" />
+            <Logo className="h-9 w-9 object-contain rounded-lg" />
           </Link>
           <h1 className="font-display font-bold text-[18px] md:text-[20px] text-on-surface truncate">
             {TAB_CONFIG.find((t) => t.id === tab)?.label}
@@ -472,7 +473,7 @@ function ProviderSidebarBody({
       {/* Brand */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-outline-variant/15">
         <Link to="/" className="flex items-center gap-3 min-w-0 flex-1 hover:opacity-80 transition-opacity">
-          <img src="/logo.png" alt="Al Assemah" className="h-11 w-11 object-contain rounded-xl flex-shrink-0" />
+          <Logo className="h-11 w-11 object-contain rounded-xl flex-shrink-0" />
           <div className="min-w-0">
             <p className="font-display font-black text-[17px] text-on-surface leading-none truncate">Al Assemah</p>
             <p className="text-[11px] font-bold text-secondary tracking-wide mt-1.5 flex items-center gap-1">

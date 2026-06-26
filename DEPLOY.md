@@ -164,6 +164,13 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
 - [ ] **سجل التدقيق (Audit log):** العمليات الحسّاسة (حذف/تغيير حالة/تغيير
       صلاحيات/إنشاء حساب) بتتسجّل في جدول `AuditLog` وبتتقري من
       `GET /api/admin/audit-logs` (أدمن بس).
+- [ ] **Sitemap (SEO):** الـ sitemap بقى ديناميكي من قاعدة البيانات على
+      `https://<api-domain>/api/sitemap` (بيضيف الشركات/التصنيفات تلقائيًا من غير
+      redeploy). حط `PUBLIC_SITE_URL` بدومين **الفرونت** عشان روابط الـ `loc` تطلع
+      صح، واعمل submit للرابط ده في Google Search Console (أو ضيفه في `robots.txt`
+      كـ `Sitemap:`). ملف [`app/public/sitemap.xml`](app/public/sitemap.xml)
+      الثابت بقى **متجاوَز** — احذفه، أو اعمل rewrite في
+      [`app/vercel.json`](app/vercel.json) من `/sitemap.xml` للـ API sitemap.
 - [ ] `JWT_TTL` قصير في الإنتاج (الافتراضي دلوقتي `1d`)، و`JWT_SECRET` قوي وسري.
 - [ ] **Security headers:** الهيدرز الأساسية (HSTS / nosniff / X-Frame-Options /
       Referrer-Policy / Permissions-Policy) مفعّلة تلقائيًا للباك إند
@@ -191,6 +198,22 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
       > `script-src` فيه `'unsafe-inline'` بسبب الـ inline locale-init script؛
       > لو نقلته لملف خارجي تقدر تشيلها وتشدّد الـ CSP أكتر. شيل سطر
       > `frame-src`/`script-src` بتاع Turnstile لو مش مفعّل CAPTCHA.
+
+---
+
+## ما الذي يُدار من لوحة التحكم مقابل متغيرات البيئة
+
+كل المحتوى التشغيلي والتسويقي يتدار من **`/admin`** بدون تعديل كود أو redeploy:
+الشركات/التصنيفات/المشاريع/المعارض/التقييمات/الـ feedback/الـ leads/الحسابات،
+**إعدادات المنصّة** (اسم الموقع، إيميل/تليفون الدعم، العنوان، روابط السوشيال،
+قوائم المناطق والميزانيات، نصوص الـ hero بالعربي والإنجليزي)، **شعار/أيقونة
+الموقع (logo/favicon)**، **قوالب إيميلات الإشعارات**، **صفحات الشروط والخصوصية**،
+و**الـ SEO** (sitemap ديناميكي + meta لكل شركة/تصنيف).
+
+أما الإعدادات التشغيلية (Infra) فتظل عبر **متغيّرات البيئة** (تتغيّر مرّة عند النشر،
+مش محتاجة تعديل كود): `DATABASE_URL`/`DIRECT_URL`، `JWT_SECRET`/`JWT_TTL`،
+`CORS_ALLOWED_ORIGINS`، `API_KEY`، `PUBLIC_SITE_URL`، Redis، Resend، CAPTCHA،
+`SENTRY_DSN`. كلها موثّقة في [`api/.env.example`](api/.env.example).
 
 ---
 

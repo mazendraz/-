@@ -26,6 +26,15 @@ export interface ApiProject {
   img: string;
   description: string;
   year: string;
+  featured?: boolean; // curated for the homepage showcase
+}
+
+/** GET /api/projects/featured — flattened showcase items for the homepage. */
+export interface ApiFeaturedProject {
+  title: string;
+  img: string;
+  company: string; // owning company name
+  category: string; // owning company's category label
 }
 
 export interface ApiReview {
@@ -71,6 +80,9 @@ export interface ApiCompany {
   badges: string[];
   featured: boolean;
   verified: boolean;
+  // Optional per-page SEO overrides; null/absent → frontend uses defaults.
+  metaTitle?: string | null;
+  metaDescription?: string | null;
   // Internal contact fields — lead notifications are sent here. Returned ONLY in
   // admin payloads (so the editor can round-trip them); omitted from public ones.
   email?: string | null;
@@ -86,6 +98,9 @@ export interface ApiCategory {
   icon: string;
   cover: string;
   count: number;
+  // Optional per-page SEO overrides; null/absent → frontend uses defaults.
+  metaTitle?: string | null;
+  metaDescription?: string | null;
 }
 
 /**
@@ -248,6 +263,51 @@ export interface ApiFeedbackPayload {
   name?: string;
   phone?: string;
   message: string;
+}
+
+// ── Platform settings (admin-editable, public-facing) ──────────────────────────
+
+/** GET /api/settings (public) · GET/PUT /api/admin/settings. Strings; "" = unset. */
+export interface ApiPlatformSettings {
+  site_name: string;
+  support_email: string;
+  public_phone: string;
+  address: string;
+  social_facebook: string;
+  social_instagram: string;
+  social_twitter: string;
+  social_linkedin: string;
+  // Newline-separated option lists for the request form; "" = use the built-in defaults.
+  districts: string;
+  budgets: string;
+  // Homepage hero copy per locale; "" = localized defaults.
+  hero_title_en: string;
+  hero_title_ar: string;
+  hero_subtitle_en: string;
+  hero_subtitle_ar: string;
+  // Branding image URLs; "" = built-in /logo.png + favicon.
+  logo_url: string;
+  favicon_url: string;
+}
+
+// ── Email templates (admin-only) ───────────────────────────────────────────────
+
+/** GET/PUT /api/admin/email-templates. Blank field = built-in default. Tokens:
+ *  {{company}} {{refNumber}} {{service}} {{customer}} {{phone}} {{district}}
+ *  {{budget}} {{details}} {{receivedAt}}. */
+export interface ApiEmailTemplates {
+  providerSubject: string;
+  providerBody: string;
+  adminSubject: string;
+  adminBody: string;
+}
+
+// ── Legal pages (Terms / Privacy) ───────────────────────────────────────────────
+
+/** GET /api/pages (public) · GET/PUT /api/admin/pages. Plain text; "" = unpublished. */
+export interface ApiLegalPages {
+  terms: string;
+  privacy: string;
 }
 
 // ── Audit log (admin-only) ─────────────────────────────────────────────────────

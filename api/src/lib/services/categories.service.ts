@@ -30,6 +30,8 @@ export interface CategoryInput {
   icon: string;
   cover?: string;
   isActive?: boolean;
+  metaTitle?: string;
+  metaDescription?: string;
 }
 
 /** Admin: all categories (active and not), each with its TOTAL company count. */
@@ -56,6 +58,8 @@ export async function create(input: CategoryInput): Promise<ApiAdminCategory> {
       icon: input.icon,
       cover: input.cover ?? null,
       isActive: input.isActive ?? true,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
     },
   });
   return serializeCategoryAdmin(category, 0);
@@ -80,6 +84,8 @@ export async function update(
       icon: input.icon ?? undefined,
       cover: input.cover === undefined ? undefined : input.cover,
       isActive: input.isActive ?? undefined,
+      metaTitle: input.metaTitle === undefined ? undefined : input.metaTitle,
+      metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,
     },
     include: { _count: { select: { companies: true } } },
   });

@@ -1,8 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { FEATURED_PROJECTS } from "../lib/data";
-import { useCompanies, useCategoriesWithCounts, useCatalogStatus } from "../lib/catalog";
+import { useCompanies, useCategoriesWithCounts, useCatalogStatus, useFeaturedProjects } from "../lib/catalog";
 import { CompanyCardSkeleton } from "../components/Skeleton";
 import { useSiteReviews, useReviewsEnabled, addSiteReview } from "../lib/siteReviews";
 import { useCountUp } from "../hooks/useCountUp";
@@ -15,6 +14,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
+import { useSettings } from "../lib/settings";
 
 // ── Generic reveal wrapper ────────────────────────────────────────────────
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -42,7 +42,13 @@ export default function Home() {
   const loadingEmpty = status === "loading" && COMPANIES.length === 0;
   const siteReviews = useSiteReviews();
   const reviewsEnabled = useReviewsEnabled();
+  const featured = useFeaturedProjects();
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+
+  // Admin-editable hero copy (per locale); blank → the localized i18n defaults.
+  const settings = useSettings();
+  const heroTitleOverride = (locale === "ar" ? settings.hero_title_ar : settings.hero_title_en).trim();
+  const heroSubOverride = (locale === "ar" ? settings.hero_subtitle_ar : settings.hero_subtitle_en).trim();
 
   // Average customer rating — derived from live company ratings (×10 so the
   // counter can animate an integer), not a hardcoded number.
@@ -79,8 +85,14 @@ export default function Home() {
                        text-[2.2rem] leading-[1.15]
                        md:text-display-xl md:leading-[1.1]"
           >
-            {t(locale, "home_hero_title_1")}<br className="hidden md:block" />{" "}
-            {t(locale, "home_hero_title_2")}
+            {heroTitleOverride ? (
+              heroTitleOverride
+            ) : (
+              <>
+                {t(locale, "home_hero_title_1")}<br className="hidden md:block" />{" "}
+                {t(locale, "home_hero_title_2")}
+              </>
+            )}
           </h1>
           <p
             ref={heroSub}
@@ -88,7 +100,7 @@ export default function Home() {
                        text-[16px] md:text-body-lg leading-relaxed"
             style={{ transitionDelay: "100ms" }}
           >
-            {t(locale, "home_hero_sub")}
+            {heroSubOverride || t(locale, "home_hero_sub")}
           </p>
 
           {/* CTA buttons */}
@@ -294,22 +306,22 @@ export default function Home() {
             <Reveal delay={0} className="md:col-span-2">
               <div className="group relative h-64 md:h-80 rounded-2xl overflow-hidden shadow-bloom card-lift cursor-default">
                 <LazyImage
-                  src={FEATURED_PROJECTS[0].img}
-                  alt={FEATURED_PROJECTS[0].title}
+                  src={featured[0].img}
+                  alt={featured[0].title}
                   wrapperClassName="absolute inset-0"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 p-6">
-                  <span className="inline-block px-3 py-1 bg-secondary text-on-secondary rounded-full text-[11px] font-bold mb-2">{FEATURED_PROJECTS[0].category}</span>
-                  <h3 className="text-white font-bold text-[20px] mb-1 drop-shadow">{FEATURED_PROJECTS[0].title}</h3>
-                  <p className="text-white/75 text-[13px]">{FEATURED_PROJECTS[0].company}</p>
+                  <span className="inline-block px-3 py-1 bg-secondary text-on-secondary rounded-full text-[11px] font-bold mb-2">{featured[0].category}</span>
+                  <h3 className="text-white font-bold text-[20px] mb-1 drop-shadow">{featured[0].title}</h3>
+                  <p className="text-white/75 text-[13px]">{featured[0].company}</p>
                 </div>
               </div>
             </Reveal>
             {/* 2 small cards */}
             <div className="flex flex-col gap-4">
-              {FEATURED_PROJECTS.slice(1, 3).map((p, i) => (
+              {featured.slice(1, 3).map((p, i) => (
                 <Reveal key={p.title} delay={(i + 1) * 80} className="flex-1">
                   <div className="group relative rounded-2xl overflow-hidden shadow-bloom card-lift cursor-default" style={{ height: 148 }}>
                     <LazyImage src={p.img} alt={p.title} wrapperClassName="absolute inset-0" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
@@ -323,7 +335,7 @@ export default function Home() {
               ))}
             </div>
             {/* Bottom row */}
-            {FEATURED_PROJECTS.slice(3).map((p, i) => (
+            {featured.slice(3).map((p, i) => (
               <Reveal key={p.title} delay={(i + 3) * 70}>
                 <div className="group relative h-52 rounded-2xl overflow-hidden shadow-bloom card-lift cursor-default">
                   <LazyImage src={p.img} alt={p.title} wrapperClassName="absolute inset-0" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
@@ -412,7 +424,7 @@ export default function Home() {
           </div>
         </section>
 
-      <div id="contact" aria-hidden="true" />
+      {/* The #contact anchor now lives in the footer (real, admin-managed contact). */}
 
       {/* Site review submission modal */}
       {reviewModalOpen && (

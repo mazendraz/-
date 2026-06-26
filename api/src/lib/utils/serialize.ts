@@ -71,6 +71,7 @@ export function serializeProject(p: Project): ApiProject {
     img: p.img,
     description: p.description,
     year: p.year,
+    featured: p.featured ?? false,
   };
 }
 
@@ -95,6 +96,8 @@ export function serializeCategory(c: Category, count: number): ApiCategory {
     icon: c.icon,
     cover: c.cover ?? "",
     count,
+    metaTitle: c.metaTitle ?? null,
+    metaDescription: c.metaDescription ?? null,
   };
 }
 
@@ -137,6 +140,8 @@ function companyScalars(c: CompanyCardRow) {
     badges: c.badges,
     featured: c.featured,
     verified: c.verified,
+    metaTitle: c.metaTitle ?? null,
+    metaDescription: c.metaDescription ?? null,
   };
 }
 

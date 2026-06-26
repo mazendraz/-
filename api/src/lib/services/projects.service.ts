@@ -1,8 +1,34 @@
-// Company project management (admin only).
+// Company project management (admin only) + the public homepage featured showcase.
 import { prisma } from "@/lib/prisma";
+import { CompanyStatus } from "@/generated/prisma/enums";
 import { serializeProject } from "@/lib/utils/serialize";
 import { NotFoundError } from "@/lib/utils/errors";
-import type { ApiProject } from "@/lib/apiTypes";
+import type { ApiFeaturedProject, ApiProject } from "@/lib/apiTypes";
+
+const MAX_FEATURED = 6;
+
+/**
+ * Public: curated projects for the homepage showcase — featured projects of
+ * ACTIVE companies only, flattened with the owning company name + category label.
+ */
+export async function listFeatured(): Promise<ApiFeaturedProject[]> {
+  const rows = await prisma.project.findMany({
+    where: { featured: true, company: { status: CompanyStatus.ACTIVE } },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+    take: MAX_FEATURED,
+    select: {
+      title: true,
+      img: true,
+      company: { select: { name: true, category: { select: { label: true } } } },
+    },
+  });
+  return rows.map((r) => ({
+    title: r.title,
+    img: r.img,
+    company: r.company.name,
+    category: r.company.category.label,
+  }));
+}
 
 export interface ProjectInput {
   title: string;

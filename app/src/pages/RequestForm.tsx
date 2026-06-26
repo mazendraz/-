@@ -2,6 +2,7 @@ import { useState, useId } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isApiConfigured } from "../lib/api";
 import { DISTRICTS, BUDGETS, addLead, getMyLeads, type Lead } from "../lib/requests";
+import { useSettings, parseLines } from "../lib/settings";
 import { getCompany } from "../lib/catalog";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
@@ -45,6 +46,12 @@ export default function RequestForm() {
 
   const company = companySlug ? getCompany(companySlug) : undefined;
   const companyName = company?.name ?? (companyNameParam || "Al Assema");
+
+  // District/budget options are admin-configurable (Settings); fall back to the
+  // built-in lists when not overridden.
+  const settings = useSettings();
+  const districts = parseLines(settings.districts, DISTRICTS);
+  const budgets = parseLines(settings.budgets, BUDGETS);
 
   // Smart pre-fill: reuse contact details from this device's last request
   const lastLead = getMyLeads()[0];
@@ -279,7 +286,7 @@ export default function RequestForm() {
                 data-has-error={!!errors.district}
               >
                 <option value="">{t(locale, "form_district_ph")}</option>
-                {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                {districts.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             )}
           </Field>
@@ -296,7 +303,7 @@ export default function RequestForm() {
                 data-has-error={!!errors.budget}
               >
                 <option value="">{t(locale, "form_budget_ph")}</option>
-                {BUDGETS.map((b) => <option key={b} value={b}>{b}</option>)}
+                {budgets.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             )}
           </Field>

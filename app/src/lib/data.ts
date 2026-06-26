@@ -16,6 +16,7 @@ export type Project = {
   img: string;
   description: string;
   year: string;
+  featured?: boolean; // curated for the homepage showcase
 };
 
 export type Company = {
@@ -47,6 +48,9 @@ export type Company = {
   // Internal contact for lead notifications — admin-only (not shown publicly).
   email?: string;         // where new-lead emails are sent
   whatsapp?: string;      // provider WhatsApp number (optional channel)
+  // Optional per-page SEO overrides (admin-set); blank → name/tagline defaults.
+  metaTitle?: string;
+  metaDescription?: string;
 };
 
 export type ServiceCategory = {
@@ -56,6 +60,9 @@ export type ServiceCategory = {
   description: string;
   count: number;
   cover: string;
+  // Optional per-page SEO overrides (admin-set); blank → label/description defaults.
+  metaTitle?: string;
+  metaDescription?: string;
 };
 
 // ─── Images ──────────────────────────────────────────────────────────────────

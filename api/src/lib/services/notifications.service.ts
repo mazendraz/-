@@ -3,6 +3,7 @@
 // email, or a send error never throws — lead creation must never break or block
 // because of notifications.
 import type { ApiLead } from "@/lib/apiTypes";
+import { getEmailTemplates } from "@/lib/services/settings.service";
 
 export interface LeadNotificationTarget {
   /** Provider contact email (Company.email). Null/absent → email skipped. */
@@ -25,6 +26,43 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ── Admin-editable templates (token substitution) ───────────────────────────────
+
+/** Token map for a lead — feeds both the provider and admin templates. */
+function leadVars(lead: ApiLead, companyName: string): Record<string, string> {
+  return {
+    company: companyName,
+    refNumber: lead.refNumber,
+    service: lead.service,
+    customer: lead.name,
+    phone: lead.phone,
+    district: lead.district,
+    budget: lead.budget,
+    details: lead.description,
+    receivedAt: new Date(lead.createdAt).toISOString(),
+  };
+}
+
+/** Replace {{token}} occurrences; unknown tokens collapse to "". */
+function applyTokens(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
+}
+
+/**
+ * Render a {subject, text, html} from admin templates. The whole substituted body
+ * is HTML-escaped (values + literal text) and newlines become <br>, so a template
+ * can never inject markup. Pure — unit-testable.
+ */
+export function buildFromTemplate(
+  subject: string,
+  body: string,
+  vars: Record<string, string>,
+): Omit<BuiltEmail, "to"> {
+  const text = applyTokens(body, vars);
+  const html = escapeHtml(text).replace(/\n/g, "<br>");
+  return { subject: applyTokens(subject, vars), text, html };
 }
 
 /**
@@ -96,8 +134,14 @@ export async function notifyNewLead(
   target: LeadNotificationTarget,
 ): Promise<boolean> {
   try {
-    const email = buildNewLeadEmail(lead, target);
-    if (!email) return false; // no provider email on file
+    if (!target.email) return false; // no provider email on file
+
+    // Admin-customized template when both fields are set; else the built-in default.
+    const tpl = await getEmailTemplates();
+    const email: BuiltEmail =
+      tpl.providerSubject && tpl.providerBody
+        ? { to: target.email, ...buildFromTemplate(tpl.providerSubject, tpl.providerBody, leadVars(lead, target.companyName)) }
+        : buildNewLeadEmail(lead, target)!;
 
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -177,8 +221,12 @@ export async function notifyAdmins(
       return false;
     }
 
-    const body = buildAdminAlertEmail(lead, companyName);
-    await sendViaResend(apiKey, { to: recipients, ...body });
+    const tpl = await getEmailTemplates();
+    const built =
+      tpl.adminSubject && tpl.adminBody
+        ? buildFromTemplate(tpl.adminSubject, tpl.adminBody, leadVars(lead, companyName))
+        : buildAdminAlertEmail(lead, companyName);
+    await sendViaResend(apiKey, { to: recipients, ...built });
     return true;
   } catch (err) {
     console.error(`[notify] admin alert failed for lead ${lead.refNumber}:`, err);

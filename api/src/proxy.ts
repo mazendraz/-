@@ -45,7 +45,9 @@ export function proxy(request: NextRequest) {
   // health/readiness probes, which monitors hit without the key) must present a
   // matching X-Api-Key header.
   const apiKey = process.env.API_KEY;
-  const probePaths = new Set(["/api/health", "/api/ready"]);
+  // Probes + the public sitemap are hit by external tools (monitors, crawlers)
+  // that don't send the API key, so they're exempt from the gate.
+  const probePaths = new Set(["/api/health", "/api/ready", "/api/sitemap"]);
   if (
     apiKey &&
     !probePaths.has(request.nextUrl.pathname) &&

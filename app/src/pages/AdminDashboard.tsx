@@ -24,10 +24,16 @@ import {
   type AdminUser, type Role,
 } from "../lib/users";
 import { loadDemoLeads } from "../lib/demo";
+import {
+  useSettings, updateSettings, type PlatformSettings,
+  fetchEmailTemplates, saveEmailTemplates, type EmailTemplates,
+  fetchLegalPagesAdmin, saveLegalPages, type LegalPages,
+} from "../lib/settings";
 import { isApiConfigured } from "../lib/api";
 import { logout, isAuthenticated } from "../lib/auth";
 import { uploadImage, isDataUrl, type UploadBucket } from "../lib/image";
 import SearchInput from "../components/SearchInput";
+import Logo from "../components/Logo";
 import {
   leadsPerDay, leadsByStatus, conversionFunnel, leadsByCompany,
   companyLeaderboard, periodDelta,
@@ -117,7 +123,7 @@ export default function AdminDashboard() {
               <span className="material-symbols-outlined text-on-surface text-[26px]">menu</span>
             </button>
             <Link to="/" className="md:hidden flex-shrink-0">
-              <img src="/logo.png" alt="Al Assemah" className="h-9 w-9 object-contain rounded-lg" />
+              <Logo className="h-9 w-9 object-contain rounded-lg" />
             </Link>
             <h1 className="font-display font-bold text-[18px] md:text-[20px] text-on-surface capitalize truncate">
               {NAV.find((n) => n.id === tab)?.label}
@@ -557,6 +563,20 @@ function CompanyEditor({ company, categories, onClose }: {
               <p className="text-[12px] text-outline">Show this company in the home "Featured Companies" section</p>
             </div>
           </label>
+
+          {/* SEO overrides — optional; blank uses the name/tagline defaults. */}
+          <div className="bg-surface-container rounded-xl p-3.5 space-y-4">
+            <p className="text-[12px] font-bold text-outline flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px]">travel_explore</span>
+              SEO (optional — leave blank to use the company name &amp; tagline)
+            </p>
+            <LField label="Meta title">
+              <input className="field-input" value={draft.metaTitle ?? ""} onChange={(e) => set("metaTitle", e.target.value)} placeholder="e.g. Aura Interiors — Luxury Fit-out in the New Capital" />
+            </LField>
+            <LField label="Meta description">
+              <textarea className="field-input resize-none" rows={2} value={draft.metaDescription ?? ""} onChange={(e) => set("metaDescription", e.target.value)} placeholder="~160 characters shown in search results" />
+            </LField>
+          </div>
         </div>
       )}
 
@@ -587,11 +607,15 @@ function CompanyEditor({ company, categories, onClose }: {
 
 // ── Projects editor ──
 function ProjectsEditor({ projects, onChange }: { projects: Project[]; onChange: (p: Project[]) => void }) {
-  const [d, setD] = useState<Project>({ title: "", img: "", description: "", year: String(new Date().getFullYear()) });
+  const blank = (): Project => ({ title: "", img: "", description: "", year: String(new Date().getFullYear()), featured: false });
+  const [d, setD] = useState<Project>(blank);
   function add() {
     if (!d.title.trim()) return;
     onChange([{ ...d }, ...projects]);
-    setD({ title: "", img: "", description: "", year: String(new Date().getFullYear()) });
+    setD(blank());
+  }
+  function toggleFeatured(i: number) {
+    onChange(projects.map((p, idx) => (idx === i ? { ...p, featured: !p.featured } : p)));
   }
   return (
     <div className="space-y-4">
@@ -603,6 +627,10 @@ function ProjectsEditor({ projects, onChange }: { projects: Project[]; onChange:
         </div>
         <ImageUpload label="Project Image" value={d.img} onChange={(v) => setD({ ...d, img: v })} shape="wide" maxDim={1200} bucket="projects" />
         <textarea className="field-input resize-none" rows={2} placeholder="Short description" value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} />
+        <label className="flex items-center gap-2 text-[13px] font-bold text-on-surface cursor-pointer">
+          <input type="checkbox" className="w-4 h-4 accent-secondary" checked={d.featured ?? false} onChange={(e) => setD({ ...d, featured: e.target.checked })} />
+          Feature on the home page
+        </label>
         <button onClick={add} className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-[13px] hover:bg-primary-container transition-colors">Add Project</button>
       </div>
       {projects.length === 0 ? (
@@ -614,6 +642,10 @@ function ProjectsEditor({ projects, onChange }: { projects: Project[]; onChange:
             <p className="font-bold text-[14px] text-on-surface truncate">{p.title}</p>
             <p className="text-[12px] text-outline truncate">{p.year} · {p.description}</p>
           </div>
+          <button onClick={() => toggleFeatured(i)} title={p.featured ? "Featured on home page" : "Feature on home page"}
+            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${p.featured ? "text-secondary" : "text-outline hover:text-secondary"}`}>
+            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: p.featured ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+          </button>
           <button onClick={() => onChange(projects.filter((_, idx) => idx !== i))} className="p-1.5 rounded-lg hover:bg-error/10 text-outline hover:text-error transition-colors flex-shrink-0">
             <span className="material-symbols-outlined text-[18px]">delete</span>
           </button>
@@ -1047,11 +1079,14 @@ function CategoryEditor({ category, onClose }: { category: ServiceCategory | nul
   const [icon, setIcon] = useState(category?.icon ?? "category");
   const [description, setDescription] = useState(category?.description ?? "");
   const [cover, setCover] = useState(category?.cover ?? "");
+  const [metaTitle, setMetaTitle] = useState(category?.metaTitle ?? "");
+  const [metaDescription, setMetaDescription] = useState(category?.metaDescription ?? "");
 
   function save() {
     if (!label.trim()) { alert("Label is required."); return; }
-    if (category) updateCategory(category.slug, { label, icon, description, cover });
-    else addCategory({ slug: "", label, icon, description, cover });
+    const fields = { label, icon, description, cover, metaTitle, metaDescription };
+    if (category) updateCategory(category.slug, fields);
+    else addCategory({ slug: "", ...fields });
     onClose();
   }
 
@@ -1066,6 +1101,9 @@ function CategoryEditor({ category, onClose }: { category: ServiceCategory | nul
           <span className="material-symbols-outlined text-primary text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>{icon || "category"}</span>
           <span className="text-[12px] text-outline">Icon preview</span>
         </div>
+        {/* SEO overrides — optional; blank uses the label/description defaults. */}
+        <LField label="Meta title (SEO — optional)"><input className="field-input" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder="Leave blank to use the label" /></LField>
+        <LField label="Meta description (SEO — optional)"><textarea className="field-input resize-none" rows={2} value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} placeholder="~160 characters shown in search results" /></LField>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-outline-variant/20">
         <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-[14px] text-on-surface hover:bg-surface-container transition-colors">Cancel</button>
@@ -1131,16 +1169,237 @@ function SettingsTab({ leadCount }: { leadCount: number }) {
           </SettingCard>
         </>
       ) : (
-        <div className="flex items-start gap-3 bg-surface-container rounded-2xl p-5 border border-outline-variant/20">
-          <span className="material-symbols-outlined text-outline text-[22px] flex-shrink-0 mt-0.5">cloud_done</span>
-          <div>
-            <p className="font-bold text-[14px] text-on-surface mb-1">Live data</p>
-            <p className="text-[13px] text-on-surface-variant leading-relaxed">
-              Demo &amp; backup tools are available only in preview mode (no API). In production your
-              leads and catalog come from the real database — manage them from their own tabs.
-            </p>
+        <>
+          <PlatformSettingsForm onSaved={() => flash("Settings saved.")} />
+          <EmailTemplatesForm onSaved={() => flash("Email templates saved.")} />
+          <LegalPagesForm onSaved={() => flash("Legal pages saved.")} />
+          <div className="flex items-start gap-3 bg-surface-container rounded-2xl p-5 border border-outline-variant/20">
+            <span className="material-symbols-outlined text-outline text-[22px] flex-shrink-0 mt-0.5">cloud_done</span>
+            <div>
+              <p className="font-bold text-[14px] text-on-surface mb-1">Live data</p>
+              <p className="text-[13px] text-on-surface-variant leading-relaxed">
+                Demo &amp; backup tools are available only in preview mode (no API). In production your
+                leads and catalog come from the real database — manage them from their own tabs.
+              </p>
+            </div>
           </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Admin-editable platform settings (site name, contact details, social links).
+function PlatformSettingsForm({ onSaved }: { onSaved: () => void }) {
+  const current = useSettings();
+  const [form, setForm] = useState<PlatformSettings>(current);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // Sync the form when the API hydration lands (until the admin starts editing).
+  // Keyed on the serialized settings so any field (incl. lists/hero) triggers it.
+  const currentKey = JSON.stringify(current);
+  useEffect(() => {
+    if (!dirty) setForm(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey]);
+
+  function set(key: keyof PlatformSettings, val: string) {
+    setForm((f) => ({ ...f, [key]: val }));
+    setDirty(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    setError("");
+    try {
+      await updateSettings(form);
+      setDirty(false);
+      onSaved();
+    } catch {
+      setError("Couldn't save settings. Check the values and try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const Field = ({ label, k, type = "text", placeholder }: { label: string; k: keyof PlatformSettings; type?: string; placeholder?: string }) => (
+    <LField label={label}>
+      <input className="field-input" type={type} value={form[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />
+    </LField>
+  );
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
+      <div>
+        <h3 className="font-bold text-[15px] text-on-surface">Platform settings</h3>
+        <p className="text-[13px] text-outline leading-relaxed mt-0.5">Site name, public contact details, and social links shown across the site.</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Field label="Site name" k="site_name" placeholder="Al Assema" />
+        <Field label="Support email" k="support_email" type="email" placeholder="hello@site.com" />
+        <Field label="Public phone" k="public_phone" placeholder="+20 100 …" />
+        <Field label="Address" k="address" placeholder="New Administrative Capital" />
+        <Field label="Facebook URL" k="social_facebook" placeholder="https://facebook.com/…" />
+        <Field label="Instagram URL" k="social_instagram" placeholder="https://instagram.com/…" />
+        <Field label="X (Twitter) URL" k="social_twitter" placeholder="https://x.com/…" />
+        <Field label="LinkedIn URL" k="social_linkedin" placeholder="https://linkedin.com/…" />
+      </div>
+
+      {/* Branding — uploaded logo / favicon; blank = the built-in defaults. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/15">
+        <ImageUpload label="Logo (blank = default)" value={form.logo_url} onChange={(v) => set("logo_url", v)} shape="logo" maxDim={256} bucket="logos" />
+        <ImageUpload label="Favicon (blank = default)" value={form.favicon_url} onChange={(v) => set("favicon_url", v)} shape="logo" maxDim={64} bucket="logos" />
+      </div>
+
+      {/* Request-form option lists — one per line; blank = built-in defaults. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/15">
+        <LField label="Districts (one per line — blank for defaults)">
+          <textarea className="field-input resize-y" rows={5} value={form.districts}
+            placeholder={"R7 District\nR8 District\n…"} onChange={(e) => set("districts", e.target.value)} />
+        </LField>
+        <LField label="Budget ranges (one per line — blank for defaults)">
+          <textarea className="field-input resize-y" rows={5} value={form.budgets}
+            placeholder={"Under EGP 50,000\nEGP 50,000 – 150,000\n…"} onChange={(e) => set("budgets", e.target.value)} />
+        </LField>
+      </div>
+
+      {/* Homepage hero copy, per locale — blank uses the built-in translations. */}
+      <div className="pt-2 border-t border-outline-variant/15 space-y-4">
+        <p className="text-[12px] font-bold text-outline">Homepage hero (blank = built-in text)</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Hero title (English)" k="hero_title_en" />
+          <Field label="Hero title (Arabic)" k="hero_title_ar" />
+          <Field label="Hero subtitle (English)" k="hero_subtitle_en" />
+          <Field label="Hero subtitle (Arabic)" k="hero_subtitle_ar" />
         </div>
+      </div>
+
+      {error && <p className="text-[13px] text-error font-bold">{error}</p>}
+      <button onClick={save} disabled={saving || !dirty}
+        className="bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press disabled:opacity-60 disabled:cursor-not-allowed">
+        {saving ? "Saving…" : "Save settings"}
+      </button>
+    </div>
+  );
+}
+
+// Admin-editable notification email templates. Blank field = the built-in default.
+function EmailTemplatesForm({ onSaved }: { onSaved: () => void }) {
+  const [form, setForm] = useState<EmailTemplates | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchEmailTemplates()
+      .then((t) => { if (active) setForm(t); })
+      .catch(() => { if (active) setError("Couldn't load email templates."); });
+    return () => { active = false; };
+  }, []);
+
+  function set(key: keyof EmailTemplates, val: string) {
+    setForm((f) => (f ? { ...f, [key]: val } : f));
+  }
+
+  async function save() {
+    if (!form) return;
+    setSaving(true);
+    setError("");
+    try {
+      const updated = await saveEmailTemplates(form);
+      setForm(updated);
+      onSaved();
+    } catch {
+      setError("Couldn't save email templates.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
+      <div>
+        <h3 className="font-bold text-[15px] text-on-surface">Email templates</h3>
+        <p className="text-[13px] text-outline leading-relaxed mt-0.5">
+          New-lead notification emails. Leave a field blank to use the built-in default.
+        </p>
+        <p className="text-[12px] text-outline mt-2">
+          Tokens: <code>{"{{company}} {{refNumber}} {{service}} {{customer}} {{phone}} {{district}} {{budget}} {{details}} {{receivedAt}}"}</code>
+        </p>
+      </div>
+      {!form ? (
+        <p className="text-[13px] text-outline">{error || "Loading…"}</p>
+      ) : (
+        <>
+          <p className="text-[12px] font-bold text-outline">Provider email (sent to the company)</p>
+          <LField label="Subject"><input className="field-input" value={form.providerSubject} onChange={(e) => set("providerSubject", e.target.value)} placeholder="New lead {{refNumber}} — {{service}}" /></LField>
+          <LField label="Body"><textarea className="field-input resize-y" rows={5} value={form.providerBody} onChange={(e) => set("providerBody", e.target.value)} placeholder="Blank = built-in default" /></LField>
+
+          <p className="text-[12px] font-bold text-outline pt-2 border-t border-outline-variant/15">Admin alert email (sent to all admins)</p>
+          <LField label="Subject"><input className="field-input" value={form.adminSubject} onChange={(e) => set("adminSubject", e.target.value)} placeholder="New lead — {{company}} — {{refNumber}}" /></LField>
+          <LField label="Body"><textarea className="field-input resize-y" rows={4} value={form.adminBody} onChange={(e) => set("adminBody", e.target.value)} placeholder="Blank = built-in default (omits customer PII)" /></LField>
+
+          {error && <p className="text-[13px] text-error font-bold">{error}</p>}
+          <button onClick={save} disabled={saving}
+            className="bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press disabled:opacity-60">
+            {saving ? "Saving…" : "Save templates"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Admin-editable Terms / Privacy content (plain text, shown at /terms and /privacy).
+function LegalPagesForm({ onSaved }: { onSaved: () => void }) {
+  const [form, setForm] = useState<LegalPages | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    fetchLegalPagesAdmin()
+      .then((p) => { if (active) setForm(p); })
+      .catch(() => { if (active) setError("Couldn't load legal pages."); });
+    return () => { active = false; };
+  }, []);
+
+  async function save() {
+    if (!form) return;
+    setSaving(true);
+    setError("");
+    try {
+      setForm(await saveLegalPages(form));
+      onSaved();
+    } catch {
+      setError("Couldn't save legal pages.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
+      <div>
+        <h3 className="font-bold text-[15px] text-on-surface">Legal pages</h3>
+        <p className="text-[13px] text-outline leading-relaxed mt-0.5">
+          Shown at <code>/terms</code> and <code>/privacy</code> (linked in the footer). Leave blank to hide.
+        </p>
+      </div>
+      {!form ? (
+        <p className="text-[13px] text-outline">{error || "Loading…"}</p>
+      ) : (
+        <>
+          <LField label="Terms of Service"><textarea className="field-input resize-y" rows={6} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} placeholder="Plain text…" /></LField>
+          <LField label="Privacy Policy"><textarea className="field-input resize-y" rows={6} value={form.privacy} onChange={(e) => setForm({ ...form, privacy: e.target.value })} placeholder="Plain text…" /></LField>
+          {error && <p className="text-[13px] text-error font-bold">{error}</p>}
+          <button onClick={save} disabled={saving}
+            className="bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press disabled:opacity-60">
+            {saving ? "Saving…" : "Save pages"}
+          </button>
+        </>
       )}
     </div>
   );
@@ -1175,7 +1434,7 @@ function SidebarBody({ tab, onSelect, newCount, reviewBadge, onClose }: {
       {/* Brand */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-outline-variant/15">
         <Link to="/" className="flex items-center gap-3 min-w-0 flex-1 hover:opacity-80 transition-opacity">
-          <img src="/logo.png" alt="Al Assemah" className="h-11 w-11 object-contain rounded-xl flex-shrink-0" />
+          <Logo className="h-11 w-11 object-contain rounded-xl flex-shrink-0" />
           <div className="min-w-0">
             <p className="font-display font-black text-[17px] text-on-surface leading-none truncate">Al Assemah</p>
             <p className="text-[11px] font-bold text-secondary tracking-wide mt-1.5 flex items-center gap-1">

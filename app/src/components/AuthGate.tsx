@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { login, logout, useAuth, type AuthUser, type Role } from "../lib/auth";
 import { ApiError } from "../lib/api";
+import Logo from "./Logo";
 
 const ROLE_LABEL: Record<Role, string> = { ADMIN: "Admin", PROVIDER: "Provider" };
 
@@ -41,7 +42,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
     <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-surface-container-lowest rounded-3xl shadow-bloom p-8 page-enter">
         <div className="flex flex-col items-center gap-3 mb-6">
-          <img src="/logo.png" alt="Al Assemah" className="h-14 w-14 rounded-2xl object-contain" />
+          <Logo className="h-14 w-14 rounded-2xl object-contain" />
           <div className="text-center">
             <h1 className="font-display font-bold text-[22px] text-on-surface">Al Assemah</h1>
             <p className="text-[13px] text-outline">{ROLE_LABEL[requiredRole]} sign in</p>
