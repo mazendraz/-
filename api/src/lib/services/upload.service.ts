@@ -14,6 +14,9 @@ export type UploadBucket = (typeof UPLOAD_BUCKETS)[number];
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_DIMENSION = 1200; // px, longest side
+// Reject decompression/pixel bombs: a small file can declare an enormous canvas
+// that would blow up memory when decoded. 50MP comfortably covers real photos.
+const MAX_INPUT_PIXELS = 50_000_000;
 const ALLOWED_MIME = new Set([
   "image/jpeg",
   "image/png",
@@ -40,18 +43,25 @@ export interface ProcessedImage {
  * Pure function of its input — unit-testable without Supabase.
  */
 export async function processImage(input: Buffer): Promise<ProcessedImage> {
-  const buffer = await sharp(input)
-    .rotate() // honor EXIF orientation
-    .resize({
-      width: MAX_DIMENSION,
-      height: MAX_DIMENSION,
-      fit: "inside",
-      withoutEnlargement: true,
-    })
-    .webp({ quality: 80 })
-    .toBuffer();
+  try {
+    const buffer = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+      .rotate() // honor EXIF orientation
+      .resize({
+        width: MAX_DIMENSION,
+        height: MAX_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 80 })
+      .toBuffer();
 
-  return { buffer, contentType: "image/webp", ext: "webp" };
+    return { buffer, contentType: "image/webp", ext: "webp" };
+  } catch {
+    // Corrupt, non-image, or over the pixel cap — a client error, not a 500.
+    throw new ValidationError("Could not process image", {
+      file: ["The file is not a valid image or is too large to process"],
+    });
+  }
 }
 
 function validate(file: File, bucket: string): asserts bucket is UploadBucket {

@@ -42,11 +42,13 @@ export function proxy(request: NextRequest) {
   }
 
   // Optional public gate: when API_KEY is set, every /api request (except the
-  // health probe) must present a matching X-Api-Key header.
+  // health/readiness probes, which monitors hit without the key) must present a
+  // matching X-Api-Key header.
   const apiKey = process.env.API_KEY;
+  const probePaths = new Set(["/api/health", "/api/ready"]);
   if (
     apiKey &&
-    request.nextUrl.pathname !== "/api/health" &&
+    !probePaths.has(request.nextUrl.pathname) &&
     request.headers.get("x-api-key") !== apiKey
   ) {
     const headers: Record<string, string> = { ...corsHeaders };

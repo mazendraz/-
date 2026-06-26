@@ -111,6 +111,7 @@ export function getUnreadFeedbackCount(): number {
 export async function addFeedback(
   data: Omit<Feedback, "id" | "createdAt" | "read">,
   honeypot = "",
+  captchaToken?: string | null,
 ): Promise<Feedback> {
   // With the API configured the backend is authoritative — a failed submission
   // must surface (don't fake success).
@@ -122,6 +123,7 @@ export async function addFeedback(
       phone: data.phone || undefined,
       message: data.message,
       hp_field: honeypot, // honeypot — empty for real users
+      captchaToken: captchaToken ?? undefined,
     });
     const item = fromApi(created);
     // Surface immediately to an admin viewing the dashboard in the same session.

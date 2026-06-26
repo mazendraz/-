@@ -12,9 +12,11 @@ import { UnauthorizedError } from "@/lib/utils/errors";
 import type { UserRole } from "@/generated/prisma/enums";
 import type { ApiUser } from "@/lib/apiTypes";
 
-// Token lifetime — override with JWT_TTL (e.g. "1h", "30m", "7d"). Keep it short
-// in production; pair with refresh tokens for long sessions.
-const TOKEN_TTL = process.env.JWT_TTL ?? "7d";
+// Token lifetime — override with JWT_TTL (e.g. "1h", "30m", "7d"). Defaults to a
+// short "1d" (matches .env.example/DEPLOY): tokens live in localStorage and can't
+// be revoked before expiry, so to force-revoke a session immediately deactivate
+// the user (isActive=false) — getAuthUser rejects inactive users on each request.
+const TOKEN_TTL = process.env.JWT_TTL ?? "1d";
 const BCRYPT_ROUNDS = 12;
 
 export interface AuthUser {

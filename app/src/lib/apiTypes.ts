@@ -107,6 +107,7 @@ export interface ApiLead {
   budget: string;
   description: string;
   status: ApiLeadStatus;
+  trackingToken?: string; // returned only on creation; gates public tracking/review
   createdAt: number;
 }
 

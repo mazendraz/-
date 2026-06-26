@@ -19,6 +19,21 @@ export interface AuthUser {
   companyId: string | null;
 }
 
+// Demo-mode guard: with no API configured the dashboards are intentionally open
+// (localStorage demo). If that happens on a real (non-localhost) host it's almost
+// certainly a misconfigured deploy with VITE_API_URL unset — warn loudly, because
+// authentication is NOT enforced in this mode.
+if (typeof window !== "undefined" && !isApiConfigured()) {
+  const host = window.location.hostname;
+  const isLocal = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
+  if (!isLocal) {
+    console.warn(
+      "[al-assema] VITE_API_URL is not set — running in demo mode with NO authentication. " +
+        "If this is a production deploy, set VITE_API_URL and redeploy.",
+    );
+  }
+}
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }

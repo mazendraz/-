@@ -18,6 +18,9 @@ export interface Lead {
   description: string;
   status: LeadStatus;
   reviewed?: boolean; // true once the customer has left a review for this lead
+  // High-entropy secret returned on creation; stored on this device and sent to
+  // gate status tracking + the review (replaces sending the phone as the secret).
+  trackingToken?: string;
   createdAt: number;
 }
 
@@ -115,13 +118,20 @@ export async function hydrateLeadsFromApi(): Promise<void> {
 // "New" forever. Runs once per session (statuses change on a human timescale).
 let myLeadsHydrated = false;
 
-async function trackLead(refNumber: string, phone: string): Promise<Lead | null> {
+async function trackLead(
+  refNumber: string,
+  token: string | undefined,
+  phone: string,
+): Promise<Lead | null> {
   try {
-    return await apiGet<Lead>(
-      `/leads/track?ref=${encodeURIComponent(refNumber)}&phone=${encodeURIComponent(phone)}`,
-    );
+    // Prefer the high-entropy token; fall back to phone for legacy leads that
+    // predate it (and were stored without one).
+    const secret = token
+      ? `token=${encodeURIComponent(token)}`
+      : `phone=${encodeURIComponent(phone)}`;
+    return await apiGet<Lead>(`/leads/track?ref=${encodeURIComponent(refNumber)}&${secret}`);
   } catch {
-    return null; // 404 (not found / phone mismatch) or network — keep local copy
+    return null; // 404 (not found / secret mismatch) or network — keep local copy
   }
 }
 
@@ -133,7 +143,7 @@ export async function refreshMyLeadsFromApi(): Promise<void> {
   if (mine.length === 0) return;
 
   const results = await Promise.allSettled(
-    mine.map((l) => trackLead(l.refNumber, l.phone)),
+    mine.map((l) => trackLead(l.refNumber, l.trackingToken, l.phone)),
   );
   const byRef = new Map<string, Lead>();
   for (const r of results) {
@@ -156,9 +166,20 @@ export async function submitReview(
   rating: number,
   text: string,
   honeypot = "",
+  captchaToken?: string | null,
+  // The lead's tracking token (preferred secret); phone is the legacy fallback.
+  trackingToken?: string,
 ): Promise<void> {
   if (isApiConfigured()) {
-    await apiPost("/reviews", { ref: refNumber, phone, rating, text, hp_field: honeypot });
+    await apiPost("/reviews", {
+      ref: refNumber,
+      // Send the token when we have it; otherwise fall back to phone (legacy leads).
+      ...(trackingToken ? { token: trackingToken } : { phone }),
+      rating,
+      text,
+      hp_field: honeypot,
+      captchaToken: captchaToken ?? undefined,
+    });
   }
   write(read().map((l) => (l.refNumber === refNumber ? { ...l, reviewed: true } : l)));
 }
@@ -176,6 +197,9 @@ export async function addLead(
   // Honeypot value — real users leave this empty; bots fill it and the server
   // rejects the submission. Not part of the Lead shape, so it's passed sidecar.
   honeypot = "",
+  // CAPTCHA token (Turnstile). Only present when VITE_TURNSTILE_SITE_KEY is set;
+  // the backend ignores it unless TURNSTILE_SECRET_KEY is configured.
+  captchaToken?: string | null,
 ): Promise<Lead> {
   // When the API is configured, the backend is the source of truth. A failed
   // submission must surface as an error — we must NOT fake success and silently
@@ -185,7 +209,7 @@ export async function addLead(
   if (isApiConfigured()) {
     const created = await apiFetch<Lead>("/leads", {
       method: "POST",
-      body: JSON.stringify({ ...data, hp_field: honeypot }),
+      body: JSON.stringify({ ...data, hp_field: honeypot, captchaToken: captchaToken ?? undefined }),
     });
     write([created, ...read()]);
     rememberMyRequest(created.id);

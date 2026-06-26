@@ -3,7 +3,7 @@
 // Mirrors siteReviews.service.ts, plus enum mapping (Prisma UPPERCASE ↔ API label)
 // and company slug/name resolved from the relation.
 import { prisma } from "@/lib/prisma";
-import { FeedbackType } from "@/generated/prisma/enums";
+import { CompanyStatus, FeedbackType } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/utils/errors";
 import type {
   ApiFeedback,
@@ -53,10 +53,11 @@ function serialize(r: FeedbackRow): ApiFeedback {
   };
 }
 
-/** Public: create feedback for a company (resolved by slug). 404 if no such company. */
+/** Public: create feedback for an ACTIVE company (resolved by slug). 404 otherwise
+ *  — matches lead/review, and the public UI only surfaces ACTIVE companies. */
 export async function create(payload: ApiFeedbackPayload): Promise<ApiFeedback> {
-  const company = await prisma.company.findUnique({
-    where: { slug: payload.companySlug },
+  const company = await prisma.company.findFirst({
+    where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
     select: { id: true },
   });
   if (!company) throw new NotFoundError("Company");

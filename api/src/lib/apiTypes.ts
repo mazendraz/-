@@ -116,6 +116,9 @@ export interface ApiLead {
   description: string;
   status: ApiLeadStatus;
   reviewed: boolean; // true once the customer has left a review for this lead
+  // High-entropy secret for public tracking/review — returned ONLY on creation
+  // (stored client-side), never in admin/provider list payloads.
+  trackingToken?: string;
   createdAt: number; // epoch ms
 }
 
@@ -241,4 +244,18 @@ export interface ApiFeedbackPayload {
   name?: string;
   phone?: string;
   message: string;
+}
+
+// ── Audit log (admin-only) ─────────────────────────────────────────────────────
+
+/** GET /admin/audit-logs → ApiPage<ApiAuditLog>. Append-only admin action trail. */
+export interface ApiAuditLog {
+  id: string;
+  actorId: string;
+  actorEmail: string;
+  action: string; // dot-namespaced, e.g. "company.delete"
+  entity: string;
+  entityId: string;
+  meta: Record<string, unknown> | null;
+  createdAt: number; // epoch ms
 }

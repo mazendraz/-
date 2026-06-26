@@ -145,6 +145,42 @@ exports[`serializer contract shapes > ApiCompany (raw profile) 1`] = `
 }
 `;
 
+exports[`serializer contract shapes > ApiCompany card (list view — empty projects/reviews, same shape) 1`] = `
+{
+  "about": "We design homes.",
+  "badges": [
+    "Licensed",
+  ],
+  "category": "interior-design",
+  "categoryLabel": "Interior Design",
+  "completedProjects": 87,
+  "cover": "/img/cover.jpg",
+  "featured": true,
+  "gallery": [
+    "/img/g1.jpg",
+  ],
+  "id": "co-1",
+  "location": "New Cairo",
+  "logo": "/img/logo.jpg",
+  "name": "Aura Interiors",
+  "phone": "0223456789",
+  "projects": [],
+  "rating": 4.8,
+  "responseTime": "within 2 hours",
+  "reviewCount": 1,
+  "reviews": [],
+  "services": [
+    "Interior Design",
+    "Fit-out",
+  ],
+  "slug": "aura-interiors",
+  "tagline": "Calm, considered interiors",
+  "verified": true,
+  "verifiedSince": "2021",
+  "yearsExperience": 8,
+}
+`;
+
 exports[`serializer contract shapes > ApiLead (createdAt as epoch ms) 1`] = `
 {
   "budget": "EGP 150,000 – 500,000",

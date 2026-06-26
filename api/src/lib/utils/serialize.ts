@@ -106,7 +106,14 @@ export function serializeCategoryAdmin(
   return { id: c.id, isActive: c.isActive, ...serializeCategory(c, count) };
 }
 
-export function serializeCompany(c: CompanyWithRelations): ApiCompany {
+// Company row with only the category relation (no projects/reviews) — the shape
+// the list/card serializer needs.
+export type CompanyCardRow = Company & {
+  category: Pick<Category, "slug" | "label">;
+};
+
+// Scalar + category fields shared by the card and full serializers.
+function companyScalars(c: CompanyCardRow) {
   return {
     id: c.id,
     slug: c.slug,
@@ -122,8 +129,6 @@ export function serializeCompany(c: CompanyWithRelations): ApiCompany {
     reviewCount: c.reviewCount,
     completedProjects: c.completedProjects,
     gallery: c.gallery,
-    projects: c.projects.map(serializeProject),
-    reviews: c.reviews.map(serializeReview),
     phone: c.phone,
     location: c.location,
     yearsExperience: c.yearsExperience,
@@ -132,6 +137,25 @@ export function serializeCompany(c: CompanyWithRelations): ApiCompany {
     badges: c.badges,
     featured: c.featured,
     verified: c.verified,
+  };
+}
+
+/**
+ * List/card view: the full ApiCompany shape but with EMPTY projects/reviews. The
+ * public list endpoints omit those heavy relations (they'd pull every review for
+ * every listed company); the detail route (/companies/[slug]) returns them. Same
+ * wire shape as serializeCompany, so the frontend Company type is unchanged — the
+ * profile/provider pages fetch the full record by slug to fill the arrays.
+ */
+export function serializeCompanyCard(c: CompanyCardRow): ApiCompany {
+  return { ...companyScalars(c), projects: [], reviews: [] };
+}
+
+export function serializeCompany(c: CompanyWithRelations): ApiCompany {
+  return {
+    ...companyScalars(c),
+    projects: c.projects.map(serializeProject),
+    reviews: c.reviews.map(serializeReview),
   };
 }
 

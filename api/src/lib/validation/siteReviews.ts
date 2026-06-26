@@ -4,8 +4,8 @@ import { sanitizedText } from "@/lib/utils/sanitize";
 
 // POST /site-reviews — public submission (held for moderation).
 export const createSiteReviewSchema = z.object({
-  name: z.string().trim().min(2).max(100),
-  district: z.string().trim().min(1).max(100),
+  name: sanitizedText(2, 100),
+  district: sanitizedText(1, 100),
   rating: z.number().int().min(1).max(5),
   text: sanitizedText(3, 1000),
 });

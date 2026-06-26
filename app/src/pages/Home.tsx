@@ -13,6 +13,8 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
+import Captcha from "../components/Captcha";
+import { captchaConfigured } from "../lib/captcha";
 
 // ── Generic reveal wrapper ────────────────────────────────────────────────
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -481,6 +483,8 @@ function SiteReviewModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   // Focus trap + Escape. Block close (Esc, backdrop, X) while a submit is
   // in-flight so the user can't accidentally lose a review mid-send.
@@ -490,13 +494,16 @@ function SiteReviewModal({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     if (!name.trim()) { setError(t(locale, "review_err_name")); return; }
     if (!text.trim()) { setError(t(locale, "review_err_text")); return; }
+    if (captchaConfigured() && !captchaToken) { setError(t(locale, "form_err_captcha")); return; }
     setIsSubmitting(true);
     setError("");
     try {
-      await addSiteReview({ name: name.trim(), district: district.trim() || "NAC", rating, text: text.trim() });
+      await addSiteReview({ name: name.trim(), district: district.trim() || "NAC", rating, text: text.trim() }, "", captchaToken);
       setSubmitted(true);
     } catch {
       setError("Couldn't submit your review. Please try again.");
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setIsSubmitting(false);
     }
@@ -555,6 +562,7 @@ function SiteReviewModal({ onClose }: { onClose: () => void }) {
                   value={text} onChange={(e) => { setText(e.target.value); setError(""); }} />
               </div>
               {error && <p className="text-[12px] text-error font-bold">{error}</p>}
+              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
               <button type="submit" disabled={isSubmitting}
                 className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-all touch-press btn-press disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 {isSubmitting ? (

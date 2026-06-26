@@ -124,6 +124,11 @@ model Project {
 model Review {
   id        String   @id @default(uuid())
   companyId String
+  // The completed lead this review came from, for verified customer reviews; null
+  // for curated/seeded admin reviews. UNIQUE → enforces one review per lead at the
+  // DB level (the one-time customer review invariant). Postgres allows many NULLs,
+  // so curated reviews don't collide. See reviews.service submitFromLead.
+  leadId    String?  @unique
   author    String // matches ApiReview.author
   avatar    String // initial letter as fallback
   rating    Int // 1..5
@@ -136,6 +141,9 @@ model Review {
   createdAt DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Deleting a lead keeps its (verified) review but unlinks it (SetNull). Deleting
+  // the company cascades both via companyId, so there's no conflict.
+  lead    Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
 }
@@ -143,6 +151,10 @@ model Review {
 model Lead {
   id           String     @id @default(uuid())
   refNumber    String     @unique // AA-YYYYMMDD-XXXX — generated server-side
+  // High-entropy secret (generated at creation) that gates public status tracking
+  // and the one-time review, replacing the guessable phone number. Nullable so
+  // leads created before this column existed fall back to phone-tail matching.
+  trackingToken String?
   companyId    String
   service      String // requested service (text)
   customerName String // ApiLead.name
@@ -159,6 +171,8 @@ model Lead {
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // companySlug + companyName are returned derived from this relation.
+  // The (at most one) verified review submitted for this completed lead.
+  review  Review?
 
   @@index([companyId])
   @@index([status])
@@ -222,4 +236,23 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// Append-only audit trail of sensitive/destructive admin actions (deletes, status
+// and role/active changes, account creation). Recorded fail-open so a logging
+// failure never breaks the action. actorEmail is denormalized so the record stays
+// meaningful even if the actor account is later deleted.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actorEmail String
+  action     String // e.g. "company.delete", "company.status", "user.update"
+  entity     String // e.g. "Company", "User", "Lead"
+  entityId   String
+  meta       String? // optional JSON string with extra context (e.g. new status)
+  createdAt  DateTime @default(now()) // returned as epoch ms in the API
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+  @@index([actorId])
 }

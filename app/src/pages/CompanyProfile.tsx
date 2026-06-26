@@ -2,7 +2,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
-import { useCompany, useCatalogStatus } from "../lib/catalog";
+import { useCompanyDetail, useCatalogStatus } from "../lib/catalog";
 import LazyImage from "../components/LazyImage";
 import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
@@ -11,6 +11,8 @@ import { addFeedback, type FeedbackType } from "../lib/feedback";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
+import Captcha from "../components/Captcha";
+import { captchaConfigured } from "../lib/captcha";
 
 const TABS: { key: "Overview" | "Projects" | "Gallery"; labelKey: StringKey }[] = [
   { key: "Overview", labelKey: "profile_tab_overview" },
@@ -23,7 +25,7 @@ export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
   const { locale } = useLocale();
   const navigate = useNavigate();
-  const company = useCompany(slug ?? "");
+  const { company, loading: detailLoading } = useCompanyDetail(slug ?? "");
   const status = useCatalogStatus();
   usePageMeta(
     company ? `${company.name} | Al Assema` : "Company | Al Assema",
@@ -77,8 +79,10 @@ export default function CompanyProfile() {
 
   if (!company) {
     // API mode: distinguish "still loading" and "backend unreachable" from a
-    // genuine 404 so we don't flash "not found" while the catalog hydrates.
-    if (status === "loading") {
+    // genuine 404 so we don't flash "not found" while the catalog hydrates or the
+    // by-slug detail fetch is still in flight (e.g. a deep link to a company that
+    // isn't in the first page of the cached list).
+    if (status === "loading" || detailLoading) {
       return (
         <div className="min-h-screen flex items-center justify-center pt-20">
           <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
@@ -479,22 +483,28 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
   const { containerRef, trapTab } = useDialogA11y(true, onClose);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!message.trim()) { setError(t(locale, "feedback_err")); return; }
+    if (captchaConfigured() && !captchaToken) { setError(t(locale, "form_err_captcha")); return; }
     setIsSubmitting(true);
     setError("");
     try {
       await addFeedback(
         { type, name: name.trim(), phone: phone.trim(), companySlug, companyName, message: message.trim() },
         honeypot,
+        captchaToken,
       );
       setSubmitted(true);
     } catch {
       // API mode surfaces real failures — don't fake success.
       setError(t(locale, "feedback_err_submit"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
       setIsSubmitting(false);
     }
   }
@@ -586,6 +596,9 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                 />
                 {error && <p className="text-[12px] text-error font-bold mt-1">{error}</p>}
               </div>
+
+              {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
+              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
               <button
                 type="submit"

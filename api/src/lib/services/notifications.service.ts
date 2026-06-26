@@ -118,8 +118,10 @@ export async function notifyNewLead(
 }
 
 /**
- * Build the admin-alert email body (without `to`), or null if there are no rows.
- * Same data as the provider email, framed for an admin watching all companies.
+ * Build the admin-alert email body (without `to`). This goes to EVERY admin as a
+ * monitoring heads-up, so it deliberately OMITS customer PII (name, phone, budget,
+ * description) — only the provider, who must act on the lead, gets those (see
+ * buildNewLeadEmail). Admins open the dashboard for the full record.
  */
 export function buildAdminAlertEmail(
   lead: ApiLead,
@@ -130,17 +132,14 @@ export function buildAdminAlertEmail(
     ["Company", companyName],
     ["Reference", lead.refNumber],
     ["Service", lead.service],
-    ["Customer", lead.name],
-    ["Phone", lead.phone],
     ["District", lead.district],
-    ["Budget", lead.budget],
-    ["Details", lead.description],
   ];
 
   const text =
     `A new lead was submitted on Al Assema.\n\n` +
     rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
-    `\n\nReceived: ${new Date(lead.createdAt).toISOString()}`;
+    `\n\nReceived: ${new Date(lead.createdAt).toISOString()}` +
+    `\n\nCustomer contact details are in the admin dashboard (omitted here for privacy).`;
 
   const html =
     `<h2>New lead — ${escapeHtml(companyName)}</h2><table>` +
@@ -150,7 +149,8 @@ export function buildAdminAlertEmail(
           `<tr><td><strong>${escapeHtml(k)}</strong></td><td>${escapeHtml(v)}</td></tr>`,
       )
       .join("") +
-    `</table>`;
+    `</table>` +
+    `<p>Customer contact details are in the admin dashboard (omitted here for privacy).</p>`;
 
   return { subject, text, html };
 }

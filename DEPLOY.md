@@ -141,17 +141,56 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
 
 ## 7. تحسينات الإنتاج (مهمة قبل ضغط حقيقي)
 
-- [ ] **Rate limiting (لو هتشغّل أكتر من نسخة / serverless):** الافتراضي in-memory
-      وكفاية لنسخة واحدة (PM2 fork). للنسخ المتعددة حط `UPSTASH_REDIS_REST_URL` +
-      `UPSTASH_REDIS_REST_TOKEN` — الكود بيتحوّل لـ Redis تلقائيًا وبيرجع لـ in-memory
-      لو Redis وقع. (مفيش تعديل كود مطلوب.)
+- [ ] **Rate limiting (مهم على Vercel / أي serverless):** الـ in-memory limiter
+      بيتصفّر مع كل cold lambda، فعمليًا مفيش حماية على serverless/أكتر من نسخة.
+      عشان كده **في الإنتاج التطبيق هيرفض يقلع** لو مفيش Redis مظبوط — حط
+      `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (الكود بيتحوّل لـ Redis
+      تلقائيًا وبيرجع لـ in-memory لو Redis وقع لحظيًا). لو شغّال **نسخة واحدة طول
+      الوقت** (PM2 fork على VPS) والـ in-memory كفاية، حط `RATE_LIMIT_ALLOW_INMEMORY=1`
+      صراحةً.
 - [ ] **إيميلات الإشعارات (اختياري):** حط `RESEND_API_KEY` + `RESEND_FROM` (sender
       موثّق) علشان مزوّد الخدمة ياخد إيميل مع كل طلب جديد. من غيرها الطلبات بتتسجّل عادي.
 - [ ] **CAPTCHA (اختياري):** حط `TURNSTILE_SECRET_KEY` (أو `RECAPTCHA_SECRET_KEY`)
       لتفعيل الحماية على فورمات الطلب/التقييم. **مهم:** تفعيله بيتطلّب إضافة الـ widget
       في الفرونت وإرسال الـ token، وإلا كل الطلبات هتترفض.
 - [ ] **مراقبة الأخطاء (اختياري):** حط `SENTRY_DSN` علشان الأخطاء (500) تتبعت لـ Sentry.
+- [ ] **الجاهزية (Readiness):** خلي الـ load balancer / monitor يضرب
+      `GET /api/ready` (بيتأكد إن قاعدة البيانات شغالة، بيرجّع 503 لو وقعت) بدل
+      `/api/health` (liveness بس). الاتنين مُعفيين من بوابة الـ API key.
+- [ ] **الخصوصية / PII:** إيميل تنبيه الأدمن بقى مفيهوش بيانات العميل الشخصية
+      (اسم/تليفون/ميزانية) — التفاصيل في الداشبورد بس؛ إيميل مزوّد الخدمة لوحده
+      اللي فيه التليفون (محتاجه يتواصل). فكّر في **سياسة احتفاظ** (purge للـ leads
+      القديمة بعد فترة) ووثّق اتفاقيات معالجة البيانات (DPA) مع Supabase وResend.
+- [ ] **سجل التدقيق (Audit log):** العمليات الحسّاسة (حذف/تغيير حالة/تغيير
+      صلاحيات/إنشاء حساب) بتتسجّل في جدول `AuditLog` وبتتقري من
+      `GET /api/admin/audit-logs` (أدمن بس).
 - [ ] `JWT_TTL` قصير في الإنتاج (الافتراضي دلوقتي `1d`)، و`JWT_SECRET` قوي وسري.
+- [ ] **Security headers:** الهيدرز الأساسية (HSTS / nosniff / X-Frame-Options /
+      Referrer-Policy / Permissions-Policy) مفعّلة تلقائيًا للباك إند
+      ([`api/next.config.ts`](api/next.config.ts)) وللفرونت
+      ([`app/vercel.json`](app/vercel.json)).
+- [ ] **CSP (موصى بيه — التوكن في localStorage فالـ CSP هو خط الدفاع ضد XSS):**
+      مش مفعّل افتراضيًا لأنه بيتطلّب دومينات النشر بتاعتك + فيه `<script>` inline
+      في `index.html`. فعّله بعد ما تظبط القيم، ويفضّل تبدأ بـ
+      `Content-Security-Policy-Report-Only` وتتأكد إن مفيش حاجة بتتكسر قبل ما
+      تشيل `-Report-Only`. أضِفه كـ header في [`app/vercel.json`](app/vercel.json):
+
+      ```
+      Content-Security-Policy:
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        img-src 'self' data: https://<SUPABASE-REF>.supabase.co;
+        connect-src 'self' https://<API-DOMAIN>;
+        frame-src https://challenges.cloudflare.com;
+        frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+      ```
+
+      > غيّر `<SUPABASE-REF>` (بَكِت الصور) و`<API-DOMAIN>` (دومين الباك إند).
+      > `script-src` فيه `'unsafe-inline'` بسبب الـ inline locale-init script؛
+      > لو نقلته لملف خارجي تقدر تشيلها وتشدّد الـ CSP أكتر. شيل سطر
+      > `frame-src`/`script-src` بتاع Turnstile لو مش مفعّل CAPTCHA.
 
 ---
 

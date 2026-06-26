@@ -4,6 +4,7 @@ import { adminOnly } from "@/lib/middleware/guards";
 import { parseAdminUserListQuery } from "@/lib/utils/query";
 import { createUserSchema } from "@/lib/validation/users";
 import * as usersService from "@/lib/services/users.service";
+import * as audit from "@/lib/services/audit.service";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,14 @@ export const GET = adminOnly(async (request: NextRequest) => {
 });
 
 // POST /api/admin/users → create an account (defaults to PROVIDER). 409 on dup email.
-export const POST = adminOnly(async (request: NextRequest) => {
+export const POST = adminOnly(async (request: NextRequest, _ctx, user) => {
   const input = createUserSchema.parse(await request.json());
-  return ok(await usersService.create(input), 201);
+  const created = await usersService.create(input);
+  await audit.record(user, {
+    action: "user.create",
+    entity: "User",
+    entityId: created.id,
+    meta: { role: created.role, email: created.email },
+  });
+  return ok(created, 201);
 });

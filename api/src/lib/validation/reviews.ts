@@ -2,12 +2,12 @@ import { z } from "zod";
 import { sanitizedText } from "@/lib/utils/sanitize";
 
 export const createReviewSchema = z.object({
-  author: z.string().trim().min(1).max(100),
+  author: sanitizedText(1, 100),
   avatar: z.string().trim().min(1).max(4).optional(), // defaults to author's initial
   rating: z.number().int().min(1).max(5),
   text: sanitizedText(1, 2000),
   date: z.string().trim().min(1).max(40),
-  district: z.string().trim().min(1).max(100),
+  district: sanitizedText(1, 100),
 });
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
@@ -18,11 +18,21 @@ const egyptianPhone = /^(?:\+?20)?0?1[0125]\d{8}$/;
 
 // Public customer review submission (POST /reviews). author/date/district are
 // derived server-side from the lead, so the customer only sends rating + text.
-export const submitReviewSchema = z.object({
-  ref: z.string().trim().min(1),
-  phone: z.string().trim().regex(egyptianPhone, "Invalid Egyptian mobile number"),
-  rating: z.number().int().min(1).max(5),
-  text: sanitizedText(1, 2000),
-});
+// Gated by the lead's tracking token (new leads) or phone (legacy) — at least one.
+export const submitReviewSchema = z
+  .object({
+    ref: z.string().trim().min(1),
+    token: z.string().trim().min(1).max(200).optional(),
+    phone: z
+      .string()
+      .trim()
+      .regex(egyptianPhone, "Invalid Egyptian mobile number")
+      .optional(),
+    rating: z.number().int().min(1).max(5),
+    text: sanitizedText(1, 2000),
+  })
+  .refine((o) => Boolean(o.token) || Boolean(o.phone), {
+    message: "A tracking token or phone number is required",
+  });
 
 export type SubmitReviewInput = z.infer<typeof submitReviewSchema>;

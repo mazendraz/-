@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildNewLeadEmail, notifyNewLead } from "@/lib/services/notifications.service";
+import {
+  buildAdminAlertEmail,
+  buildNewLeadEmail,
+  notifyNewLead,
+} from "@/lib/services/notifications.service";
 import type { ApiLead } from "@/lib/apiTypes";
 
 const lead: ApiLead = {
@@ -43,6 +47,22 @@ describe("buildNewLeadEmail", () => {
     );
     expect(email!.html).not.toContain("<script>");
     expect(email!.html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("buildAdminAlertEmail (PII-minimized)", () => {
+  it("includes the company/ref/service but OMITS customer name, phone, budget, details", () => {
+    const email = buildAdminAlertEmail(lead, "Aura Interiors");
+    expect(email.subject).toContain("AA-20260101-7F3K");
+    expect(email.text).toContain("Aura Interiors");
+    expect(email.text).toContain("Full Interior Design");
+    // No PII in the all-admins broadcast.
+    for (const body of [email.text, email.html]) {
+      expect(body).not.toContain("Mona Adel");
+      expect(body).not.toContain("01012345678");
+      expect(body).not.toContain("EGP 150,000 – 500,000");
+      expect(body).not.toContain("Need a full fit-out");
+    }
   });
 });
 

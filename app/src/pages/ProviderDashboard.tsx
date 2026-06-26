@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useLeadsForCompany, updateLeadStatus, type Lead, type LeadStatus, LEAD_STATUSES, STATUS_COLORS } from "../lib/requests";
-import { useCompanies, getCompany, type Company } from "../lib/catalog";
+import { useCompanies, useCompanyDetail, type Company } from "../lib/catalog";
 import { useAuth, logout, isAuthenticated } from "../lib/auth";
 import {
   leadsPerDay, leadsPerMonth, leadsByStatus, conversionFunnel, periodDelta,
@@ -45,7 +45,9 @@ export default function ProviderDashboard() {
   const [reviewQuery, setReviewQuery] = useState("");
   const [reviewRating, setReviewRating] = useState(0);
 
-  const company = getCompany(effectiveSlug);
+  // Full company (projects/reviews) fetched by slug — the cached list is now
+  // lightweight cards. Falls back to the cached card while the fetch is in flight.
+  const { company } = useCompanyDetail(effectiveSlug);
   const leads = useLeadsForCompany(effectiveSlug);
 
   const stats = {

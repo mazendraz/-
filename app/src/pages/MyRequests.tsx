@@ -7,6 +7,8 @@ import SearchInput from "../components/SearchInput";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
+import Captcha from "../components/Captcha";
+import { captchaConfigured } from "../lib/captcha";
 
 const STATUS_STYLE: Record<LeadStatus, { bg: string; text: string; icon: string; labelKey: StringKey }> = {
   New: { bg: "bg-blue-100", text: "text-blue-700", icon: "schedule", labelKey: "requests_status_received" },
@@ -188,17 +190,25 @@ function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   async function submit() {
     if (rating < 1 || !text.trim()) return;
+    if (captchaConfigured() && !captchaToken) {
+      setError(t(locale, "form_err_captcha"));
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await submitReview(lead.refNumber, lead.phone, rating, text.trim());
+      await submitReview(lead.refNumber, lead.phone, rating, text.trim(), "", captchaToken, lead.trackingToken);
       setDone(true);
       setTimeout(onClose, 1400);
     } catch {
       setError(t(locale, "lead_review_error"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
       setBusy(false);
     }
   }
@@ -243,6 +253,10 @@ function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar
             />
 
             {error && <p className="text-[13px] text-error font-medium bg-error/8 rounded-lg px-3 py-2 mt-3">{error}</p>}
+
+            <div className="mt-4">
+              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
+            </div>
 
             <button
               onClick={submit} disabled={busy || rating < 1 || !text.trim()}

@@ -7,7 +7,7 @@ import {
   type Project,
   type Review,
 } from "./data";
-import { apiFetch, apiPost, apiPut, apiDelete, isApiConfigured } from "./api";
+import { apiFetch, apiGet, apiPost, apiPut, apiDelete, isApiConfigured } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type { Company, ServiceCategory, Project, Review };
@@ -451,6 +451,38 @@ export function useCategoriesWithCounts(): ServiceCategory[] {
 export function useCompany(slug: string): Company | undefined {
   const companies = useCompanies();
   return companies.find((c) => c.slug === slug);
+}
+
+/**
+ * Full company for a detail view (profile / provider dashboard). The public list
+ * endpoint now returns lightweight cards WITHOUT projects/reviews, so a page that
+ * needs those must fetch the full record by slug. The cached card paints instantly
+ * (name/cover/rating); the fetched detail (full projects/reviews) replaces it when
+ * it lands. In demo mode (no API) the cache already holds full seed data, so it's
+ * used directly. `loading` is true only while fetching with nothing yet to show.
+ */
+export function useCompanyDetail(slug: string): { company: Company | undefined; loading: boolean } {
+  const cached = useCompany(slug);
+  const [detail, setDetail] = useState<Company | undefined>(undefined);
+  const [loading, setLoading] = useState<boolean>(isApiConfigured() && Boolean(slug));
+
+  useEffect(() => {
+    if (!isApiConfigured() || !slug) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setDetail(undefined);
+    apiGet<Company>(`/companies/${encodeURIComponent(slug)}`)
+      .then((full) => { if (active) setDetail(full); })
+      .catch(() => { /* keep the cached card as a fallback */ })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [slug]);
+
+  const company = !isApiConfigured() ? cached : (detail ?? cached);
+  return { company, loading: loading && !company };
 }
 
 /** Reactive hydration status (loading/ready/error) for loading & error UI. */

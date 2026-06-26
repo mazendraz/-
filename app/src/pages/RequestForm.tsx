@@ -6,6 +6,8 @@ import { getCompany } from "../lib/catalog";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
+import Captcha from "../components/Captcha";
+import { captchaConfigured } from "../lib/captcha";
 
 type Step = "form" | "success";
 
@@ -62,6 +64,8 @@ export default function RequestForm() {
   const [shakeForm, setShakeForm] = useState(false);
   const [submittedLead, setSubmittedLead] = useState<Lead | null>(null);
   const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0); // bump to reset the widget
 
   function clearPrefill() {
     setForm((f) => ({ ...f, name: "", phone: "", district: "" }));
@@ -82,6 +86,7 @@ export default function RequestForm() {
     if (!form.district) e.district = t(locale, "form_err_district");
     if (!form.budget) e.budget = t(locale, "form_err_budget");
     if (!form.description.trim()) e.description = t(locale, "form_err_description");
+    else if (form.description.trim().length < 10) e.description = t(locale, "form_err_description_short");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -96,6 +101,11 @@ export default function RequestForm() {
       firstError?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    // CAPTCHA gate — only when a Turnstile key is configured.
+    if (captchaConfigured() && !captchaToken) {
+      setSubmitError(t(locale, "form_err_captcha"));
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -108,12 +118,14 @@ export default function RequestForm() {
         district: form.district,
         budget: form.budget,
         description: form.description.trim(),
-      }, honeypot);
+      }, honeypot, captchaToken);
       setSubmittedLead(lead);
       setStep("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       setSubmitError(t(locale, "form_err_submit"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1); // token is single-use — refresh for retry
       setIsSubmitting(false);
     }
   }
@@ -339,6 +351,9 @@ export default function RequestForm() {
               {submitError}
             </div>
           )}
+
+          {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
+          <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
           {/* Submit */}
           <button

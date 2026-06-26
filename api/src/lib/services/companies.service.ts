@@ -3,13 +3,17 @@
 import { prisma } from "@/lib/prisma";
 import { CompanyStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { serializeCompany } from "@/lib/utils/serialize";
+import { serializeCompany, serializeCompanyCard } from "@/lib/utils/serialize";
 import { uniqueSlug } from "@/lib/utils/slug";
 import { NotFoundError } from "@/lib/utils/errors";
 import type { ApiCompany, ApiPage } from "@/lib/apiTypes";
 
 export const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+// Cap reviews returned on a single profile so a company with a huge review count
+// can't produce an unbounded payload. Most-recent first; the count badge still
+// shows the true total (company.reviewCount).
+const MAX_PROFILE_REVIEWS = 50;
 
 export type CompanySort =
   | "recommended"
@@ -27,11 +31,19 @@ export interface CompanyListQuery {
   sort?: CompanySort;
 }
 
-// Relations needed to serialize a full ApiCompany.
+// Relations needed to serialize a full ApiCompany (detail route + admin list).
+// Reviews are capped (most recent first) so one profile can't return tens of
+// thousands of rows; the true total stays in company.reviewCount.
 const companyInclude = {
   category: { select: { slug: true, label: true } },
   projects: { orderBy: { sortOrder: "asc" } },
-  reviews: { orderBy: { createdAt: "desc" } },
+  reviews: { orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
+} satisfies Prisma.CompanyInclude;
+
+// Card view (public list endpoints): only the category relation — NOT the heavy
+// projects/reviews arrays. Pairs with serializeCompanyCard.
+const companyCardInclude = {
+  category: { select: { slug: true, label: true } },
 } satisfies Prisma.CompanyInclude;
 
 // Mirrors the frontend Companies page sorters (pages/Companies.tsx).
@@ -95,14 +107,14 @@ async function listActiveWhere(
     prisma.company.count({ where }),
     prisma.company.findMany({
       where,
-      include: companyInclude,
+      include: companyCardInclude,
       orderBy: orderBy(query.sort ?? "recommended"),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
   ]);
 
-  return { data: rows.map(serializeCompany), meta: { total, page, pageSize } };
+  return { data: rows.map(serializeCompanyCard), meta: { total, page, pageSize } };
 }
 
 /** Public: paginated ACTIVE companies with filters. */

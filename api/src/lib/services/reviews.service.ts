@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { LeadStatus } from "@/generated/prisma/enums";
 import { serializeReview } from "@/lib/utils/serialize";
-import { phoneTail } from "@/lib/utils/phone";
+import { leadSecretMatches } from "@/lib/services/leads.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
 import type { SubmitReviewInput } from "@/lib/validation/reviews";
 import type { ApiReview } from "@/lib/apiTypes";
@@ -109,17 +109,21 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
       customerName: true,
       district: true,
       phone: true,
+      trackingToken: true,
       status: true,
       reviewedAt: true,
     },
   });
-  // Missing ref and phone mismatch both return 404 — don't reveal valid refs.
-  if (!lead || phoneTail(lead.phone) !== phoneTail(input.phone)) {
+  // Missing ref and secret mismatch both return 404 — don't reveal valid refs.
+  if (!lead || !leadSecretMatches(lead, { token: input.token, phone: input.phone })) {
     throw new NotFoundError("Lead");
   }
   if (lead.status !== LeadStatus.COMPLETED) {
     throw new ConflictError("Only completed requests can be reviewed.");
   }
+  // Fast-path, friendly error for the common (non-racing) case. The authoritative
+  // guard is the conditional claim inside the transaction below — two concurrent
+  // submits can both pass this read, so it must NOT be the only check.
   if (lead.reviewedAt) {
     throw new ConflictError("This request has already been reviewed.");
   }
@@ -128,9 +132,20 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
   const date = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   const review = await prisma.$transaction(async (tx) => {
+    // Atomically claim the one-time review slot: only the first concurrent caller
+    // flips reviewedAt from null (the row lock serializes the rest), so only it
+    // proceeds. Losers match 0 rows → 409, and the whole transaction rolls back.
+    const claimed = await tx.lead.updateMany({
+      where: { id: lead.id, reviewedAt: null },
+      data: { reviewedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictError("This request has already been reviewed.");
+    }
     const created = await tx.review.create({
       data: {
         companyId: lead.companyId,
+        leadId: lead.id, // links the review to its lead; UNIQUE backstops the claim
         author: lead.customerName,
         avatar,
         rating: input.rating,
@@ -140,7 +155,6 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
         verified: true,
       },
     });
-    await tx.lead.update({ where: { id: lead.id }, data: { reviewedAt: new Date() } });
     await recompute(tx, lead.companyId);
     return created;
   });
