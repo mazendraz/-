@@ -44,6 +44,15 @@ enum FeedbackType {
   INQUIRY
 }
 
+// Moderation state for a portfolio project. Provider-submitted projects start
+// PENDING and only appear publicly once an admin sets them APPROVED. Admin-created
+// projects are APPROVED on creation.
+enum ProjectStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Category {
   id          String   @id @default(uuid())
   slug        String   @unique
@@ -85,9 +94,13 @@ model Company {
   responseTime      String // "within 2 hours"
   verifiedSince     String // "2021"
   completedProjects Int           @default(0) // manual admin number (!= projects.length)
-  // aggregate cache — recomputed from Review on any change
+  // aggregate cache — recomputed from Review on any change, UNLESS ratingOverridden
+  // is true, in which case an admin set rating/reviewCount manually and the review
+  // recompute leaves them alone (see reviews.service recompute). Clearing the flag
+  // recomputes from real reviews again.
   rating            Float         @default(0)
   reviewCount       Int           @default(0)
+  ratingOverridden  Boolean       @default(false)
   featured          Boolean       @default(true)
   verified          Boolean       @default(false)
   status            CompanyStatus @default(ACTIVE)
@@ -124,12 +137,16 @@ model Project {
   sortOrder   Int      @default(0)
   // Curated for the homepage "Featured Projects" showcase (admin-set).
   featured    Boolean  @default(false)
+  // Moderation state. New rows default to PENDING (provider submissions); admin
+  // creations are set APPROVED in the service. Only APPROVED show publicly.
+  status      ProjectStatus @default(PENDING)
   createdAt   DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
   @@index([featured])
+  @@index([status])
 }
 
 model Review {
@@ -149,6 +166,10 @@ model Review {
   // true = submitted by a real customer on a COMPLETED lead (shows a "Verified"
   // badge). false = curated/seeded by an admin. See reviews.service submitFromLead.
   verified  Boolean  @default(false)
+  // Moderation gate. Customer submissions start unapproved (hidden + excluded from
+  // the rating aggregate) until an admin approves them. Admin-curated reviews are
+  // created approved. New rows default false; existing rows backfilled to true.
+  approved  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -157,6 +178,7 @@ model Review {
   lead    Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
+  @@index([approved])
 }
 
 model Lead {
@@ -202,9 +224,28 @@ model User {
   updatedAt    DateTime @updatedAt
 
   company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  pushSubscriptions PushSubscription[]
 
   @@index([email])
   @@index([companyId])
+}
+
+// Web Push subscription for a user's browser/device. One row per device (a user
+// may enable notifications on phone + laptop). `endpoint` is the push service URL
+// and is globally unique. Deleted automatically when the push service reports the
+// subscription is gone (404/410) — see push.service. Cascades with the user.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String // client public key (base64url) for payload encryption
+  auth      String // client auth secret (base64url)
+  userAgent String? // for the user to identify which device this is
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Visitor-submitted platform testimonials shown on the homepage. New submissions

@@ -21,12 +21,19 @@ export interface ApiErrorBody {
 
 // ── Companies ─────────────────────────────────────────────────────────────────
 
+export type ApiProjectStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 export interface ApiProject {
+  // Present on admin/provider payloads (per-project management); omitted on the
+  // public profile, which only ever returns APPROVED projects.
+  id?: string;
   title: string;
   img: string;
   description: string;
   year: string;
   featured?: boolean; // curated for the homepage showcase
+  // Moderation state — surfaced to admin/provider so they can see/manage approval.
+  status?: ApiProjectStatus;
 }
 
 /** GET /api/projects/featured — flattened showcase items for the homepage. */
@@ -38,6 +45,7 @@ export interface ApiFeaturedProject {
 }
 
 export interface ApiReview {
+  id?: string; // present on admin payloads (per-review management); omitted publicly
   author: string;
   avatar: string; // initial letter used as fallback
   rating: number;
@@ -87,6 +95,9 @@ export interface ApiCompany {
   // admin payloads (so the editor can round-trip them); omitted from public ones.
   email?: string | null;
   whatsapp?: string | null;
+  // Admin-only: true when rating/reviewCount were set manually (not derived from
+  // the Review table). Present only in admin payloads.
+  ratingOverridden?: boolean;
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────
@@ -288,6 +299,10 @@ export interface ApiPlatformSettings {
   // Branding image URLs; "" = built-in /logo.png + favicon.
   logo_url: string;
   favicon_url: string;
+  // Logo size as a percentage (50–200) of the built-in size; "" = 100%.
+  logo_scale: string;
+  // Homepage hero background image URL; "" = the built-in skyline render.
+  hero_image_url: string;
 }
 
 // ── Email templates (admin-only) ───────────────────────────────────────────────

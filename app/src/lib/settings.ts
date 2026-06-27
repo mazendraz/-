@@ -22,6 +22,10 @@ export interface PlatformSettings {
   hero_subtitle_ar: string;
   logo_url: string;
   favicon_url: string;
+  // Logo size as a percentage of the built-in size; "" = 100%.
+  logo_scale: string;
+  // Homepage hero background image; "" = the built-in skyline render.
+  hero_image_url: string;
 }
 
 export const SETTINGS_DEFAULTS: PlatformSettings = {
@@ -41,6 +45,8 @@ export const SETTINGS_DEFAULTS: PlatformSettings = {
   hero_subtitle_ar: "",
   logo_url: "",
   favicon_url: "",
+  logo_scale: "",
+  hero_image_url: "",
 };
 
 /** Split a newline-separated settings value into a trimmed list, or the fallback

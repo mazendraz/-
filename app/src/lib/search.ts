@@ -1,4 +1,5 @@
-import { getCompanies, getCategoriesWithCounts } from "./catalog";
+import { getCompanies, getCategoriesWithCounts, type Company } from "./catalog";
+import { apiGet, isApiConfigured } from "./api";
 
 export type SearchResult =
   | { type: "service"; slug: string; label: string; sub: string; icon: string; to: string }
@@ -51,22 +52,12 @@ function matchesQuery(text: string, normQ: string): boolean {
   return false;
 }
 
-/**
- * Universal client-side search across service categories, companies,
- * and the individual services each company offers. Instant — all local.
- */
-export function search(query: string, limit = 8): SearchResult[] {
-  const q = norm(query);
-  if (!q) return [];
-
-  const results: SearchResult[] = [];
-  const COMPANIES = getCompanies();
-  const SERVICE_CATEGORIES = getCategoriesWithCounts();
-
-  // 1. Service categories
-  for (const cat of SERVICE_CATEGORIES) {
+// Service-category matches (fully loaded in the catalog, so always client-side).
+function categoryResults(q: string): SearchResult[] {
+  const out: SearchResult[] = [];
+  for (const cat of getCategoriesWithCounts()) {
     if (matchesQuery(cat.label, q) || matchesQuery(cat.description, q)) {
-      results.push({
+      out.push({
         type: "service",
         slug: cat.slug,
         label: cat.label,
@@ -76,15 +67,15 @@ export function search(query: string, limit = 8): SearchResult[] {
       });
     }
   }
+  return out;
+}
 
-  // 2. Companies (by name, tagline, category)
-  for (const c of COMPANIES) {
-    if (
-      matchesQuery(c.name, q) ||
-      matchesQuery(c.tagline, q) ||
-      matchesQuery(c.categoryLabel, q)
-    ) {
-      results.push({
+// Company + individual-service-item matches from a set of companies.
+function companyResults(companies: Company[], q: string): SearchResult[] {
+  const out: SearchResult[] = [];
+  for (const c of companies) {
+    if (matchesQuery(c.name, q) || matchesQuery(c.tagline, q) || matchesQuery(c.categoryLabel, q)) {
+      out.push({
         type: "company",
         slug: c.slug,
         label: c.name,
@@ -95,15 +86,13 @@ export function search(query: string, limit = 8): SearchResult[] {
       });
     }
   }
-
-  // 3. Individual services offered by companies (e.g. "CCTV", "Pool")
   const seen = new Set<string>();
-  for (const c of COMPANIES) {
+  for (const c of companies) {
     for (const svc of c.services) {
       const key = norm(svc) + "|" + c.slug;
       if (matchesQuery(svc, q) && !seen.has(key)) {
         seen.add(key);
-        results.push({
+        out.push({
           type: "serviceItem",
           label: svc,
           sub: `by ${c.name}`,
@@ -114,12 +103,42 @@ export function search(query: string, limit = 8): SearchResult[] {
       }
     }
   }
+  return out;
+}
 
-  // Prioritize: services → companies → service items, then cap
+function prioritise(results: SearchResult[], limit: number): SearchResult[] {
   const order = { service: 0, company: 1, serviceItem: 2 } as const;
-  results.sort((a, b) => order[a.type] - order[b.type]);
+  return [...results].sort((a, b) => order[a.type] - order[b.type]).slice(0, limit);
+}
 
-  return results.slice(0, limit);
+/**
+ * Synchronous search over the LOCALLY loaded catalog (categories + the hydrated
+ * company page). Used as the demo-mode path and as an instant first paint.
+ */
+export function search(query: string, limit = 8): SearchResult[] {
+  const q = norm(query);
+  if (!q) return [];
+  return prioritise([...categoryResults(q), ...companyResults(getCompanies(), q)], limit);
+}
+
+/**
+ * Backend-backed search over the COMPLETE company dataset (so the overlay finds
+ * companies/services that were never loaded into the browser). Categories stay
+ * local (fully loaded). Falls back to the synchronous local search when the API
+ * isn't configured or the request fails.
+ */
+export async function searchRemote(query: string, limit = 8): Promise<SearchResult[]> {
+  const q = norm(query);
+  if (!q) return [];
+  if (!isApiConfigured()) return search(query, limit);
+  try {
+    const res = await apiGet<{ data: Company[] }>(
+      `/companies?search=${encodeURIComponent(query.trim())}&pageSize=${limit}`,
+    );
+    return prioritise([...categoryResults(q), ...companyResults(res.data, q)], limit);
+  } catch {
+    return search(query, limit); // network/parse failure → local best-effort
+  }
 }
 
 // ── Recent searches (localStorage) ─────────────────────────────────────────

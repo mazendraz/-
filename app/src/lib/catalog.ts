@@ -168,6 +168,11 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
     completedProjects: c.completedProjects,
     featured: c.featured ?? true,
     verified: c.verified ?? false,
+    // Manual rating override — the server only applies rating/reviewCount when
+    // ratingOverridden is true; otherwise they're derived from real reviews.
+    ratingOverridden: c.ratingOverridden ?? false,
+    rating: c.rating,
+    reviewCount: c.reviewCount,
     metaTitle: c.metaTitle?.trim() || undefined,
     metaDescription: c.metaDescription?.trim() || undefined,
     // Internal contact for lead notifications. Send "" as undefined so an empty
@@ -244,6 +249,7 @@ const EMPTY_COMPANY: CompanyDraft = {
   badges: [],
   featured: true,
   verified: false,
+  ratingOverridden: false,
   email: "",
   whatsapp: "",
   metaTitle: "",
@@ -254,15 +260,22 @@ export function emptyCompany(): CompanyDraft {
   return JSON.parse(JSON.stringify(EMPTY_COMPANY));
 }
 
-export function addCompany(draft: CompanyDraft): Company {
+export async function addCompany(draft: CompanyDraft): Promise<Company> {
   const list = getCompanies();
   const slug = draft.slug || slugify(draft.name);
   const company: Company = { ...draft, id: newId(), slug: uniqueSlug(slug, list) };
   writeCompanies([company, ...list]); // optimistic
   if (isAdminSession()) {
-    void apiPost("/admin/companies", companyPayload(draft))
-      .catch((err) => console.error("Create company failed:", err))
-      .finally(() => refreshCatalogFromApi());
+    try {
+      await apiPost("/admin/companies", companyPayload(draft));
+    } catch (err) {
+      // Roll back the optimistic insert and surface the error to the caller —
+      // otherwise the new company silently vanishes on the next sync.
+      writeCompanies(getCompanies().filter((c) => c.id !== company.id));
+      throw err;
+    } finally {
+      refreshCatalogFromApi();
+    }
   }
   return company;
 }
@@ -274,15 +287,19 @@ function uniqueSlug(base: string, list: Company[]): string {
   return slug;
 }
 
-export function updateCompany(id: string, patch: Partial<Company>) {
+export async function updateCompany(id: string, patch: Partial<Company>): Promise<void> {
   writeCompanies(getCompanies().map((c) => (c.id === id ? { ...c, ...patch } : c))); // optimistic
   if (isAdminSession()) {
     // Send the merged company so the payload is always complete (PUT semantics).
     const merged = getCompanies().find((c) => c.id === id);
     if (merged) {
-      void apiPut(`/admin/companies/${id}`, companyPayload(merged))
-        .catch((err) => console.error("Update company failed:", err))
-        .finally(() => refreshCatalogFromApi());
+      try {
+        await apiPut(`/admin/companies/${id}`, companyPayload(merged));
+      } finally {
+        // Re-sync from the server on both success and failure so the UI reflects
+        // the real stored state (and a rejected save propagates to the caller).
+        refreshCatalogFromApi();
+      }
     }
   }
 }
@@ -397,15 +414,20 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
   }
 }
 
-export function deleteCategory(slug: string) {
+export async function deleteCategory(slug: string, cascade = false): Promise<void> {
   const id = isAdminSession() ? categoryIdForSlug(slug) : null;
   writeCategories(getCategories().filter((c) => c.slug !== slug)); // optimistic
+  // When cascading, also drop the category's companies locally so the UI doesn't
+  // flash stale rows before the server re-sync lands.
+  if (cascade) writeCompanies(getCompanies().filter((c) => c.category !== slug));
   if (id) {
-    // DELETE fails with 409 if the category still has companies — refresh then
-    // restores it (the delete simply didn't take).
-    void apiDelete(`/admin/categories/${id}`)
-      .catch((err) => console.error("Delete category failed:", err))
-      .finally(() => refreshCatalogFromApi());
+    // Without cascade the API returns 409 if the category still has companies;
+    // the error propagates to the caller and the re-sync restores the rows.
+    try {
+      await apiDelete(`/admin/categories/${id}${cascade ? "?cascade=true" : ""}`);
+    } finally {
+      refreshCatalogFromApi();
+    }
   }
 }
 

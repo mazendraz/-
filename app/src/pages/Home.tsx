@@ -27,6 +27,7 @@ function Reveal({ children, delay = 0, className = "" }: { children: React.React
 }
 
 // ── Hero image ─────────────────────────────────────────────────────────────
+// Built-in default; admins can override via Settings → branding (hero_image_url).
 const HERO = "/img/seed-16.jpg";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -49,6 +50,7 @@ export default function Home() {
   const settings = useSettings();
   const heroTitleOverride = (locale === "ar" ? settings.hero_title_ar : settings.hero_title_en).trim();
   const heroSubOverride = (locale === "ar" ? settings.hero_subtitle_ar : settings.hero_subtitle_en).trim();
+  const heroImage = settings.hero_image_url.trim() || HERO;
 
   // Average customer rating — derived from live company ratings (×10 so the
   // counter can animate an integer), not a hardcoded number.
@@ -69,7 +71,7 @@ export default function Home() {
       <header className="relative w-full h-screen min-h-[640px] max-h-[900px] flex items-center justify-center overflow-hidden">
         {/* Background — eager loaded, above the fold */}
         <img
-          src={HERO}
+          src={heroImage}
           alt="New Administrative Capital skyline"
           loading="eager"
           decoding="async"

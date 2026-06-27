@@ -36,3 +36,7 @@ export const submitReviewSchema = z
   });
 
 export type SubmitReviewInput = z.infer<typeof submitReviewSchema>;
+
+// Admin moderation: approve / un-approve a review (PATCH /admin/reviews/[id]).
+export const reviewApprovalSchema = z.object({ approved: z.boolean() });
+export type ReviewApprovalInput = z.infer<typeof reviewApprovalSchema>;

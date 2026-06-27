@@ -27,6 +27,10 @@ export const PLATFORM_SETTING_KEYS = [
   // Branding — uploaded image URLs; blank = the built-in /logo.png + favicon.
   "logo_url",
   "favicon_url",
+  // Logo size as a percentage of the built-in size; blank = 100%.
+  "logo_scale",
+  // Homepage hero background image URL; blank = the built-in skyline render.
+  "hero_image_url",
 ] as const;
 export type PlatformSettingKey = (typeof PLATFORM_SETTING_KEYS)[number];
 
@@ -47,6 +51,8 @@ const DEFAULTS: ApiPlatformSettings = {
   hero_subtitle_ar: "",
   logo_url: "",
   favicon_url: "",
+  logo_scale: "",
+  hero_image_url: "",
 };
 
 function isKey(k: string): k is PlatformSettingKey {

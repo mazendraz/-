@@ -26,6 +26,7 @@ git remote add origin https://github.com/<user>/<repo>.git
 git push -u origin main
 ```
 
+
 ---
 
 ## 1. قاعدة البيانات (Supabase)

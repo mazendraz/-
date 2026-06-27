@@ -13,6 +13,14 @@ const urlOrEmpty = z
   .trim()
   .max(300)
   .refine((v) => v === "" || /^https?:\/\/.+/.test(v), "Must be a URL (https://…) or blank");
+// Logo size percentage: blank (100%) or an integer in 50–200.
+const scaleOrEmpty = z
+  .string()
+  .trim()
+  .refine(
+    (v) => v === "" || (/^\d+$/.test(v) && Number(v) >= 50 && Number(v) <= 200),
+    "Must be a whole number between 50 and 200, or blank",
+  );
 
 export const updateSettingsSchema = z
   .object({
@@ -32,6 +40,8 @@ export const updateSettingsSchema = z
     hero_subtitle_ar: text(300),
     logo_url: urlOrEmpty,
     favicon_url: urlOrEmpty,
+    logo_scale: scaleOrEmpty,
+    hero_image_url: urlOrEmpty,
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, { message: "At least one setting is required" });

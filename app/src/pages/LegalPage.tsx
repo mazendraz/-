@@ -5,9 +5,11 @@ import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { fetchLegalPages } from "../lib/settings";
 import { isApiConfigured } from "../lib/api";
+import Markdown from "../components/Markdown";
 
-// Terms / Privacy. Content is admin-managed (Settings) and fetched on demand.
-// Rendered as plain text (React escapes it) — no HTML injection from the stored value.
+// Terms / Privacy. Content is admin-managed (Settings, Markdown) and fetched on
+// demand. Rendered via a safe React-element Markdown renderer (no raw HTML) — and
+// the backend strips HTML on save, so there's no injection from the stored value.
 export default function LegalPage({ kind }: { kind: "terms" | "privacy" }) {
   const { locale } = useLocale();
   const title = t(locale, kind === "terms" ? "footer_terms" : "footer_privacy");
@@ -39,7 +41,7 @@ export default function LegalPage({ kind }: { kind: "terms" | "privacy" }) {
         {loading ? (
           <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
         ) : content && content.trim() ? (
-          <div className="whitespace-pre-wrap text-[15px] leading-relaxed text-on-surface-variant">{content}</div>
+          <Markdown source={content} className="text-[15px] leading-relaxed text-on-surface-variant" />
         ) : (
           <p className="text-[15px] text-outline">{t(locale, "legal_unpublished")}</p>
         )}

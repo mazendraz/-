@@ -67,16 +67,19 @@ export type LeadWithCompany = Lead & {
 
 export function serializeProject(p: Project): ApiProject {
   return {
+    id: p.id,
     title: p.title,
     img: p.img,
     description: p.description,
     year: p.year,
     featured: p.featured ?? false,
+    status: p.status,
   };
 }
 
 export function serializeReview(r: Review): ApiReview {
   return {
+    id: r.id,
     author: r.author,
     avatar: r.avatar,
     rating: r.rating,
@@ -174,6 +177,8 @@ export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
     ...serializeCompany(c),
     email: c.email ?? null,
     whatsapp: c.whatsapp ?? null,
+    // Admin-only: lets the editor show whether the rating is a manual override.
+    ratingOverridden: c.ratingOverridden,
   };
 }
 

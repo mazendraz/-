@@ -233,3 +233,80 @@ export async function notifyAdmins(
     return false;
   }
 }
+
+/**
+ * Notify all admins that a provider submitted (or edited) a portfolio project that
+ * now needs approval. One email, multiple recipients. Never throws; returns true if
+ * an email was dispatched, false if skipped (no key / no recipients).
+ */
+export async function notifyAdminsProjectSubmitted(params: {
+  projectTitle: string;
+  companyName: string;
+  adminEmails: (string | null | undefined)[];
+}): Promise<boolean> {
+  try {
+    const recipients = [...new Set(params.adminEmails.filter((e): e is string => !!e))];
+    if (recipients.length === 0) return false;
+
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info("[notify] RESEND_API_KEY not set — skipping project-submission alert");
+      return false;
+    }
+
+    const subject = `New project for review — ${params.companyName}`;
+    const text =
+      `${params.companyName} submitted a portfolio project "${params.projectTitle}" for approval.\n\n` +
+      `Review it in the admin dashboard → Reviews & Feedback → Project approvals.`;
+    const html =
+      `<h2>New project for review</h2>` +
+      `<p><strong>${escapeHtml(params.companyName)}</strong> submitted a portfolio project ` +
+      `"<strong>${escapeHtml(params.projectTitle)}</strong>" for approval.</p>` +
+      `<p>Review it in the admin dashboard → Reviews &amp; Feedback → Project approvals.</p>`;
+
+    await sendViaResend(apiKey, { to: recipients, subject, text, html });
+    return true;
+  } catch (err) {
+    console.error("[notify] project-submission alert failed:", err);
+    return false;
+  }
+}
+
+/**
+ * Notify all admins that a customer left a verified review for a company. One email,
+ * multiple recipients. Never throws; returns true if dispatched, false if skipped.
+ */
+export async function notifyAdminsReviewSubmitted(params: {
+  companyName: string;
+  rating: number;
+  author: string;
+  adminEmails: (string | null | undefined)[];
+}): Promise<boolean> {
+  try {
+    const recipients = [...new Set(params.adminEmails.filter((e): e is string => !!e))];
+    if (recipients.length === 0) return false;
+
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info("[notify] RESEND_API_KEY not set — skipping review alert");
+      return false;
+    }
+
+    const stars = "★".repeat(params.rating) + "☆".repeat(Math.max(0, 5 - params.rating));
+    const subject = `New review to approve — ${params.companyName} (${params.rating}/5)`;
+    const text =
+      `${params.author} left a ${params.rating}/5 review for ${params.companyName} and it's awaiting approval.\n\n` +
+      `Approve or delete it in the admin dashboard → Reviews & Feedback → Customer reviews.`;
+    const html =
+      `<h2>New review to approve</h2>` +
+      `<p><strong>${escapeHtml(params.author)}</strong> left a ${escapeHtml(stars)} (${params.rating}/5) ` +
+      `review for <strong>${escapeHtml(params.companyName)}</strong> — awaiting approval.</p>` +
+      `<p>Approve or delete it in the admin dashboard → Reviews &amp; Feedback → Customer reviews.</p>`;
+
+    await sendViaResend(apiKey, { to: recipients, subject, text, html });
+    return true;
+  } catch (err) {
+    console.error("[notify] review alert failed:", err);
+    return false;
+  }
+}

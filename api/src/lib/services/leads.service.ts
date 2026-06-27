@@ -8,6 +8,10 @@ import { generateTrackingToken, safeEqual } from "@/lib/utils/token";
 import { phoneTail } from "@/lib/utils/phone";
 import { leadStatusFromLabel, serializeLead } from "@/lib/utils/serialize";
 import { notifyNewLead, notifyAdmins } from "@/lib/services/notifications.service";
+import {
+  notifyCompanyProviders as pushCompanyProviders,
+  notifyAdmins as pushAdmins,
+} from "@/lib/services/push.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
 import type {
   ApiLead,
@@ -126,6 +130,22 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
         .then((admins) => notifyAdmins(serialized, company.name, admins.map((a) => a.email)))
         .catch((err) => console.error(`[notify] admin lookup failed for lead ${serialized.refNumber}:`, err));
 
+      // Web Push — reaches provider/admin devices even with the dashboard closed.
+      // Bodies stay lean (no customer PII on a lockscreen); details live in the
+      // dashboard, which the click opens. Fire-and-forget + fail-open.
+      void pushCompanyProviders(company.id, {
+        title: "New lead — Al Assema",
+        body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
+        url: "/provider",
+        tag: `lead-${serialized.id}`,
+      });
+      void pushAdmins({
+        title: `New lead — ${company.name}`,
+        body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
+        url: "/admin",
+        tag: `lead-${serialized.id}`,
+      });
+
       return serialized;
     } catch (err) {
       const code = (err as { code?: string })?.code;
@@ -139,8 +159,28 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
 
 export interface LeadListQuery {
   status?: ApiLeadStatus; // by label, e.g. "In Progress"
+  search?: string; // matches refNumber / customerName / phone / service / district
   page?: number;
   pageSize?: number;
+}
+
+/**
+ * Build a case-insensitive OR filter across the human-searchable lead fields.
+ * Returns {} for an empty query so it composes cleanly into any where clause.
+ * Exported for unit testing.
+ */
+export function leadSearchWhere(search?: string): Prisma.LeadWhereInput {
+  const s = search?.trim();
+  if (!s) return {};
+  return {
+    OR: [
+      { refNumber: { contains: s, mode: "insensitive" } },
+      { customerName: { contains: s, mode: "insensitive" } },
+      { phone: { contains: s, mode: "insensitive" } },
+      { service: { contains: s, mode: "insensitive" } },
+      { district: { contains: s, mode: "insensitive" } },
+    ],
+  };
 }
 
 export interface AdminLeadListQuery extends LeadListQuery {
@@ -154,7 +194,7 @@ export async function listByCompany(
   companyId: string,
   query: LeadListQuery,
 ): Promise<ApiPage<ApiLead>> {
-  const where: Prisma.LeadWhereInput = { companyId };
+  const where: Prisma.LeadWhereInput = { companyId, ...leadSearchWhere(query.search) };
   if (query.status) where.status = leadStatusFromLabel(query.status);
   return listWhere(where, query);
 }
@@ -163,7 +203,7 @@ export async function listByCompany(
 export async function listAll(
   query: AdminLeadListQuery,
 ): Promise<ApiPage<ApiLead>> {
-  const where: Prisma.LeadWhereInput = {};
+  const where: Prisma.LeadWhereInput = { ...leadSearchWhere(query.search) };
   if (query.companyId) where.companyId = query.companyId;
   if (query.status) where.status = leadStatusFromLabel(query.status);
   if (query.from || query.to) {

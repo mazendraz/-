@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
   useLeads, updateLeadStatus, deleteLead, clearAllLeads,
@@ -20,7 +20,7 @@ import {
   type Feedback, FEEDBACK_TYPE_LABELS, FEEDBACK_TYPE_ICONS, FEEDBACK_TYPE_COLORS,
 } from "../lib/feedback";
 import {
-  useAdminUsers, canManageUsers, createUser, updateUser, deleteUser,
+  canManageUsers, createUser, updateUser, deleteUser,
   type AdminUser, type Role,
 } from "../lib/users";
 import { loadDemoLeads } from "../lib/demo";
@@ -30,10 +30,18 @@ import {
   fetchLegalPagesAdmin, saveLegalPages, type LegalPages,
 } from "../lib/settings";
 import { isApiConfigured } from "../lib/api";
+import {
+  listModerationProjects, setProjectStatus, deleteProjectAdmin, type ModerationProject,
+} from "../lib/projects";
+import { listAdminReviews, approveAdminReview, deleteAdminReview, type AdminReview, type AdminReviewStatus } from "../lib/adminReviews";
+import type { ProjectStatus } from "../lib/data";
 import { logout, isAuthenticated } from "../lib/auth";
 import { uploadImage, isDataUrl, type UploadBucket } from "../lib/image";
 import SearchInput from "../components/SearchInput";
+import Pagination from "../components/Pagination";
 import Logo from "../components/Logo";
+import NotificationToggle from "../components/NotificationToggle";
+import { useServerSearch } from "../hooks/useServerSearch";
 import {
   leadsPerDay, leadsByStatus, conversionFunnel, leadsByCompany,
   companyLeaderboard, periodDelta,
@@ -75,6 +83,24 @@ export default function AdminDashboard() {
   const [editingCompany, setEditingCompany] = useState<{ company: Company | null } | null>(null);
   const [editingCategory, setEditingCategory] = useState<{ category: ServiceCategory | null } | null>(null);
 
+  // Leads: server-driven search/pagination over the COMPLETE dataset when the API
+  // is configured; the in-memory filter below is the demo-mode (localStorage) path.
+  const leadApiMode = isApiConfigured();
+  const companyIdBySlug = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of companies) m.set(c.slug, c.id);
+    return m;
+  }, [companies]);
+  const leadSearch = useServerSearch<Lead>(
+    "/admin/leads",
+    leadQuery,
+    {
+      status: filterStatus === "All" ? undefined : filterStatus,
+      companyId: filterCompany === "all" ? undefined : companyIdBySlug.get(filterCompany),
+    },
+    { pageSize: 20, enabled: leadApiMode },
+  );
+
   const lq = leadQuery.trim().toLowerCase();
   const filtered = leads.filter((l) => {
     const matchStatus = filterStatus === "All" || l.status === filterStatus;
@@ -83,8 +109,40 @@ export default function AdminDashboard() {
     return matchStatus && matchCompany && matchQuery;
   });
 
+  // Unified view: server page in API mode, client-filtered list in demo mode.
+  const leadList = leadApiMode ? leadSearch.data : filtered;
+  const leadTotal = leadApiMode ? leadSearch.total : filtered.length;
+
+  // Mutations refresh the server page (after the PATCH/DELETE settles) so the
+  // visible rows reflect the change even though they came from the backend.
+  const handleLeadStatus = (id: string, status: LeadStatus) => {
+    void updateLeadStatus(id, status).then(() => { if (leadApiMode) leadSearch.refresh(); });
+  };
+  const handleLeadDelete = (id: string) => {
+    void deleteLead(id).then(() => { if (leadApiMode) leadSearch.refresh(); });
+  };
+
   const cq = companyQuery.trim().toLowerCase();
   const filteredCompanies = companies.filter((c) => !cq || [c.name, c.categoryLabel, ...c.services].some((v) => v.toLowerCase().includes(cq)));
+
+  // Companies: server-driven search/pagination over the COMPLETE catalog in API
+  // mode; the client filter above is the demo-mode path. The catalog mutations
+  // (add/update/delete) call refreshCatalogFromApi() on settle, which updates
+  // `companies` — so re-running the server query on that change keeps the list in
+  // sync after edits without racing the optimistic write.
+  const companyApiMode = isApiConfigured();
+  const companySearch = useServerSearch<Company>(
+    "/admin/companies",
+    companyQuery,
+    {},
+    { pageSize: 12, enabled: companyApiMode },
+  );
+  const refreshCompanyList = companySearch.refresh;
+  useEffect(() => {
+    if (companyApiMode) refreshCompanyList();
+  }, [companies, companyApiMode, refreshCompanyList]);
+  const companyList = companyApiMode ? companySearch.data : filteredCompanies;
+  const companyTotal = companyApiMode ? companySearch.total : filteredCompanies.length;
 
   const catq = categoryQuery.trim().toLowerCase();
   const filteredCategories = categories.filter((c) => !catq || [c.label, c.description].some((v) => v.toLowerCase().includes(catq)));
@@ -175,23 +233,29 @@ export default function AdminDashboard() {
                   <option value="all">All Companies</option>
                   {companies.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
                 </select>
-                <span className="text-[13px] font-bold text-outline ml-auto">{filtered.length} lead{filtered.length !== 1 ? "s" : ""}</span>
+                <span className="text-[13px] font-bold text-outline ml-auto">{leadTotal} lead{leadTotal !== 1 ? "s" : ""}</span>
               </div>
-              {filtered.length === 0 ? (
+              {leadApiMode && leadSearch.error && (
+                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{leadSearch.error}</div>
+              )}
+              {leadList.length === 0 ? (
                 <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
-                  <EmptyState msg="No leads match the current filters." icon="search_off" />
+                  <EmptyState msg={leadApiMode && leadSearch.loading ? "Searching…" : "No leads match the current filters."} icon="search_off" />
                 </div>
               ) : (
                 <>
                   {/* Desktop table */}
                   <div className="hidden md:block bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
-                    <LeadTable leads={filtered} onOpen={setSelectedLead} onStatusChange={updateLeadStatus} />
+                    <LeadTable leads={leadList} onOpen={setSelectedLead} onStatusChange={handleLeadStatus} />
                   </div>
                   {/* Mobile cards */}
                   <div className="md:hidden space-y-3">
-                    {filtered.map((l) => <LeadMobileCard key={l.id} lead={l} onOpen={setSelectedLead} />)}
+                    {leadList.map((l) => <LeadMobileCard key={l.id} lead={l} onOpen={setSelectedLead} />)}
                   </div>
                 </>
+              )}
+              {leadApiMode && (
+                <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} noun="lead" />
               )}
             </div>
           )}
@@ -201,14 +265,16 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               <SearchInput value={companyQuery} onChange={setCompanyQuery} placeholder="Search companies by name, category, service…" />
               <p className="text-[14px] text-outline">
-                <span className="font-black text-on-surface">{filteredCompanies.length}</span>
-                {cq ? ` of ${companies.length}` : ""} companies
+                <span className="font-black text-on-surface">{companyTotal}</span> companies
               </p>
-              {filteredCompanies.length === 0 ? (
-                <div className="bg-surface-container-lowest rounded-2xl shadow-bloom"><EmptyState msg="No companies match your search." icon="search_off" /></div>
+              {companyApiMode && companySearch.error && (
+                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{companySearch.error}</div>
+              )}
+              {companyList.length === 0 ? (
+                <div className="bg-surface-container-lowest rounded-2xl shadow-bloom"><EmptyState msg={companyApiMode && companySearch.loading ? "Searching…" : "No companies match your search."} icon="search_off" /></div>
               ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {filteredCompanies.map((c) => {
+                {companyList.map((c) => {
                   const cLeads = leads.filter((l) => l.companySlug === c.slug).length;
                   return (
                     <div key={c.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex items-center gap-4">
@@ -243,6 +309,9 @@ export default function AdminDashboard() {
                 })}
               </div>
               )}
+              {companyApiMode && (
+                <Pagination page={companySearch.page} pageCount={companySearch.pageCount} total={companySearch.total} pageSize={companySearch.pageSize} onPage={companySearch.setPage} noun="company" nounPlural="companies" />
+              )}
             </div>
           )}
 
@@ -270,10 +339,7 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <p className="text-[12px] text-on-surface-variant mt-2 line-clamp-2">{cat.description}</p>
-                    <div className="flex gap-2 mt-3">
-                      <button onClick={() => setEditingCategory({ category: cat })} className="flex-1 bg-surface-container py-2 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors">Edit</button>
-                      <ConfirmDelete onConfirm={() => deleteCategory(cat.slug)} label="category" />
-                    </div>
+                    <CategoryCardActions cat={cat} onEdit={() => setEditingCategory({ category: cat })} />
                   </div>
                 ))}
               </div>
@@ -303,8 +369,8 @@ export default function AdminDashboard() {
         <LeadModal
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
-          onStatusChange={(id, s) => { updateLeadStatus(id, s); setSelectedLead((l) => (l ? { ...l, status: s } : null)); }}
-          onDelete={(id) => { deleteLead(id); setSelectedLead(null); }}
+          onStatusChange={(id, s) => { handleLeadStatus(id, s); setSelectedLead((l) => (l ? { ...l, status: s } : null)); }}
+          onDelete={(id) => { handleLeadDelete(id); setSelectedLead(null); }}
         />
       )}
       {editingCompany && (
@@ -445,6 +511,7 @@ function CompanyEditor({ company, categories, onClose }: {
     company ? { ...company } : emptyCompany()
   );
   const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   function set<K extends keyof CompanyDraft>(key: K, val: CompanyDraft[K]) {
     setDraft((d) => ({ ...d, [key]: val }));
@@ -455,15 +522,39 @@ function CompanyEditor({ company, categories, onClose }: {
     setDraft((d) => ({ ...d, category: slug, categoryLabel: cat?.label ?? "" }));
   }
 
-  function save() {
-    if (!draft.name.trim()) { setSaveError("Company name is required."); return; }
+  // Validate the fields the live API requires before saving — otherwise the
+  // create/update is rejected server-side and the row vanishes on the next sync.
+  // In demo mode (no API) only the name is enforced.
+  function validate(): string | null {
+    if (draft.name.trim().length < 2) return "Company name must be at least 2 characters.";
+    if (isApiConfigured()) {
+      if (!draft.category) return "Please choose a category.";
+      if (!draft.logo) return "Please add a logo image.";
+      if (!draft.cover) return "Please add a cover image.";
+      if (draft.phone.trim().length < 8) return "Please add a phone number (at least 8 digits).";
+    }
+    return null;
+  }
+
+  async function save() {
+    const problem = validate();
+    if (problem) { setSaveError(problem); setTab("details"); return; }
+    setSaving(true);
+    setSaveError("");
     try {
-      if (company) updateCompany(company.id, draft);
-      else addCompany(draft);
+      if (company) await updateCompany(company.id, draft);
+      else await addCompany(draft);
       onClose();
     } catch (err) {
-      setSaveError("Couldn't save — storage is full. Try removing some uploaded images or use smaller files.");
+      const msg = err instanceof Error ? err.message : "";
+      setSaveError(
+        /quota/i.test(msg) || (err as { name?: string })?.name === "QuotaExceededError"
+          ? "Couldn't save — storage is full. Try removing some uploaded images or use smaller files."
+          : msg || "Couldn't save. Please check the fields and try again."
+      );
       console.error(err);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -520,24 +611,41 @@ function CompanyEditor({ company, categories, onClose }: {
           </div>
 
           <TagField label="Services Offered" tags={draft.services} onChange={(t) => set("services", t)} placeholder="Add a service…" />
-          {/* Trust numbers. Rating + Reviews are NOT editable here: the server
-              ignores them (they're derived from the Review table). Show read-only
-              so admins don't think they're saving a value that vanishes. */}
+          {/* Trust numbers. Rating + Reviews are auto-calculated from the Review
+              table unless an admin ticks "set manually" below to override them. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <LField label="Rating">
-              <div className="field-input bg-surface-container/50 text-on-surface-variant cursor-not-allowed flex items-center" title="Auto-calculated from real customer reviews">
-                {Number(draft.rating ?? 0).toFixed(1)}
-              </div>
+              {draft.ratingOverridden ? (
+                <input type="number" min="0" max="5" step="0.1" className="field-input" value={draft.rating ?? 0}
+                  onChange={(e) => set("rating", Math.min(5, Math.max(0, Number(e.target.value) || 0)))} />
+              ) : (
+                <div className="field-input bg-surface-container/50 text-on-surface-variant cursor-not-allowed flex items-center" title="Auto-calculated from real customer reviews">
+                  {Number(draft.rating ?? 0).toFixed(1)}
+                </div>
+              )}
             </LField>
             <LField label="Reviews">
-              <div className="field-input bg-surface-container/50 text-on-surface-variant cursor-not-allowed flex items-center" title="Auto-calculated from real customer reviews">
-                {draft.reviewCount ?? 0}
-              </div>
+              {draft.ratingOverridden ? (
+                <input type="number" min="0" className="field-input" value={draft.reviewCount ?? 0}
+                  onChange={(e) => set("reviewCount", Math.max(0, Math.trunc(Number(e.target.value) || 0)))} />
+              ) : (
+                <div className="field-input bg-surface-container/50 text-on-surface-variant cursor-not-allowed flex items-center" title="Auto-calculated from real customer reviews">
+                  {draft.reviewCount ?? 0}
+                </div>
+              )}
             </LField>
             <LField label="Projects"><input type="number" min="0" className="field-input" value={draft.completedProjects} onChange={(e) => set("completedProjects", Number(e.target.value))} /></LField>
             <LField label="Years Exp."><input type="number" min="0" className="field-input" value={draft.yearsExperience} onChange={(e) => set("yearsExperience", Number(e.target.value))} /></LField>
           </div>
-          <p className="text-[12px] text-outline -mt-1">Rating &amp; Reviews are calculated automatically from real customer reviews.</p>
+          <label className="flex items-start gap-2.5 -mt-1 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" checked={draft.ratingOverridden === true}
+              onChange={(e) => set("ratingOverridden", e.target.checked)} />
+            <span className="text-[12px] text-outline">
+              {draft.ratingOverridden
+                ? "Manual rating — overrides real customer reviews. Untick to revert to the automatic average."
+                : "Rating & Reviews are calculated automatically from real customer reviews. Tick to set them manually."}
+            </span>
+          </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <LField label="Response Time"><input className="field-input" value={draft.responseTime} onChange={(e) => set("responseTime", e.target.value)} placeholder="within 2 hours" /></LField>
             <LField label="Verified Since"><input className="field-input" value={draft.verifiedSince} onChange={(e) => set("verifiedSince", e.target.value)} placeholder="2021" /></LField>
@@ -594,9 +702,10 @@ function CompanyEditor({ company, categories, onClose }: {
             <ConfirmDelete onConfirm={() => { deleteCompany(company!.id); onClose(); }} label="company" big />
           ) : <span />}
           <div className="flex gap-2.5 ml-auto">
-            <button onClick={onClose} className="px-4 sm:px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-[14px] text-on-surface hover:bg-surface-container transition-colors">Cancel</button>
-            <button onClick={save} className="px-5 sm:px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
-              {isNew ? "Create" : "Save Changes"}
+            <button onClick={onClose} disabled={saving} className="px-4 sm:px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-[14px] text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">Cancel</button>
+            <button onClick={save} disabled={saving} className="px-5 sm:px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+              {saving && <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>}
+              {saving ? "Saving…" : isNew ? "Create" : "Save Changes"}
             </button>
           </div>
         </div>
@@ -658,6 +767,277 @@ function ProjectsEditor({ projects, onChange }: { projects: Project[]; onChange:
 // ══════════════════════════════════════════════════════════════════════════
 //  ADMIN REVIEWS TAB
 // ══════════════════════════════════════════════════════════════════════════
+// Moderation queue for provider-submitted portfolio projects. Pending projects
+// are hidden from the public profile until approved here. Also lets the admin
+// revisit rejected ones (re-approve or delete).
+function ProjectApprovals() {
+  const [status, setStatus] = useState<ProjectStatus>("PENDING");
+  const [items, setItems] = useState<ModerationProject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ModerationProject | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true); setError("");
+    try { setItems(await listModerationProjects(status)); }
+    catch { setError("Couldn't load project submissions."); }
+    finally { setLoading(false); }
+  }, [status]);
+  useEffect(() => { void reload(); }, [reload]);
+
+  async function act(p: ModerationProject, next: ProjectStatus) {
+    if (!p.id) return;
+    setBusyId(p.id); setError("");
+    try { await setProjectStatus(p.id, next); setItems((cur) => cur.filter((x) => x.id !== p.id)); setPreview(null); }
+    catch { setError("Action failed. Please try again."); }
+    finally { setBusyId(null); }
+  }
+  async function remove(p: ModerationProject) {
+    if (!p.id) return;
+    setBusyId(p.id); setError("");
+    try { await deleteProjectAdmin(p.id); setItems((cur) => cur.filter((x) => x.id !== p.id)); setPreview(null); }
+    catch { setError("Couldn't delete that project."); }
+    finally { setBusyId(null); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-bold text-[16px] text-on-surface">Project approvals</h2>
+          <p className="text-[12px] text-outline mt-0.5">Provider-submitted portfolio projects — approve to publish on their profile.</p>
+        </div>
+        <div className="flex bg-surface-container rounded-xl p-0.5">
+          {(["PENDING", "REJECTED"] as ProjectStatus[]).map((s) => (
+            <button key={s} onClick={() => setStatus(s)}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${status === s ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}>
+              {s === "PENDING" ? "Pending" : "Rejected"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {error && <p className="text-[13px] text-error font-bold bg-error/8 rounded-lg px-3 py-2">{error}</p>}
+
+      {loading ? (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-8 text-center text-[13px] text-outline">
+          <span className="spinner spinner-primary mx-auto mb-3 block" /> Loading…
+        </div>
+      ) : items.length === 0 ? (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+          <EmptyState msg={status === "PENDING" ? "No projects waiting for review." : "No rejected projects."} icon="task_alt" />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((p) => (
+            <div key={p.id} className="bg-surface-container-lowest rounded-xl p-3 shadow-bloom flex gap-3">
+              <button onClick={() => setPreview(p)} className="flex-shrink-0 group relative" title="View project">
+                <img src={p.img} alt="" className="w-20 h-20 rounded-lg object-cover border border-outline-variant/20" />
+                <span className="absolute inset-0 rounded-lg bg-on-background/0 group-hover:bg-on-background/30 flex items-center justify-center transition-colors">
+                  <span className="material-symbols-outlined text-white text-[20px] opacity-0 group-hover:opacity-100 transition-opacity">zoom_in</span>
+                </span>
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => setPreview(p)} className="font-bold text-[14px] text-on-surface text-left hover:text-primary transition-colors">{p.title}</button>
+                  <span className="text-[11px] text-outline">{p.year}</span>
+                </div>
+                <p className="text-[12px] font-bold text-primary truncate">{p.companyName}</p>
+                <p className="text-[12px] text-on-surface-variant line-clamp-2 mt-0.5">{p.description}</p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => setPreview(p)}
+                    className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors">
+                    <span className="material-symbols-outlined text-[14px]">visibility</span> View
+                  </button>
+                  {status !== "APPROVED" && (
+                    <button onClick={() => act(p, "APPROVED")} disabled={busyId === p.id}
+                      className="flex items-center gap-1 bg-primary text-on-primary px-3 py-1.5 rounded-lg text-[12px] font-bold hover:bg-primary-container transition-colors disabled:opacity-60">
+                      <span className="material-symbols-outlined text-[14px]">check</span> Approve
+                    </button>
+                  )}
+                  {status === "PENDING" && (
+                    <button onClick={() => act(p, "REJECTED")} disabled={busyId === p.id}
+                      className="flex items-center gap-1 border border-error/30 text-error px-3 py-1.5 rounded-lg text-[12px] font-bold hover:bg-error/5 transition-colors disabled:opacity-60">
+                      <span className="material-symbols-outlined text-[14px]">close</span> Reject
+                    </button>
+                  )}
+                  <button onClick={() => remove(p)} disabled={busyId === p.id}
+                    className="flex items-center gap-1 text-outline px-2.5 py-1.5 rounded-lg text-[12px] font-bold hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
+                    <span className="material-symbols-outlined text-[14px]">delete</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {preview && (
+        <ProjectPreviewModal
+          project={preview}
+          busy={busyId === preview.id}
+          onClose={() => setPreview(null)}
+          onApprove={() => act(preview, "APPROVED")}
+          onReject={() => act(preview, "REJECTED")}
+          onDelete={() => remove(preview)}
+        />
+      )}
+    </div>
+  );
+}
+
+// Full-detail view of a submitted project so the admin can read everything before
+// deciding. Approve / Reject / Delete are available right here too.
+function ProjectPreviewModal({ project, busy, onClose, onApprove, onReject, onDelete }: {
+  project: ModerationProject;
+  busy: boolean;
+  onClose: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+  onDelete: () => void;
+}) {
+  const isRejected = project.status === "REJECTED";
+  return (
+    <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-surface-container-lowest w-full max-w-xl sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-outline-variant/20 sticky top-0 bg-surface-container-lowest z-10">
+          <h2 className="font-bold text-[18px] text-on-surface">Review project</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><span className="material-symbols-outlined text-outline">close</span></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <img src={project.img} alt={project.title} className="w-full max-h-[50vh] object-contain rounded-xl bg-surface-container" />
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-[18px] text-on-surface">{project.title}</h3>
+              <span className="text-[12px] font-bold text-outline">{project.year}</span>
+              {isRejected && <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-error/10 text-error">Rejected</span>}
+            </div>
+            <p className="text-[13px] font-bold text-primary mt-0.5">{project.companyName}</p>
+          </div>
+          {project.description
+            ? <p className="text-[14px] text-on-surface-variant leading-relaxed whitespace-pre-wrap">{project.description}</p>
+            : <p className="text-[13px] text-outline italic">No description provided.</p>}
+        </div>
+        <div className="flex flex-wrap justify-end gap-2.5 p-5 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-lowest">
+          <button onClick={onDelete} disabled={busy}
+            className="me-auto flex items-center gap-1 text-outline px-3 py-2.5 rounded-xl text-[13px] font-bold hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
+            <span className="material-symbols-outlined text-[16px]">delete</span> Delete
+          </button>
+          {!isRejected && (
+            <button onClick={onReject} disabled={busy}
+              className="flex items-center gap-1 border border-error/30 text-error px-4 py-2.5 rounded-xl text-[13px] font-bold hover:bg-error/5 transition-colors disabled:opacity-60">
+              <span className="material-symbols-outlined text-[16px]">close</span> Reject
+            </button>
+          )}
+          <button onClick={onApprove} disabled={busy}
+            className="flex items-center gap-1 bg-primary text-on-primary px-5 py-2.5 rounded-xl text-[13px] font-bold hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed">
+            {busy ? <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> : <span className="material-symbols-outlined text-[16px]">check</span>}
+            {busy ? "Working…" : "Approve"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Admin moderation of customer reviews across all companies. Customer reviews are
+// held PENDING (hidden + excluded from the rating) until approved here. Pending
+// queue defaults; a toggle shows already-approved reviews.
+function AdminCustomerReviews() {
+  const [status, setStatus] = useState<AdminReviewStatus>("pending");
+  const [items, setItems] = useState<AdminReview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true); setError("");
+    try { setItems(await listAdminReviews(status)); }
+    catch { setError("Couldn't load customer reviews."); }
+    finally { setLoading(false); }
+  }, [status]);
+  useEffect(() => { void reload(); }, [reload]);
+
+  async function approve(r: AdminReview) {
+    if (!r.id) return;
+    setBusyId(r.id); setError("");
+    try { await approveAdminReview(r.id); setItems((cur) => cur.filter((x) => x.id !== r.id)); }
+    catch { setError("Couldn't approve that review."); }
+    finally { setBusyId(null); }
+  }
+  async function del(r: AdminReview) {
+    if (!r.id) return;
+    setBusyId(r.id); setError("");
+    try { await deleteAdminReview(r.id); setItems((cur) => cur.filter((x) => x.id !== r.id)); }
+    catch { setError("Couldn't delete that review."); }
+    finally { setBusyId(null); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-bold text-[16px] text-on-surface">Customer reviews</h2>
+          <p className="text-[12px] text-outline mt-0.5">Reviews from customers after a completed service — approve to publish on the company profile.</p>
+        </div>
+        <div className="flex bg-surface-container rounded-xl p-0.5">
+          {(["pending", "approved"] as AdminReviewStatus[]).map((s) => (
+            <button key={s} onClick={() => setStatus(s)}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-bold capitalize transition-colors ${status === s ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}>
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {error && <p className="text-[13px] text-error font-bold bg-error/8 rounded-lg px-3 py-2">{error}</p>}
+
+      {loading ? (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-8 text-center text-[13px] text-outline">
+          <span className="spinner spinner-primary mx-auto mb-3 block" /> Loading…
+        </div>
+      ) : items.length === 0 ? (
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+          <EmptyState msg={status === "pending" ? "No reviews waiting for approval." : "No approved reviews yet."} icon="reviews" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {items.map((r) => (
+            <div key={r.id} className="bg-surface-container-lowest rounded-xl p-4 shadow-bloom flex flex-col">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-bold text-[14px] text-on-surface truncate">{r.author}</p>
+                  <p className="text-[12px] font-bold text-primary truncate">{r.companyName}</p>
+                </div>
+                <span className="text-secondary text-[14px] tracking-tight flex-shrink-0" aria-label={`${r.rating} out of 5`}>
+                  {"★".repeat(r.rating)}<span className="text-outline/30">{"★".repeat(Math.max(0, 5 - r.rating))}</span>
+                </span>
+              </div>
+              <p className="text-[13px] text-on-surface-variant leading-relaxed mt-2 flex-grow">{r.text}</p>
+              <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-outline-variant/15">
+                <span className="text-[11px] text-outline">{r.district} · {r.date}</span>
+                <div className="flex gap-2">
+                  {status === "pending" && (
+                    <button onClick={() => approve(r)} disabled={busyId === r.id}
+                      className="flex items-center gap-1 bg-primary text-on-primary px-3 py-1.5 rounded-lg text-[12px] font-bold hover:bg-primary-container transition-colors disabled:opacity-60">
+                      <span className="material-symbols-outlined text-[14px]">{busyId === r.id ? "progress_activity" : "check"}</span> Approve
+                    </button>
+                  )}
+                  <button onClick={() => del(r)} disabled={busyId === r.id}
+                    className="flex items-center gap-1 text-outline px-2.5 py-1.5 rounded-lg text-[12px] font-bold hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
+                    <span className="material-symbols-outlined text-[14px]">delete</span> Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminReviewsTab() {
   const allReviews = useSiteReviews(true);
   const feedbacks = useFeedbacks();
@@ -671,6 +1051,14 @@ function AdminReviewsTab() {
 
   return (
     <div className="space-y-6 max-w-4xl">
+
+      {/* ── Project approvals ── */}
+      <ProjectApprovals />
+
+      {/* ── Customer reviews (verified, company-specific) ── */}
+      <div className="border-t border-outline-variant/20 pt-6">
+        <AdminCustomerReviews />
+      </div>
 
       {/* ── Platform Reviews ── */}
       <div className="space-y-3">
@@ -830,9 +1218,17 @@ function TeamTab({ companies, initialCompanyId, onConsumeInitial }: {
   initialCompanyId?: string | null;
   onConsumeInitial?: () => void;
 }) {
-  const { users, status, reload } = useAdminUsers();
   const [editing, setEditing] = useState<{ user: AdminUser | null; companyId?: string } | null>(null);
   const [query, setQuery] = useState("");
+  // Accounts live only on the server — search/paginate the COMPLETE set there
+  // (no localStorage analog, so no demo fallback). Must run before the early
+  // return below (rules of hooks).
+  const userSearch = useServerSearch<AdminUser>(
+    "/admin/users",
+    query,
+    {},
+    { pageSize: 12, enabled: canManageUsers() },
+  );
 
   // Deep-link from a company card: open a new-user editor pre-linked to it.
   useEffect(() => {
@@ -859,10 +1255,7 @@ function TeamTab({ companies, initialCompanyId, onConsumeInitial }: {
     );
   }
 
-  const q = query.trim().toLowerCase();
-  const filtered = users.filter(
-    (u) => !q || [u.name, u.email, u.companyName ?? ""].some((v) => v.toLowerCase().includes(q)),
-  );
+  const hasQuery = query.trim().length > 0;
 
   return (
     <div className="space-y-4">
@@ -881,25 +1274,25 @@ function TeamTab({ companies, initialCompanyId, onConsumeInitial }: {
 
       <SearchInput value={query} onChange={setQuery} placeholder="Search by name, email, company…" />
 
-      {status === "loading" && (
+      {userSearch.loading && userSearch.data.length === 0 && (
         <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center text-[14px] text-outline">
           <span className="spinner spinner-primary mx-auto mb-3 block" /> Loading accounts…
         </div>
       )}
-      {status === "error" && (
+      {userSearch.error && (
         <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
           <EmptyState msg="Couldn't load accounts. Check the API connection and try again." icon="cloud_off" />
         </div>
       )}
-      {status === "ready" && filtered.length === 0 && (
+      {!userSearch.loading && !userSearch.error && userSearch.data.length === 0 && (
         <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
-          <EmptyState msg={q ? "No accounts match your search." : "No accounts yet. Add your first provider login."} icon="badge" />
+          <EmptyState msg={hasQuery ? "No accounts match your search." : "No accounts yet. Add your first provider login."} icon="badge" />
         </div>
       )}
 
-      {status === "ready" && filtered.length > 0 && (
+      {userSearch.data.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {filtered.map((u) => (
+          {userSearch.data.map((u) => (
             <div key={u.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex items-center gap-4">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[16px] flex-shrink-0
                 ${u.role === "ADMIN" ? "bg-secondary/15 text-secondary" : "bg-primary/10 text-primary"}`}>
@@ -927,13 +1320,15 @@ function TeamTab({ companies, initialCompanyId, onConsumeInitial }: {
         </div>
       )}
 
+      <Pagination page={userSearch.page} pageCount={userSearch.pageCount} total={userSearch.total} pageSize={userSearch.pageSize} onPage={userSearch.setPage} noun="account" />
+
       {editing && (
         <UserEditor
           user={editing.user}
           initialCompanyId={editing.companyId}
           companies={companies}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); void reload(); }}
+          onSaved={() => { setEditing(null); userSearch.refresh(); }}
         />
       )}
     </div>
@@ -1148,6 +1543,10 @@ function SettingsTab({ leadCount }: { leadCount: number }) {
     <div className="max-w-2xl space-y-5">
       {msg && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-[13px] font-bold">{msg}</div>}
 
+      <SettingCard icon="notifications_active" title="Push Notifications" desc="Get an instant alert on this device for every new lead — even when the dashboard is closed.">
+        <NotificationToggle />
+      </SettingCard>
+
       {demoMode ? (
         <>
           {/* Demo data */}
@@ -1169,238 +1568,353 @@ function SettingsTab({ leadCount }: { leadCount: number }) {
           </SettingCard>
         </>
       ) : (
-        <>
-          <PlatformSettingsForm onSaved={() => flash("Settings saved.")} />
-          <EmailTemplatesForm onSaved={() => flash("Email templates saved.")} />
-          <LegalPagesForm onSaved={() => flash("Legal pages saved.")} />
-          <div className="flex items-start gap-3 bg-surface-container rounded-2xl p-5 border border-outline-variant/20">
-            <span className="material-symbols-outlined text-outline text-[22px] flex-shrink-0 mt-0.5">cloud_done</span>
-            <div>
-              <p className="font-bold text-[14px] text-on-surface mb-1">Live data</p>
-              <p className="text-[13px] text-on-surface-variant leading-relaxed">
-                Demo &amp; backup tools are available only in preview mode (no API). In production your
-                leads and catalog come from the real database — manage them from their own tabs.
-              </p>
-            </div>
-          </div>
-        </>
+        <SettingsPanel onSaved={flash} />
       )}
     </div>
   );
 }
 
-// Admin-editable platform settings (site name, contact details, social links).
-function PlatformSettingsForm({ onSaved }: { onSaved: () => void }) {
+// ══════════════════════════════════════════════════════════════════════════
+//  Unified, tabbed platform settings (General / Branding / Email / Legal).
+//  Each backing endpoint keeps its own form state; a single sticky "Save
+//  Changes" persists every dirty section at once and switching tabs preserves
+//  unsaved edits.
+// ══════════════════════════════════════════════════════════════════════════
+type SettingsSubTab = "general" | "branding" | "email" | "legal";
+
+const SETTINGS_TABS: { id: SettingsSubTab; label: string }[] = [
+  { id: "general", label: "General" },
+  { id: "branding", label: "Branding" },
+  { id: "email", label: "Email Templates" },
+  { id: "legal", label: "Legal" },
+];
+
+// Newline-string ⇄ chip-list helpers for the Districts / Budgets tag inputs.
+const linesToTags = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
+const tagsToLines = (t: string[]) => t.join("\n");
+
+const EMAIL_TOKENS = [
+  "{{company}}", "{{refNumber}}", "{{service}}", "{{customer}}", "{{phone}}",
+  "{{district}}", "{{budget}}", "{{details}}", "{{receivedAt}}",
+];
+
+function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
+  const [active, setActive] = useState<SettingsSubTab>("general");
+
+  // General + Branding share the platform-settings endpoint.
   const current = useSettings();
-  const [form, setForm] = useState<PlatformSettings>(current);
-  const [dirty, setDirty] = useState(false);
+  const [platform, setPlatform] = useState<PlatformSettings>(current);
+  const [platformDirty, setPlatformDirty] = useState(false);
+  const currentKey = JSON.stringify(current);
+  useEffect(() => {
+    if (!platformDirty) setPlatform(current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey]);
+  const setP = (k: keyof PlatformSettings, v: string) => { setPlatform((f) => ({ ...f, [k]: v })); setPlatformDirty(true); };
+
+  // Email templates + Legal pages load lazily from their admin endpoints.
+  const [email, setEmail] = useState<EmailTemplates | null>(null);
+  const [emailDirty, setEmailDirty] = useState(false);
+  const setE = (k: keyof EmailTemplates, v: string) => { setEmail((f) => (f ? { ...f, [k]: v } : f)); setEmailDirty(true); };
+
+  const [legal, setLegal] = useState<LegalPages | null>(null);
+  const [legalDirty, setLegalDirty] = useState(false);
+  const setL = (k: keyof LegalPages, v: string) => { setLegal((f) => (f ? { ...f, [k]: v } : f)); setLegalDirty(true); };
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Sync the form when the API hydration lands (until the admin starts editing).
-  // Keyed on the serialized settings so any field (incl. lists/hero) triggers it.
-  const currentKey = JSON.stringify(current);
   useEffect(() => {
-    if (!dirty) setForm(current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentKey]);
+    let on = true;
+    fetchEmailTemplates().then((t) => { if (on) setEmail(t); }).catch(() => { if (on) setError("Couldn't load email templates."); });
+    fetchLegalPagesAdmin().then((p) => { if (on) setLegal(p); }).catch(() => { if (on) setError("Couldn't load legal pages."); });
+    return () => { on = false; };
+  }, []);
 
-  function set(key: keyof PlatformSettings, val: string) {
-    setForm((f) => ({ ...f, [key]: val }));
-    setDirty(true);
-  }
+  const anyDirty = platformDirty || emailDirty || legalDirty;
+  const tabDirty = (id: SettingsSubTab) =>
+    id === "email" ? emailDirty : id === "legal" ? legalDirty : platformDirty;
 
-  async function save() {
+  async function saveAll() {
     setSaving(true);
     setError("");
     try {
-      await updateSettings(form);
-      setDirty(false);
-      onSaved();
+      if (platformDirty) { await updateSettings(platform); setPlatformDirty(false); }
+      if (emailDirty && email) { setEmail(await saveEmailTemplates(email)); setEmailDirty(false); }
+      if (legalDirty && legal) { setLegal(await saveLegalPages(legal)); setLegalDirty(false); }
+      onSaved("Settings saved.");
     } catch {
-      setError("Couldn't save settings. Check the values and try again.");
+      setError("Couldn't save. Check the values and try again.");
     } finally {
       setSaving(false);
     }
   }
 
-  const Field = ({ label, k, type = "text", placeholder }: { label: string; k: keyof PlatformSettings; type?: string; placeholder?: string }) => (
+  return (
+    <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+      {/* Tabbed navigation */}
+      <div className="flex gap-1 px-2 sm:px-4 border-b border-outline-variant/20 overflow-x-auto">
+        {SETTINGS_TABS.map((tab) => {
+          const on = active === tab.id;
+          return (
+            <button key={tab.id} onClick={() => setActive(tab.id)}
+              className={`relative px-3 sm:px-4 py-3 text-[13px] font-bold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                on ? "border-primary text-primary" : "border-transparent text-outline hover:text-on-surface"
+              }`}>
+              {tab.label}
+              {tabDirty(tab.id) && <span className="ms-1.5 inline-block w-1.5 h-1.5 rounded-full bg-secondary align-middle" />}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="p-5 space-y-4">
+        {active === "general" && <GeneralSettings form={platform} setP={setP} />}
+        {active === "branding" && <BrandingSettings form={platform} setP={setP} />}
+        {active === "email" && <EmailSettings email={email} setE={setE} />}
+        {active === "legal" && <LegalSettings legal={legal} setL={setL} />}
+        {error && <p className="text-[13px] text-error font-bold">{error}</p>}
+      </div>
+
+      {/* Sticky save bar — always reachable, bottom-right of the container. */}
+      <div className="sticky bottom-0 flex items-center justify-end gap-3 px-5 py-3 rounded-b-2xl bg-surface-container-lowest/95 backdrop-blur border-t border-outline-variant/20">
+        {anyDirty && <span className="me-auto text-[12px] font-bold text-secondary">You have unsaved changes</span>}
+        <button onClick={saveAll} disabled={saving || !anyDirty}
+          className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+          {saving && <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>}
+          {saving ? "Saving…" : "Save Changes"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsHeading({ title, desc }: { title: string; desc: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="font-bold text-[15px] text-on-surface">{title}</h3>
+      <p className="text-[13px] text-outline leading-relaxed mt-0.5">{desc}</p>
+    </div>
+  );
+}
+
+// Stable (module-scope) text field — avoids the remount/focus-loss bug you get
+// from defining a field component inside a parent's render.
+function TextField({ label, value, onChange, type = "text", placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string;
+}) {
+  return (
     <LField label={label}>
-      <input className="field-input" type={type} value={form[k]} placeholder={placeholder} onChange={(e) => set(k, e.target.value)} />
+      <input className="field-input" type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
     </LField>
   );
+}
 
+function GeneralSettings({ form, setP }: { form: PlatformSettings; setP: (k: keyof PlatformSettings, v: string) => void }) {
   return (
-    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
-      <div>
-        <h3 className="font-bold text-[15px] text-on-surface">Platform settings</h3>
-        <p className="text-[13px] text-outline leading-relaxed mt-0.5">Site name, public contact details, and social links shown across the site.</p>
-      </div>
+    <div className="space-y-4">
+      <SettingsHeading title="Platform" desc="Site name, public contact details, and social links shown across the site." />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Field label="Site name" k="site_name" placeholder="Al Assema" />
-        <Field label="Support email" k="support_email" type="email" placeholder="hello@site.com" />
-        <Field label="Public phone" k="public_phone" placeholder="+20 100 …" />
-        <Field label="Address" k="address" placeholder="New Administrative Capital" />
-        <Field label="Facebook URL" k="social_facebook" placeholder="https://facebook.com/…" />
-        <Field label="Instagram URL" k="social_instagram" placeholder="https://instagram.com/…" />
-        <Field label="X (Twitter) URL" k="social_twitter" placeholder="https://x.com/…" />
-        <Field label="LinkedIn URL" k="social_linkedin" placeholder="https://linkedin.com/…" />
+        <TextField label="Site name" value={form.site_name} onChange={(v) => setP("site_name", v)} placeholder="Al Assema" />
+        <TextField label="Support email" type="email" value={form.support_email} onChange={(v) => setP("support_email", v)} placeholder="hello@site.com" />
+        <TextField label="Public phone" value={form.public_phone} onChange={(v) => setP("public_phone", v)} placeholder="+20 100 …" />
+        <TextField label="Address" value={form.address} onChange={(v) => setP("address", v)} placeholder="New Administrative Capital" />
+        <TextField label="Facebook URL" value={form.social_facebook} onChange={(v) => setP("social_facebook", v)} placeholder="https://facebook.com/…" />
+        <TextField label="Instagram URL" value={form.social_instagram} onChange={(v) => setP("social_instagram", v)} placeholder="https://instagram.com/…" />
+        <TextField label="X (Twitter) URL" value={form.social_twitter} onChange={(v) => setP("social_twitter", v)} placeholder="https://x.com/…" />
+        <TextField label="LinkedIn URL" value={form.social_linkedin} onChange={(v) => setP("social_linkedin", v)} placeholder="https://linkedin.com/…" />
       </div>
 
-      {/* Branding — uploaded logo / favicon; blank = the built-in defaults. */}
+      {/* Request-form option lists as removable chips; blank = built-in defaults. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/15">
-        <ImageUpload label="Logo (blank = default)" value={form.logo_url} onChange={(v) => set("logo_url", v)} shape="logo" maxDim={256} bucket="logos" />
-        <ImageUpload label="Favicon (blank = default)" value={form.favicon_url} onChange={(v) => set("favicon_url", v)} shape="logo" maxDim={64} bucket="logos" />
-      </div>
-
-      {/* Request-form option lists — one per line; blank = built-in defaults. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/15">
-        <LField label="Districts (one per line — blank for defaults)">
-          <textarea className="field-input resize-y" rows={5} value={form.districts}
-            placeholder={"R7 District\nR8 District\n…"} onChange={(e) => set("districts", e.target.value)} />
-        </LField>
-        <LField label="Budget ranges (one per line — blank for defaults)">
-          <textarea className="field-input resize-y" rows={5} value={form.budgets}
-            placeholder={"Under EGP 50,000\nEGP 50,000 – 150,000\n…"} onChange={(e) => set("budgets", e.target.value)} />
-        </LField>
+        <TagField label="Districts (blank = built-in defaults)" tags={linesToTags(form.districts)} onChange={(t) => setP("districts", tagsToLines(t))} placeholder="Add a district…" />
+        <TagField label="Budget ranges (blank = built-in defaults)" tags={linesToTags(form.budgets)} onChange={(t) => setP("budgets", tagsToLines(t))} placeholder="Add a range…" />
       </div>
 
       {/* Homepage hero copy, per locale — blank uses the built-in translations. */}
       <div className="pt-2 border-t border-outline-variant/15 space-y-4">
         <p className="text-[12px] font-bold text-outline">Homepage hero (blank = built-in text)</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Hero title (English)" k="hero_title_en" />
-          <Field label="Hero title (Arabic)" k="hero_title_ar" />
-          <Field label="Hero subtitle (English)" k="hero_subtitle_en" />
-          <Field label="Hero subtitle (Arabic)" k="hero_subtitle_ar" />
+          <TextField label="Hero title (English)" value={form.hero_title_en} onChange={(v) => setP("hero_title_en", v)} />
+          <TextField label="Hero title (Arabic)" value={form.hero_title_ar} onChange={(v) => setP("hero_title_ar", v)} />
+          <TextField label="Hero subtitle (English)" value={form.hero_subtitle_en} onChange={(v) => setP("hero_subtitle_en", v)} />
+          <TextField label="Hero subtitle (Arabic)" value={form.hero_subtitle_ar} onChange={(v) => setP("hero_subtitle_ar", v)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrandingSettings({ form, setP }: { form: PlatformSettings; setP: (k: keyof PlatformSettings, v: string) => void }) {
+  const scale = Number(form.logo_scale) || 100;
+  return (
+    <div className="space-y-4">
+      <SettingsHeading title="Branding" desc="Logo, favicon, and homepage background. Leave blank to use the built-in defaults." />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <ImageUpload label="Logo" value={form.logo_url} onChange={(v) => setP("logo_url", v)} shape="logo" maxDim={256} bucket="logos" />
+        <ImageUpload label="Favicon" value={form.favicon_url} onChange={(v) => setP("favicon_url", v)} shape="logo" maxDim={64} bucket="logos" />
+      </div>
+      <ImageUpload label="Homepage background" value={form.hero_image_url} onChange={(v) => setP("hero_image_url", v)} shape="wide" maxDim={2000} bucket="covers" />
+      <LField label={`Logo size — ${scale}%`}>
+        <div className="flex items-center gap-3">
+          <input type="range" min={50} max={200} step={5} value={scale}
+            onChange={(e) => setP("logo_scale", e.target.value === "100" ? "" : e.target.value)}
+            className="flex-1 accent-primary" />
+          <button type="button" onClick={() => setP("logo_scale", "")}
+            className="text-[12px] font-bold text-outline hover:text-on-surface transition-colors shrink-0">Reset</button>
+        </div>
+      </LField>
+    </div>
+  );
+}
+
+// Highlights {{tokens}} inside a textarea using a mirrored backdrop layer (a
+// textarea can't style its own substrings). Backdrop + textarea share identical
+// metrics so the highlight sits exactly behind the real, visible text.
+function highlightTokens(value: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  const re = /\{\{[^}]+\}\}/g;
+  let last = 0; let m: RegExpExecArray | null; let i = 0;
+  while ((m = re.exec(value)) !== null) {
+    if (m.index > last) nodes.push(<span key={`t${i}`}>{value.slice(last, m.index)}</span>);
+    nodes.push(<mark key={`m${i}`} className="rounded-[3px]" style={{ background: "rgba(0,85,120,0.16)", color: "transparent" }}>{m[0]}</mark>);
+    last = m.index + m[0].length; i++;
+  }
+  // Trailing newline keeps the backdrop's last line in sync with the textarea.
+  nodes.push(<span key="end">{value.slice(last) + "\n"}</span>);
+  return nodes;
+}
+
+function HighlightTextarea({ value, onChange, onFocus, rows = 4, placeholder }: {
+  value: string; onChange: (v: string) => void; onFocus?: React.FocusEventHandler<HTMLTextAreaElement>; rows?: number; placeholder?: string;
+}) {
+  const back = useRef<HTMLDivElement>(null);
+  const shared: React.CSSProperties = { padding: "14px 16px", fontSize: 16, fontFamily: '"Inter", sans-serif', lineHeight: 1.5 };
+  return (
+    <div className="relative">
+      <div ref={back} aria-hidden
+        className="absolute inset-0 overflow-hidden whitespace-pre-wrap break-words rounded-[14px] pointer-events-none"
+        style={{ ...shared, border: "1.5px solid transparent", color: "transparent" }}>
+        {highlightTokens(value)}
+      </div>
+      <textarea value={value} onChange={(e) => onChange(e.target.value)} onFocus={onFocus} rows={rows} placeholder={placeholder}
+        onScroll={(e) => { if (back.current) back.current.scrollTop = e.currentTarget.scrollTop; }}
+        className="field-input resize-y relative" style={{ ...shared, background: "transparent" }} />
+    </div>
+  );
+}
+
+function EmailSettings({ email, setE }: { email: EmailTemplates | null; setE: (k: keyof EmailTemplates, v: string) => void }) {
+  // Track the last-focused field so a token chip inserts at its caret. The chip
+  // buttons use onMouseDown→preventDefault so clicking them doesn't blur/clear it.
+  const focused = useRef<{ el: HTMLInputElement | HTMLTextAreaElement; key: keyof EmailTemplates } | null>(null);
+  const track = (key: keyof EmailTemplates) => (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    focused.current = { el: e.currentTarget, key };
+  };
+  function insertToken(tok: string) {
+    const f = focused.current;
+    if (!f || !email) return;
+    const el = f.el;
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? start;
+    const cur = email[f.key];
+    setE(f.key, cur.slice(0, start) + tok + cur.slice(end));
+    requestAnimationFrame(() => {
+      el.focus();
+      const p = start + tok.length;
+      try { el.setSelectionRange(p, p); } catch { /* inputs without range support */ }
+    });
+  }
+
+  if (!email) return <p className="text-[13px] text-outline">Loading…</p>;
+  return (
+    <div className="space-y-4">
+      <SettingsHeading title="Email templates" desc="New-lead notification emails. Leave a field blank to use the built-in default." />
+
+      {/* Tokens toolbar */}
+      <div className="bg-surface-container/50 rounded-xl p-3 border border-outline-variant/15">
+        <p className="text-[12px] font-bold text-outline mb-2">Insert token (click to add at the cursor)</p>
+        <div className="flex flex-wrap gap-1.5">
+          {EMAIL_TOKENS.map((tok) => (
+            <button key={tok} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => insertToken(tok)}
+              className="font-mono text-[12px] bg-primary/8 text-primary px-2.5 py-1 rounded-full font-bold hover:bg-primary/15 transition-colors touch-press">
+              {tok}
+            </button>
+          ))}
         </div>
       </div>
 
-      {error && <p className="text-[13px] text-error font-bold">{error}</p>}
-      <button onClick={save} disabled={saving || !dirty}
-        className="bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press disabled:opacity-60 disabled:cursor-not-allowed">
-        {saving ? "Saving…" : "Save settings"}
-      </button>
+      <p className="text-[12px] font-bold text-outline pt-2 border-t border-outline-variant/15">Provider email (sent to the company)</p>
+      <LField label="Subject"><input className="field-input" value={email.providerSubject} onFocus={track("providerSubject")} onChange={(e) => setE("providerSubject", e.target.value)} placeholder="New lead {{refNumber}} — {{service}}" /></LField>
+      <LField label="Body"><HighlightTextarea value={email.providerBody} onChange={(v) => setE("providerBody", v)} onFocus={track("providerBody")} rows={5} placeholder="Blank = built-in default" /></LField>
+
+      <p className="text-[12px] font-bold text-outline pt-2 border-t border-outline-variant/15">Admin alert email (sent to all admins)</p>
+      <LField label="Subject"><input className="field-input" value={email.adminSubject} onFocus={track("adminSubject")} onChange={(e) => setE("adminSubject", e.target.value)} placeholder="New lead — {{company}} — {{refNumber}}" /></LField>
+      <LField label="Body"><HighlightTextarea value={email.adminBody} onChange={(v) => setE("adminBody", v)} onFocus={track("adminBody")} rows={4} placeholder="Blank = built-in default (omits customer PII)" /></LField>
     </div>
   );
 }
 
-// Admin-editable notification email templates. Blank field = the built-in default.
-function EmailTemplatesForm({ onSaved }: { onSaved: () => void }) {
-  const [form, setForm] = useState<EmailTemplates | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    fetchEmailTemplates()
-      .then((t) => { if (active) setForm(t); })
-      .catch(() => { if (active) setError("Couldn't load email templates."); });
-    return () => { active = false; };
-  }, []);
-
-  function set(key: keyof EmailTemplates, val: string) {
-    setForm((f) => (f ? { ...f, [key]: val } : f));
+function LegalSettings({ legal, setL }: { legal: LegalPages | null; setL: (k: keyof LegalPages, v: string) => void }) {
+  const focused = useRef<{ el: HTMLTextAreaElement; key: keyof LegalPages } | null>(null);
+  const track = (key: keyof LegalPages) => (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    focused.current = { el: e.currentTarget, key };
+  };
+  function wrap(before: string, after: string) {
+    const f = focused.current;
+    if (!f || !legal) return;
+    const el = f.el;
+    const s = el.selectionStart ?? 0;
+    const e2 = el.selectionEnd ?? s;
+    const cur = legal[f.key];
+    const sel = cur.slice(s, e2) || "text";
+    setL(f.key, cur.slice(0, s) + before + sel + after + cur.slice(e2));
+    requestAnimationFrame(() => { el.focus(); const p1 = s + before.length; el.setSelectionRange(p1, p1 + sel.length); });
+  }
+  function listPrefix(ordered: boolean) {
+    const f = focused.current;
+    if (!f || !legal) return;
+    const el = f.el;
+    const s = el.selectionStart ?? 0;
+    const e2 = el.selectionEnd ?? s;
+    const cur = legal[f.key];
+    const lineStart = cur.lastIndexOf("\n", s - 1) + 1;
+    const nl = cur.indexOf("\n", e2);
+    const lineEnd = nl === -1 ? cur.length : nl;
+    const out = cur.slice(lineStart, lineEnd).split("\n").map((ln, i) => (ordered ? `${i + 1}. ` : "- ") + ln).join("\n");
+    setL(f.key, cur.slice(0, lineStart) + out + cur.slice(lineEnd));
+    requestAnimationFrame(() => { el.focus(); el.setSelectionRange(lineStart, lineStart + out.length); });
   }
 
-  async function save() {
-    if (!form) return;
-    setSaving(true);
-    setError("");
-    try {
-      const updated = await saveEmailTemplates(form);
-      setForm(updated);
-      onSaved();
-    } catch {
-      setError("Couldn't save email templates.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
-      <div>
-        <h3 className="font-bold text-[15px] text-on-surface">Email templates</h3>
-        <p className="text-[13px] text-outline leading-relaxed mt-0.5">
-          New-lead notification emails. Leave a field blank to use the built-in default.
-        </p>
-        <p className="text-[12px] text-outline mt-2">
-          Tokens: <code>{"{{company}} {{refNumber}} {{service}} {{customer}} {{phone}} {{district}} {{budget}} {{details}} {{receivedAt}}"}</code>
-        </p>
-      </div>
-      {!form ? (
-        <p className="text-[13px] text-outline">{error || "Loading…"}</p>
-      ) : (
-        <>
-          <p className="text-[12px] font-bold text-outline">Provider email (sent to the company)</p>
-          <LField label="Subject"><input className="field-input" value={form.providerSubject} onChange={(e) => set("providerSubject", e.target.value)} placeholder="New lead {{refNumber}} — {{service}}" /></LField>
-          <LField label="Body"><textarea className="field-input resize-y" rows={5} value={form.providerBody} onChange={(e) => set("providerBody", e.target.value)} placeholder="Blank = built-in default" /></LField>
-
-          <p className="text-[12px] font-bold text-outline pt-2 border-t border-outline-variant/15">Admin alert email (sent to all admins)</p>
-          <LField label="Subject"><input className="field-input" value={form.adminSubject} onChange={(e) => set("adminSubject", e.target.value)} placeholder="New lead — {{company}} — {{refNumber}}" /></LField>
-          <LField label="Body"><textarea className="field-input resize-y" rows={4} value={form.adminBody} onChange={(e) => set("adminBody", e.target.value)} placeholder="Blank = built-in default (omits customer PII)" /></LField>
-
-          {error && <p className="text-[13px] text-error font-bold">{error}</p>}
-          <button onClick={save} disabled={saving}
-            className="bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press disabled:opacity-60">
-            {saving ? "Saving…" : "Save templates"}
-          </button>
-        </>
-      )}
+  const toolbar = (
+    <div className="flex items-center gap-0.5 mb-1.5">
+      {([
+        { icon: "format_bold", title: "Bold", fn: () => wrap("**", "**") },
+        { icon: "format_italic", title: "Italic", fn: () => wrap("*", "*") },
+        { icon: "format_list_bulleted", title: "Bulleted list", fn: () => listPrefix(false) },
+        { icon: "format_list_numbered", title: "Numbered list", fn: () => listPrefix(true) },
+      ] as const).map((b) => (
+        <button key={b.icon} type="button" title={b.title} onMouseDown={(e) => e.preventDefault()} onClick={b.fn}
+          className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
+          <span className="material-symbols-outlined text-[18px]">{b.icon}</span>
+        </button>
+      ))}
+      <span className="text-[11px] text-outline ms-1.5">Markdown</span>
     </div>
   );
-}
 
-// Admin-editable Terms / Privacy content (plain text, shown at /terms and /privacy).
-function LegalPagesForm({ onSaved }: { onSaved: () => void }) {
-  const [form, setForm] = useState<LegalPages | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    fetchLegalPagesAdmin()
-      .then((p) => { if (active) setForm(p); })
-      .catch(() => { if (active) setError("Couldn't load legal pages."); });
-    return () => { active = false; };
-  }, []);
-
-  async function save() {
-    if (!form) return;
-    setSaving(true);
-    setError("");
-    try {
-      setForm(await saveLegalPages(form));
-      onSaved();
-    } catch {
-      setError("Couldn't save legal pages.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
+  if (!legal) return <p className="text-[13px] text-outline">Loading…</p>;
   return (
-    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
-      <div>
-        <h3 className="font-bold text-[15px] text-on-surface">Legal pages</h3>
-        <p className="text-[13px] text-outline leading-relaxed mt-0.5">
-          Shown at <code>/terms</code> and <code>/privacy</code> (linked in the footer). Leave blank to hide.
-        </p>
-      </div>
-      {!form ? (
-        <p className="text-[13px] text-outline">{error || "Loading…"}</p>
-      ) : (
-        <>
-          <LField label="Terms of Service"><textarea className="field-input resize-y" rows={6} value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} placeholder="Plain text…" /></LField>
-          <LField label="Privacy Policy"><textarea className="field-input resize-y" rows={6} value={form.privacy} onChange={(e) => setForm({ ...form, privacy: e.target.value })} placeholder="Plain text…" /></LField>
-          {error && <p className="text-[13px] text-error font-bold">{error}</p>}
-          <button onClick={save} disabled={saving}
-            className="bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press disabled:opacity-60">
-            {saving ? "Saving…" : "Save pages"}
-          </button>
-        </>
-      )}
+    <div className="space-y-4">
+      <SettingsHeading title="Legal pages" desc={<>Shown at <code>/terms</code> and <code>/privacy</code> (linked in the footer). Markdown supported; leave blank to hide.</>} />
+      <LField label="Terms of Service">
+        {toolbar}
+        <textarea className="field-input resize-y font-mono text-[14px]" rows={8} value={legal.terms} onFocus={track("terms")} onChange={(e) => setL("terms", e.target.value)} placeholder="Markdown — **bold**, *italic*, - lists…" />
+      </LField>
+      <LField label="Privacy Policy">
+        {toolbar}
+        <textarea className="field-input resize-y font-mono text-[14px]" rows={8} value={legal.privacy} onFocus={track("privacy")} onChange={(e) => setL("privacy", e.target.value)} placeholder="Markdown — **bold**, *italic*, - lists…" />
+      </LField>
     </div>
   );
 }
@@ -1529,16 +2043,16 @@ function TagField({ label, tags, onChange, placeholder }: { label: string; tags:
   );
 }
 
-// ── Single image upload (with URL fallback) ──
+// ── Single image upload — drag-and-drop zone with live preview + URL fallback ──
 function ImageUpload({ label, value, onChange, shape = "wide", maxDim = 1000, bucket }: {
   label: string; value: string; onChange: (v: string) => void; shape?: "logo" | "wide"; maxDim?: number; bucket: UploadBucket;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [drag, setDrag] = useState(false);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
+  async function handleFile(f: File | undefined) {
     if (!f) return;
     setBusy(true); setErr("");
     try { onChange(await uploadImage(f, bucket, maxDim)); }
@@ -1546,42 +2060,51 @@ function ImageUpload({ label, value, onChange, shape = "wide", maxDim = 1000, bu
     finally { setBusy(false); if (ref.current) ref.current.value = ""; }
   }
 
-  const preview = shape === "logo" ? "w-16 h-16 rounded-xl" : "w-28 h-20 rounded-lg";
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDrag(false);
+    void handleFile(e.dataTransfer.files?.[0]);
+  }
+
+  const zoneH = shape === "logo" ? "h-28" : "h-36";
 
   return (
     <div>
       <label className="block text-[13px] font-bold text-on-surface mb-1.5">{label}</label>
-      <div className="flex gap-3 items-start">
-        <div className={`${preview} bg-surface-container border border-outline-variant/30 overflow-hidden flex items-center justify-center flex-shrink-0`}>
-          {busy ? (
-            <span className="spinner spinner-primary" />
-          ) : value ? (
-            <img src={value} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span className="material-symbols-outlined text-outline/50 text-[22px]">image</span>
-          )}
-        </div>
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="flex gap-2">
-            <button type="button" onClick={() => ref.current?.click()} disabled={busy}
-              className="flex items-center gap-1.5 bg-primary text-on-primary px-3 py-2 rounded-lg font-bold text-[12px] hover:bg-primary-container transition-colors disabled:opacity-60">
-              <span className="material-symbols-outlined text-[16px]">upload</span> Upload
+      <div
+        onClick={() => ref.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={onDrop}
+        className={`relative ${zoneH} w-full rounded-xl border-2 border-dashed flex flex-col items-center justify-center text-center overflow-hidden cursor-pointer transition-colors ${
+          drag ? "border-primary bg-primary/5" : "border-outline-variant/40 hover:border-primary/50 hover:bg-surface-container/40"
+        }`}
+      >
+        {busy ? (
+          <span className="spinner spinner-primary" />
+        ) : value ? (
+          <>
+            <img src={value} alt="" className={`max-h-full max-w-full ${shape === "logo" ? "object-contain p-2" : "w-full h-full object-cover"}`} />
+            <button type="button" onClick={(e) => { e.stopPropagation(); onChange(""); }}
+              className="absolute top-1.5 right-1.5 bg-on-background/55 text-white rounded-full p-1 hover:bg-error transition-colors" aria-label="Remove image">
+              <span className="material-symbols-outlined text-[16px] block">close</span>
             </button>
-            {value && (
-              <button type="button" onClick={() => onChange("")}
-                className="px-3 py-2 rounded-lg font-bold text-[12px] text-outline hover:text-error transition-colors">Remove</button>
-            )}
-          </div>
-          <input
-            className="field-input !py-2 text-[12px]"
-            placeholder="…or paste an image URL"
-            value={isDataUrl(value) ? "" : value}
-            onChange={(e) => onChange(e.target.value)}
-          />
-          {err && <p className="text-[11px] text-error font-bold">{err}</p>}
-        </div>
-        <input ref={ref} type="file" accept="image/*" hidden onChange={onFile} />
+          </>
+        ) : (
+          <>
+            <span className="material-symbols-outlined text-outline/60 text-[28px]">cloud_upload</span>
+            <p className="text-[12px] font-bold text-outline mt-1">Drag &amp; drop or <span className="text-primary">browse</span></p>
+          </>
+        )}
       </div>
+      <input
+        className="field-input !py-2 text-[12px] mt-2"
+        placeholder="…or paste an image URL"
+        value={isDataUrl(value) ? "" : value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {err && <p className="text-[11px] text-error font-bold mt-1">{err}</p>}
+      <input ref={ref} type="file" accept="image/*" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
     </div>
   );
 }
@@ -1632,6 +2155,61 @@ function GalleryUpload({ images, onChange }: { images: string[]; onChange: (g: s
       </div>
       {err && <p className="text-[11px] text-error font-bold mt-1.5">{err}</p>}
       <input ref={ref} type="file" accept="image/*" multiple hidden onChange={onFiles} />
+    </div>
+  );
+}
+
+// Edit + Delete actions for a category card. Deleting a category that still has
+// companies prompts for confirmation and, on confirm, cascade-deletes those
+// companies too (the API blocks a plain delete with a 409).
+function CategoryCardActions({ cat, onEdit }: { cat: ServiceCategory; onEdit: () => void }) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const count = cat.count ?? 0;
+
+  async function doDelete() {
+    setBusy(true);
+    setErr("");
+    try {
+      await deleteCategory(cat.slug, count > 0);
+      // On success the card disappears via the catalog re-sync; nothing else to do.
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Couldn't delete. Please try again.");
+      setBusy(false);
+    }
+  }
+
+  if (armed) {
+    return (
+      <div className="mt-3">
+        <p className="text-[12px] font-bold text-error leading-snug mb-2">
+          {count > 0
+            ? `This category has ${count} ${count === 1 ? "company" : "companies"}. Deleting it will permanently delete ${count === 1 ? "that company" : "those companies"} too — along with their projects, reviews and leads. This can't be undone.`
+            : `Delete “${cat.label}”? This can't be undone.`}
+        </p>
+        {err && <p className="text-[12px] font-bold text-error mb-2">{err}</p>}
+        <div className="flex gap-2">
+          <button onClick={doDelete} disabled={busy}
+            className="flex-1 bg-error text-white py-2 rounded-lg text-[12px] font-bold hover:bg-error/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+            {busy ? "Deleting…" : count > 0 ? `Delete category + ${count}` : "Delete"}
+          </button>
+          <button onClick={() => { setArmed(false); setErr(""); }} disabled={busy}
+            className="flex-1 bg-surface-container text-on-surface py-2 rounded-lg text-[12px] font-bold hover:bg-surface-container-high transition-colors disabled:opacity-60">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2 mt-3">
+      <button onClick={onEdit} className="flex-1 bg-surface-container py-2 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors">Edit</button>
+      <button onClick={() => setArmed(true)}
+        className="flex items-center justify-center gap-1 border border-error/30 text-error rounded-lg font-bold hover:bg-error/5 transition-colors px-3 py-2 text-[12px]">
+        <span className="material-symbols-outlined text-[16px]">delete</span>
+      </button>
     </div>
   );
 }

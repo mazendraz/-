@@ -7,6 +7,9 @@ import { Skeleton } from "../components/Skeleton";
 import CatalogError from "../components/CatalogError";
 import LazyImage from "../components/LazyImage";
 import SearchInput from "../components/SearchInput";
+import Pagination from "../components/Pagination";
+import { isApiConfigured } from "../lib/api";
+import { useServerSearch } from "../hooks/useServerSearch";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
@@ -23,11 +26,29 @@ export default function ServiceCategoryPage() {
     cat?.metaDescription || cat?.description
   );
   const [query, setQuery] = useState("");
-  const inCategory = category ? allCompaniesRaw.filter((c) => c.category === category) : allCompaniesRaw;
   const q = query.trim().toLowerCase();
-  const allCompanies = inCategory.filter((c) => !q || [c.name, c.tagline, c.categoryLabel, ...c.services].some((v) => v.toLowerCase().includes(q)));
-  const loadingEmpty = status === "loading" && allCompaniesRaw.length === 0;
-  const errorEmpty = status === "error" && allCompaniesRaw.length === 0;
+
+  // Server-driven over the COMPLETE catalog (API mode); the client filter is the
+  // demo (localStorage) path.
+  const apiMode = isApiConfigured();
+  const companySearch = useServerSearch<Company>(
+    "/companies",
+    query,
+    { category: category || undefined },
+    { pageSize: 12, enabled: apiMode },
+  );
+
+  const inCategory = category ? allCompaniesRaw.filter((c) => c.category === category) : allCompaniesRaw;
+  const filteredCompanies = inCategory.filter((c) => !q || [c.name, c.tagline, c.categoryLabel, ...c.services].some((v) => v.toLowerCase().includes(q)));
+
+  const allCompanies = apiMode ? companySearch.data : filteredCompanies;
+  const total = apiMode ? companySearch.total : filteredCompanies.length;
+  const loadingEmpty = apiMode
+    ? companySearch.loading && companySearch.data.length === 0
+    : status === "loading" && allCompaniesRaw.length === 0;
+  const errorEmpty = apiMode
+    ? !!companySearch.error && companySearch.data.length === 0
+    : status === "error" && allCompaniesRaw.length === 0;
 
   const headerRef = useReveal();
 
@@ -57,7 +78,7 @@ export default function ServiceCategoryPage() {
                 </h1>
                 <p className="text-body-lg font-body-lg text-outline max-w-2xl">
                   {cat?.description ?? t(locale, "category_browse_all_desc")}
-                  {" "}— {allCompanies.length} {allCompanies.length === 1 ? t(locale, "category_available_suffix_one") : t(locale, "category_available_suffix")}
+                  {" "}— {total} {total === 1 ? t(locale, "category_available_suffix_one") : t(locale, "category_available_suffix")}
                 </p>
               </div>
             </div>
@@ -87,11 +108,25 @@ export default function ServiceCategoryPage() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-6">
-            {allCompanies.map((c, i) => (
-              <CompanyRow key={c.id} company={c} delay={i * 80} locale={locale} />
-            ))}
-          </div>
+          <>
+            <div className="space-y-6">
+              {allCompanies.map((c, i) => (
+                <CompanyRow key={c.id} company={c} delay={i * 80} locale={locale} />
+              ))}
+            </div>
+            {apiMode && (
+              <Pagination
+                className="mt-8"
+                page={companySearch.page}
+                pageCount={companySearch.pageCount}
+                total={companySearch.total}
+                pageSize={companySearch.pageSize}
+                onPage={(p) => { companySearch.setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                noun={t(locale, "common_company")}
+                nounPlural={t(locale, "common_companies")}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

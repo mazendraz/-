@@ -31,6 +31,11 @@ export const upsertCompanySchema = z.object({
   completedProjects: z.number().int().min(0).default(0),
   featured: z.boolean().default(true),
   verified: z.boolean().default(false),
+  // Manual rating override. rating/reviewCount only take effect when
+  // ratingOverridden is true; otherwise they're derived from the Review table.
+  rating: z.number().min(0).max(5).optional(),
+  reviewCount: z.number().int().min(0).optional(),
+  ratingOverridden: z.boolean().optional(),
   metaTitle: sanitizedOptionalText(120).optional(),
   metaDescription: sanitizedOptionalText(320).optional(),
   email: z.string().email().optional(),

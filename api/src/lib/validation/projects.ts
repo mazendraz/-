@@ -14,3 +14,13 @@ export const createProjectSchema = z.object({
 });
 
 export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+
+// Provider edit of their own project — same fields as create (sortOrder ignored).
+export const updateProjectSchema = createProjectSchema;
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+
+// Admin moderation: set a project's status (approve / reject / reset to pending).
+export const projectStatusSchema = z.object({
+  status: z.enum(["PENDING", "APPROVED", "REJECTED"]),
+});
+export type ProjectStatusInput = z.infer<typeof projectStatusSchema>;

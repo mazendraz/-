@@ -227,24 +227,32 @@ export async function addLead(
   return lead;
 }
 
-export function updateLeadStatus(id: string, status: LeadStatus) {
+// Returns a promise that resolves once the server PATCH settles, so callers driving
+// a server-paginated list can refresh() afterward without racing the write.
+export function updateLeadStatus(id: string, status: LeadStatus): Promise<void> {
   write(read().map((l) => (l.id === id ? { ...l, status } : l))); // optimistic
   if (isApiConfigured() && isAuthenticated()) {
-    apiPatch(`/leads/${id}`, { status }).catch((err) => {
-      console.error("Lead status update failed:", err);
-      void hydrateLeadsFromApi(); // reconcile from the server
-    });
+    return apiPatch(`/leads/${id}`, { status })
+      .then(() => undefined)
+      .catch((err) => {
+        console.error("Lead status update failed:", err);
+        void hydrateLeadsFromApi(); // reconcile from the server
+      });
   }
+  return Promise.resolve();
 }
 
-export function deleteLead(id: string) {
+export function deleteLead(id: string): Promise<void> {
   write(read().filter((l) => l.id !== id)); // optimistic
   if (isApiConfigured() && isAuthenticated()) {
-    apiDelete(`/admin/leads/${id}`).catch((err) => {
-      console.error("Lead delete failed:", err);
-      void hydrateLeadsFromApi();
-    });
+    return apiDelete(`/admin/leads/${id}`)
+      .then(() => undefined)
+      .catch((err) => {
+        console.error("Lead delete failed:", err);
+        void hydrateLeadsFromApi();
+      });
   }
+  return Promise.resolve();
 }
 
 /** Bulk-insert leads (used by the demo-data loader). */

@@ -16,10 +16,16 @@ export const PUT = adminOnly(async (request: NextRequest, ctx: Ctx) => {
   return ok(await categoriesService.update(id, input));
 });
 
-// DELETE /api/admin/categories/[id] → 204 (CONFLICT if it still has companies)
-export const DELETE = adminOnly(async (_request: NextRequest, ctx: Ctx, user) => {
+// DELETE /api/admin/categories/[id] → 204. CONFLICT if it still has companies,
+// unless ?cascade=true, which also deletes every company in the category.
+export const DELETE = adminOnly(async (request: NextRequest, ctx: Ctx, user) => {
   const { id } = await ctx.params;
-  await categoriesService.remove(id);
-  await audit.record(user, { action: "category.delete", entity: "Category", entityId: id });
+  const cascade = request.nextUrl.searchParams.get("cascade") === "true";
+  await categoriesService.remove(id, cascade);
+  await audit.record(user, {
+    action: cascade ? "category.delete_cascade" : "category.delete",
+    entity: "Category",
+    entityId: id,
+  });
   return new NextResponse(null, { status: 204 });
 });

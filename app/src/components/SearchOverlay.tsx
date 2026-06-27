@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   search,
+  searchRemote,
   getPopularSearches,
   getRecentSearches,
   addRecentSearch,
@@ -24,7 +25,19 @@ export default function SearchOverlay({ open, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  const results = useMemo(() => search(query), [query]);
+  // Instant local results for the first paint, then replaced by the backend
+  // results (which cover the COMPLETE dataset) after a short debounce.
+  const [results, setResults] = useState<SearchResult[]>([]);
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) { setResults([]); return; }
+    setResults(search(query)); // optimistic local matches
+    let alive = true;
+    const id = setTimeout(() => {
+      void searchRemote(query).then((r) => { if (alive) setResults(r); });
+    }, 200);
+    return () => { alive = false; clearTimeout(id); };
+  }, [query]);
   const popular = getPopularSearches();
 
   // Focus input + lock scroll when opened
@@ -61,10 +74,9 @@ export default function SearchOverlay({ open, onClose }: Props) {
     const trimmed = term.trim();
     if (!trimmed) return;
     addRecentSearch(trimmed);
-    const first = search(trimmed)[0];
     onClose();
-    // Go to first match if any; otherwise to companies page (browse all)
-    navigate(first ? first.to : "/companies");
+    // Go to the top current match if any; otherwise the companies page (browse all).
+    navigate(results[0] ? results[0].to : "/companies");
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -111,21 +123,18 @@ export default function SearchOverlay({ open, onClose }: Props) {
               placeholder={t(locale, "search_overlay_placeholder")}
               className="flex-1 bg-transparent border-none outline-none text-[17px] text-on-surface placeholder:text-outline/70"
               style={{ fontSize: "16px" }}
-              type="search"
+              type="text"
+              inputMode="search"
               autoComplete="off"
               enterKeyHint="search"
             />
+            {/* Exactly one trailing action: a gray clear-text "X" (only when there's text).
+                Dismiss is intentionally via backdrop click / Escape — no Cancel button. */}
             {query && (
-              <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="p-1 rounded-full hover:bg-surface-container transition-colors" aria-label={t(locale, "common_clear")}>
-                <span className="material-symbols-outlined text-outline text-[20px]">close</span>
+              <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="p-1 rounded-full text-outline hover:bg-surface-container hover:text-on-surface transition-colors flex-shrink-0" aria-label={t(locale, "common_clear")}>
+                <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="ms-1 text-[14px] font-bold text-outline hover:text-primary transition-colors px-2 py-1 rounded-lg"
-            >
-              {t(locale, "search_cancel")}
-            </button>
           </div>
 
           {/* Body */}
@@ -167,8 +176,10 @@ export default function SearchOverlay({ open, onClose }: Props) {
             {/* NO RESULTS */}
             {query && results.length === 0 && (
               <div className="px-5 py-14 text-center">
-                <span className="material-symbols-outlined text-outline/50 text-[44px] mb-3 block">search_off</span>
-                <p className="text-[15px] font-bold text-on-surface mb-1">{t(locale, "search_no_matches")} "{query}"</p>
+                <span className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-4">
+                  <span className="material-symbols-outlined text-outline/60 text-[32px]">search_off</span>
+                </span>
+                <p className="text-[15px] font-bold text-on-surface mb-1">{t(locale, "search_no_matches")} ‘{query}’</p>
                 <p className="text-[13px] text-outline mb-5">{t(locale, "search_try")}</p>
                 <button
                   onClick={() => runTextSearch(query)}

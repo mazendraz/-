@@ -11,13 +11,18 @@ export default function Logo({
   alt?: string;
   style?: React.CSSProperties;
 }) {
-  const { logo_url, site_name } = useSettings();
+  const { logo_url, site_name, logo_scale } = useSettings();
+  // Admin-tunable size: a percentage (blank = 100). Applied as a transform so it
+  // scales the logo within its layout box without shifting surrounding elements.
+  const scale = Number(logo_scale);
+  const clamped = Number.isFinite(scale) && scale > 0 ? Math.min(Math.max(scale, 50), 200) : 100;
+  const transform = clamped !== 100 ? `scale(${clamped / 100})` : undefined;
   return (
     <img
       src={logo_url || "/logo.png"}
       alt={alt ?? site_name ?? "Logo"}
       className={className}
-      style={style}
+      style={transform ? { ...style, transform } : style}
       loading="eager"
       decoding="async"
     />
