@@ -37,6 +37,26 @@ export function verifyPassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash);
 }
 
+// A real bcrypt hash of a throwaway string, computed once at boot. Used to run a
+// compare even when the account doesn't exist, so a login response takes the same
+// time whether or not the email is registered — closing the timing side-channel an
+// attacker could use to enumerate valid accounts.
+const DUMMY_HASH = bcrypt.hashSync("timing-equalizer-not-a-real-password", BCRYPT_ROUNDS);
+
+/**
+ * Verify a password against a possibly-null hash (null = no such/active user).
+ * ALWAYS performs one bcrypt compare — against DUMMY_HASH when the hash is null —
+ * so timing doesn't reveal whether the account exists. Returns false for a null
+ * hash regardless of the compare result.
+ */
+export async function verifyPasswordSafe(
+  plain: string,
+  hash: string | null,
+): Promise<boolean> {
+  const match = await bcrypt.compare(plain, hash ?? DUMMY_HASH);
+  return hash !== null && match;
+}
+
 // ── JWT ───────────────────────────────────────────────────────────────────────
 
 function secretKey(): Uint8Array {
