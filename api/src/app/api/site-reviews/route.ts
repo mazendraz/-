@@ -3,6 +3,7 @@ import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
 import { ForbiddenError, RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
+import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
 import { createSiteReviewSchema } from "@/lib/validation/siteReviews";
 import * as service from "@/lib/services/siteReviews.service";
@@ -29,10 +30,8 @@ export const POST = withErrors(async (request: NextRequest) => {
     throw new ForbiddenError("Review submissions are currently closed.");
   }
 
-  const raw = await request.json().catch(() => null);
-  if (raw === null || typeof raw !== "object") {
-    throw new ValidationError("Request body must be a JSON object");
-  }
+  // Bounded read: reject oversized bodies (413) before parsing.
+  const raw = await readJsonObject(request);
 
   // Honeypot: real clients never fill `hp_field`; bots auto-fill every field.
   // (Named generically, NOT "website"/"email", so browser password managers don't

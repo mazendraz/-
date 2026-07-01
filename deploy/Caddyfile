@@ -19,6 +19,15 @@ your-domain.com {
 
 	# API → Next.js backend (PM2 on :3000)
 	handle /api/* {
+		# Reject oversized request bodies at the edge — the outer layer of the
+		# body-size guard (the app also caps public JSON submits at 64KB; see
+		# bodyLimit.ts). Stops a bot forcing the backend to buffer/parse huge
+		# payloads. Set just above the app's 5MB image-upload cap (upload.service.ts)
+		# so admin uploads still pass; raise both together if you need larger uploads.
+		request_body {
+			max_size 6MB
+		}
+
 		reverse_proxy localhost:3000 {
 			# Strip any client-supplied X-Forwarded-For and re-set it from the real
 			# peer, so the app can't be tricked into trusting a spoofed client IP

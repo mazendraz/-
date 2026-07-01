@@ -3,6 +3,7 @@ import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
+import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
 import { createFeedbackSchema } from "@/lib/validation/feedback";
 import * as feedbackService from "@/lib/services/feedback.service";
@@ -20,10 +21,8 @@ export const POST = withErrors(async (request: NextRequest) => {
     throw new RateLimitError(`Too many requests. Try again in ${seconds}s.`);
   }
 
-  const raw = await request.json().catch(() => null);
-  if (raw === null || typeof raw !== "object") {
-    throw new ValidationError("Request body must be a JSON object");
-  }
+  // Bounded read: reject oversized bodies (413) before parsing.
+  const raw = await readJsonObject(request);
 
   // Honeypot: real clients never fill `hp_field`; bots auto-fill every field.
   // (Named generically, NOT "website"/"email", so browser password managers don't
