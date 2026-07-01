@@ -4,7 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
-import { serializeReview } from "@/lib/utils/serialize";
+import { serializeReview, serializeReviewAdmin } from "@/lib/utils/serialize";
 import { leadSecretMatches } from "@/lib/services/leads.service";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import { notifyAdminsReviewSubmitted } from "@/lib/services/notifications.service";
@@ -58,7 +58,7 @@ export async function listAllForAdmin(approved?: boolean): Promise<AdminReviewIt
     include: { company: { select: { id: true, name: true, slug: true } } },
   });
   return rows.map((r) => ({
-    ...serializeReview(r),
+    ...serializeReviewAdmin(r),
     companyId: r.company.id,
     companyName: r.company.name,
     companySlug: r.company.slug,
@@ -77,7 +77,7 @@ export async function setApproved(reviewId: string, approved: boolean): Promise<
     await recompute(tx, review.companyId);
     return r;
   });
-  return serializeReview(updated);
+  return serializeReviewAdmin(updated);
 }
 
 /** Admin: delete any review by id (recomputes the company aggregate). */
@@ -221,7 +221,7 @@ export async function add(
     return created;
   });
 
-  return serializeReview(review);
+  return serializeReviewAdmin(review);
 }
 
 /** Admin: delete a review, then recompute the company's aggregate. */

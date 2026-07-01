@@ -65,21 +65,39 @@ export type LeadWithCompany = Lead & {
 
 // ── Entity serializers ────────────────────────────────────────────────────────
 
+/**
+ * Public project shape: deliberately omits `id` and `status`. The public profile
+ * only ever returns APPROVED projects, so status is redundant, and exposing row
+ * ids on public payloads serves no purpose. Pairs with serializeProjectAdmin.
+ */
 export function serializeProject(p: Project): ApiProject {
   return {
-    id: p.id,
     title: p.title,
     img: p.img,
     description: p.description,
     year: p.year,
     featured: p.featured ?? false,
+  };
+}
+
+/**
+ * Admin/provider project shape: the public fields PLUS `id` and `status`, which
+ * the per-project management UI needs to edit/delete and see moderation state.
+ */
+export function serializeProjectAdmin(p: Project): ApiProject {
+  return {
+    ...serializeProject(p),
+    id: p.id,
     status: p.status,
   };
 }
 
+/**
+ * Public review shape: omits `id` (see ApiReview). Pairs with serializeReviewAdmin,
+ * which adds the id the per-review management UI needs.
+ */
 export function serializeReview(r: Review): ApiReview {
   return {
-    id: r.id,
     author: r.author,
     avatar: r.avatar,
     rating: r.rating,
@@ -88,6 +106,11 @@ export function serializeReview(r: Review): ApiReview {
     district: r.district,
     verified: r.verified,
   };
+}
+
+/** Admin/provider review shape: the public fields PLUS `id` for management. */
+export function serializeReviewAdmin(r: Review): ApiReview {
+  return { ...serializeReview(r), id: r.id };
 }
 
 /** count = number of ACTIVE companies, computed live by the caller. */

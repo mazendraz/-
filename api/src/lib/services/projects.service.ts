@@ -3,7 +3,7 @@
 // them; only APPROVED projects appear publicly.
 import { prisma } from "@/lib/prisma";
 import { CompanyStatus, ProjectStatus } from "@/generated/prisma/enums";
-import { serializeProject } from "@/lib/utils/serialize";
+import { serializeProjectAdmin } from "@/lib/utils/serialize";
 import { NotFoundError } from "@/lib/utils/errors";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import { notifyAdminsProjectSubmitted } from "@/lib/services/notifications.service";
@@ -113,7 +113,7 @@ export async function createForCompany(
       status,
     },
   });
-  const serialized = serializeProject(project);
+  const serialized = serializeProjectAdmin(project);
   // A provider submission lands as PENDING — alert admins it needs review.
   if (status === ProjectStatus.PENDING) void notifyAdminsPendingProject(serialized, companyId);
   return serialized;
@@ -143,7 +143,7 @@ export async function updateForCompany(
       status: ProjectStatus.PENDING,
     },
   });
-  const serialized = serializeProject(project);
+  const serialized = serializeProjectAdmin(project);
   // The edit re-enters the moderation queue — alert admins it needs review again.
   void notifyAdminsPendingProject(serialized, companyId);
   return serialized;
@@ -155,7 +155,7 @@ export async function listByCompany(companyId: string): Promise<ApiProject[]> {
     where: { companyId },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
   });
-  return rows.map(serializeProject);
+  return rows.map(serializeProjectAdmin);
 }
 
 export interface ModerationProject extends ApiProject {
@@ -174,7 +174,7 @@ export async function listForModeration(
     include: { company: { select: { id: true, name: true, slug: true } } },
   });
   return rows.map((r) => ({
-    ...serializeProject(r),
+    ...serializeProjectAdmin(r),
     companyId: r.company.id,
     companyName: r.company.name,
     companySlug: r.company.slug,
@@ -195,7 +195,7 @@ export async function setStatus(
     where: { id: projectId },
     data: { status: status as ProjectStatus },
   });
-  return serializeProject(project);
+  return serializeProjectAdmin(project);
 }
 
 /** Admin or owning provider: remove a project. Scoped to companyId. */
