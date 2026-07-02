@@ -80,12 +80,14 @@ export default function Home() {
         <div className="absolute inset-0 hero-scrim" />
 
         {/* Content */}
-        <div className="relative z-10 text-center px-5 md:px-8 max-w-5xl mx-auto w-full mt-16 md:mt-20">
+        <div className="relative z-10 text-center px-5 md:px-8 max-w-4xl mx-auto w-full mt-16 md:mt-20">
           <h1
             ref={heroTitle}
-            className="fade-up text-white font-black mb-5 drop-shadow-lg tracking-tight
-                       text-[2.2rem] leading-[1.15]
-                       md:text-display-xl md:leading-[1.1]"
+            className="fade-up text-white font-black mb-6 tracking-tight
+                       text-[2.4rem] leading-[1.12]
+                       md:text-[3.75rem] md:leading-[1.08]
+                       max-w-3xl mx-auto"
+            style={{ textShadow: "0 2px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4)" }}
           >
             {heroTitleOverride ? (
               heroTitleOverride
@@ -98,9 +100,9 @@ export default function Home() {
           </h1>
           <p
             ref={heroSub}
-            className="fade-up text-white/90 mb-8 max-w-xl mx-auto drop-shadow
-                       text-[16px] md:text-body-lg leading-relaxed"
-            style={{ transitionDelay: "100ms" }}
+            className="fade-up text-white/95 mb-10 max-w-lg mx-auto
+                       text-[16px] md:text-[18px] leading-[1.75] font-medium"
+            style={{ transitionDelay: "120ms", textShadow: "0 1px 8px rgba(0,0,0,0.45)" }}
           >
             {heroSubOverride || t(locale, "home_hero_sub")}
           </p>
@@ -108,15 +110,18 @@ export default function Home() {
           {/* CTA buttons */}
           <div
             ref={heroCta}
-            className="fade-up flex flex-col items-center sm:flex-row sm:justify-center gap-4"
-            style={{ transitionDelay: "200ms" }}
+            className="fade-up flex flex-col items-center sm:flex-row sm:justify-center gap-3 sm:gap-4"
+            style={{ transitionDelay: "240ms" }}
           >
             {/* Primary CTA */}
             <button
               onClick={() => scrollTo("services")}
-              className="w-[85%] sm:w-auto bg-primary text-on-primary px-8 py-[18px] sm:py-4 rounded-full
-                         font-bold text-[15px] hover:bg-primary-container transition-all duration-300
-                         shadow-lg touch-press btn-press"
+              className="w-[85%] sm:w-auto bg-primary text-on-primary px-9 py-[17px] sm:py-[15px] rounded-full
+                         font-bold text-[15px] tracking-wide
+                         shadow-[0_4px_24px_rgba(0,85,120,0.45),0_1px_4px_rgba(0,0,0,0.2)]
+                         hover:brightness-110 hover:shadow-[0_8px_32px_rgba(0,85,120,0.55),0_2px_8px_rgba(0,0,0,0.25)]
+                         hover:scale-[1.02] active:scale-[0.98]
+                         transition-all duration-250 ease-out touch-press btn-press"
             >
               {t(locale, "home_cta_explore")}
             </button>
@@ -125,22 +130,20 @@ export default function Home() {
             <button
               onClick={() => scrollTo("companies")}
               className="group w-[85%] sm:w-auto flex items-center justify-center gap-2.5
-                         px-8 py-[18px] sm:py-4 rounded-full
-                         bg-white/[0.15] backdrop-blur-[20px]
-                         border border-white/30
-                         shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_32px_rgba(0,0,0,0.22)]
-                         text-white font-semibold text-[15px] tracking-[0.03em]
-                         hover:bg-white/[0.25]
-                         hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_16px_48px_rgba(0,0,0,0.35)]
-                         hover:scale-[1.02]
-                         active:scale-[0.98]
-                         transition-all duration-300 ease-out
-                         touch-press"
+                         px-9 py-[17px] sm:py-[15px] rounded-full
+                         bg-white/[0.12] backdrop-blur-[20px]
+                         border border-white/35
+                         shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_4px_24px_rgba(0,0,0,0.2)]
+                         text-white font-semibold text-[15px] tracking-wide
+                         hover:bg-white/[0.22] hover:border-white/50
+                         hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_8px_32px_rgba(0,0,0,0.3)]
+                         hover:scale-[1.02] active:scale-[0.98]
+                         transition-all duration-250 ease-out touch-press"
             >
               {t(locale, "home_cta_browse")}
               <span
-                className="material-symbols-outlined text-[18px] opacity-80 rtl-flip
-                           group-hover:translate-x-1 transition-transform duration-300"
+                className="material-symbols-outlined text-[18px] opacity-75 rtl-flip
+                           group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform duration-250"
               >
                 arrow_forward
               </span>

@@ -17,6 +17,7 @@ function Spinner() {
 function LoginScreen({ requiredRole }: { requiredRole: Role }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -70,14 +71,27 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
           </label>
           <label className="block">
             <span className="text-[12px] font-bold text-on-surface-variant mb-1.5 block">Password</span>
-            <input
-              type="password"
-              required
-              className="field-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                className="field-input pr-11"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-outline hover:text-on-surface-variant transition-colors focus:outline-none"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {showPassword ? "visibility_off" : "visibility"}
+                </span>
+              </button>
+            </div>
           </label>
           <button
             type="submit"
