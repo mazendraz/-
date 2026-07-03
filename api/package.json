@@ -10,6 +10,8 @@
     "test": "vitest run --no-file-parallelism",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:db:up": "docker compose up -d --wait db",
+    "test:db:down": "docker compose down",
     "seed": "tsx prisma/seed.ts",
     "create-admin": "tsx prisma/create-admin.ts",
     "db:generate": "prisma generate",
