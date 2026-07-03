@@ -10,15 +10,15 @@ interface LocaleCtx {
 }
 
 const LocaleContext = createContext<LocaleCtx>({
-  locale: "en",
+  locale: "ar",
   setLocale: () => {},
-  isRTL: false,
+  isRTL: true,
 });
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
-    try { return (localStorage.getItem(LOCALE_KEY) as Locale) ?? "en"; }
-    catch { return "en"; }
+    try { return (localStorage.getItem(LOCALE_KEY) as Locale) ?? "ar"; }
+    catch { return "ar"; }
   });
 
   const isRTL = locale === "ar";

@@ -26,7 +26,7 @@ const STRINGS = {
     search_requests_placeholder: "Search by reference, company, service…",
 
     // Language toggle label — shows the OTHER language
-    lang_switch: "ع",
+    lang_switch: "عربي",
 
     // ── Footer ──
     footer_platform: "Platform",
@@ -364,7 +364,7 @@ const STRINGS = {
     search_saved_placeholder: "ابحث في شركاتك المحفوظة…",
     search_requests_placeholder: "ابحث بالرقم المرجعي أو الشركة أو الخدمة…",
 
-    lang_switch: "EN",
+    lang_switch: "English",
 
     // ── Footer ──
     footer_platform: "المنصة",

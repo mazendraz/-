@@ -75,7 +75,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
               <input
                 type={showPassword ? "text" : "password"}
                 required
-                className="field-input pr-11"
+                className="field-input pe-11"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -85,7 +85,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
                 onClick={() => setShowPassword((v) => !v)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 aria-pressed={showPassword}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-outline hover:text-on-surface-variant transition-colors focus:outline-none"
+                className="absolute inset-y-0 end-0 flex items-center pe-3 text-outline hover:text-on-surface-variant transition-colors focus:outline-none"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   {showPassword ? "visibility_off" : "visibility"}
