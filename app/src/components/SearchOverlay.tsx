@@ -128,13 +128,17 @@ export default function SearchOverlay({ open, onClose }: Props) {
               autoComplete="off"
               enterKeyHint="search"
             />
-            {/* Exactly one trailing action: a gray clear-text "X" (only when there's text).
-                Dismiss is intentionally via backdrop click / Escape — no Cancel button. */}
+            {/* Clear-text "X" — only shown while there's text, clears the query. */}
             {query && (
               <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="p-1 rounded-full text-outline hover:bg-surface-container hover:text-on-surface transition-colors flex-shrink-0" aria-label={t(locale, "common_clear")}>
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             )}
+            {/* Persistent close button — always dismisses the overlay (needed on
+                mobile, where the backdrop isn't visible and there's no Esc key). */}
+            <button onClick={onClose} className="flex-shrink-0 text-[14px] font-bold text-outline hover:text-primary transition-colors px-1" aria-label={t(locale, "search_cancel")}>
+              {t(locale, "search_cancel")}
+            </button>
           </div>
 
           {/* Body */}
