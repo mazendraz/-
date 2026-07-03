@@ -13,6 +13,7 @@ import {
   notifyAdmins as pushAdmins,
 } from "@/lib/services/push.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type {
   ApiLead,
   ApiLeadPayload,
@@ -112,38 +113,45 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
       // never surfaced in admin/provider list payloads.
       const serialized = { ...serializeLead(lead), trackingToken: lead.trackingToken ?? undefined };
 
-      // Notify the provider — fire-and-forget; never blocks or fails the response.
-      // (In a serverless deploy, wrap this in the platform's waitUntil instead.)
-      void notifyNewLead(serialized, {
-        email: company.email,
-        whatsapp: company.whatsapp,
-        companyName: company.name,
-      });
+      // Notifications run AFTER the response is sent (see runAfterResponse): they
+      // never block or fail lead creation, and on a serverless host the function is
+      // kept alive until they settle so nothing is dropped when the instance
+      // freezes post-response. Each channel is individually fail-open.
+      runAfterResponse(async () => {
+        // Admins are sourced live from the User table so notifications track the
+        // Team tab automatically (no env var to keep in sync).
+        const admins = await prisma.user
+          .findMany({ where: { role: "ADMIN", isActive: true }, select: { email: true } })
+          .catch((err) => {
+            console.error(`[notify] admin lookup failed for lead ${serialized.refNumber}:`, err);
+            return [] as { email: string }[];
+          });
 
-      // Notify all active admins too — sourced from the User table so it tracks
-      // the Team tab automatically (no env var to keep in sync). Also fail-open.
-      void prisma.user
-        .findMany({
-          where: { role: "ADMIN", isActive: true },
-          select: { email: true },
-        })
-        .then((admins) => notifyAdmins(serialized, company.name, admins.map((a) => a.email)))
-        .catch((err) => console.error(`[notify] admin lookup failed for lead ${serialized.refNumber}:`, err));
-
-      // Web Push — reaches provider/admin devices even with the dashboard closed.
-      // Bodies stay lean (no customer PII on a lockscreen); details live in the
-      // dashboard, which the click opens. Fire-and-forget + fail-open.
-      void pushCompanyProviders(company.id, {
-        title: "New lead — Al Assema",
-        body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
-        url: "/provider",
-        tag: `lead-${serialized.id}`,
-      });
-      void pushAdmins({
-        title: `New lead — ${company.name}`,
-        body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
-        url: "/admin",
-        tag: `lead-${serialized.id}`,
+        await Promise.allSettled([
+          // Provider email (has customer contact details — they must act on it).
+          notifyNewLead(serialized, {
+            email: company.email,
+            whatsapp: company.whatsapp,
+            companyName: company.name,
+          }),
+          // Admin heads-up email (no customer PII — see notifications.service).
+          notifyAdmins(serialized, company.name, admins.map((a) => a.email)),
+          // Web Push — reaches provider/admin devices even with the dashboard
+          // closed. Bodies stay lean (no PII on a lockscreen); the click opens
+          // the dashboard for the full record.
+          pushCompanyProviders(company.id, {
+            title: "New lead — Al Assema",
+            body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
+            url: "/provider",
+            tag: `lead-${serialized.id}`,
+          }),
+          pushAdmins({
+            title: `New lead — ${company.name}`,
+            body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
+            url: "/admin",
+            tag: `lead-${serialized.id}`,
+          }),
+        ]);
       });
 
       return serialized;

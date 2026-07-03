@@ -177,28 +177,27 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
       Referrer-Policy / Permissions-Policy) مفعّلة تلقائيًا للباك إند
       ([`api/next.config.ts`](api/next.config.ts)) وللفرونت
       ([`app/vercel.json`](app/vercel.json)).
-- [ ] **CSP (موصى بيه — التوكن في localStorage فالـ CSP هو خط الدفاع ضد XSS):**
-      مش مفعّل افتراضيًا لأنه بيتطلّب دومينات النشر بتاعتك + فيه `<script>` inline
-      في `index.html`. فعّله بعد ما تظبط القيم، ويفضّل تبدأ بـ
-      `Content-Security-Policy-Report-Only` وتتأكد إن مفيش حاجة بتتكسر قبل ما
-      تشيل `-Report-Only`. أضِفه كـ header في [`app/vercel.json`](app/vercel.json):
+- [ ] **CSP (التوكن في localStorage فالـ CSP هو خط الدفاع ضد XSS) — بقى متوصّل:**
+      الـ CSP اتحطّ **Report-Only** بالفعل في التنصيبتين:
+      - VPS: [`deploy/Caddyfile`](deploy/Caddyfile) (بلوك الـ SPA).
+      - Vercel: [`app/vercel.json`](app/vercel.json) — **غيّر `REPLACE-WITH-API-DOMAIN`**
+        في `connect-src` لدومين الباك إند (على VPS مش محتاج — نفس الـ origin).
 
-      ```
-      Content-Security-Policy:
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
-        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        font-src 'self' https://fonts.gstatic.com;
-        img-src 'self' data: https://<SUPABASE-REF>.supabase.co;
-        connect-src 'self' https://<API-DOMAIN>;
-        frame-src https://challenges.cloudflare.com;
-        frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
-      ```
+      والـ locale-init script اتنقل لملف خارجي
+      ([`app/public/locale-init.js`](app/public/locale-init.js))، فـ `script-src`
+      بقى `'self'` **من غير** `'unsafe-inline'` — يعني أي `<script>` محقون بيتمنع.
 
-      > غيّر `<SUPABASE-REF>` (بَكِت الصور) و`<API-DOMAIN>` (دومين الباك إند).
-      > `script-src` فيه `'unsafe-inline'` بسبب الـ inline locale-init script؛
-      > لو نقلته لملف خارجي تقدر تشيلها وتشدّد الـ CSP أكتر. شيل سطر
-      > `frame-src`/`script-src` بتاع Turnstile لو مش مفعّل CAPTCHA.
+      **الخطوات:**
+      1. انشر بالـ Report-Only، وافتح DevTools console وأنت بتتصفّح كل الصفحات
+         (الرئيسية، تصنيف، شركة، فورم الطلب، `/admin`، `/provider`) وصلّح أي
+         violation بيتبلّغ.
+      2. بعد يومين/تلاتة هادية، فعّل الحجب: غيّر اسم الـ header من
+         `Content-Security-Policy-Report-Only` لـ `Content-Security-Policy`.
+
+      > `style-src` فيه `'unsafe-inline'` لأن React بيحط `style=""` inline (خطره
+      > منخفض). `img-src` بيسمح بصور Supabase (`*.supabase.co`) + `data:`. سطر
+      > `frame-src`/challenges.cloudflare.com محتاجه بس لو Turnstile مفعّل — شيله
+      > غير كده.
 
 ---
 

@@ -40,6 +40,26 @@ your-domain.com {
 	# Everything else → static SPA with client-side routing fallback
 	handle {
 		root * /var/www/alassema/dist
+
+		# Content-Security-Policy — the main defense against XSS stealing the
+		# localStorage auth token. Shipped in REPORT-ONLY first: violations are
+		# reported to the browser console but nothing is blocked, so you can verify
+		# the whole site (home, category, company, request form, admin, provider)
+		# with DevTools open and fix any violation before enforcing.
+		#
+		# TO ENFORCE (after a few quiet days): rename the header below from
+		# `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
+		#
+		# Notes on this policy (same-origin deploy, so connect-src 'self' covers the API):
+		#   • script-src 'self' — NO 'unsafe-inline' (the locale-init script is now an
+		#     external /locale-init.js), so injected inline <script> is blocked.
+		#   • style-src allows 'unsafe-inline' — React sets inline style="" attributes;
+		#     style injection is low-risk. Google Fonts CSS is fetched from googleapis.
+		#   • img-src allows Supabase Storage (uploaded images) + data: URIs.
+		#   • frame-src/…cloudflare.com is only needed when Turnstile CAPTCHA is on;
+		#     remove it otherwise.
+		header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+
 		try_files {path} /index.html
 		file_server
 	}

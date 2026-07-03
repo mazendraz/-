@@ -9,6 +9,7 @@ import { leadSecretMatches } from "@/lib/services/leads.service";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import { notifyAdminsReviewSubmitted } from "@/lib/services/notifications.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type { SubmitReviewInput } from "@/lib/validation/reviews";
 import type { ApiPage, ApiReview } from "@/lib/apiTypes";
 
@@ -21,18 +22,21 @@ async function notifyAdminsNewReview(companyId: string, rating: number, author: 
     const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
     const companyName = company?.name ?? "A company";
 
-    void pushAdmins({
-      title: "New review to approve",
-      body: `${companyName} — ${"★".repeat(rating)} from ${author}`,
-      url: "/admin",
-      tag: `review-${companyId}-${Date.now()}`,
-    });
-
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN", isActive: true },
       select: { email: true },
     });
-    void notifyAdminsReviewSubmitted({ companyName, rating, author, adminEmails: admins.map((a) => a.email) });
+    // Awaited (via allSettled) so the enclosing runAfterResponse keeps the
+    // serverless function alive until both channels actually send.
+    await Promise.allSettled([
+      pushAdmins({
+        title: "New review to approve",
+        body: `${companyName} — ${"★".repeat(rating)} from ${author}`,
+        url: "/admin",
+        tag: `review-${companyId}-${Date.now()}`,
+      }),
+      notifyAdminsReviewSubmitted({ companyName, rating, author, adminEmails: admins.map((a) => a.email) }),
+    ]);
   } catch (err) {
     console.error("[notify] new-review admin alert failed:", err);
   }
@@ -312,8 +316,8 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
     return created;
   });
 
-  // Alert admins a new customer review came in (push + email). Fire-and-forget.
-  void notifyAdminsNewReview(lead.companyId, input.rating, lead.customerName);
+  // Alert admins a new customer review came in (push + email) after the response.
+  runAfterResponse(() => notifyAdminsNewReview(lead.companyId, input.rating, lead.customerName));
 
   return serializeReview(review);
 }

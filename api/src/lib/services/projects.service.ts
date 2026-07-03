@@ -7,6 +7,7 @@ import { serializeProjectAdmin } from "@/lib/utils/serialize";
 import { NotFoundError } from "@/lib/utils/errors";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import { notifyAdminsProjectSubmitted } from "@/lib/services/notifications.service";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type { ApiFeaturedProject, ApiProject, ApiProjectStatus } from "@/lib/apiTypes";
 
 /**
@@ -21,22 +22,25 @@ async function notifyAdminsPendingProject(project: ApiProject, companyId: string
     });
     const companyName = company?.name ?? "A provider";
 
-    void pushAdmins({
-      title: "New project for review",
-      body: `${companyName}: “${project.title}” needs approval`,
-      url: "/admin",
-      tag: `project-${project.id}`,
-    });
-
     const admins = await prisma.user.findMany({
       where: { role: "ADMIN", isActive: true },
       select: { email: true },
     });
-    void notifyAdminsProjectSubmitted({
-      projectTitle: project.title,
-      companyName,
-      adminEmails: admins.map((a) => a.email),
-    });
+    // Awaited (via allSettled) so the enclosing runAfterResponse keeps the
+    // serverless function alive until both channels actually send.
+    await Promise.allSettled([
+      pushAdmins({
+        title: "New project for review",
+        body: `${companyName}: “${project.title}” needs approval`,
+        url: "/admin",
+        tag: `project-${project.id}`,
+      }),
+      notifyAdminsProjectSubmitted({
+        projectTitle: project.title,
+        companyName,
+        adminEmails: admins.map((a) => a.email),
+      }),
+    ]);
   } catch (err) {
     console.error("[notify] pending-project admin alert failed:", err);
   }
@@ -115,7 +119,9 @@ export async function createForCompany(
   });
   const serialized = serializeProjectAdmin(project);
   // A provider submission lands as PENDING — alert admins it needs review.
-  if (status === ProjectStatus.PENDING) void notifyAdminsPendingProject(serialized, companyId);
+  if (status === ProjectStatus.PENDING) {
+    runAfterResponse(() => notifyAdminsPendingProject(serialized, companyId));
+  }
   return serialized;
 }
 
@@ -145,7 +151,7 @@ export async function updateForCompany(
   });
   const serialized = serializeProjectAdmin(project);
   // The edit re-enters the moderation queue — alert admins it needs review again.
-  void notifyAdminsPendingProject(serialized, companyId);
+  runAfterResponse(() => notifyAdminsPendingProject(serialized, companyId));
   return serialized;
 }
 
