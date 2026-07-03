@@ -179,6 +179,9 @@ model Review {
 
   @@index([companyId])
   @@index([approved])
+  // Serves the hot public/company read: WHERE companyId=? AND approved=true
+  // ORDER BY createdAt DESC — filter + sort from one index.
+  @@index([companyId, approved, createdAt])
 }
 
 model Lead {
@@ -210,6 +213,9 @@ model Lead {
   @@index([companyId])
   @@index([status])
   @@index([createdAt])
+  // Serves the provider/admin lead lists: WHERE companyId=? [AND status=?]
+  // ORDER BY createdAt DESC — filter + sort from one index.
+  @@index([companyId, status, createdAt])
 }
 
 model User {
