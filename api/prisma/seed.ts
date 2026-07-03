@@ -25,6 +25,23 @@ function aggregate(reviews: { rating: number }[]): {
 }
 
 async function main() {
+  // Safety guard: this script DELETES the whole catalog before reseeding. That is
+  // fine on a fresh/empty database, but catastrophic if run against production —
+  // it would wipe every real lead, review, and company. Leads are customer
+  // submissions and are never seeded, so their presence means "this is a live DB".
+  // Refuse unless the operator explicitly forces it.
+  const leadCount = await prisma.lead.count();
+  const force =
+    process.argv.includes("--force") || process.env.SEED_ALLOW_DESTRUCTIVE === "1";
+  if (leadCount > 0 && !force) {
+    throw new Error(
+      `Refusing to seed: the database already contains ${leadCount} lead(s). ` +
+        `This script DELETES all companies, projects, leads, and reviews before ` +
+        `reseeding. Re-run with --force (or SEED_ALLOW_DESTRUCTIVE=1) ONLY if you ` +
+        `truly intend to erase and rebuild the catalog.`,
+    );
+  }
+
   // Clear catalog (children first; company delete also cascades, but be explicit).
   await prisma.review.deleteMany();
   await prisma.project.deleteMany();

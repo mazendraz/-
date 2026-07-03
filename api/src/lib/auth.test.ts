@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { hashPassword, signToken, verifyPassword, verifyPasswordSafe } from "@/lib/auth";
 
 beforeAll(() => {
@@ -31,6 +31,36 @@ describe("verifyPasswordSafe", () => {
 
 describe("signToken", () => {
   it("produces a 3-part HS256 JWT", async () => {
+    const token = await signToken({ sub: "u1", role: "ADMIN", companyId: null });
+    expect(token.split(".")).toHaveLength(3);
+  });
+});
+
+describe("JWT secret strength guard", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects a short secret in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("JWT_SECRET", "too-short");
+    // secretKey() is called synchronously inside signToken (not an async fn), so
+    // the guard throws synchronously — before any promise is created.
+    expect(() => signToken({ sub: "u1", role: "ADMIN", companyId: null })).toThrow(
+      /too short/i,
+    );
+  });
+
+  it("accepts a strong (≥32 char) secret in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("JWT_SECRET", "x".repeat(32));
+    const token = await signToken({ sub: "u1", role: "ADMIN", companyId: null });
+    expect(token.split(".")).toHaveLength(3);
+  });
+
+  it("allows a short secret outside production (dev/test convenience)", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("JWT_SECRET", "short-dev-secret");
     const token = await signToken({ sub: "u1", role: "ADMIN", companyId: null });
     expect(token.split(".")).toHaveLength(3);
   });

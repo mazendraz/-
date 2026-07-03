@@ -15,6 +15,23 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
+// Constant-time equality for the shared API key. proxy runs on the Edge runtime,
+// which has no node:crypto.timingSafeEqual — so we compare SHA-256 digests via Web
+// Crypto instead. Digests are fixed-length and unpredictable, so the byte-wise
+// compare leaks neither the length nor the content of the key through timing.
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const va = new Uint8Array(da);
+  const vb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < va.length; i += 1) diff |= va[i]! ^ vb[i]!;
+  return diff === 0;
+}
+
 // Returns the value to send back in Access-Control-Allow-Origin, or null to deny.
 // With an allowlist configured, only those origins are allowed. With no allowlist:
 // reflect any origin in development for convenience, but DENY in production so a
@@ -27,7 +44,7 @@ function resolveAllowedOrigin(origin: string): string | null {
   return origin || "*";
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const origin = request.headers.get("origin") ?? "";
   const allowOrigin = resolveAllowedOrigin(origin);
 
@@ -51,7 +68,7 @@ export function proxy(request: NextRequest) {
   if (
     apiKey &&
     !probePaths.has(request.nextUrl.pathname) &&
-    request.headers.get("x-api-key") !== apiKey
+    !(await timingSafeEqual(request.headers.get("x-api-key") ?? "", apiKey))
   ) {
     const headers: Record<string, string> = { ...corsHeaders };
     if (allowOrigin) {

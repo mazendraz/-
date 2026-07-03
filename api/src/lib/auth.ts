@@ -59,9 +59,24 @@ export async function verifyPasswordSafe(
 
 // ── JWT ───────────────────────────────────────────────────────────────────────
 
+// Minimum secret length for HS256. A short/guessable secret is offline-
+// bruteforceable from any single captured token, which would let an attacker mint
+// an ADMIN token for any user id — so we refuse a weak secret in production. 32
+// chars matches the documented `openssl rand -base64 32` recommendation.
+const MIN_JWT_SECRET_LENGTH = 32;
+
 function secretKey(): Uint8Array {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error("JWT_SECRET is not set");
+  if (
+    process.env.NODE_ENV === "production" &&
+    secret.length < MIN_JWT_SECRET_LENGTH
+  ) {
+    throw new Error(
+      `JWT_SECRET is too short for production (need ≥${MIN_JWT_SECRET_LENGTH} chars). ` +
+        `Generate a strong one with: openssl rand -base64 32`,
+    );
+  }
   return new TextEncoder().encode(secret);
 }
 

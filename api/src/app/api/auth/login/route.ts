@@ -3,6 +3,7 @@ import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
 import { RateLimitError, UnauthorizedError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
+import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { loginSchema } from "@/lib/validation/auth";
 import { signToken, verifyPasswordSafe } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +33,9 @@ export const POST = withErrors(async (request: NextRequest) => {
     throw new RateLimitError(`Too many attempts. Try again in ${seconds}s.`);
   }
 
-  const { email, password } = loginSchema.parse(await request.json());
+  // Bounded read (a login body is tiny): reject oversized payloads before parsing,
+  // consistent with the other public POST endpoints.
+  const { email, password } = loginSchema.parse(await readJsonObject(request, 4096));
 
   const user = await prisma.user.findUnique({ where: { email } });
   // Run a bcrypt compare even when there's no active user (verifyPasswordSafe uses
