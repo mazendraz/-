@@ -99,6 +99,25 @@ bash deploy/deploy.sh
 
 ---
 
+## ج) النسخ الاحتياطي والمراقبة (مهم قبل الإطلاق)
+
+قبل ما تستقبل عملاء حقيقيين لازم يكون عندك **باك أب** و**تنبيهات**:
+
+- **باك أب يومي off-site:** سكربت [`deploy/backup.sh`](backup.sh) بيعمل `pg_dump`
+  وبيرفعه لتخزين خارجي (rclone) وبيمسح القديم. ثبّت `postgresql-client` و`rclone`،
+  اعمل `rclone config` لريموت (يُفضّل مزوّد مختلف عن Supabase)، وحطّه في cron:
+  ```bash
+  crontab -e
+  0 3 * * *  BACKUP_HEALTHCHECK_URL="https://hc-ping.com/<uuid>" /var/www/alassema/deploy/backup.sh >> /var/log/alassema-backup.log 2>&1
+  ```
+- **جرّب الاستعادة مرة واحدة** على قاعدة بيانات مؤقتة — الخطوات في
+  [`deploy/RESTORE.md`](RESTORE.md). باك أب مجربتوش = مش باك أب.
+- **مراقبة + تنبيهات:** راقب `GET /api/ready` (بيرجّع 503 لو قاعدة البيانات وقعت)،
+  فعّل `SENTRY_DSN`، وثبّت `pm2-logrotate`. التفاصيل في
+  [`deploy/MONITORING.md`](MONITORING.md).
+
+---
+
 ## ملاحظات
 - **Rate limiting** in-memory، فإحنا مشغّلين **نسخة واحدة** من الـ API (fork mode)
   علشان يفضل صح. لو هتعمل cluster/scale، اربط Upstash Redis الأول.
