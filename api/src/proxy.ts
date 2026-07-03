@@ -21,6 +21,21 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
+// Origin-specific CORS headers. When we reflect a specific origin we also allow
+// credentials, so the httpOnly session cookie can flow on cross-origin requests
+// (the client uses fetch credentials:"include"). Credentials must NEVER pair with
+// "*" (browsers reject it), so Allow-Credentials is omitted for the dev wildcard —
+// which is only ever returned for a request with no Origin (same-origin), where
+// CORS doesn't apply anyway.
+function originHeaders(allowOrigin: string): Record<string, string> {
+  const h: Record<string, string> = {
+    "Access-Control-Allow-Origin": allowOrigin,
+    Vary: "Origin",
+  };
+  if (allowOrigin !== "*") h["Access-Control-Allow-Credentials"] = "true";
+  return h;
+}
+
 // Constant-time equality for the shared API key. proxy runs on the Edge runtime,
 // which has no node:crypto.timingSafeEqual — so we compare SHA-256 digests via Web
 // Crypto instead. Digests are fixed-length and unpredictable, so the byte-wise
@@ -59,10 +74,7 @@ export async function proxy(request: NextRequest) {
   // Preflight
   if (request.method === "OPTIONS") {
     const headers: Record<string, string> = { ...corsHeaders };
-    if (allowOrigin) {
-      headers["Access-Control-Allow-Origin"] = allowOrigin;
-      headers["Vary"] = "Origin";
-    }
+    if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
     return new NextResponse(null, { status: 204, headers });
   }
 
@@ -79,10 +91,7 @@ export async function proxy(request: NextRequest) {
     !(await timingSafeEqual(request.headers.get("x-api-key") ?? "", apiKey))
   ) {
     const headers: Record<string, string> = { ...corsHeaders };
-    if (allowOrigin) {
-      headers["Access-Control-Allow-Origin"] = allowOrigin;
-      headers["Vary"] = "Origin";
-    }
+    if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
     return NextResponse.json(
       { code: "UNAUTHORIZED", message: "Invalid or missing API key" },
       { status: 401, headers },
@@ -92,8 +101,9 @@ export async function proxy(request: NextRequest) {
   // Simple/actual requests
   const response = NextResponse.next();
   if (allowOrigin) {
-    response.headers.set("Access-Control-Allow-Origin", allowOrigin);
-    response.headers.set("Vary", "Origin");
+    for (const [key, value] of Object.entries(originHeaders(allowOrigin))) {
+      response.headers.set(key, value);
+    }
   }
   for (const [key, value] of Object.entries(corsHeaders)) {
     response.headers.set(key, value);

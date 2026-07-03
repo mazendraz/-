@@ -69,6 +69,20 @@ describe("proxy — CORS", () => {
     expect(res.status).not.toBe(401);
     expect(res.headers.get("access-control-allow-origin")).toBe("https://alassema.com");
   });
+
+  it("allows credentials when reflecting a specific origin (cookie auth cross-origin)", async () => {
+    vi.stubEnv("CORS_ALLOWED_ORIGINS", "https://alassema.com");
+    const res = await proxy(req("/api/companies", { origin: "https://alassema.com" }));
+    expect(res.headers.get("access-control-allow-credentials")).toBe("true");
+  });
+
+  it("never sends credentials with the '*' wildcard (dev, no Origin)", async () => {
+    vi.stubEnv("CORS_ALLOWED_ORIGINS", "");
+    vi.stubEnv("NODE_ENV", "development");
+    const res = await proxy(req("/api/companies")); // no Origin header → "*"
+    expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    expect(res.headers.get("access-control-allow-credentials")).toBeNull();
+  });
 });
 
 describe("proxy — API-key gate", () => {
