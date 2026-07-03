@@ -4,10 +4,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+// Read the allowlist fresh each call (not frozen at import) so behavior is a pure
+// function of the current env — this keeps resolveAllowedOrigin unit-testable via
+// env stubbing, matching the rateLimitConfigError(env) pattern. Cost is a trivial
+// string split per request.
+function getAllowedOrigins(): string[] {
+  return (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -36,7 +42,9 @@ async function timingSafeEqual(a: string, b: string): Promise<boolean> {
 // With an allowlist configured, only those origins are allowed. With no allowlist:
 // reflect any origin in development for convenience, but DENY in production so a
 // missing CORS_ALLOWED_ORIGINS can't silently expose the API to every site.
-function resolveAllowedOrigin(origin: string): string | null {
+// Exported for unit testing (the deny-by-default-in-production invariant).
+export function resolveAllowedOrigin(origin: string): string | null {
+  const allowedOrigins = getAllowedOrigins();
   if (allowedOrigins.length > 0) {
     return allowedOrigins.includes(origin) ? origin : null;
   }

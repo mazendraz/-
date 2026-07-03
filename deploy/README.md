@@ -96,6 +96,15 @@ cd /var/www/alassema
 bash deploy/deploy.sh
 ```
 بيعمل: pull → build للاتنين → `migrate deploy` → نشر الواجهة → `pm2 reload`.
+وقبل الـ pull بيحفظ الـ commit الحالي في `deploy/.rollback-sha`.
+
+**لو الديبلوي طلع وحش:** `bash deploy/rollback.sh` بيرجّع الكود لآخر نسخة كانت
+شغالة ويعيد البناء. ملاحظة: ده بيرجّع **الكود بس** — الـ migrations forward-only،
+فلو الديبلوي السيّئ عمل migration مدمّر ارجع من الباك أب ([`RESTORE.md`](RESTORE.md)).
+
+**اختبار الحِمل (اختياري، على staging بس):** [`deploy/loadtest/leads-flood.js`](loadtest/leads-flood.js)
+بيتأكد إن الـ circuit breakers بتشتغل تحت ضغط والـ API مابيرجّعش 5xx. متشغّلوش على
+الإنتاج.
 
 ---
 

@@ -1,0 +1,2 @@
+# Runtime rollback pointer written by deploy.sh on the server — not source.
+.rollback-sha
