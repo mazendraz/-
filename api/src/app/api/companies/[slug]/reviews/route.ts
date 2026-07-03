@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
-import { ok } from "@/lib/utils/response";
+import { okCached } from "@/lib/utils/response";
 import * as reviewsService from "@/lib/services/reviews.service";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,6 @@ export const GET = withErrors(
       page: toInt(sp.get("page")),
       pageSize: toInt(sp.get("pageSize")),
     });
-    return ok(result);
+    return okCached(result);
   },
 );

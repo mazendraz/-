@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fail, ok, page } from "@/lib/utils/response";
+import { fail, ok, okCached, page, PUBLIC_READ_CACHE } from "@/lib/utils/response";
 
 describe("ok", () => {
   it("returns the raw object with no envelope", async () => {
@@ -10,6 +10,20 @@ describe("ok", () => {
 
   it("honors a custom status (e.g. 201)", () => {
     expect(ok({ id: "lead-1" }, 201).status).toBe(201);
+  });
+
+  it("attaches custom headers when provided", () => {
+    const res = ok({ id: "co-1" }, 200, { "Cache-Control": "no-store" });
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+});
+
+describe("okCached", () => {
+  it("returns the raw object with the public Cache-Control header", async () => {
+    const res = okCached({ slug: "aura" });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ slug: "aura" });
+    expect(res.headers.get("cache-control")).toBe(PUBLIC_READ_CACHE);
   });
 });
 

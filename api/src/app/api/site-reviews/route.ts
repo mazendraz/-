@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
-import { ok } from "@/lib/utils/response";
+import { ok, okCached } from "@/lib/utils/response";
 import { ForbiddenError, RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
@@ -15,7 +15,7 @@ const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 // GET /api/site-reviews → visible ApiSiteReview[] (public; homepage testimonials).
 export const GET = withErrors(async () => {
-  return ok(await service.listPublic());
+  return okCached(await service.listPublic());
 });
 
 // POST /api/site-reviews → 201 + ApiSiteReview, held for moderation (visible=false).
