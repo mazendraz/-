@@ -13,11 +13,51 @@ import type { UserRole } from "@/generated/prisma/enums";
 import type { ApiUser } from "@/lib/apiTypes";
 
 // Token lifetime — override with JWT_TTL (e.g. "1h", "30m", "7d"). Defaults to a
-// short "1d" (matches .env.example/DEPLOY): tokens live in localStorage and can't
-// be revoked before expiry, so to force-revoke a session immediately deactivate
-// the user (isActive=false) — getAuthUser rejects inactive users on each request.
+// short "1d". The token is delivered as an httpOnly session cookie (unreadable by
+// JS) and can't be revoked before expiry, so to force-revoke a session immediately
+// deactivate the user (isActive=false) — getAuthUser rejects inactive users on each
+// request. Keep the TTL short in production.
 const TOKEN_TTL = process.env.JWT_TTL ?? "1d";
 const BCRYPT_ROUNDS = 12;
+
+// Name of the httpOnly session cookie. The token is delivered as an httpOnly cookie
+// (unreadable by JS, so XSS can't steal it) for the same-origin deploy; the Bearer
+// header is still accepted as a transition/fallback path.
+export const SESSION_COOKIE = "al-assema-session";
+
+/** Parse a TTL ("1d", "12h", "30m", "45s", or bare seconds) → seconds. */
+export function ttlToSeconds(ttl: string): number {
+  const m = /^(\d+)\s*([smhd])?$/.exec(ttl.trim());
+  if (!m) return 24 * 60 * 60; // fallback: 1 day
+  const n = Number(m[1]);
+  const unit = m[2] ?? "s";
+  const mult = unit === "d" ? 86400 : unit === "h" ? 3600 : unit === "m" ? 60 : 1;
+  return n * mult;
+}
+
+export interface SessionCookieOptions {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: "strict";
+  path: string;
+  maxAge: number;
+}
+
+/**
+ * Attributes for the session cookie. httpOnly (no JS access) + SameSite=Strict
+ * (not sent on cross-site requests → structural CSRF protection for the same-origin
+ * deploy) + Secure in production (HTTPS only; omitted in dev so it works over http
+ * localhost). maxAge tracks JWT_TTL so the cookie and token expire together.
+ */
+export function sessionCookieOptions(): SessionCookieOptions {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: ttlToSeconds(TOKEN_TTL),
+  };
+}
 
 export interface AuthUser {
   id: string;
@@ -110,18 +150,23 @@ async function verifyToken(token: string): Promise<TokenClaims> {
 
 // ── Current user ──────────────────────────────────────────────────────────────
 
-function bearerToken(request: NextRequest): string {
+// Resolve the JWT from either the Authorization: Bearer header (transition/API
+// clients) OR the httpOnly session cookie (same-origin browser auth). Header wins
+// when both are present.
+function resolveToken(request: NextRequest): string {
   const header = request.headers.get("authorization") ?? "";
   const [scheme, token] = header.split(" ");
-  if (scheme?.toLowerCase() !== "bearer" || !token) {
-    throw new UnauthorizedError("Authentication required");
-  }
-  return token;
+  if (scheme?.toLowerCase() === "bearer" && token) return token;
+
+  const cookie = request.cookies.get(SESSION_COOKIE)?.value;
+  if (cookie) return cookie;
+
+  throw new UnauthorizedError("Authentication required");
 }
 
-/** Verify the Bearer token and load the (active) user. Throws 401 otherwise. */
+/** Verify the token (header or cookie) and load the (active) user. Throws 401 otherwise. */
 export async function getAuthUser(request: NextRequest): Promise<AuthUser> {
-  const claims = await verifyToken(bearerToken(request));
+  const claims = await verifyToken(resolveToken(request));
 
   const user = await prisma.user.findUnique({
     where: { id: claims.sub },

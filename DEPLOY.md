@@ -177,7 +177,10 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
       Referrer-Policy / Permissions-Policy) مفعّلة تلقائيًا للباك إند
       ([`api/next.config.ts`](api/next.config.ts)) وللفرونت
       ([`app/vercel.json`](app/vercel.json)).
-- [ ] **CSP (التوكن في localStorage فالـ CSP هو خط الدفاع ضد XSS) — بقى متوصّل:**
+- [ ] **CSP (دفاع أساسي ضد XSS) — بقى متوصّل:**
+      > ملاحظة: التوكن بقى في **httpOnly cookie** (مش localStorage)، فـ XSS مش
+      > بيقدر يسرقه؛ الـ CSP فاضلة مهمة كدفاع عميق ضد حقن السكربتات عمومًا.
+
       الـ CSP اتحطّ **Report-Only** بالفعل في التنصيبتين:
       - VPS: [`deploy/Caddyfile`](deploy/Caddyfile) (بلوك الـ SPA).
       - Vercel: [`app/vercel.json`](app/vercel.json) — **غيّر `REPLACE-WITH-API-DOMAIN`**

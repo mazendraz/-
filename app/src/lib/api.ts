@@ -24,8 +24,8 @@ export function isApiConfigured(): boolean {
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
   if (API_KEY) h["X-Api-Key"] = API_KEY;
-  const token = localStorage.getItem("al-assema-token");
-  if (token) h["Authorization"] = `Bearer ${token}`;
+  // Auth travels in the httpOnly session cookie (sent via credentials: "include"),
+  // not a JS-readable token — so XSS can't exfiltrate the session.
   return h;
 }
 
@@ -44,6 +44,7 @@ export async function apiFetch<T>(
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: buildHeaders(extraHeaders),
+    credentials: "include", // send the httpOnly session cookie
   });
 
   if (!res.ok) {
@@ -89,10 +90,13 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
 
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-Api-Key"] = API_KEY;
-  const token = localStorage.getItem("al-assema-token");
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, { method: "POST", body: form, headers });
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    body: form,
+    headers,
+    credentials: "include", // send the httpOnly session cookie
+  });
   if (!res.ok) {
     let message = res.statusText;
     try { message = (await res.json()).message ?? message; } catch { /* ignore */ }

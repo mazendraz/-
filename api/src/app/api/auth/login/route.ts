@@ -5,7 +5,7 @@ import { RateLimitError, UnauthorizedError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { loginSchema } from "@/lib/validation/auth";
-import { signToken, verifyPasswordSafe } from "@/lib/auth";
+import { signToken, verifyPasswordSafe, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { ApiAuthResponse } from "@/lib/apiTypes";
 
@@ -73,5 +73,9 @@ export const POST = withErrors(async (request: NextRequest) => {
       companyId: user.companyId,
     },
   };
-  return ok(body);
+  // Deliver the token as an httpOnly cookie (primary, same-origin) AND in the body
+  // (transition — the frontend will stop reading it once fully on cookies).
+  const res = ok(body);
+  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+  return res;
 });

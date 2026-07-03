@@ -1,5 +1,12 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { hashPassword, signToken, verifyPassword, verifyPasswordSafe } from "@/lib/auth";
+import {
+  hashPassword,
+  signToken,
+  verifyPassword,
+  verifyPasswordSafe,
+  ttlToSeconds,
+  sessionCookieOptions,
+} from "@/lib/auth";
 
 beforeAll(() => {
   process.env.JWT_SECRET = "test-secret-for-vitest";
@@ -33,6 +40,43 @@ describe("signToken", () => {
   it("produces a 3-part HS256 JWT", async () => {
     const token = await signToken({ sub: "u1", role: "ADMIN", companyId: null });
     expect(token.split(".")).toHaveLength(3);
+  });
+});
+
+describe("ttlToSeconds", () => {
+  it("parses day/hour/minute/second units and bare seconds", () => {
+    expect(ttlToSeconds("1d")).toBe(86400);
+    expect(ttlToSeconds("12h")).toBe(43200);
+    expect(ttlToSeconds("30m")).toBe(1800);
+    expect(ttlToSeconds("45s")).toBe(45);
+    expect(ttlToSeconds("3600")).toBe(3600);
+  });
+  it("falls back to 1 day on garbage", () => {
+    expect(ttlToSeconds("nonsense")).toBe(86400);
+  });
+});
+
+describe("sessionCookieOptions", () => {
+  const original = process.env.NODE_ENV;
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is httpOnly + SameSite=strict with a matching maxAge", () => {
+    const o = sessionCookieOptions();
+    expect(o.httpOnly).toBe(true);
+    expect(o.sameSite).toBe("strict");
+    expect(o.path).toBe("/");
+    expect(o.maxAge).toBeGreaterThan(0);
+  });
+
+  it("is Secure only in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(sessionCookieOptions().secure).toBe(true);
+    vi.stubEnv("NODE_ENV", "development");
+    expect(sessionCookieOptions().secure).toBe(false);
+  });
+
+  it("keeps NODE_ENV isolated", () => {
+    expect(process.env.NODE_ENV).toBe(original);
   });
 });
 
