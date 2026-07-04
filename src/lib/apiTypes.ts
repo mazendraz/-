@@ -13,7 +13,12 @@ export interface ApiPage<T> {
   meta: { total: number; page: number; pageSize: number };
 }
 
-/** Generic single-item response envelope */
+/**
+ * Generic single-item response envelope.
+ * NOTE: single resources are returned RAW (no envelope) — the live client does
+ * `res.json() as T` directly (see api.ts / requests.ts). Kept only for callers
+ * that explicitly opt into a wrapped shape; the default contract is raw.
+ */
 export interface ApiItem<T> {
   data: T;
 }
@@ -29,18 +34,18 @@ export interface ApiErrorBody {
 
 export interface ApiProject {
   title: string;
+  img: string;
   description: string;
-  image: string;
-  year: number;
-  location?: string;
+  year: string;
 }
 
 export interface ApiReview {
-  reviewer: string;
+  author: string;
+  avatar: string; // initial letter used as fallback
   rating: number;
   text: string;
   date: string;
-  avatar?: string;
+  district: string;
 }
 
 export interface ApiCompany {
@@ -77,7 +82,7 @@ export interface ApiCategory {
   label: string;
   description: string;
   icon: string;
-  image: string;
+  cover: string;
   count: number;
 }
 
@@ -102,6 +107,7 @@ export interface ApiLead {
   budget: string;
   description: string;
   status: ApiLeadStatus;
+  trackingToken?: string; // returned only on creation; gates public tracking/review
   createdAt: number;
 }
 

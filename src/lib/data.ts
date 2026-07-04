@@ -8,13 +8,19 @@ export type Review = {
   text: string;
   date: string;
   district: string;
+  verified?: boolean; // true = submitted by a real customer on a completed lead
 };
 
+export type ProjectStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 export type Project = {
+  id?: string; // present on admin/provider payloads; absent on the public profile
   title: string;
   img: string;
   description: string;
   year: string;
+  featured?: boolean; // curated for the homepage showcase
+  status?: ProjectStatus; // moderation state (admin/provider views)
 };
 
 export type Company = {
@@ -43,6 +49,13 @@ export type Company = {
   badges: string[];       // e.g. ["Licensed", "Award-Winning"]
   featured?: boolean;     // show in home "Featured Companies" (default: true)
   verified?: boolean;     // admin-controlled verified badge (default: false for new companies)
+  ratingOverridden?: boolean; // admin set rating/reviewCount manually (skip review recompute)
+  // Internal contact for lead notifications — admin-only (not shown publicly).
+  email?: string;         // where new-lead emails are sent
+  whatsapp?: string;      // provider WhatsApp number (optional channel)
+  // Optional per-page SEO overrides (admin-set); blank → name/tagline defaults.
+  metaTitle?: string;
+  metaDescription?: string;
 };
 
 export type ServiceCategory = {
@@ -52,6 +65,9 @@ export type ServiceCategory = {
   description: string;
   count: number;
   cover: string;
+  // Optional per-page SEO overrides (admin-set); blank → label/description defaults.
+  metaTitle?: string;
+  metaDescription?: string;
 };
 
 // ─── Images ──────────────────────────────────────────────────────────────────

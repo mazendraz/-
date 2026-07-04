@@ -24,8 +24,8 @@ export function isApiConfigured(): boolean {
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
   if (API_KEY) h["X-Api-Key"] = API_KEY;
-  const token = localStorage.getItem("al-assema-token");
-  if (token) h["Authorization"] = `Bearer ${token}`;
+  // Auth travels in the httpOnly session cookie (sent via credentials: "include"),
+  // not a JS-readable token — so XSS can't exfiltrate the session.
   return h;
 }
 
@@ -44,6 +44,7 @@ export async function apiFetch<T>(
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: buildHeaders(extraHeaders),
+    credentials: "include", // send the httpOnly session cookie
   });
 
   if (!res.ok) {
@@ -67,10 +68,39 @@ export function apiPost<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: "POST", body: JSON.stringify(body) });
 }
 
+export function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
 export function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 export function apiDelete(path: string): Promise<void> {
   return apiFetch<void>(path, { method: "DELETE" });
+}
+
+/**
+ * Multipart upload (e.g. POST /admin/upload). Sends auth + API key but lets the
+ * browser set the multipart Content-Type with its boundary — so it does NOT go
+ * through apiFetch, which forces application/json.
+ */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  if (!BASE_URL) throw new ApiError(0, "VITE_API_URL is not configured");
+
+  const headers: Record<string, string> = {};
+  if (API_KEY) headers["X-Api-Key"] = API_KEY;
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    body: form,
+    headers,
+    credentials: "include", // send the httpOnly session cookie
+  });
+  if (!res.ok) {
+    let message = res.statusText;
+    try { message = (await res.json()).message ?? message; } catch { /* ignore */ }
+    throw new ApiError(res.status, message);
+  }
+  return res.json() as Promise<T>;
 }

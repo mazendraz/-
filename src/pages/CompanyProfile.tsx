@@ -2,14 +2,17 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
-import { getCompany } from "../lib/catalog";
+import { useCompanyDetail, useCatalogStatus } from "../lib/catalog";
 import LazyImage from "../components/LazyImage";
+import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { addFeedback, type FeedbackType } from "../lib/feedback";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
+import Captcha from "../components/Captcha";
+import { captchaConfigured } from "../lib/captcha";
 
 const TABS: { key: "Overview" | "Projects" | "Gallery"; labelKey: StringKey }[] = [
   { key: "Overview", labelKey: "profile_tab_overview" },
@@ -22,10 +25,11 @@ export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
   const { locale } = useLocale();
   const navigate = useNavigate();
-  const company = slug ? getCompany(slug) : undefined;
+  const { company, loading: detailLoading } = useCompanyDetail(slug ?? "");
+  const status = useCatalogStatus();
   usePageMeta(
-    company ? `${company.name} | Al Assema` : "Company | Al Assema",
-    company?.tagline
+    company?.metaTitle || (company ? `${company.name} | Al Assema` : "Company | Al Assema"),
+    company?.metaDescription || company?.tagline
   );
   const [tab, setTab] = useState<Tab>("Overview");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
@@ -74,6 +78,24 @@ export default function CompanyProfile() {
   }, [company?.slug]);
 
   if (!company) {
+    // API mode: distinguish "still loading" and "backend unreachable" from a
+    // genuine 404 so we don't flash "not found" while the catalog hydrates or the
+    // by-slug detail fetch is still in flight (e.g. a deep link to a company that
+    // isn't in the first page of the cached list).
+    if (status === "loading" || detailLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center pt-20">
+          <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        </div>
+      );
+    }
+    if (status === "error") {
+      return (
+        <div className="min-h-screen flex items-center justify-center pt-20 px-5">
+          <CatalogError message="We couldn't load this company. Please try again." />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 pt-20">
         <span className="material-symbols-outlined text-outline text-[64px]">business_center</span>
@@ -265,7 +287,7 @@ export default function CompanyProfile() {
                   {[
                     { icon: "star", label: t(locale, "profile_stat_rating"), val: `${company.rating} / 5.0` },
                     { icon: "reviews", label: t(locale, "profile_stat_reviews"), val: `${company.reviewCount}` },
-                    { icon: "construction", label: t(locale, "profile_stat_completed"), val: `${company.completedProjects}` },
+                    { icon: "construction", label: t(locale, "profile_stat_completed"), val: `${company.completedProjects}`, note: t(locale, "profile_self_reported") },
                     { icon: "workspace_premium", label: t(locale, "profile_stat_experience"), val: `${company.yearsExperience} ${t(locale, "profile_years")}` },
                     { icon: "bolt", label: t(locale, "profile_stat_response"), val: company.responseTime },
                     { icon: "location_on", label: t(locale, "profile_stat_location"), val: company.location },
@@ -273,7 +295,12 @@ export default function CompanyProfile() {
                     <div key={s.label} className="flex items-center gap-3 py-2.5 border-b border-outline-variant/20 last:border-0">
                       <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
                       <div>
-                        <p className="text-[12px] text-outline">{s.label}</p>
+                        <p className="text-[12px] text-outline flex items-center gap-1">
+                          {s.label}
+                          {s.note && (
+                            <span className="material-symbols-outlined text-outline/60 text-[13px] cursor-help" title={s.note}>info</span>
+                          )}
+                        </p>
                         <p className="text-[14px] font-bold text-on-surface">{s.val}</p>
                       </div>
                     </div>
@@ -291,15 +318,6 @@ export default function CompanyProfile() {
                   >
                     {t(locale, "profile_request_company")}
                   </Link>
-                </div>
-
-                {/* Contact */}
-                <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
-                  <h3 className="font-label-md text-label-md text-outline mb-3 uppercase tracking-wider">{t(locale, "profile_contact")}</h3>
-                  <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>phone</span>
-                    <span className="text-body-md font-body-md text-on-surface">{company.phone}</span>
-                  </div>
                 </div>
 
                 {/* Report a problem */}
@@ -463,13 +481,32 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
   const { containerRef, trapTab } = useDialogA11y(true, onClose);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!message.trim()) { setError(t(locale, "feedback_err")); return; }
-    addFeedback({ type, name: name.trim(), phone: phone.trim(), companySlug, companyName, message: message.trim() });
-    setSubmitted(true);
+    if (captchaConfigured() && !captchaToken) { setError(t(locale, "form_err_captcha")); return; }
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await addFeedback(
+        { type, name: name.trim(), phone: phone.trim(), companySlug, companyName, message: message.trim() },
+        honeypot,
+        captchaToken,
+      );
+      setSubmitted(true);
+    } catch {
+      // API mode surfaces real failures — don't fake success.
+      setError(t(locale, "feedback_err_submit"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
+      setIsSubmitting(false);
+    }
   }
 
   const typeLabels: Record<FeedbackType, string> = {
@@ -560,12 +597,36 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                 {error && <p className="text-[12px] text-error font-bold mt-1">{error}</p>}
               </div>
 
+              {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
+              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
+
               <button
                 type="submit"
-                className="w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press"
+                disabled={isSubmitting}
+                className={`w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] transition-colors touch-press
+                  ${isSubmitting ? "opacity-80 cursor-not-allowed" : "hover:bg-primary-container btn-press"}`}
               >
                 {t(locale, "feedback_send")}
               </button>
+
+              {/* Honeypot — hidden from real users; bots auto-fill it and the
+                  server rejects the submission. Kept out of the tab order. The
+                  data-*-ignore attrs stop password managers (1Password/LastPass/
+                  Bitwarden) from autofilling it, which would falsely flag a real user. */}
+              <input
+                type="text"
+                name="hp_field"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+              />
             </form>
           )}
         </div>

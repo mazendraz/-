@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { apiFetch, isApiConfigured } from "./api";
+import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
+import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type LeadStatus = "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled";
 
@@ -16,6 +17,10 @@ export interface Lead {
   budget: string;
   description: string;
   status: LeadStatus;
+  reviewed?: boolean; // true once the customer has left a review for this lead
+  // High-entropy secret returned on creation; stored on this device and sent to
+  // gate status tracking + the review (replaces sending the phone as the secret).
+  trackingToken?: string;
   createdAt: number;
 }
 
@@ -85,6 +90,100 @@ function write(list: Lead[]) {
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
+// ── API hydration ───────────────────────────────────────────────────────────
+// When signed in (admin or provider), pull the authoritative lead list from the
+// API into the local cache. No-op for unauthenticated customers, so it's safe to
+// trigger from useLeads (the customer "My Requests" view just keeps its own).
+export async function hydrateLeadsFromApi(): Promise<void> {
+  if (!isApiConfigured() || !isAuthenticated()) return;
+  const user = getCurrentUser();
+  const endpoint =
+    user?.role === "ADMIN"
+      ? "/admin/leads?pageSize=100"
+      : "/provider/leads?pageSize=100";
+  try {
+    const res = await apiGet<{ data: Lead[] }>(endpoint);
+    localStorage.setItem(KEY, JSON.stringify(res.data));
+    window.dispatchEvent(new CustomEvent(EVENT));
+  } catch (err) {
+    console.error("Leads hydration from API failed:", err);
+  }
+}
+
+// ── Customer status tracking ─────────────────────────────────────────────────
+// Unauthenticated customers have no account, but they CAN re-fetch the live
+// status of their own submissions via the public track endpoint, gated by the
+// reference number + the phone they used (a shared secret). This keeps the "My
+// Requests" view in sync with the provider/admin pipeline instead of frozen at
+// "New" forever. Runs once per session (statuses change on a human timescale).
+let myLeadsHydrated = false;
+
+async function trackLead(
+  refNumber: string,
+  token: string | undefined,
+  phone: string,
+): Promise<Lead | null> {
+  try {
+    // Prefer the high-entropy token; fall back to phone for legacy leads that
+    // predate it (and were stored without one).
+    const secret = token
+      ? `token=${encodeURIComponent(token)}`
+      : `phone=${encodeURIComponent(phone)}`;
+    return await apiGet<Lead>(`/leads/track?ref=${encodeURIComponent(refNumber)}&${secret}`);
+  } catch {
+    return null; // 404 (not found / secret mismatch) or network — keep local copy
+  }
+}
+
+export async function refreshMyLeadsFromApi(): Promise<void> {
+  // Admins/providers already get the authoritative list via hydrateLeadsFromApi.
+  if (!isApiConfigured() || isAuthenticated()) return;
+  const mineIds = new Set(readMine());
+  const mine = read().filter((l) => mineIds.has(l.id));
+  if (mine.length === 0) return;
+
+  const results = await Promise.allSettled(
+    mine.map((l) => trackLead(l.refNumber, l.trackingToken, l.phone)),
+  );
+  const byRef = new Map<string, Lead>();
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) byRef.set(r.value.refNumber, r.value);
+  }
+  if (byRef.size === 0) return;
+
+  // Merge server truth over the local copy, keyed by the stable reference number.
+  write(read().map((l) => byRef.get(l.refNumber) ?? l));
+}
+
+/**
+ * Customer submits a review for a COMPLETED request of theirs. Gated server-side
+ * by ref + phone; on success the lead is marked reviewed locally so the prompt
+ * disappears. In demo mode (no API) it just marks locally.
+ */
+export async function submitReview(
+  refNumber: string,
+  phone: string,
+  rating: number,
+  text: string,
+  honeypot = "",
+  captchaToken?: string | null,
+  // The lead's tracking token (preferred secret); phone is the legacy fallback.
+  trackingToken?: string,
+): Promise<void> {
+  if (isApiConfigured()) {
+    await apiPost("/reviews", {
+      ref: refNumber,
+      // Send the token when we have it; otherwise fall back to phone (legacy leads).
+      ...(trackingToken ? { token: trackingToken } : { phone }),
+      rating,
+      text,
+      hp_field: honeypot,
+      captchaToken: captchaToken ?? undefined,
+    });
+  }
+  write(read().map((l) => (l.refNumber === refNumber ? { ...l, reviewed: true } : l)));
+}
+
 export function getLeads(): Lead[] {
   return read().sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -93,7 +192,15 @@ export function getLeadsForCompany(companySlug: string): Lead[] {
   return getLeads().filter((l) => l.companySlug === companySlug);
 }
 
-export async function addLead(data: Omit<Lead, "id" | "refNumber" | "status" | "createdAt">): Promise<Lead> {
+export async function addLead(
+  data: Omit<Lead, "id" | "refNumber" | "status" | "createdAt">,
+  // Honeypot value — real users leave this empty; bots fill it and the server
+  // rejects the submission. Not part of the Lead shape, so it's passed sidecar.
+  honeypot = "",
+  // CAPTCHA token (Turnstile). Only present when VITE_TURNSTILE_SITE_KEY is set;
+  // the backend ignores it unless TURNSTILE_SECRET_KEY is configured.
+  captchaToken?: string | null,
+): Promise<Lead> {
   // When the API is configured, the backend is the source of truth. A failed
   // submission must surface as an error — we must NOT fake success and silently
   // drop the lead into this device's localStorage, or the customer is promised a
@@ -102,7 +209,7 @@ export async function addLead(data: Omit<Lead, "id" | "refNumber" | "status" | "
   if (isApiConfigured()) {
     const created = await apiFetch<Lead>("/leads", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, hp_field: honeypot, captchaToken: captchaToken ?? undefined }),
     });
     write([created, ...read()]);
     rememberMyRequest(created.id);
@@ -120,12 +227,32 @@ export async function addLead(data: Omit<Lead, "id" | "refNumber" | "status" | "
   return lead;
 }
 
-export function updateLeadStatus(id: string, status: LeadStatus) {
-  write(read().map((l) => (l.id === id ? { ...l, status } : l)));
+// Returns a promise that resolves once the server PATCH settles, so callers driving
+// a server-paginated list can refresh() afterward without racing the write.
+export function updateLeadStatus(id: string, status: LeadStatus): Promise<void> {
+  write(read().map((l) => (l.id === id ? { ...l, status } : l))); // optimistic
+  if (isApiConfigured() && isAuthenticated()) {
+    return apiPatch(`/leads/${id}`, { status })
+      .then(() => undefined)
+      .catch((err) => {
+        console.error("Lead status update failed:", err);
+        void hydrateLeadsFromApi(); // reconcile from the server
+      });
+  }
+  return Promise.resolve();
 }
 
-export function deleteLead(id: string) {
-  write(read().filter((l) => l.id !== id));
+export function deleteLead(id: string): Promise<void> {
+  write(read().filter((l) => l.id !== id)); // optimistic
+  if (isApiConfigured() && isAuthenticated()) {
+    return apiDelete(`/admin/leads/${id}`)
+      .then(() => undefined)
+      .catch((err) => {
+        console.error("Lead delete failed:", err);
+        void hydrateLeadsFromApi();
+      });
+  }
+  return Promise.resolve();
 }
 
 /** Bulk-insert leads (used by the demo-data loader). */
@@ -144,6 +271,7 @@ export function useLeads(): Lead[] {
     const refresh = () => setList(getLeads());
     window.addEventListener(EVENT, refresh);
     window.addEventListener("storage", refresh);
+    void hydrateLeadsFromApi(); // no-op unless signed in + API configured
     return () => {
       window.removeEventListener(EVENT, refresh);
       window.removeEventListener("storage", refresh);
@@ -190,6 +318,11 @@ export function useMyLeads(): Lead[] {
     const refresh = () => setMineIds(new Set(readMine()));
     window.addEventListener(EVENT, refresh);
     window.addEventListener("storage", refresh);
+    // Pull live status for this device's submissions (once per session).
+    if (!myLeadsHydrated) {
+      myLeadsHydrated = true;
+      void refreshMyLeadsFromApi();
+    }
     return () => {
       window.removeEventListener(EVENT, refresh);
       window.removeEventListener("storage", refresh);

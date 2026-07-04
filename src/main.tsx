@@ -6,6 +6,7 @@ import "./index.css";
 import RootLayout from "./RootLayout";
 import Home from "./pages/Home"; // eager — the landing page / LCP, must paint instantly
 import ErrorPage from "./pages/ErrorPage"; // eager — needed to render route errors
+import RequireAuth from "./components/AuthGate";
 
 // Everything else is code-split so the initial load only ships Home + chrome.
 // Each route's JS is fetched on first navigation (and cached thereafter).
@@ -18,6 +19,7 @@ const MyRequests = lazy(() => import("./pages/MyRequests"));
 const GuidedStart = lazy(() => import("./pages/GuidedStart"));
 const Saved = lazy(() => import("./pages/Saved"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const LegalPage = lazy(() => import("./pages/LegalPage"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const ProviderDashboard = lazy(() => import("./pages/ProviderDashboard"));
 
@@ -43,6 +45,8 @@ const router = createBrowserRouter([
       { path: "/saved", element: <Saved /> },
       { path: "/requests", element: <MyRequests /> },
       { path: "/request", element: <RequestForm /> },
+      { path: "/terms", element: <LegalPage kind="terms" /> },
+      { path: "/privacy", element: <LegalPage kind="privacy" /> },
       // Catch-all 404 — keeps the shared chrome so users can navigate out
       { path: "*", element: <NotFound /> },
     ],
@@ -51,12 +55,20 @@ const router = createBrowserRouter([
   {
     path: "/admin",
     errorElement: <ErrorPage />,
-    element: <Suspense fallback={<DashboardFallback />}><AdminDashboard /></Suspense>,
+    element: (
+      <RequireAuth role="ADMIN">
+        <Suspense fallback={<DashboardFallback />}><AdminDashboard /></Suspense>
+      </RequireAuth>
+    ),
   },
   {
     path: "/provider",
     errorElement: <ErrorPage />,
-    element: <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>,
+    element: (
+      <RequireAuth role="PROVIDER">
+        <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>
+      </RequireAuth>
+    ),
   },
 ]);
 

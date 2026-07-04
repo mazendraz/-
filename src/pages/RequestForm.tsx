@@ -1,10 +1,14 @@
 import { useState, useId } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { isApiConfigured } from "../lib/api";
 import { DISTRICTS, BUDGETS, addLead, getMyLeads, type Lead } from "../lib/requests";
+import { useSettings, parseLines } from "../lib/settings";
 import { getCompany } from "../lib/catalog";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
+import Captcha from "../components/Captcha";
+import { captchaConfigured } from "../lib/captcha";
 
 type Step = "form" | "success";
 
@@ -20,6 +24,18 @@ interface FormState {
 const EMPTY: FormState = { name: "", phone: "", district: "", budget: "", description: "", service: "" };
 const DESCRIPTION_MAX = 500;
 
+// Egyptian mobile, matching the backend (api/src/lib/validation/leads.ts). The
+// server trims but does NOT strip internal spaces/dashes, so normalize to ASCII
+// digits with no separators before validating/sending — otherwise a number like
+// "+20 100 123 4567" would pass here yet be rejected by the API.
+const EG_MOBILE = /^(?:\+?20)?0?1[0125]\d{8}$/;
+function normalizePhone(raw: string): string {
+  return raw
+    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString())
+    .replace(/[\s\-()]/g, "")
+    .trim();
+}
+
 export default function RequestForm() {
   usePageMeta("Request a Service | Al Assema", "Submit a service request to a verified company in the New Administrative Capital.");
   const { locale } = useLocale();
@@ -30,6 +46,12 @@ export default function RequestForm() {
 
   const company = companySlug ? getCompany(companySlug) : undefined;
   const companyName = company?.name ?? (companyNameParam || "Al Assema");
+
+  // District/budget options are admin-configurable (Settings); fall back to the
+  // built-in lists when not overridden.
+  const settings = useSettings();
+  const districts = parseLines(settings.districts, DISTRICTS);
+  const budgets = parseLines(settings.budgets, BUDGETS);
 
   // Smart pre-fill: reuse contact details from this device's last request
   const lastLead = getMyLeads()[0];
@@ -48,6 +70,9 @@ export default function RequestForm() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [shakeForm, setShakeForm] = useState(false);
   const [submittedLead, setSubmittedLead] = useState<Lead | null>(null);
+  const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0); // bump to reset the widget
 
   function clearPrefill() {
     setForm((f) => ({ ...f, name: "", phone: "", district: "" }));
@@ -64,10 +89,11 @@ export default function RequestForm() {
     const e: Partial<FormState> = {};
     if (!form.name.trim()) e.name = t(locale, "form_err_name");
     if (!form.phone.trim()) e.phone = t(locale, "form_err_phone");
-    else if (!/^[0-9+\s\-()٠-٩]{7,}$/.test(form.phone.trim())) e.phone = t(locale, "form_err_phone_invalid");
+    else if (!EG_MOBILE.test(normalizePhone(form.phone))) e.phone = t(locale, "form_err_phone_invalid");
     if (!form.district) e.district = t(locale, "form_err_district");
     if (!form.budget) e.budget = t(locale, "form_err_budget");
     if (!form.description.trim()) e.description = t(locale, "form_err_description");
+    else if (form.description.trim().length < 10) e.description = t(locale, "form_err_description_short");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -82,6 +108,11 @@ export default function RequestForm() {
       firstError?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
+    // CAPTCHA gate — only when a Turnstile key is configured.
+    if (captchaConfigured() && !captchaToken) {
+      setSubmitError(t(locale, "form_err_captcha"));
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -90,22 +121,32 @@ export default function RequestForm() {
         companyName,
         service: form.service || "General Inquiry",
         name: form.name.trim(),
-        phone: form.phone.trim(),
+        phone: normalizePhone(form.phone),
         district: form.district,
         budget: form.budget,
         description: form.description.trim(),
-      });
+      }, honeypot, captchaToken);
       setSubmittedLead(lead);
       setStep("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
       setSubmitError(t(locale, "form_err_submit"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1); // token is single-use — refresh for retry
       setIsSubmitting(false);
     }
   }
 
   if (step === "success" && submittedLead) {
     return <SuccessScreen lead={submittedLead} companyName={companyName} locale={locale} />;
+  }
+
+  // A lead must attach to a real company the platform can route it to. When the
+  // API is live and no company was selected, there's no server-side "general"
+  // company to receive it — so guide the user to pick one instead of rendering a
+  // form that would fail on submit. Demo mode (no API) keeps the offline flow.
+  if (!companySlug && isApiConfigured()) {
+    return <ChooseCompanyPrompt locale={locale} />;
   }
 
   return (
@@ -245,7 +286,7 @@ export default function RequestForm() {
                 data-has-error={!!errors.district}
               >
                 <option value="">{t(locale, "form_district_ph")}</option>
-                {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                {districts.map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             )}
           </Field>
@@ -262,7 +303,7 @@ export default function RequestForm() {
                 data-has-error={!!errors.budget}
               >
                 <option value="">{t(locale, "form_budget_ph")}</option>
-                {BUDGETS.map((b) => <option key={b} value={b}>{b}</option>)}
+                {budgets.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             )}
           </Field>
@@ -318,6 +359,9 @@ export default function RequestForm() {
             </div>
           )}
 
+          {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
+          <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
+
           {/* Submit */}
           <button
             type="submit"
@@ -344,6 +388,25 @@ export default function RequestForm() {
           <p className="text-center text-[12px] text-outline">
             {t(locale, "form_contact_24h")}
           </p>
+
+          {/* Honeypot — hidden from real users; bots auto-fill it and the server
+              rejects the submission. Kept out of the tab order + a11y tree. The
+              data-*-ignore attrs stop password managers (1Password/LastPass/
+              Bitwarden) from autofilling it, which would falsely flag a real user. */}
+          <input
+            type="text"
+            name="hp_field"
+            tabIndex={-1}
+            autoComplete="off"
+            aria-hidden="true"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-bwignore="true"
+            data-form-type="other"
+            value={honeypot}
+            onChange={(e) => setHoneypot(e.target.value)}
+            className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+          />
         </form>
       </div>
     </div>
@@ -377,6 +440,40 @@ function Field({
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+// ── Choose-a-company prompt ───────────────────────────────────────────────
+// Shown when the form is opened with no company and the live API is in use: a
+// lead must attach to a real company, so we send the user to the directory.
+function ChooseCompanyPrompt({ locale }: { locale: Locale }) {
+  return (
+    <div className="bg-surface min-h-screen pt-20 pb-16 px-5 flex items-center justify-center">
+      <div className="max-w-md w-full text-center">
+        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6 shadow-bloom">
+          <span className="material-symbols-outlined text-primary text-[44px]"
+            style={{ fontVariationSettings: "'FILL' 1" }}>storefront</span>
+        </div>
+        <h1 className="font-black text-[26px] text-on-surface mb-2 tracking-tight">
+          {t(locale, "form_pick_company_title")}
+        </h1>
+        <p className="text-[15px] text-outline mb-7 leading-relaxed max-w-sm mx-auto">
+          {t(locale, "form_pick_company_sub")}
+        </p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link to="/companies"
+            className="flex-1 bg-primary text-on-primary py-3.5 rounded-xl font-bold text-[15px]
+                       hover:bg-primary-container transition-colors text-center touch-press btn-press">
+            {t(locale, "common_browse_companies")}
+          </Link>
+          <Link to="/"
+            className="flex-1 bg-surface-container-lowest text-on-surface py-3.5 rounded-xl font-bold text-[15px]
+                       hover:bg-surface-container-low transition-colors text-center border border-outline-variant/25 touch-press">
+            {t(locale, "common_back_to_home")}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

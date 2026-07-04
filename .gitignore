@@ -4,3 +4,9 @@ dist
 .env.local
 *.tsbuildinfo
 .DS_Store
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

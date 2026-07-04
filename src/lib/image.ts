@@ -1,3 +1,39 @@
+import { apiUpload, isApiConfigured } from "./api";
+
+/** Supabase Storage buckets the backend accepts (see admin/upload). */
+export type UploadBucket = "logos" | "covers" | "gallery" | "projects";
+
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB — mirrors the backend limit
+
+/**
+ * Upload an image and return a URL to persist in the catalog.
+ *  • API mode: POST the file to /admin/upload — the server resizes to WebP and
+ *    stores it in Supabase, returning a public URL. No base64 in localStorage.
+ *  • Demo mode (no API): fall back to a downscaled, compressed data URL so the
+ *    offline admin still works (kept small to respect the localStorage quota).
+ */
+export async function uploadImage(
+  file: File,
+  bucket: UploadBucket,
+  maxDim = 1000,
+  // Upload endpoint. Admin UIs use the default; the provider dashboard passes
+  // "/provider/upload" (admin/upload is admin-only and would 403 for providers).
+  endpoint: "/admin/upload" | "/provider/upload" = "/admin/upload",
+): Promise<string> {
+  if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
+
+  if (isApiConfigured()) {
+    if (file.size > MAX_UPLOAD_BYTES) throw new Error("Image must be 5MB or smaller.");
+    const form = new FormData();
+    form.append("file", file);
+    form.append("bucket", bucket);
+    const { url } = await apiUpload<{ url: string }>(endpoint, form);
+    return url;
+  }
+
+  return fileToDataURL(file, maxDim);
+}
+
 /**
  * Client-side image handling for the admin (no backend).
  * Reads an uploaded File, downscales it to a max dimension, and returns a

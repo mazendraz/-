@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="light" lang="en">
+<html class="light" lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -12,17 +12,12 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Al Assema — Every Trusted Service in the New Capital" />
     <meta name="twitter:description" content="Find verified interior design, landscaping, smart home, and finishing companies in Egypt's New Administrative Capital." />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0f172a" />
     <link rel="preload" as="image" href="/img/seed-16.jpg" />
-    <!-- Locale init: apply saved dir/lang before React hydrates to prevent FOUC -->
-    <script>
-      try {
-        var l = localStorage.getItem("al-assema-locale");
-        if (l === "ar") {
-          document.documentElement.dir = "rtl";
-          document.documentElement.lang = "ar";
-        }
-      } catch (e) {}
-    </script>
+    <!-- Locale init: apply saved dir/lang before React hydrates to prevent FOUC.
+         External (not inline) so the CSP can drop 'unsafe-inline' from script-src. -->
+    <script src="/locale-init.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
