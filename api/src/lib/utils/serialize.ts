@@ -65,15 +65,37 @@ export type LeadWithCompany = Lead & {
 
 // ── Entity serializers ────────────────────────────────────────────────────────
 
+/**
+ * Public project shape: deliberately omits `id` and `status`. The public profile
+ * only ever returns APPROVED projects, so status is redundant, and exposing row
+ * ids on public payloads serves no purpose. Pairs with serializeProjectAdmin.
+ */
 export function serializeProject(p: Project): ApiProject {
   return {
     title: p.title,
     img: p.img,
     description: p.description,
     year: p.year,
+    featured: p.featured ?? false,
   };
 }
 
+/**
+ * Admin/provider project shape: the public fields PLUS `id` and `status`, which
+ * the per-project management UI needs to edit/delete and see moderation state.
+ */
+export function serializeProjectAdmin(p: Project): ApiProject {
+  return {
+    ...serializeProject(p),
+    id: p.id,
+    status: p.status,
+  };
+}
+
+/**
+ * Public review shape: omits `id` (see ApiReview). Pairs with serializeReviewAdmin,
+ * which adds the id the per-review management UI needs.
+ */
 export function serializeReview(r: Review): ApiReview {
   return {
     author: r.author,
@@ -86,6 +108,11 @@ export function serializeReview(r: Review): ApiReview {
   };
 }
 
+/** Admin/provider review shape: the public fields PLUS `id` for management. */
+export function serializeReviewAdmin(r: Review): ApiReview {
+  return { ...serializeReview(r), id: r.id };
+}
+
 /** count = number of ACTIVE companies, computed live by the caller. */
 export function serializeCategory(c: Category, count: number): ApiCategory {
   return {
@@ -95,6 +122,8 @@ export function serializeCategory(c: Category, count: number): ApiCategory {
     icon: c.icon,
     cover: c.cover ?? "",
     count,
+    metaTitle: c.metaTitle ?? null,
+    metaDescription: c.metaDescription ?? null,
   };
 }
 
@@ -106,7 +135,14 @@ export function serializeCategoryAdmin(
   return { id: c.id, isActive: c.isActive, ...serializeCategory(c, count) };
 }
 
-export function serializeCompany(c: CompanyWithRelations): ApiCompany {
+// Company row with only the category relation (no projects/reviews) — the shape
+// the list/card serializer needs.
+export type CompanyCardRow = Company & {
+  category: Pick<Category, "slug" | "label">;
+};
+
+// Scalar + category fields shared by the card and full serializers.
+function companyScalars(c: CompanyCardRow) {
   return {
     id: c.id,
     slug: c.slug,
@@ -122,8 +158,6 @@ export function serializeCompany(c: CompanyWithRelations): ApiCompany {
     reviewCount: c.reviewCount,
     completedProjects: c.completedProjects,
     gallery: c.gallery,
-    projects: c.projects.map(serializeProject),
-    reviews: c.reviews.map(serializeReview),
     phone: c.phone,
     location: c.location,
     yearsExperience: c.yearsExperience,
@@ -132,6 +166,42 @@ export function serializeCompany(c: CompanyWithRelations): ApiCompany {
     badges: c.badges,
     featured: c.featured,
     verified: c.verified,
+    metaTitle: c.metaTitle ?? null,
+    metaDescription: c.metaDescription ?? null,
+  };
+}
+
+/**
+ * List/card view: the full ApiCompany shape but with EMPTY projects/reviews. The
+ * public list endpoints omit those heavy relations (they'd pull every review for
+ * every listed company); the detail route (/companies/[slug]) returns them. Same
+ * wire shape as serializeCompany, so the frontend Company type is unchanged — the
+ * profile/provider pages fetch the full record by slug to fill the arrays.
+ */
+export function serializeCompanyCard(c: CompanyCardRow): ApiCompany {
+  return { ...companyScalars(c), projects: [], reviews: [] };
+}
+
+export function serializeCompany(c: CompanyWithRelations): ApiCompany {
+  return {
+    ...companyScalars(c),
+    projects: c.projects.map(serializeProject),
+    reviews: c.reviews.map(serializeReview),
+  };
+}
+
+/**
+ * Admin view: the full company PLUS the internal contact fields (email/whatsapp)
+ * that the public serializers deliberately omit. Used only by admin endpoints so
+ * the company editor can display and round-trip them (lead notifications go here).
+ */
+export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
+  return {
+    ...serializeCompany(c),
+    email: c.email ?? null,
+    whatsapp: c.whatsapp ?? null,
+    // Admin-only: lets the editor show whether the rating is a manual override.
+    ratingOverridden: c.ratingOverridden,
   };
 }
 

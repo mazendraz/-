@@ -62,6 +62,15 @@ export async function verifyCaptcha(
     const data = (await res.json()) as { success?: boolean };
     success = data.success === true;
   } catch (err) {
+    // Default: fail OPEN (verifier outage shouldn't block real users; honeypot +
+    // rate limit still apply). Set CAPTCHA_FAIL_CLOSED=1 to reject instead — use
+    // on high-value endpoints where blocking abuse outweighs the rare outage.
+    if (process.env.CAPTCHA_FAIL_CLOSED === "1") {
+      console.error("[captcha] verifier unreachable — rejecting (fail-closed):", err);
+      throw new ValidationError("CAPTCHA verification unavailable. Please try again.", {
+        captcha: ["Verifier temporarily unreachable"],
+      });
+    }
     console.error("[captcha] verifier unreachable — allowing through:", err);
     return; // fail open
   }

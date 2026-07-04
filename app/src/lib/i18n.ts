@@ -26,12 +26,15 @@ const STRINGS = {
     search_requests_placeholder: "Search by reference, company, service…",
 
     // Language toggle label — shows the OTHER language
-    lang_switch: "ع",
+    lang_switch: "عربي",
 
     // ── Footer ──
     footer_platform: "Platform",
     footer_company: "Company",
     footer_copyright: "Egypt's New Administrative Capital Digital Marketplace.",
+    footer_terms: "Terms of Service",
+    footer_privacy: "Privacy Policy",
+    legal_unpublished: "This page hasn't been published yet.",
     footer_provider_portal: "Provider Portal",
     footer_link_browse_services: "Browse Services",
     footer_link_verified_companies: "Verified Companies",
@@ -304,7 +307,9 @@ const STRINGS = {
     form_err_district: "Please select your district",
     form_err_budget: "Please select a budget range",
     form_err_description: "A brief description helps us match you better",
+    form_err_description_short: "Please add a bit more detail (at least 10 characters)",
     form_err_submit: "Something went wrong submitting your request. Please try again.",
+    form_err_captcha: "Please complete the verification below.",
     form_success_title: "Request Received!",
     form_success_sub: "Your request has been successfully received. Our team will contact you shortly.",
     form_ref_number: "Reference Number",
@@ -359,12 +364,15 @@ const STRINGS = {
     search_saved_placeholder: "ابحث في شركاتك المحفوظة…",
     search_requests_placeholder: "ابحث بالرقم المرجعي أو الشركة أو الخدمة…",
 
-    lang_switch: "EN",
+    lang_switch: "English",
 
     // ── Footer ──
     footer_platform: "المنصة",
     footer_company: "الشركة",
     footer_copyright: "سوق العاصمة الإدارية الجديدة الرقمي بمصر.",
+    footer_terms: "شروط الخدمة",
+    footer_privacy: "سياسة الخصوصية",
+    legal_unpublished: "لم يتم نشر هذه الصفحة بعد.",
     footer_provider_portal: "بوابة مقدّمي الخدمة",
     footer_link_browse_services: "تصفح الخدمات",
     footer_link_verified_companies: "الشركات الموثّقة",
@@ -637,7 +645,9 @@ const STRINGS = {
     form_err_district: "من فضلك اختر حيّك",
     form_err_budget: "من فضلك اختر نطاق الميزانية",
     form_err_description: "وصف موجز يساعدنا على ترشيح الأنسب لك",
+    form_err_description_short: "من فضلك اكتب تفاصيل أكتر شوية (10 حروف على الأقل)",
     form_err_submit: "حدث خطأ أثناء إرسال طلبك. من فضلك حاول مرة أخرى.",
+    form_err_captcha: "من فضلك أكمل التحقق بالأسفل.",
     form_success_title: "تم استلام الطلب!",
     form_success_sub: "تم استلام طلبك بنجاح. سيتواصل معك فريقنا قريبًا.",
     form_ref_number: "الرقم المرجعي",

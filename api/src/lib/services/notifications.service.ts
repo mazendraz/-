@@ -3,6 +3,7 @@
 // email, or a send error never throws — lead creation must never break or block
 // because of notifications.
 import type { ApiLead } from "@/lib/apiTypes";
+import { getEmailTemplates } from "@/lib/services/settings.service";
 
 export interface LeadNotificationTarget {
   /** Provider contact email (Company.email). Null/absent → email skipped. */
@@ -25,6 +26,43 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// ── Admin-editable templates (token substitution) ───────────────────────────────
+
+/** Token map for a lead — feeds both the provider and admin templates. */
+function leadVars(lead: ApiLead, companyName: string): Record<string, string> {
+  return {
+    company: companyName,
+    refNumber: lead.refNumber,
+    service: lead.service,
+    customer: lead.name,
+    phone: lead.phone,
+    district: lead.district,
+    budget: lead.budget,
+    details: lead.description,
+    receivedAt: new Date(lead.createdAt).toISOString(),
+  };
+}
+
+/** Replace {{token}} occurrences; unknown tokens collapse to "". */
+function applyTokens(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? "");
+}
+
+/**
+ * Render a {subject, text, html} from admin templates. The whole substituted body
+ * is HTML-escaped (values + literal text) and newlines become <br>, so a template
+ * can never inject markup. Pure — unit-testable.
+ */
+export function buildFromTemplate(
+  subject: string,
+  body: string,
+  vars: Record<string, string>,
+): Omit<BuiltEmail, "to"> {
+  const text = applyTokens(body, vars);
+  const html = escapeHtml(text).replace(/\n/g, "<br>");
+  return { subject: applyTokens(subject, vars), text, html };
 }
 
 /**
@@ -96,8 +134,14 @@ export async function notifyNewLead(
   target: LeadNotificationTarget,
 ): Promise<boolean> {
   try {
-    const email = buildNewLeadEmail(lead, target);
-    if (!email) return false; // no provider email on file
+    if (!target.email) return false; // no provider email on file
+
+    // Admin-customized template when both fields are set; else the built-in default.
+    const tpl = await getEmailTemplates();
+    const email: BuiltEmail =
+      tpl.providerSubject && tpl.providerBody
+        ? { to: target.email, ...buildFromTemplate(tpl.providerSubject, tpl.providerBody, leadVars(lead, target.companyName)) }
+        : buildNewLeadEmail(lead, target)!;
 
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
@@ -118,8 +162,10 @@ export async function notifyNewLead(
 }
 
 /**
- * Build the admin-alert email body (without `to`), or null if there are no rows.
- * Same data as the provider email, framed for an admin watching all companies.
+ * Build the admin-alert email body (without `to`). This goes to EVERY admin as a
+ * monitoring heads-up, so it deliberately OMITS customer PII (name, phone, budget,
+ * description) — only the provider, who must act on the lead, gets those (see
+ * buildNewLeadEmail). Admins open the dashboard for the full record.
  */
 export function buildAdminAlertEmail(
   lead: ApiLead,
@@ -130,17 +176,14 @@ export function buildAdminAlertEmail(
     ["Company", companyName],
     ["Reference", lead.refNumber],
     ["Service", lead.service],
-    ["Customer", lead.name],
-    ["Phone", lead.phone],
     ["District", lead.district],
-    ["Budget", lead.budget],
-    ["Details", lead.description],
   ];
 
   const text =
     `A new lead was submitted on Al Assema.\n\n` +
     rows.map(([k, v]) => `${k}: ${v}`).join("\n") +
-    `\n\nReceived: ${new Date(lead.createdAt).toISOString()}`;
+    `\n\nReceived: ${new Date(lead.createdAt).toISOString()}` +
+    `\n\nCustomer contact details are in the admin dashboard (omitted here for privacy).`;
 
   const html =
     `<h2>New lead — ${escapeHtml(companyName)}</h2><table>` +
@@ -150,7 +193,8 @@ export function buildAdminAlertEmail(
           `<tr><td><strong>${escapeHtml(k)}</strong></td><td>${escapeHtml(v)}</td></tr>`,
       )
       .join("") +
-    `</table>`;
+    `</table>` +
+    `<p>Customer contact details are in the admin dashboard (omitted here for privacy).</p>`;
 
   return { subject, text, html };
 }
@@ -177,11 +221,92 @@ export async function notifyAdmins(
       return false;
     }
 
-    const body = buildAdminAlertEmail(lead, companyName);
-    await sendViaResend(apiKey, { to: recipients, ...body });
+    const tpl = await getEmailTemplates();
+    const built =
+      tpl.adminSubject && tpl.adminBody
+        ? buildFromTemplate(tpl.adminSubject, tpl.adminBody, leadVars(lead, companyName))
+        : buildAdminAlertEmail(lead, companyName);
+    await sendViaResend(apiKey, { to: recipients, ...built });
     return true;
   } catch (err) {
     console.error(`[notify] admin alert failed for lead ${lead.refNumber}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Notify all admins that a provider submitted (or edited) a portfolio project that
+ * now needs approval. One email, multiple recipients. Never throws; returns true if
+ * an email was dispatched, false if skipped (no key / no recipients).
+ */
+export async function notifyAdminsProjectSubmitted(params: {
+  projectTitle: string;
+  companyName: string;
+  adminEmails: (string | null | undefined)[];
+}): Promise<boolean> {
+  try {
+    const recipients = [...new Set(params.adminEmails.filter((e): e is string => !!e))];
+    if (recipients.length === 0) return false;
+
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info("[notify] RESEND_API_KEY not set — skipping project-submission alert");
+      return false;
+    }
+
+    const subject = `New project for review — ${params.companyName}`;
+    const text =
+      `${params.companyName} submitted a portfolio project "${params.projectTitle}" for approval.\n\n` +
+      `Review it in the admin dashboard → Reviews & Feedback → Project approvals.`;
+    const html =
+      `<h2>New project for review</h2>` +
+      `<p><strong>${escapeHtml(params.companyName)}</strong> submitted a portfolio project ` +
+      `"<strong>${escapeHtml(params.projectTitle)}</strong>" for approval.</p>` +
+      `<p>Review it in the admin dashboard → Reviews &amp; Feedback → Project approvals.</p>`;
+
+    await sendViaResend(apiKey, { to: recipients, subject, text, html });
+    return true;
+  } catch (err) {
+    console.error("[notify] project-submission alert failed:", err);
+    return false;
+  }
+}
+
+/**
+ * Notify all admins that a customer left a verified review for a company. One email,
+ * multiple recipients. Never throws; returns true if dispatched, false if skipped.
+ */
+export async function notifyAdminsReviewSubmitted(params: {
+  companyName: string;
+  rating: number;
+  author: string;
+  adminEmails: (string | null | undefined)[];
+}): Promise<boolean> {
+  try {
+    const recipients = [...new Set(params.adminEmails.filter((e): e is string => !!e))];
+    if (recipients.length === 0) return false;
+
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info("[notify] RESEND_API_KEY not set — skipping review alert");
+      return false;
+    }
+
+    const stars = "★".repeat(params.rating) + "☆".repeat(Math.max(0, 5 - params.rating));
+    const subject = `New review to approve — ${params.companyName} (${params.rating}/5)`;
+    const text =
+      `${params.author} left a ${params.rating}/5 review for ${params.companyName} and it's awaiting approval.\n\n` +
+      `Approve or delete it in the admin dashboard → Reviews & Feedback → Customer reviews.`;
+    const html =
+      `<h2>New review to approve</h2>` +
+      `<p><strong>${escapeHtml(params.author)}</strong> left a ${escapeHtml(stars)} (${params.rating}/5) ` +
+      `review for <strong>${escapeHtml(params.companyName)}</strong> — awaiting approval.</p>` +
+      `<p>Approve or delete it in the admin dashboard → Reviews &amp; Feedback → Customer reviews.</p>`;
+
+    await sendViaResend(apiKey, { to: recipients, subject, text, html });
+    return true;
+  } catch (err) {
+    console.error("[notify] review alert failed:", err);
     return false;
   }
 }

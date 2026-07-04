@@ -19,6 +19,7 @@ const MyRequests = lazy(() => import("./pages/MyRequests"));
 const GuidedStart = lazy(() => import("./pages/GuidedStart"));
 const Saved = lazy(() => import("./pages/Saved"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const LegalPage = lazy(() => import("./pages/LegalPage"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const ProviderDashboard = lazy(() => import("./pages/ProviderDashboard"));
 
@@ -44,6 +45,8 @@ const router = createBrowserRouter([
       { path: "/saved", element: <Saved /> },
       { path: "/requests", element: <MyRequests /> },
       { path: "/request", element: <RequestForm /> },
+      { path: "/terms", element: <LegalPage kind="terms" /> },
+      { path: "/privacy", element: <LegalPage kind="privacy" /> },
       // Catch-all 404 — keeps the shared chrome so users can navigate out
       { path: "*", element: <NotFound /> },
     ],

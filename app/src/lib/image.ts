@@ -12,7 +12,14 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB — mirrors the backend limit
  *  • Demo mode (no API): fall back to a downscaled, compressed data URL so the
  *    offline admin still works (kept small to respect the localStorage quota).
  */
-export async function uploadImage(file: File, bucket: UploadBucket, maxDim = 1000): Promise<string> {
+export async function uploadImage(
+  file: File,
+  bucket: UploadBucket,
+  maxDim = 1000,
+  // Upload endpoint. Admin UIs use the default; the provider dashboard passes
+  // "/provider/upload" (admin/upload is admin-only and would 403 for providers).
+  endpoint: "/admin/upload" | "/provider/upload" = "/admin/upload",
+): Promise<string> {
   if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
 
   if (isApiConfigured()) {
@@ -20,7 +27,7 @@ export async function uploadImage(file: File, bucket: UploadBucket, maxDim = 100
     const form = new FormData();
     form.append("file", file);
     form.append("bucket", bucket);
-    const { url } = await apiUpload<{ url: string }>("/admin/upload", form);
+    const { url } = await apiUpload<{ url: string }>(endpoint, form);
     return url;
   }
 

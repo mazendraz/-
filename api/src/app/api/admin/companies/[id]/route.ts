@@ -3,6 +3,7 @@ import { ok } from "@/lib/utils/response";
 import { adminOnly } from "@/lib/middleware/guards";
 import { updateCompanySchema } from "@/lib/validation/companies";
 import * as companiesService from "@/lib/services/companies.service";
+import * as audit from "@/lib/services/audit.service";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,9 @@ export const PUT = adminOnly(async (request: NextRequest, ctx: Ctx) => {
 });
 
 // DELETE /api/admin/companies/[id] → 204 (cascades projects/reviews/leads)
-export const DELETE = adminOnly(async (_request: NextRequest, ctx: Ctx) => {
+export const DELETE = adminOnly(async (_request: NextRequest, ctx: Ctx, user) => {
   const { id } = await ctx.params;
   await companiesService.remove(id);
+  await audit.record(user, { action: "company.delete", entity: "Company", entityId: id });
   return new NextResponse(null, { status: 204 });
 });

@@ -1,11 +1,13 @@
-// Frontend auth: login/logout against the API, JWT stored in localStorage
-// (al-assema-token — the same key api.ts reads to send `Authorization: Bearer`).
+// Frontend auth: login/logout against the API. The session lives in an httpOnly
+// cookie the browser sends automatically (same-origin) — it is NOT readable by JS,
+// so XSS can't steal it. We keep only a NON-secret copy of the user profile in
+// localStorage (USER_KEY) as a UX cache; the cookie is the real credential and the
+// server re-validates it on every request (and via /auth/me on mount).
 // Auth is only enforced when the API is configured (VITE_API_URL); in the
 // localStorage/demo mode the dashboards stay open as before.
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, isApiConfigured } from "./api";
 
-const TOKEN_KEY = "al-assema-token";
 const USER_KEY = "al-assema-user";
 const EVENT = "al-assema-auth-changed";
 
@@ -19,8 +21,19 @@ export interface AuthUser {
   companyId: string | null;
 }
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+// Demo-mode guard: with no API configured the dashboards are intentionally open
+// (localStorage demo). If that happens on a real (non-localhost) host it's almost
+// certainly a misconfigured deploy with VITE_API_URL unset — warn loudly, because
+// authentication is NOT enforced in this mode.
+if (typeof window !== "undefined" && !isApiConfigured()) {
+  const host = window.location.hostname;
+  const isLocal = host === "localhost" || host === "127.0.0.1" || host.endsWith(".local");
+  if (!isLocal) {
+    console.warn(
+      "[al-assema] VITE_API_URL is not set — running in demo mode with NO authentication. " +
+        "If this is a production deploy, set VITE_API_URL and redeploy.",
+    );
+  }
 }
 
 export function getCurrentUser(): AuthUser | null {
@@ -32,28 +45,27 @@ export function getCurrentUser(): AuthUser | null {
   }
 }
 
+// Optimistic, synchronous "is a user logged in?" based on the cached profile. The
+// authoritative check is the httpOnly cookie, which the server validates on every
+// request and which useAuth() revalidates via /auth/me on mount. UI gating only.
 export function isAuthenticated(): boolean {
-  return Boolean(getToken());
+  return Boolean(getCurrentUser());
 }
 
-function setSession(token: string, user: AuthUser) {
-  localStorage.setItem(TOKEN_KEY, token);
+function setSession(user: AuthUser) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
 function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
 export async function login(email: string, password: string): Promise<AuthUser> {
-  const res = await apiPost<{ token: string; user: AuthUser }>("/auth/login", {
-    email,
-    password,
-  });
-  setSession(res.token, res.user);
+  // The server sets the httpOnly session cookie; we keep only the user profile.
+  const res = await apiPost<{ user: AuthUser }>("/auth/login", { email, password });
+  setSession(res.user);
   return res.user;
 }
 

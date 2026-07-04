@@ -101,12 +101,17 @@ export function getSiteReviews(includeHidden = false): SiteReview[] {
 export async function addSiteReview(
   data: Omit<SiteReview, "id" | "createdAt" | "visible">,
   honeypot = "",
+  captchaToken?: string | null,
 ): Promise<SiteReview> {
   // With the API configured the backend is authoritative — a failed submission
   // must surface (don't fake success). New reviews are held for moderation, so
   // they won't appear on the homepage until an admin approves them.
   if (isApiConfigured()) {
-    const created = await apiPost<SiteReview>("/site-reviews", { ...data, hp_field: honeypot });
+    const created = await apiPost<SiteReview>("/site-reviews", {
+      ...data,
+      hp_field: honeypot,
+      captchaToken: captchaToken ?? undefined,
+    });
     write([created, ...read()]);
     return created;
   }

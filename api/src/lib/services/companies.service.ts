@@ -3,13 +3,18 @@
 import { prisma } from "@/lib/prisma";
 import { CompanyStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
-import { serializeCompany } from "@/lib/utils/serialize";
+import { serializeCompany, serializeCompanyAdmin, serializeCompanyCard } from "@/lib/utils/serialize";
 import { uniqueSlug } from "@/lib/utils/slug";
+import { recomputeAggregate } from "@/lib/services/reviews.service";
 import { NotFoundError } from "@/lib/utils/errors";
 import type { ApiCompany, ApiPage } from "@/lib/apiTypes";
 
 export const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+// Cap reviews returned on a single profile so a company with a huge review count
+// can't produce an unbounded payload. Most-recent first; the count badge still
+// shows the true total (company.reviewCount).
+const MAX_PROFILE_REVIEWS = 50;
 
 export type CompanySort =
   | "recommended"
@@ -27,11 +32,27 @@ export interface CompanyListQuery {
   sort?: CompanySort;
 }
 
-// Relations needed to serialize a full ApiCompany.
+// Relations needed to serialize a full ApiCompany (detail route + admin list).
+// Reviews are capped (most recent first) so one profile can't return tens of
+// thousands of rows; the true total stays in company.reviewCount.
 const companyInclude = {
   category: { select: { slug: true, label: true } },
   projects: { orderBy: { sortOrder: "asc" } },
-  reviews: { orderBy: { createdAt: "desc" } },
+  reviews: { orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
+} satisfies Prisma.CompanyInclude;
+
+// Public profile: only APPROVED projects are shown (provider submissions stay
+// hidden until an admin approves them). Admin/provider views use companyInclude.
+const publicCompanyInclude = {
+  category: { select: { slug: true, label: true } },
+  projects: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } },
+  reviews: { where: { approved: true }, orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
+} satisfies Prisma.CompanyInclude;
+
+// Card view (public list endpoints): only the category relation — NOT the heavy
+// projects/reviews arrays. Pairs with serializeCompanyCard.
+const companyCardInclude = {
+  category: { select: { slug: true, label: true } },
 } satisfies Prisma.CompanyInclude;
 
 // Mirrors the frontend Companies page sorters (pages/Companies.tsx).
@@ -95,14 +116,14 @@ async function listActiveWhere(
     prisma.company.count({ where }),
     prisma.company.findMany({
       where,
-      include: companyInclude,
+      include: companyCardInclude,
       orderBy: orderBy(query.sort ?? "recommended"),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
   ]);
 
-  return { data: rows.map(serializeCompany), meta: { total, page, pageSize } };
+  return { data: rows.map(serializeCompanyCard), meta: { total, page, pageSize } };
 }
 
 /** Public: paginated ACTIVE companies with filters. */
@@ -122,7 +143,7 @@ export function listByCategory(
 export async function getActiveBySlug(slug: string): Promise<ApiCompany> {
   const company = await prisma.company.findFirst({
     where: { slug, status: CompanyStatus.ACTIVE },
-    include: companyInclude,
+    include: publicCompanyInclude,
   });
   if (!company) throw new NotFoundError("Company");
   return serializeCompany(company);
@@ -148,8 +169,16 @@ export interface CompanyInput {
   completedProjects?: number;
   featured?: boolean;
   verified?: boolean;
+  metaTitle?: string;
+  metaDescription?: string;
   email?: string;
   whatsapp?: string;
+  // Manual rating override. When ratingOverridden is true, rating/reviewCount are
+  // taken as-is and the review recompute leaves them alone; when false, they're
+  // recomputed from the Review table (any rating/reviewCount sent is ignored).
+  rating?: number;
+  reviewCount?: number;
+  ratingOverridden?: boolean;
   // When provided, the company's project list is replaced with these.
   projects?: CompanyProjectInput[];
 }
@@ -159,6 +188,7 @@ export interface CompanyProjectInput {
   img: string;
   description: string;
   year: string;
+  featured?: boolean;
 }
 
 function projectCreateData(projects: CompanyProjectInput[]) {
@@ -168,6 +198,9 @@ function projectCreateData(projects: CompanyProjectInput[]) {
     description: p.description,
     year: p.year,
     sortOrder: i,
+    featured: p.featured ?? false,
+    // Projects managed through the admin company editor are published directly.
+    status: "APPROVED" as const,
   }));
 }
 
@@ -213,7 +246,7 @@ export async function listAll(
       take: pageSize,
     }),
   ]);
-  return { data: rows.map(serializeCompany), meta: { total, page, pageSize } };
+  return { data: rows.map(serializeCompanyAdmin), meta: { total, page, pageSize } };
 }
 
 /** Admin: create a company. Slug is auto-generated from the name. */
@@ -244,6 +277,14 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
       completedProjects: input.completedProjects ?? 0,
       featured: input.featured ?? true,
       verified: input.verified ?? false,
+      // Manual rating override on create (e.g. seeding a curated company that has
+      // no real reviews yet). Without it, rating/reviewCount stay 0 until reviews.
+      ratingOverridden: input.ratingOverridden ?? false,
+      ...(input.ratingOverridden
+        ? { rating: input.rating ?? 0, reviewCount: input.reviewCount ?? 0 }
+        : {}),
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
       email: input.email ?? null,
       whatsapp: input.whatsapp ?? null,
       ...(input.projects
@@ -252,7 +293,7 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
     },
     include: companyInclude,
   });
-  return serializeCompany(company);
+  return serializeCompanyAdmin(company);
 }
 
 /** Admin: update a company. The slug stays stable to preserve existing links. */
@@ -285,14 +326,24 @@ export async function update(
     completedProjects: input.completedProjects ?? undefined,
     featured: input.featured ?? undefined,
     verified: input.verified ?? undefined,
+    ratingOverridden: input.ratingOverridden ?? undefined,
+    // Only write rating/reviewCount when the override is being turned ON; otherwise
+    // they're owned by the review recompute (and cleared back to it below).
+    ...(input.ratingOverridden === true
+      ? { rating: input.rating ?? undefined, reviewCount: input.reviewCount ?? undefined }
+      : {}),
+    metaTitle: input.metaTitle === undefined ? undefined : input.metaTitle,
+    metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,
     email: input.email === undefined ? undefined : input.email,
     whatsapp: input.whatsapp === undefined ? undefined : input.whatsapp,
   };
 
-  // When projects are supplied, replace the whole list atomically.
+  // When projects are supplied, replace the admin-curated (APPROVED) list
+  // atomically. Provider submissions still awaiting moderation (PENDING/REJECTED)
+  // are left untouched so an admin company edit never wipes them.
   const company = input.projects
     ? await prisma.$transaction(async (tx) => {
-        await tx.project.deleteMany({ where: { companyId: id } });
+        await tx.project.deleteMany({ where: { companyId: id, status: "APPROVED" } });
         return tx.company.update({
           where: { id },
           data: {
@@ -308,7 +359,15 @@ export async function update(
         include: companyInclude,
       });
 
-  return serializeCompany(company);
+  // Override just cleared → restore rating/reviewCount from real reviews and return
+  // the recomputed record (recompute now runs because the flag is false).
+  if (input.ratingOverridden === false) {
+    await recomputeAggregate(id);
+    const fresh = await prisma.company.findUnique({ where: { id }, include: companyInclude });
+    if (fresh) return serializeCompanyAdmin(fresh);
+  }
+
+  return serializeCompanyAdmin(company);
 }
 
 /** Admin: delete a company (cascades projects/reviews/leads). */
@@ -337,5 +396,5 @@ export async function setStatus(
     data: { status },
     include: companyInclude,
   });
-  return serializeCompany(company);
+  return serializeCompanyAdmin(company);
 }

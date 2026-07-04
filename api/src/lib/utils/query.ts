@@ -77,6 +77,7 @@ export function parseLeadListQuery(
     page: toInt(searchParams.get("page")),
     pageSize: toInt(searchParams.get("pageSize")),
     status: parseLeadStatus(searchParams.get("status")),
+    search: searchParams.get("search")?.trim() || undefined,
   };
 }
 

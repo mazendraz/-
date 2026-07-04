@@ -21,14 +21,31 @@ export interface ApiErrorBody {
 
 // ── Companies ─────────────────────────────────────────────────────────────────
 
+export type ApiProjectStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 export interface ApiProject {
+  // Present on admin/provider payloads (per-project management); omitted on the
+  // public profile, which only ever returns APPROVED projects.
+  id?: string;
   title: string;
   img: string;
   description: string;
   year: string;
+  featured?: boolean; // curated for the homepage showcase
+  // Moderation state — surfaced to admin/provider so they can see/manage approval.
+  status?: ApiProjectStatus;
+}
+
+/** GET /api/projects/featured — flattened showcase items for the homepage. */
+export interface ApiFeaturedProject {
+  title: string;
+  img: string;
+  company: string; // owning company name
+  category: string; // owning company's category label
 }
 
 export interface ApiReview {
+  id?: string; // present on admin payloads (per-review management); omitted publicly
   author: string;
   avatar: string; // initial letter used as fallback
   rating: number;
@@ -71,6 +88,16 @@ export interface ApiCompany {
   badges: string[];
   featured: boolean;
   verified: boolean;
+  // Optional per-page SEO overrides; null/absent → frontend uses defaults.
+  metaTitle?: string | null;
+  metaDescription?: string | null;
+  // Internal contact fields — lead notifications are sent here. Returned ONLY in
+  // admin payloads (so the editor can round-trip them); omitted from public ones.
+  email?: string | null;
+  whatsapp?: string | null;
+  // Admin-only: true when rating/reviewCount were set manually (not derived from
+  // the Review table). Present only in admin payloads.
+  ratingOverridden?: boolean;
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────
@@ -82,6 +109,9 @@ export interface ApiCategory {
   icon: string;
   cover: string;
   count: number;
+  // Optional per-page SEO overrides; null/absent → frontend uses defaults.
+  metaTitle?: string | null;
+  metaDescription?: string | null;
 }
 
 /**
@@ -116,6 +146,9 @@ export interface ApiLead {
   description: string;
   status: ApiLeadStatus;
   reviewed: boolean; // true once the customer has left a review for this lead
+  // High-entropy secret for public tracking/review — returned ONLY on creation
+  // (stored client-side), never in admin/provider list payloads.
+  trackingToken?: string;
   createdAt: number; // epoch ms
 }
 
@@ -241,4 +274,67 @@ export interface ApiFeedbackPayload {
   name?: string;
   phone?: string;
   message: string;
+}
+
+// ── Platform settings (admin-editable, public-facing) ──────────────────────────
+
+/** GET /api/settings (public) · GET/PUT /api/admin/settings. Strings; "" = unset. */
+export interface ApiPlatformSettings {
+  site_name: string;
+  support_email: string;
+  public_phone: string;
+  address: string;
+  social_facebook: string;
+  social_instagram: string;
+  social_twitter: string;
+  social_linkedin: string;
+  // Newline-separated option lists for the request form; "" = use the built-in defaults.
+  districts: string;
+  budgets: string;
+  // Homepage hero copy per locale; "" = localized defaults.
+  hero_title_en: string;
+  hero_title_ar: string;
+  hero_subtitle_en: string;
+  hero_subtitle_ar: string;
+  // Branding image URLs; "" = built-in /logo.png + favicon.
+  logo_url: string;
+  favicon_url: string;
+  // Logo size as a percentage (50–200) of the built-in size; "" = 100%.
+  logo_scale: string;
+  // Homepage hero background image URL; "" = the built-in skyline render.
+  hero_image_url: string;
+}
+
+// ── Email templates (admin-only) ───────────────────────────────────────────────
+
+/** GET/PUT /api/admin/email-templates. Blank field = built-in default. Tokens:
+ *  {{company}} {{refNumber}} {{service}} {{customer}} {{phone}} {{district}}
+ *  {{budget}} {{details}} {{receivedAt}}. */
+export interface ApiEmailTemplates {
+  providerSubject: string;
+  providerBody: string;
+  adminSubject: string;
+  adminBody: string;
+}
+
+// ── Legal pages (Terms / Privacy) ───────────────────────────────────────────────
+
+/** GET /api/pages (public) · GET/PUT /api/admin/pages. Plain text; "" = unpublished. */
+export interface ApiLegalPages {
+  terms: string;
+  privacy: string;
+}
+
+// ── Audit log (admin-only) ─────────────────────────────────────────────────────
+
+/** GET /admin/audit-logs → ApiPage<ApiAuditLog>. Append-only admin action trail. */
+export interface ApiAuditLog {
+  id: string;
+  actorId: string;
+  actorEmail: string;
+  action: string; // dot-namespaced, e.g. "company.delete"
+  entity: string;
+  entityId: string;
+  meta: Record<string, unknown> | null;
+  createdAt: number; // epoch ms
 }

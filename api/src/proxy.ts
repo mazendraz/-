@@ -4,10 +4,16 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+// Read the allowlist fresh each call (not frozen at import) so behavior is a pure
+// function of the current env — this keeps resolveAllowedOrigin unit-testable via
+// env stubbing, matching the rateLimitConfigError(env) pattern. Cost is a trivial
+// string split per request.
+function getAllowedOrigins(): string[] {
+  return (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -15,11 +21,45 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
+// Origin-specific CORS headers. When we reflect a specific origin we also allow
+// credentials, so the httpOnly session cookie can flow on cross-origin requests
+// (the client uses fetch credentials:"include"). Credentials must NEVER pair with
+// "*" (browsers reject it), so Allow-Credentials is omitted for the dev wildcard —
+// which is only ever returned for a request with no Origin (same-origin), where
+// CORS doesn't apply anyway.
+function originHeaders(allowOrigin: string): Record<string, string> {
+  const h: Record<string, string> = {
+    "Access-Control-Allow-Origin": allowOrigin,
+    Vary: "Origin",
+  };
+  if (allowOrigin !== "*") h["Access-Control-Allow-Credentials"] = "true";
+  return h;
+}
+
+// Constant-time equality for the shared API key. proxy runs on the Edge runtime,
+// which has no node:crypto.timingSafeEqual — so we compare SHA-256 digests via Web
+// Crypto instead. Digests are fixed-length and unpredictable, so the byte-wise
+// compare leaks neither the length nor the content of the key through timing.
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [da, db] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const va = new Uint8Array(da);
+  const vb = new Uint8Array(db);
+  let diff = 0;
+  for (let i = 0; i < va.length; i += 1) diff |= va[i]! ^ vb[i]!;
+  return diff === 0;
+}
+
 // Returns the value to send back in Access-Control-Allow-Origin, or null to deny.
 // With an allowlist configured, only those origins are allowed. With no allowlist:
 // reflect any origin in development for convenience, but DENY in production so a
 // missing CORS_ALLOWED_ORIGINS can't silently expose the API to every site.
-function resolveAllowedOrigin(origin: string): string | null {
+// Exported for unit testing (the deny-by-default-in-production invariant).
+export function resolveAllowedOrigin(origin: string): string | null {
+  const allowedOrigins = getAllowedOrigins();
   if (allowedOrigins.length > 0) {
     return allowedOrigins.includes(origin) ? origin : null;
   }
@@ -27,33 +67,31 @@ function resolveAllowedOrigin(origin: string): string | null {
   return origin || "*";
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const origin = request.headers.get("origin") ?? "";
   const allowOrigin = resolveAllowedOrigin(origin);
 
   // Preflight
   if (request.method === "OPTIONS") {
     const headers: Record<string, string> = { ...corsHeaders };
-    if (allowOrigin) {
-      headers["Access-Control-Allow-Origin"] = allowOrigin;
-      headers["Vary"] = "Origin";
-    }
+    if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
     return new NextResponse(null, { status: 204, headers });
   }
 
   // Optional public gate: when API_KEY is set, every /api request (except the
-  // health probe) must present a matching X-Api-Key header.
+  // health/readiness probes, which monitors hit without the key) must present a
+  // matching X-Api-Key header.
   const apiKey = process.env.API_KEY;
+  // Probes + the public sitemap are hit by external tools (monitors, crawlers)
+  // that don't send the API key, so they're exempt from the gate.
+  const probePaths = new Set(["/api/health", "/api/ready", "/api/sitemap"]);
   if (
     apiKey &&
-    request.nextUrl.pathname !== "/api/health" &&
-    request.headers.get("x-api-key") !== apiKey
+    !probePaths.has(request.nextUrl.pathname) &&
+    !(await timingSafeEqual(request.headers.get("x-api-key") ?? "", apiKey))
   ) {
     const headers: Record<string, string> = { ...corsHeaders };
-    if (allowOrigin) {
-      headers["Access-Control-Allow-Origin"] = allowOrigin;
-      headers["Vary"] = "Origin";
-    }
+    if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
     return NextResponse.json(
       { code: "UNAUTHORIZED", message: "Invalid or missing API key" },
       { status: 401, headers },
@@ -63,8 +101,9 @@ export function proxy(request: NextRequest) {
   // Simple/actual requests
   const response = NextResponse.next();
   if (allowOrigin) {
-    response.headers.set("Access-Control-Allow-Origin", allowOrigin);
-    response.headers.set("Vary", "Origin");
+    for (const [key, value] of Object.entries(originHeaders(allowOrigin))) {
+      response.headers.set(key, value);
+    }
   }
   for (const [key, value] of Object.entries(corsHeaders)) {
     response.headers.set(key, value);

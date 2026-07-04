@@ -8,6 +8,7 @@ export type ErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "RATE_LIMITED"
+  | "PAYLOAD_TOO_LARGE"
   | "CONFLICT"
   | "INTERNAL_ERROR";
 
@@ -61,5 +62,11 @@ export class ConflictError extends AppError {
 export class RateLimitError extends AppError {
   constructor(message = "Too many requests") {
     super("RATE_LIMITED", message, 429);
+  }
+}
+
+export class PayloadTooLargeError extends AppError {
+  constructor(message = "Request body too large") {
+    super("PAYLOAD_TOO_LARGE", message, 413);
   }
 }

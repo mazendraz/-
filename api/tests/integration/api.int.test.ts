@@ -10,8 +10,21 @@ import { POST as leadsPOST } from "@/app/api/leads/route";
 import { PATCH as leadPATCH } from "@/app/api/leads/[id]/route";
 import { GET as providerLeadsGET } from "@/app/api/provider/leads/route";
 import { GET as companyGET } from "@/app/api/companies/[slug]/route";
+import { GET as companiesListGET } from "@/app/api/companies/route";
+import { GET as adminCompaniesGET } from "@/app/api/admin/companies/route";
+import { GET as settingsGET } from "@/app/api/settings/route";
+import { PUT as adminSettingsPUT } from "@/app/api/admin/settings/route";
+import { GET as emailTemplatesGET, PUT as emailTemplatesPUT } from "@/app/api/admin/email-templates/route";
+import { GET as pagesGET } from "@/app/api/pages/route";
+import { PUT as adminPagesPUT } from "@/app/api/admin/pages/route";
+import { GET as sitemapGET } from "@/app/api/sitemap/route";
+import { GET as featuredProjectsGET } from "@/app/api/projects/featured/route";
 import { DELETE as categoryDELETE } from "@/app/api/admin/categories/[id]/route";
 import { POST as reviewPOST } from "@/app/api/admin/companies/[id]/reviews/route";
+import { POST as customerReviewPOST } from "@/app/api/reviews/route";
+import { PATCH as companyStatusPATCH } from "@/app/api/admin/companies/[id]/status/route";
+import { GET as auditLogsGET } from "@/app/api/admin/audit-logs/route";
+import { GET as leadTrackGET } from "@/app/api/leads/track/route";
 
 const tag = `int-${Date.now()}`;
 
@@ -98,13 +111,19 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Audit rows aren't FK-linked (append-only), so clean this run's by actor.
+  await prisma.auditLog.deleteMany({ where: { actorEmail: `${tag}-admin@test` } });
   await prisma.user.deleteMany({ where: { id: { in: [adminId, providerId] } } });
   await prisma.company.deleteMany({ where: { categoryId } });
   await prisma.category.delete({ where: { id: categoryId } }).catch(() => {});
   await prisma.$disconnect();
 });
 
-function leadBody(companySlug: string, companyName = "X") {
+function leadBody(
+  companySlug: string,
+  companyName = "X",
+  extra: Partial<Record<string, string>> = {},
+) {
   return {
     companySlug,
     companyName,
@@ -114,6 +133,7 @@ function leadBody(companySlug: string, companyName = "X") {
     district: "R7",
     budget: "EGP 100k",
     description: "I need a full fit-out for my apartment please.",
+    ...extra,
   };
 }
 
@@ -137,11 +157,25 @@ describe("POST /leads", () => {
     const ip = "10.0.0.99";
     const codes: number[] = [];
     for (let i = 0; i < 6; i += 1) {
-      const res = await leadsPOST(req("/api/leads", { method: "POST", body: leadBody(activeSlug), ip }));
+      // Unique service per request so the de-dup guard doesn't intervene — this
+      // test isolates rate-limit behavior, not de-dup.
+      const res = await leadsPOST(
+        req("/api/leads", { method: "POST", body: leadBody(activeSlug, "X", { service: `Design ${i}` }), ip }),
+      );
       codes.push(res.status);
     }
     expect(codes.slice(0, 5).every((c) => c === 201)).toBe(true);
     expect(codes[5]).toBe(429);
+  });
+
+  it("rejects an identical re-submit within the de-dup window (409)", async () => {
+    // Distinct phone/service/IP so it's independent of the other tests' leads and
+    // the per-IP rate limit. Same body twice → first 201, second 409.
+    const body = leadBody(activeSlug, "X", { phone: "01099000011", service: "Dedup Job" });
+    const first = await leadsPOST(req("/api/leads", { method: "POST", body, ip: "10.0.50.1" }));
+    expect(first.status).toBe(201);
+    const second = await leadsPOST(req("/api/leads", { method: "POST", body, ip: "10.0.50.2" }));
+    expect(second.status).toBe(409);
   });
 });
 
@@ -206,5 +240,317 @@ describe("admin catalog rules", () => {
     const company = await res.json();
     expect(company.reviewCount).toBe(2);
     expect(company.rating).toBe(4.5); // (4 + 5) / 2
+  });
+
+  it("public list returns lightweight cards (no reviews/projects); detail returns them", async () => {
+    // The list endpoint must NOT embed reviews/projects (scale guard) but keeps
+    // the aggregate counts cards display; the detail route returns the full arrays.
+    const listRes = await companiesListGET(req(`/api/companies?pageSize=100`));
+    const listed = (await listRes.json()).data as Array<{
+      slug: string; reviews: unknown[]; projects: unknown[]; reviewCount: number;
+    }>;
+    const card = listed.find((c) => c.slug === activeSlug)!;
+    expect(card.reviews).toEqual([]);
+    expect(card.projects).toEqual([]);
+    expect(card.reviewCount).toBe(2); // aggregate count still present
+
+    const detail = await (await companyGET(req(`/api/companies/${activeSlug}`), ctx({ slug: activeSlug }))).json();
+    expect(detail.reviews).toHaveLength(2);
+  });
+});
+
+describe("lead tracking (token replaces phone as the secret)", () => {
+  it("tracks by the issued token; the phone no longer works once a token exists", async () => {
+    const createRes = await leadsPOST(
+      req("/api/leads", { method: "POST", body: leadBody(activeSlug, "X", { service: "Token Job", phone: "01077000022" }), ip: "10.0.77.1" }),
+    );
+    expect(createRes.status).toBe(201);
+    const created = await createRes.json();
+    expect(typeof created.trackingToken).toBe("string");
+    expect(created.trackingToken.length).toBeGreaterThan(20);
+
+    // Correct token → 200.
+    const okRes = await leadTrackGET(
+      req(`/api/leads/track?ref=${created.refNumber}&token=${encodeURIComponent(created.trackingToken)}`, { ip: "10.0.77.2" }),
+    );
+    expect(okRes.status).toBe(200);
+    expect((await okRes.json()).refNumber).toBe(created.refNumber);
+
+    // Correct phone but the lead has a token → phone fallback is disabled → 404.
+    const phoneRes = await leadTrackGET(
+      req(`/api/leads/track?ref=${created.refNumber}&phone=01077000022`, { ip: "10.0.77.3" }),
+    );
+    expect(phoneRes.status).toBe(404);
+
+    // Wrong token → 404.
+    const badRes = await leadTrackGET(
+      req(`/api/leads/track?ref=${created.refNumber}&token=not-the-real-token`, { ip: "10.0.77.4" }),
+    );
+    expect(badRes.status).toBe(404);
+  });
+});
+
+describe("company contact fields (admin-only)", () => {
+  it("returns email/whatsapp to admins but never in the public payload", async () => {
+    const company = await prisma.company.create({
+      data: {
+        ...companyData(`${tag}-contact`, "ACTIVE", categoryId),
+        email: "owner@contact.test",
+        whatsapp: "201000000000",
+      },
+    });
+
+    // Admin list includes the internal contact fields (so the editor can edit them).
+    const adminRes = await adminCompaniesGET(
+      req(`/api/admin/companies?pageSize=200`, { token: adminToken }),
+      undefined as never,
+    );
+    const adminCard = (await adminRes.json()).data.find(
+      (c: { slug: string }) => c.slug === `${tag}-contact`,
+    );
+    expect(adminCard.email).toBe("owner@contact.test");
+    expect(adminCard.whatsapp).toBe("201000000000");
+
+    // Public profile must NOT leak them.
+    const pub = await (await companyGET(req(`/api/companies/${tag}-contact`), ctx({ slug: `${tag}-contact` }))).json();
+    expect(pub.email).toBeUndefined();
+    expect(pub.whatsapp).toBeUndefined();
+  });
+});
+
+describe("featured projects (homepage showcase)", () => {
+  it("returns featured projects of ACTIVE companies only, with company + category", async () => {
+    await prisma.project.create({
+      data: { companyId: activeId, title: `${tag}-Feat`, img: "/img/x.jpg", description: "d", year: "2025", sortOrder: 0, featured: true },
+    });
+    await prisma.project.create({
+      data: { companyId: activeId, title: `${tag}-Plain`, img: "/img/y.jpg", description: "d", year: "2025", sortOrder: 1, featured: false },
+    });
+    const susp = await prisma.company.findFirst({ where: { slug: suspendedSlug }, select: { id: true } });
+    await prisma.project.create({
+      data: { companyId: susp!.id, title: `${tag}-SuspFeat`, img: "/img/z.jpg", description: "d", year: "2025", sortOrder: 0, featured: true },
+    });
+
+    const list = (await (await featuredProjectsGET()).json()) as Array<{ title: string; company: string; category: string }>;
+    const titles = list.map((p) => p.title);
+    expect(titles).toContain(`${tag}-Feat`);
+    expect(titles).not.toContain(`${tag}-Plain`); // not featured
+    expect(titles).not.toContain(`${tag}-SuspFeat`); // company suspended
+    const mine = list.find((p) => p.title === `${tag}-Feat`)!;
+    expect(mine.company).toBe(`Co ${tag}-active`); // companyData name = `Co ${slug}`
+    expect(mine.category).toBe("Int Cat"); // the test category label
+  });
+});
+
+describe("dynamic sitemap", () => {
+  it("lists ACTIVE companies + active categories, excludes suspended, serves XML", async () => {
+    const res = await sitemapGET();
+    expect(res.headers.get("content-type")).toContain("xml");
+    const body = await res.text();
+    expect(body).toContain("/companies/" + activeSlug); // ACTIVE company present
+    expect(body).toContain("/services/" + `${tag}-cat`); // active category present
+    expect(body).not.toContain("/companies/" + suspendedSlug); // suspended excluded
+    expect(body).toContain("<loc>"); // well-formed urlset
+  });
+});
+
+describe("platform settings", () => {
+  it("public GET; admin PUT persists & reflects publicly; invalid rejected; provider 403", async () => {
+    // Snapshot the keys this test mutates so the shared DB is restored afterwards.
+    const keys = ["support_email", "social_facebook", "districts"];
+    const before = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+    try {
+      const pub1 = await (await settingsGET()).json();
+      expect(typeof pub1.site_name).toBe("string"); // default "Al Assema" when unset
+      expect(pub1.districts).toBe(""); // newline list — blank = frontend defaults
+
+      const putRes = await adminSettingsPUT(
+        req("/api/admin/settings", {
+          method: "PUT",
+          body: {
+            support_email: "help@int.test",
+            social_facebook: "https://facebook.com/int",
+            districts: "Zone A\nZone B",
+          },
+          token: adminToken,
+        }),
+        undefined as never,
+      );
+      expect(putRes.status).toBe(200);
+      expect((await putRes.json()).support_email).toBe("help@int.test");
+
+      // Public endpoint reflects the changes.
+      const pub2 = await (await settingsGET()).json();
+      expect(pub2.support_email).toBe("help@int.test");
+      expect(pub2.districts).toBe("Zone A\nZone B");
+
+      // Invalid email → 400.
+      const bad = await adminSettingsPUT(
+        req("/api/admin/settings", { method: "PUT", body: { support_email: "not-an-email" }, token: adminToken }),
+        undefined as never,
+      );
+      expect(bad.status).toBe(400);
+
+      // Providers can't change platform settings.
+      const prov = await adminSettingsPUT(
+        req("/api/admin/settings", { method: "PUT", body: { site_name: "Hijack" }, token: providerToken }),
+        undefined as never,
+      );
+      expect(prov.status).toBe(403);
+    } finally {
+      for (const key of keys) {
+        const orig = before.find((r) => r.key === key);
+        if (orig) {
+          await prisma.appSetting.upsert({ where: { key }, create: { key, value: orig.value }, update: { value: orig.value } });
+        } else {
+          await prisma.appSetting.deleteMany({ where: { key } });
+        }
+      }
+    }
+  });
+});
+
+describe("legal pages", () => {
+  it("public GET; admin PUT persists & reflects publicly; provider 403; self-restores", async () => {
+    const keys = ["legal_terms"];
+    const before = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+    try {
+      const pub1 = await (await pagesGET()).json();
+      expect(pub1).toHaveProperty("terms");
+
+      const put = await adminPagesPUT(
+        req("/api/admin/pages", { method: "PUT", body: { terms: "Our terms apply." }, token: adminToken }),
+        undefined as never,
+      );
+      expect(put.status).toBe(200);
+
+      const pub2 = await (await pagesGET()).json();
+      expect(pub2.terms).toBe("Our terms apply.");
+
+      const prov = await adminPagesPUT(
+        req("/api/admin/pages", { method: "PUT", body: { terms: "x" }, token: providerToken }),
+        undefined as never,
+      );
+      expect(prov.status).toBe(403);
+    } finally {
+      for (const key of keys) {
+        const o = before.find((r) => r.key === key);
+        if (o) await prisma.appSetting.upsert({ where: { key }, create: { key, value: o.value }, update: { value: o.value } });
+        else await prisma.appSetting.deleteMany({ where: { key } });
+      }
+    }
+  });
+});
+
+describe("email templates", () => {
+  it("admin GET returns the shape; PUT persists; provider 403; self-restores", async () => {
+    const keys = ["email_provider_subject"];
+    const before = await prisma.appSetting.findMany({ where: { key: { in: keys } } });
+    try {
+      const got = await (await emailTemplatesGET(
+        req("/api/admin/email-templates", { token: adminToken }), undefined as never,
+      )).json();
+      expect(got).toHaveProperty("providerSubject"); // blank by default
+
+      const put = await emailTemplatesPUT(
+        req("/api/admin/email-templates", { method: "PUT", body: { providerSubject: "Hi {{refNumber}}" }, token: adminToken }),
+        undefined as never,
+      );
+      expect(put.status).toBe(200);
+      expect((await put.json()).providerSubject).toBe("Hi {{refNumber}}");
+
+      const prov = await emailTemplatesPUT(
+        req("/api/admin/email-templates", { method: "PUT", body: { providerSubject: "x" }, token: providerToken }),
+        undefined as never,
+      );
+      expect(prov.status).toBe(403);
+    } finally {
+      for (const key of keys) {
+        const o = before.find((r) => r.key === key);
+        if (o) await prisma.appSetting.upsert({ where: { key }, create: { key, value: o.value }, update: { value: o.value } });
+        else await prisma.appSetting.deleteMany({ where: { key } });
+      }
+    }
+  });
+});
+
+describe("audit log", () => {
+  it("records a company.status change and exposes it via /admin/audit-logs", async () => {
+    const company = await prisma.company.create({
+      data: companyData(`${tag}-audit`, "ACTIVE", categoryId),
+    });
+
+    const patchRes = await companyStatusPATCH(
+      req(`/api/admin/companies/${company.id}/status`, {
+        method: "PATCH", body: { status: "SUSPENDED" }, token: adminToken,
+      }),
+      ctx({ id: company.id }),
+    );
+    expect(patchRes.status).toBe(200);
+
+    const logsRes = await auditLogsGET(
+      req(`/api/admin/audit-logs?entity=Company&pageSize=200`, { token: adminToken }),
+      undefined as never,
+    );
+    expect(logsRes.status).toBe(200);
+    const logs = (await logsRes.json()).data as Array<{
+      action: string; entityId: string; actorEmail: string; meta: { status?: string } | null;
+    }>;
+    const entry = logs.find((l) => l.entityId === company.id && l.action === "company.status");
+    expect(entry).toBeTruthy();
+    expect(entry!.meta?.status).toBe("SUSPENDED");
+    expect(entry!.actorEmail).toBe(`${tag}-admin@test`);
+  });
+
+  it("denies the audit log to providers (403)", async () => {
+    const res = await auditLogsGET(req(`/api/admin/audit-logs`, { token: providerToken }), undefined as never);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("customer review (one per completed lead)", () => {
+  // Dedicated company so the verified review doesn't pollute activeId's aggregates
+  // (and so test ordering can't affect the rating assertion above).
+  it("creates exactly one verified review under concurrent submits (no double-review race)", async () => {
+    const company = await prisma.company.create({
+      data: companyData(`${tag}-revrace`, "ACTIVE", categoryId),
+    });
+    const phone = "01080000001";
+    const lead = await prisma.lead.create({
+      data: {
+        companyId: company.id,
+        refNumber: `AA-20260626-${tag.slice(-4).toUpperCase()}`,
+        service: "S",
+        customerName: "Race Tester",
+        phone,
+        district: "R7",
+        budget: "x",
+        description: "completed job to review",
+        status: "COMPLETED",
+      },
+    });
+
+    const body = { ref: lead.refNumber, phone, rating: 5, text: "excellent work" };
+    // Two concurrent submits for the SAME lead, distinct IPs (so neither trips the
+    // per-IP rate limit). The atomic claim must let exactly one through.
+    const [a, b] = await Promise.all([
+      customerReviewPOST(req("/api/reviews", { method: "POST", body, ip: "203.0.113.50" })),
+      customerReviewPOST(req("/api/reviews", { method: "POST", body, ip: "203.0.113.51" })),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([201, 409]);
+
+    // The DB holds exactly one review, linked to the lead, and the lead is stamped.
+    const reviews = await prisma.review.findMany({ where: { leadId: lead.id } });
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]!.verified).toBe(true);
+    const after = await prisma.lead.findUnique({ where: { id: lead.id } });
+    expect(after!.reviewedAt).not.toBeNull();
+
+    // A later attempt on the now-reviewed lead is rejected (fast-path 409).
+    const again = await customerReviewPOST(
+      req("/api/reviews", { method: "POST", body, ip: "203.0.113.52" }),
+    );
+    expect(again.status).toBe(409);
   });
 });

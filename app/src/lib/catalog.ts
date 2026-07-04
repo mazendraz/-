@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import {
   COMPANIES as SEED_COMPANIES,
   SERVICE_CATEGORIES as SEED_CATEGORIES,
+  FEATURED_PROJECTS,
   type Company,
   type ServiceCategory,
   type Project,
   type Review,
 } from "./data";
-import { apiFetch, apiPost, apiPut, apiDelete, isApiConfigured } from "./api";
+import { apiFetch, apiGet, apiPost, apiPut, apiDelete, isApiConfigured } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type { Company, ServiceCategory, Project, Review };
@@ -167,11 +168,23 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
     completedProjects: c.completedProjects,
     featured: c.featured ?? true,
     verified: c.verified ?? false,
+    // Manual rating override — the server only applies rating/reviewCount when
+    // ratingOverridden is true; otherwise they're derived from real reviews.
+    ratingOverridden: c.ratingOverridden ?? false,
+    rating: c.rating,
+    reviewCount: c.reviewCount,
+    metaTitle: c.metaTitle?.trim() || undefined,
+    metaDescription: c.metaDescription?.trim() || undefined,
+    // Internal contact for lead notifications. Send "" as undefined so an empty
+    // field clears the value rather than the API treating it as "leave unchanged".
+    email: c.email?.trim() || undefined,
+    whatsapp: c.whatsapp?.trim() || undefined,
     projects: c.projects.map((p) => ({
       title: p.title,
       img: p.img,
       description: p.description,
       year: p.year,
+      featured: p.featured ?? false,
     })),
   };
 }
@@ -236,21 +249,33 @@ const EMPTY_COMPANY: CompanyDraft = {
   badges: [],
   featured: true,
   verified: false,
+  ratingOverridden: false,
+  email: "",
+  whatsapp: "",
+  metaTitle: "",
+  metaDescription: "",
 };
 
 export function emptyCompany(): CompanyDraft {
   return JSON.parse(JSON.stringify(EMPTY_COMPANY));
 }
 
-export function addCompany(draft: CompanyDraft): Company {
+export async function addCompany(draft: CompanyDraft): Promise<Company> {
   const list = getCompanies();
   const slug = draft.slug || slugify(draft.name);
   const company: Company = { ...draft, id: newId(), slug: uniqueSlug(slug, list) };
   writeCompanies([company, ...list]); // optimistic
   if (isAdminSession()) {
-    void apiPost("/admin/companies", companyPayload(draft))
-      .catch((err) => console.error("Create company failed:", err))
-      .finally(() => refreshCatalogFromApi());
+    try {
+      await apiPost("/admin/companies", companyPayload(draft));
+    } catch (err) {
+      // Roll back the optimistic insert and surface the error to the caller —
+      // otherwise the new company silently vanishes on the next sync.
+      writeCompanies(getCompanies().filter((c) => c.id !== company.id));
+      throw err;
+    } finally {
+      refreshCatalogFromApi();
+    }
   }
   return company;
 }
@@ -262,15 +287,19 @@ function uniqueSlug(base: string, list: Company[]): string {
   return slug;
 }
 
-export function updateCompany(id: string, patch: Partial<Company>) {
+export async function updateCompany(id: string, patch: Partial<Company>): Promise<void> {
   writeCompanies(getCompanies().map((c) => (c.id === id ? { ...c, ...patch } : c))); // optimistic
   if (isAdminSession()) {
     // Send the merged company so the payload is always complete (PUT semantics).
     const merged = getCompanies().find((c) => c.id === id);
     if (merged) {
-      void apiPut(`/admin/companies/${id}`, companyPayload(merged))
-        .catch((err) => console.error("Update company failed:", err))
-        .finally(() => refreshCatalogFromApi());
+      try {
+        await apiPut(`/admin/companies/${id}`, companyPayload(merged));
+      } finally {
+        // Re-sync from the server on both success and failure so the UI reflects
+        // the real stored state (and a rejected save propagates to the caller).
+        refreshCatalogFromApi();
+      }
     }
   }
 }
@@ -357,6 +386,8 @@ export function addCategory(cat: Omit<ServiceCategory, "count">): ServiceCategor
       description: cat.description,
       icon: cat.icon,
       cover: cat.cover || undefined,
+      metaTitle: cat.metaTitle?.trim() || undefined,
+      metaDescription: cat.metaDescription?.trim() || undefined,
     })
       .catch((err) => console.error("Create category failed:", err))
       .finally(() => refreshCatalogFromApi());
@@ -374,6 +405,8 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
         description: patch.description,
         icon: patch.icon,
         cover: patch.cover || undefined,
+        metaTitle: patch.metaTitle?.trim() || undefined,
+        metaDescription: patch.metaDescription?.trim() || undefined,
       })
         .catch((err) => console.error("Update category failed:", err))
         .finally(() => refreshCatalogFromApi());
@@ -381,15 +414,20 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
   }
 }
 
-export function deleteCategory(slug: string) {
+export async function deleteCategory(slug: string, cascade = false): Promise<void> {
   const id = isAdminSession() ? categoryIdForSlug(slug) : null;
   writeCategories(getCategories().filter((c) => c.slug !== slug)); // optimistic
+  // When cascading, also drop the category's companies locally so the UI doesn't
+  // flash stale rows before the server re-sync lands.
+  if (cascade) writeCompanies(getCompanies().filter((c) => c.category !== slug));
   if (id) {
-    // DELETE fails with 409 if the category still has companies — refresh then
-    // restores it (the delete simply didn't take).
-    void apiDelete(`/admin/categories/${id}`)
-      .catch((err) => console.error("Delete category failed:", err))
-      .finally(() => refreshCatalogFromApi());
+    // Without cascade the API returns 409 if the category still has companies;
+    // the error propagates to the caller and the re-sync restores the rows.
+    try {
+      await apiDelete(`/admin/categories/${id}${cascade ? "?cascade=true" : ""}`);
+    } finally {
+      refreshCatalogFromApi();
+    }
   }
 }
 
@@ -453,7 +491,64 @@ export function useCompany(slug: string): Company | undefined {
   return companies.find((c) => c.slug === slug);
 }
 
+/**
+ * Full company for a detail view (profile / provider dashboard). The public list
+ * endpoint now returns lightweight cards WITHOUT projects/reviews, so a page that
+ * needs those must fetch the full record by slug. The cached card paints instantly
+ * (name/cover/rating); the fetched detail (full projects/reviews) replaces it when
+ * it lands. In demo mode (no API) the cache already holds full seed data, so it's
+ * used directly. `loading` is true only while fetching with nothing yet to show.
+ */
+export function useCompanyDetail(slug: string): { company: Company | undefined; loading: boolean } {
+  const cached = useCompany(slug);
+  const [detail, setDetail] = useState<Company | undefined>(undefined);
+  const [loading, setLoading] = useState<boolean>(isApiConfigured() && Boolean(slug));
+
+  useEffect(() => {
+    if (!isApiConfigured() || !slug) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setDetail(undefined);
+    apiGet<Company>(`/companies/${encodeURIComponent(slug)}`)
+      .then((full) => { if (active) setDetail(full); })
+      .catch(() => { /* keep the cached card as a fallback */ })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [slug]);
+
+  const company = !isApiConfigured() ? cached : (detail ?? cached);
+  return { company, loading: loading && !company };
+}
+
 /** Reactive hydration status (loading/ready/error) for loading & error UI. */
 export function useCatalogStatus(): CatalogStatus {
   return useCatalogValue(getCatalogStatus);
+}
+
+export interface FeaturedProject {
+  title: string;
+  img: string;
+  company: string;
+  category: string;
+}
+
+/**
+ * Homepage "Featured Projects" showcase. In API mode, the admin-curated featured
+ * projects (Project.featured) of ACTIVE companies; falls back to the seed list
+ * when none are flagged or the API is unavailable, so the section never looks empty.
+ */
+export function useFeaturedProjects(): FeaturedProject[] {
+  const [list, setList] = useState<FeaturedProject[]>(FEATURED_PROJECTS);
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let active = true;
+    apiGet<FeaturedProject[]>("/projects/featured")
+      .then((rows) => { if (active && rows.length > 0) setList(rows); })
+      .catch(() => { /* keep the seed fallback */ });
+    return () => { active = false; };
+  }, []);
+  return list;
 }

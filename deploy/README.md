@@ -96,6 +96,34 @@ cd /var/www/alassema
 bash deploy/deploy.sh
 ```
 بيعمل: pull → build للاتنين → `migrate deploy` → نشر الواجهة → `pm2 reload`.
+وقبل الـ pull بيحفظ الـ commit الحالي في `deploy/.rollback-sha`.
+
+**لو الديبلوي طلع وحش:** `bash deploy/rollback.sh` بيرجّع الكود لآخر نسخة كانت
+شغالة ويعيد البناء. ملاحظة: ده بيرجّع **الكود بس** — الـ migrations forward-only،
+فلو الديبلوي السيّئ عمل migration مدمّر ارجع من الباك أب ([`RESTORE.md`](RESTORE.md)).
+
+**اختبار الحِمل (اختياري، على staging بس):** [`deploy/loadtest/leads-flood.js`](loadtest/leads-flood.js)
+بيتأكد إن الـ circuit breakers بتشتغل تحت ضغط والـ API مابيرجّعش 5xx. متشغّلوش على
+الإنتاج.
+
+---
+
+## ج) النسخ الاحتياطي والمراقبة (مهم قبل الإطلاق)
+
+قبل ما تستقبل عملاء حقيقيين لازم يكون عندك **باك أب** و**تنبيهات**:
+
+- **باك أب يومي off-site:** سكربت [`deploy/backup.sh`](backup.sh) بيعمل `pg_dump`
+  وبيرفعه لتخزين خارجي (rclone) وبيمسح القديم. ثبّت `postgresql-client` و`rclone`،
+  اعمل `rclone config` لريموت (يُفضّل مزوّد مختلف عن Supabase)، وحطّه في cron:
+  ```bash
+  crontab -e
+  0 3 * * *  BACKUP_HEALTHCHECK_URL="https://hc-ping.com/<uuid>" /var/www/alassema/deploy/backup.sh >> /var/log/alassema-backup.log 2>&1
+  ```
+- **جرّب الاستعادة مرة واحدة** على قاعدة بيانات مؤقتة — الخطوات في
+  [`deploy/RESTORE.md`](RESTORE.md). باك أب مجربتوش = مش باك أب.
+- **مراقبة + تنبيهات:** راقب `GET /api/ready` (بيرجّع 503 لو قاعدة البيانات وقعت)،
+  فعّل `SENTRY_DSN`، وثبّت `pm2-logrotate`. التفاصيل في
+  [`deploy/MONITORING.md`](MONITORING.md).
 
 ---
 

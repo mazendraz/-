@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { login, logout, useAuth, type AuthUser, type Role } from "../lib/auth";
 import { ApiError } from "../lib/api";
+import Logo from "./Logo";
 
 const ROLE_LABEL: Record<Role, string> = { ADMIN: "Admin", PROVIDER: "Provider" };
 
@@ -16,6 +17,7 @@ function Spinner() {
 function LoginScreen({ requiredRole }: { requiredRole: Role }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,7 +43,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
     <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-surface-container-lowest rounded-3xl shadow-bloom p-8 page-enter">
         <div className="flex flex-col items-center gap-3 mb-6">
-          <img src="/logo.png" alt="Al Assemah" className="h-14 w-14 rounded-2xl object-contain" />
+          <Logo className="h-14 w-14 rounded-2xl object-contain" />
           <div className="text-center">
             <h1 className="font-display font-bold text-[22px] text-on-surface">Al Assemah</h1>
             <p className="text-[13px] text-outline">{ROLE_LABEL[requiredRole]} sign in</p>
@@ -69,14 +71,27 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
           </label>
           <label className="block">
             <span className="text-[12px] font-bold text-on-surface-variant mb-1.5 block">Password</span>
-            <input
-              type="password"
-              required
-              className="field-input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                className="field-input pe-11"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+                className="absolute inset-y-0 end-0 flex items-center pe-3 text-outline hover:text-on-surface-variant transition-colors focus:outline-none"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  {showPassword ? "visibility_off" : "visibility"}
+                </span>
+              </button>
+            </div>
           </label>
           <button
             type="submit"

@@ -4,10 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { generateRefNumber } from "@/lib/utils/refNumber";
+import { generateTrackingToken, safeEqual } from "@/lib/utils/token";
 import { phoneTail } from "@/lib/utils/phone";
 import { leadStatusFromLabel, serializeLead } from "@/lib/utils/serialize";
 import { notifyNewLead, notifyAdmins } from "@/lib/services/notifications.service";
-import { NotFoundError } from "@/lib/utils/errors";
+import {
+  notifyCompanyProviders as pushCompanyProviders,
+  notifyAdmins as pushAdmins,
+} from "@/lib/services/push.service";
+import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type {
   ApiLead,
   ApiLeadPayload,
@@ -17,6 +23,12 @@ import type {
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
+
+// Soft de-dup window: collapse an identical (company + phone + service) re-submit
+// within this window into a 409. Blunts double-click and basic bot spam; it is NOT
+// the primary defense (rate limit + CAPTCHA are) — a bot varying any field bypasses
+// it, which is acceptable for a UX/noise guard.
+const DEDUP_WINDOW_MS = 5 * 60_000;
 
 const leadInclude = {
   company: { select: { slug: true, name: true } },
@@ -63,6 +75,22 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
   // 404 for both missing and non-ACTIVE — don't reveal suspended companies.
   if (!company) throw new NotFoundError("Company");
 
+  // Reject a near-identical re-submit (double-click / retry / basic bot loop).
+  const recentDuplicate = await prisma.lead.findFirst({
+    where: {
+      companyId: company.id,
+      phone: payload.phone,
+      service: payload.service,
+      createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
+    },
+    select: { id: true },
+  });
+  if (recentDuplicate) {
+    throw new ConflictError(
+      "We already received an identical request a moment ago. We'll be in touch shortly.",
+    );
+  }
+
   // refNumber is unique; on the (extremely rare) collision, retry with a new one.
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
@@ -70,6 +98,7 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
         data: {
           companyId: company.id,
           refNumber: generateRefNumber(),
+          trackingToken: generateTrackingToken(),
           service: payload.service,
           customerName: payload.name,
           phone: payload.phone,
@@ -80,25 +109,50 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
         },
         include: leadInclude,
       });
-      const serialized = serializeLead(lead);
+      // Include the token ONLY on the creation response (stored client-side); it's
+      // never surfaced in admin/provider list payloads.
+      const serialized = { ...serializeLead(lead), trackingToken: lead.trackingToken ?? undefined };
 
-      // Notify the provider — fire-and-forget; never blocks or fails the response.
-      // (In a serverless deploy, wrap this in the platform's waitUntil instead.)
-      void notifyNewLead(serialized, {
-        email: company.email,
-        whatsapp: company.whatsapp,
-        companyName: company.name,
+      // Notifications run AFTER the response is sent (see runAfterResponse): they
+      // never block or fail lead creation, and on a serverless host the function is
+      // kept alive until they settle so nothing is dropped when the instance
+      // freezes post-response. Each channel is individually fail-open.
+      runAfterResponse(async () => {
+        // Admins are sourced live from the User table so notifications track the
+        // Team tab automatically (no env var to keep in sync).
+        const admins = await prisma.user
+          .findMany({ where: { role: "ADMIN", isActive: true }, select: { email: true } })
+          .catch((err) => {
+            console.error(`[notify] admin lookup failed for lead ${serialized.refNumber}:`, err);
+            return [] as { email: string }[];
+          });
+
+        await Promise.allSettled([
+          // Provider email (has customer contact details — they must act on it).
+          notifyNewLead(serialized, {
+            email: company.email,
+            whatsapp: company.whatsapp,
+            companyName: company.name,
+          }),
+          // Admin heads-up email (no customer PII — see notifications.service).
+          notifyAdmins(serialized, company.name, admins.map((a) => a.email)),
+          // Web Push — reaches provider/admin devices even with the dashboard
+          // closed. Bodies stay lean (no PII on a lockscreen); the click opens
+          // the dashboard for the full record.
+          pushCompanyProviders(company.id, {
+            title: "New lead — Al Assema",
+            body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
+            url: "/provider",
+            tag: `lead-${serialized.id}`,
+          }),
+          pushAdmins({
+            title: `New lead — ${company.name}`,
+            body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
+            url: "/admin",
+            tag: `lead-${serialized.id}`,
+          }),
+        ]);
       });
-
-      // Notify all active admins too — sourced from the User table so it tracks
-      // the Team tab automatically (no env var to keep in sync). Also fail-open.
-      void prisma.user
-        .findMany({
-          where: { role: "ADMIN", isActive: true },
-          select: { email: true },
-        })
-        .then((admins) => notifyAdmins(serialized, company.name, admins.map((a) => a.email)))
-        .catch((err) => console.error(`[notify] admin lookup failed for lead ${serialized.refNumber}:`, err));
 
       return serialized;
     } catch (err) {
@@ -113,8 +167,28 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
 
 export interface LeadListQuery {
   status?: ApiLeadStatus; // by label, e.g. "In Progress"
+  search?: string; // matches refNumber / customerName / phone / service / district
   page?: number;
   pageSize?: number;
+}
+
+/**
+ * Build a case-insensitive OR filter across the human-searchable lead fields.
+ * Returns {} for an empty query so it composes cleanly into any where clause.
+ * Exported for unit testing.
+ */
+export function leadSearchWhere(search?: string): Prisma.LeadWhereInput {
+  const s = search?.trim();
+  if (!s) return {};
+  return {
+    OR: [
+      { refNumber: { contains: s, mode: "insensitive" } },
+      { customerName: { contains: s, mode: "insensitive" } },
+      { phone: { contains: s, mode: "insensitive" } },
+      { service: { contains: s, mode: "insensitive" } },
+      { district: { contains: s, mode: "insensitive" } },
+    ],
+  };
 }
 
 export interface AdminLeadListQuery extends LeadListQuery {
@@ -128,7 +202,7 @@ export async function listByCompany(
   companyId: string,
   query: LeadListQuery,
 ): Promise<ApiPage<ApiLead>> {
-  const where: Prisma.LeadWhereInput = { companyId };
+  const where: Prisma.LeadWhereInput = { companyId, ...leadSearchWhere(query.search) };
   if (query.status) where.status = leadStatusFromLabel(query.status);
   return listWhere(where, query);
 }
@@ -137,7 +211,7 @@ export async function listByCompany(
 export async function listAll(
   query: AdminLeadListQuery,
 ): Promise<ApiPage<ApiLead>> {
-  const where: Prisma.LeadWhereInput = {};
+  const where: Prisma.LeadWhereInput = { ...leadSearchWhere(query.search) };
   if (query.companyId) where.companyId = query.companyId;
   if (query.status) where.status = leadStatusFromLabel(query.status);
   if (query.from || query.to) {
@@ -150,20 +224,35 @@ export async function listAll(
 }
 
 /**
- * Public: look up a single lead by its reference number, gated by a matching
- * phone (a shared secret only the submitter knows). Returns the customer's own
- * lead so they can track its status without an account. Both a missing ref and a
- * phone mismatch throw the SAME 404 — never reveal which refNumbers exist.
+ * Verify the public secret for a lead. Prefers the high-entropy trackingToken
+ * (constant-time compared); falls back to phone-tail matching ONLY for legacy
+ * leads created before the token column existed (trackingToken == null).
  */
-export async function trackByRefAndPhone(
+export function leadSecretMatches(
+  lead: { trackingToken: string | null; phone: string },
+  secret: { token?: string; phone?: string },
+): boolean {
+  if (lead.trackingToken) {
+    return typeof secret.token === "string" && safeEqual(secret.token, lead.trackingToken);
+  }
+  return typeof secret.phone === "string" && phoneTail(lead.phone) === phoneTail(secret.phone);
+}
+
+/**
+ * Public: look up a single lead by its reference number, gated by the tracking
+ * token (or phone for legacy leads). Returns the customer's own lead so they can
+ * track its status without an account. A missing ref and a secret mismatch throw
+ * the SAME 404 — never reveal which refNumbers exist.
+ */
+export async function trackByRefAndSecret(
   refNumber: string,
-  phone: string,
+  secret: { token?: string; phone?: string },
 ): Promise<ApiLead> {
   const lead = await prisma.lead.findUnique({
     where: { refNumber },
     include: leadInclude,
   });
-  if (!lead || phoneTail(lead.phone) !== phoneTail(phone)) {
+  if (!lead || !leadSecretMatches(lead, secret)) {
     throw new NotFoundError("Lead");
   }
   return serializeLead(lead);

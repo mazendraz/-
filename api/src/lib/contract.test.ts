@@ -6,6 +6,7 @@ import { LeadStatus } from "@/generated/prisma/enums";
 import { ok, page, fail } from "@/lib/utils/response";
 import {
   serializeCompany,
+  serializeCompanyCard,
   serializeLead,
   type CompanyWithRelations,
   type LeadWithCompany,
@@ -87,6 +88,10 @@ const lead = {
 describe("serializer contract shapes", () => {
   it("ApiCompany (raw profile)", () => {
     expect(serializeCompany(company)).toMatchSnapshot();
+  });
+
+  it("ApiCompany card (list view — empty projects/reviews, same shape)", () => {
+    expect(serializeCompanyCard(company)).toMatchSnapshot();
   });
 
   it("ApiLead (createdAt as epoch ms)", () => {

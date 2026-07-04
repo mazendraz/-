@@ -54,10 +54,20 @@ describe("createLeadSchema fields", () => {
 });
 
 describe("trackLeadSchema", () => {
-  it("accepts a ref + valid phone", () => {
+  it("accepts a ref + valid phone (legacy secret)", () => {
     expect(
       trackLeadSchema.safeParse({ ref: "AA-20260101-7F3K", phone: "01012345678" }).success,
     ).toBe(true);
+  });
+
+  it("accepts a ref + tracking token (no phone)", () => {
+    expect(
+      trackLeadSchema.safeParse({ ref: "AA-20260101-7F3K", token: "abc123XYZ_token" }).success,
+    ).toBe(true);
+  });
+
+  it("rejects when neither token nor phone is supplied", () => {
+    expect(trackLeadSchema.safeParse({ ref: "AA-20260101-7F3K" }).success).toBe(false);
   });
 
   it("rejects a missing ref or invalid phone", () => {

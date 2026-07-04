@@ -20,10 +20,12 @@ export const GET = withErrors(async (request: NextRequest) => {
     throw new RateLimitError(`Too many requests. Try again in ${seconds}s.`);
   }
 
-  const { ref, phone } = trackLeadSchema.parse({
-    ref: request.nextUrl.searchParams.get("ref"),
-    phone: request.nextUrl.searchParams.get("phone"),
+  const sp = request.nextUrl.searchParams;
+  const { ref, token, phone } = trackLeadSchema.parse({
+    ref: sp.get("ref") ?? undefined,
+    token: sp.get("token") ?? undefined,
+    phone: sp.get("phone") ?? undefined,
   });
 
-  return ok(await leadsService.trackByRefAndPhone(ref, phone));
+  return ok(await leadsService.trackByRefAndSecret(ref, { token, phone }));
 });

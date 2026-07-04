@@ -8,6 +8,9 @@ import { CompanyCardSkeleton } from "../components/Skeleton";
 import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import SearchInput from "../components/SearchInput";
+import Pagination from "../components/Pagination";
+import { isApiConfigured } from "../lib/api";
+import { useServerSearch } from "../hooks/useServerSearch";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
@@ -48,11 +51,31 @@ export default function Companies() {
   const COMPANIES = useCompanies();
   const SERVICE_CATEGORIES = useCategoriesWithCounts();
   const status = useCatalogStatus();
-  // Cold-cache first load / backend unreachable (API mode only).
-  const loadingEmpty = status === "loading" && COMPANIES.length === 0;
-  const errorEmpty = status === "error" && COMPANIES.length === 0;
 
-  // ── Apply filters + sort ──
+  // ── Search/filter/sort over the COMPLETE catalog via the backend (API mode);
+  // the client-side `results` below is the demo (localStorage) path. ──
+  const apiMode = isApiConfigured();
+  const companySearch = useServerSearch<Company>(
+    "/companies",
+    query,
+    {
+      category: category === "all" ? undefined : category,
+      minRating: minRating > 0 ? minRating : undefined,
+      sort,
+    },
+    { pageSize: 12, enabled: apiMode },
+  );
+
+  // Cold first load / backend unreachable. In API mode this is driven by the search
+  // request; in demo mode by the catalog hydration status.
+  const loadingEmpty = apiMode
+    ? companySearch.loading && companySearch.data.length === 0
+    : status === "loading" && COMPANIES.length === 0;
+  const errorEmpty = apiMode
+    ? !!companySearch.error && companySearch.data.length === 0
+    : status === "error" && COMPANIES.length === 0;
+
+  // ── Demo-mode client filter + sort (unchanged) ──
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = COMPANIES.filter((c) => {
@@ -71,6 +94,10 @@ export default function Companies() {
     };
     return [...list].sort(sorters[sort]);
   }, [COMPANIES, category, minRating, sort, query]);
+
+  // Unified view model: server page in API mode, client list in demo mode.
+  const list = apiMode ? companySearch.data : results;
+  const total = apiMode ? companySearch.total : results.length;
 
   const activeCount = (category !== "all" ? 1 : 0) + (minRating > 0 ? 1 : 0) + (query.trim() ? 1 : 0);
   const categoryLabel = SERVICE_CATEGORIES.find((c) => c.slug === category)?.label;
@@ -171,8 +198,8 @@ export default function Companies() {
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           {!loadingEmpty && !errorEmpty && (
             <p className="text-[14px] text-outline">
-              <span className="font-black text-on-surface">{results.length}</span>{" "}
-              {results.length === 1 ? t(locale, "common_company") : t(locale, "common_companies")}
+              <span className="font-black text-on-surface">{total}</span>{" "}
+              {total === 1 ? t(locale, "common_company") : t(locale, "common_companies")}
               {categoryLabel && <span> {t(locale, "companies_in")} <span className="font-bold text-on-surface">{categoryLabel}</span></span>}
             </p>
           )}
@@ -199,7 +226,7 @@ export default function Companies() {
           </div>
         ) : errorEmpty ? (
           <CatalogError />
-        ) : results.length === 0 ? (
+        ) : list.length === 0 ? (
           <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-12 text-center">
             <span className="material-symbols-outlined text-outline/50 text-[48px] mb-3 block">search_off</span>
             <p className="font-bold text-[17px] text-on-surface mb-1">{t(locale, "companies_none_title")}</p>
@@ -209,11 +236,25 @@ export default function Companies() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
-            {results.map((c, i) => (
-              <CompanyCard key={c.id} company={c} delay={Math.min(i, 6) * 60} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+              {list.map((c, i) => (
+                <CompanyCard key={c.id} company={c} delay={Math.min(i, 6) * 60} />
+              ))}
+            </div>
+            {apiMode && (
+              <Pagination
+                className="mt-8"
+                page={companySearch.page}
+                pageCount={companySearch.pageCount}
+                total={companySearch.total}
+                pageSize={companySearch.pageSize}
+                onPage={(p) => { companySearch.setPage(p); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                noun={t(locale, "common_company")}
+                nounPlural={t(locale, "common_companies")}
+              />
+            )}
+          </>
         )}
       </div>
 
@@ -268,7 +309,7 @@ export default function Companies() {
                 {t(locale, "common_reset")}
               </button>
               <button onClick={() => setSheetOpen(false)} className="flex-[2] py-3.5 rounded-xl bg-primary text-on-primary font-bold text-[15px] touch-press btn-press">
-                {t(locale, "companies_show")} {results.length} {results.length === 1 ? t(locale, "companies_result") : t(locale, "companies_results")}
+                {t(locale, "companies_show")} {total} {total === 1 ? t(locale, "companies_result") : t(locale, "companies_results")}
               </button>
             </div>
           </div>

@@ -1,0 +1,24 @@
+# Local Postgres for integration tests (and local dev if you want it).
+# Matches the CI service container (port 5433, db "alassema").
+#
+#   docker compose up -d --wait db     # start + wait for healthy
+#   cp .env.test.example .env.test     # point tests at it
+#   npx prisma migrate deploy          # with .env.test's DATABASE_URL/DIRECT_URL
+#   npm run test:integration
+#   docker compose down                # stop (add -v to wipe the volume)
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: alassema
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d alassema"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      # Ephemeral storage — the test DB is disposable and fast; nothing persists.
+      - /var/lib/postgresql/data

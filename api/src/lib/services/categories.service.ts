@@ -30,6 +30,8 @@ export interface CategoryInput {
   icon: string;
   cover?: string;
   isActive?: boolean;
+  metaTitle?: string;
+  metaDescription?: string;
 }
 
 /** Admin: all categories (active and not), each with its TOTAL company count. */
@@ -56,6 +58,8 @@ export async function create(input: CategoryInput): Promise<ApiAdminCategory> {
       icon: input.icon,
       cover: input.cover ?? null,
       isActive: input.isActive ?? true,
+      metaTitle: input.metaTitle ?? null,
+      metaDescription: input.metaDescription ?? null,
     },
   });
   return serializeCategoryAdmin(category, 0);
@@ -80,22 +84,40 @@ export async function update(
       icon: input.icon ?? undefined,
       cover: input.cover === undefined ? undefined : input.cover,
       isActive: input.isActive ?? undefined,
+      metaTitle: input.metaTitle === undefined ? undefined : input.metaTitle,
+      metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,
     },
     include: { _count: { select: { companies: true } } },
   });
   return serializeCategoryAdmin(category, category._count.companies);
 }
 
-/** Admin: delete a category — fails with CONFLICT if it still has companies. */
-export async function remove(id: string): Promise<void> {
+/**
+ * Admin: delete a category.
+ *  - Without `cascade`: fails with CONFLICT if it still has companies.
+ *  - With `cascade`: also deletes every company in the category. Each company's
+ *    projects, reviews, leads and feedback cascade away at the DB level (their
+ *    FKs are ON DELETE CASCADE); provider user accounts have their companyId
+ *    nulled (ON DELETE SET NULL). The whole thing runs in one transaction.
+ */
+export async function remove(id: string, cascade = false): Promise<void> {
   const category = await prisma.category.findUnique({
     where: { id },
     include: { _count: { select: { companies: true } } },
   });
   if (!category) throw new NotFoundError("Category");
+
   if (category._count.companies > 0) {
-    throw new ConflictError("Cannot delete a category that still has companies");
+    if (!cascade) {
+      throw new ConflictError("Cannot delete a category that still has companies");
+    }
+    await prisma.$transaction([
+      prisma.company.deleteMany({ where: { categoryId: id } }),
+      prisma.category.delete({ where: { id } }),
+    ]);
+    return;
   }
+
   await prisma.category.delete({ where: { id } });
 }
 

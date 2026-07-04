@@ -26,6 +26,7 @@ git remote add origin https://github.com/<user>/<repo>.git
 git push -u origin main
 ```
 
+
 ---
 
 ## 1. قاعدة البيانات (Supabase)
@@ -141,17 +142,81 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
 
 ## 7. تحسينات الإنتاج (مهمة قبل ضغط حقيقي)
 
-- [ ] **Rate limiting (لو هتشغّل أكتر من نسخة / serverless):** الافتراضي in-memory
-      وكفاية لنسخة واحدة (PM2 fork). للنسخ المتعددة حط `UPSTASH_REDIS_REST_URL` +
-      `UPSTASH_REDIS_REST_TOKEN` — الكود بيتحوّل لـ Redis تلقائيًا وبيرجع لـ in-memory
-      لو Redis وقع. (مفيش تعديل كود مطلوب.)
+- [ ] **Rate limiting (مهم على Vercel / أي serverless):** الـ in-memory limiter
+      بيتصفّر مع كل cold lambda، فعمليًا مفيش حماية على serverless/أكتر من نسخة.
+      عشان كده **في الإنتاج التطبيق هيرفض يقلع** لو مفيش Redis مظبوط — حط
+      `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` (الكود بيتحوّل لـ Redis
+      تلقائيًا وبيرجع لـ in-memory لو Redis وقع لحظيًا). لو شغّال **نسخة واحدة طول
+      الوقت** (PM2 fork على VPS) والـ in-memory كفاية، حط `RATE_LIMIT_ALLOW_INMEMORY=1`
+      صراحةً.
 - [ ] **إيميلات الإشعارات (اختياري):** حط `RESEND_API_KEY` + `RESEND_FROM` (sender
       موثّق) علشان مزوّد الخدمة ياخد إيميل مع كل طلب جديد. من غيرها الطلبات بتتسجّل عادي.
 - [ ] **CAPTCHA (اختياري):** حط `TURNSTILE_SECRET_KEY` (أو `RECAPTCHA_SECRET_KEY`)
       لتفعيل الحماية على فورمات الطلب/التقييم. **مهم:** تفعيله بيتطلّب إضافة الـ widget
       في الفرونت وإرسال الـ token، وإلا كل الطلبات هتترفض.
 - [ ] **مراقبة الأخطاء (اختياري):** حط `SENTRY_DSN` علشان الأخطاء (500) تتبعت لـ Sentry.
+- [ ] **الجاهزية (Readiness):** خلي الـ load balancer / monitor يضرب
+      `GET /api/ready` (بيتأكد إن قاعدة البيانات شغالة، بيرجّع 503 لو وقعت) بدل
+      `/api/health` (liveness بس). الاتنين مُعفيين من بوابة الـ API key.
+- [ ] **الخصوصية / PII:** إيميل تنبيه الأدمن بقى مفيهوش بيانات العميل الشخصية
+      (اسم/تليفون/ميزانية) — التفاصيل في الداشبورد بس؛ إيميل مزوّد الخدمة لوحده
+      اللي فيه التليفون (محتاجه يتواصل). فكّر في **سياسة احتفاظ** (purge للـ leads
+      القديمة بعد فترة) ووثّق اتفاقيات معالجة البيانات (DPA) مع Supabase وResend.
+- [ ] **سجل التدقيق (Audit log):** العمليات الحسّاسة (حذف/تغيير حالة/تغيير
+      صلاحيات/إنشاء حساب) بتتسجّل في جدول `AuditLog` وبتتقري من
+      `GET /api/admin/audit-logs` (أدمن بس).
+- [ ] **Sitemap (SEO):** الـ sitemap بقى ديناميكي من قاعدة البيانات على
+      `https://<api-domain>/api/sitemap` (بيضيف الشركات/التصنيفات تلقائيًا من غير
+      redeploy). حط `PUBLIC_SITE_URL` بدومين **الفرونت** عشان روابط الـ `loc` تطلع
+      صح، واعمل submit للرابط ده في Google Search Console (أو ضيفه في `robots.txt`
+      كـ `Sitemap:`). ملف [`app/public/sitemap.xml`](app/public/sitemap.xml)
+      الثابت بقى **متجاوَز** — احذفه، أو اعمل rewrite في
+      [`app/vercel.json`](app/vercel.json) من `/sitemap.xml` للـ API sitemap.
 - [ ] `JWT_TTL` قصير في الإنتاج (الافتراضي دلوقتي `1d`)، و`JWT_SECRET` قوي وسري.
+- [ ] **Security headers:** الهيدرز الأساسية (HSTS / nosniff / X-Frame-Options /
+      Referrer-Policy / Permissions-Policy) مفعّلة تلقائيًا للباك إند
+      ([`api/next.config.ts`](api/next.config.ts)) وللفرونت
+      ([`app/vercel.json`](app/vercel.json)).
+- [ ] **CSP (دفاع أساسي ضد XSS) — بقى متوصّل:**
+      > ملاحظة: التوكن بقى في **httpOnly cookie** (مش localStorage)، فـ XSS مش
+      > بيقدر يسرقه؛ الـ CSP فاضلة مهمة كدفاع عميق ضد حقن السكربتات عمومًا.
+
+      الـ CSP اتحطّ **Report-Only** بالفعل في التنصيبتين:
+      - VPS: [`deploy/Caddyfile`](deploy/Caddyfile) (بلوك الـ SPA).
+      - Vercel: [`app/vercel.json`](app/vercel.json) — **غيّر `REPLACE-WITH-API-DOMAIN`**
+        في `connect-src` لدومين الباك إند (على VPS مش محتاج — نفس الـ origin).
+
+      والـ locale-init script اتنقل لملف خارجي
+      ([`app/public/locale-init.js`](app/public/locale-init.js))، فـ `script-src`
+      بقى `'self'` **من غير** `'unsafe-inline'` — يعني أي `<script>` محقون بيتمنع.
+
+      **الخطوات:**
+      1. انشر بالـ Report-Only، وافتح DevTools console وأنت بتتصفّح كل الصفحات
+         (الرئيسية، تصنيف، شركة، فورم الطلب، `/admin`، `/provider`) وصلّح أي
+         violation بيتبلّغ.
+      2. بعد يومين/تلاتة هادية، فعّل الحجب: غيّر اسم الـ header من
+         `Content-Security-Policy-Report-Only` لـ `Content-Security-Policy`.
+
+      > `style-src` فيه `'unsafe-inline'` لأن React بيحط `style=""` inline (خطره
+      > منخفض). `img-src` بيسمح بصور Supabase (`*.supabase.co`) + `data:`. سطر
+      > `frame-src`/challenges.cloudflare.com محتاجه بس لو Turnstile مفعّل — شيله
+      > غير كده.
+
+---
+
+## ما الذي يُدار من لوحة التحكم مقابل متغيرات البيئة
+
+كل المحتوى التشغيلي والتسويقي يتدار من **`/admin`** بدون تعديل كود أو redeploy:
+الشركات/التصنيفات/المشاريع/المعارض/التقييمات/الـ feedback/الـ leads/الحسابات،
+**إعدادات المنصّة** (اسم الموقع، إيميل/تليفون الدعم، العنوان، روابط السوشيال،
+قوائم المناطق والميزانيات، نصوص الـ hero بالعربي والإنجليزي)، **شعار/أيقونة
+الموقع (logo/favicon)**، **قوالب إيميلات الإشعارات**، **صفحات الشروط والخصوصية**،
+و**الـ SEO** (sitemap ديناميكي + meta لكل شركة/تصنيف).
+
+أما الإعدادات التشغيلية (Infra) فتظل عبر **متغيّرات البيئة** (تتغيّر مرّة عند النشر،
+مش محتاجة تعديل كود): `DATABASE_URL`/`DIRECT_URL`، `JWT_SECRET`/`JWT_TTL`،
+`CORS_ALLOWED_ORIGINS`، `API_KEY`، `PUBLIC_SITE_URL`، Redis، Resend، CAPTCHA،
+`SENTRY_DSN`. كلها موثّقة في [`api/.env.example`](api/.env.example).
 
 ---
 

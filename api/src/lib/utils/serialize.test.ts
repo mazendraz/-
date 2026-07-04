@@ -84,6 +84,8 @@ describe("serializeCategory", () => {
       icon: "chair",
       cover: null,
       isActive: true,
+      metaTitle: null,
+      metaDescription: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -94,6 +96,8 @@ describe("serializeCategory", () => {
       icon: "chair",
       cover: "",
       count: 12,
+      metaTitle: null,
+      metaDescription: null,
     });
   });
 });
@@ -166,6 +170,7 @@ describe("serializeCompany", () => {
         img: "p1.jpg",
         description: "Full villa",
         year: "2024",
+        featured: false,
       },
     ]);
     expect(out.reviews).toEqual([

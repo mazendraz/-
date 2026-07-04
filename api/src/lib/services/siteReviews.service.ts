@@ -1,8 +1,9 @@
 // Site-review (platform testimonial) business logic. Visitor submissions are held
 // for moderation (visible=false); admins toggle visibility and open/close intake.
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/utils/errors";
-import type { ApiSiteReview, ApiSiteReviewPayload } from "@/lib/apiTypes";
+import type { ApiPage, ApiSiteReview, ApiSiteReviewPayload } from "@/lib/apiTypes";
 
 // AppSetting key for the global "submissions open" flag.
 const REVIEWS_ENABLED_KEY = "site_reviews_enabled";
@@ -39,10 +40,59 @@ export async function listPublic(): Promise<ApiSiteReview[]> {
   return rows.map(serialize);
 }
 
-/** Admin: all reviews (visible and hidden), newest first. */
-export async function listAll(): Promise<ApiSiteReview[]> {
-  const rows = await prisma.siteReview.findMany({ orderBy: { createdAt: "desc" } });
+export interface SiteReviewListQuery {
+  search?: string; // matches name / district / text
+  page?: number;
+  pageSize?: number;
+}
+
+const SITE_REVIEW_DEFAULT_PAGE_SIZE = 20;
+const SITE_REVIEW_MAX_PAGE_SIZE = 100;
+
+/** Case-insensitive OR filter across the human-searchable site-review fields. */
+function siteReviewSearchWhere(search?: string): Prisma.SiteReviewWhereInput {
+  const s = search?.trim();
+  if (!s) return {};
+  return {
+    OR: [
+      { name: { contains: s, mode: "insensitive" } },
+      { district: { contains: s, mode: "insensitive" } },
+      { text: { contains: s, mode: "insensitive" } },
+    ],
+  };
+}
+
+/**
+ * Admin: all reviews (visible and hidden), newest first. Optional `search` filters
+ * in the DB. Returns the full (filtered) array — default response shape unchanged,
+ * so existing callers keep working. Use `listPage` for bounded pagination.
+ */
+export async function listAll(query: SiteReviewListQuery = {}): Promise<ApiSiteReview[]> {
+  const rows = await prisma.siteReview.findMany({
+    where: siteReviewSearchWhere(query.search),
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map(serialize);
+}
+
+/** Admin: paginated reviews (newest first), filterable by `search`. */
+export async function listPage(query: SiteReviewListQuery): Promise<ApiPage<ApiSiteReview>> {
+  const where = siteReviewSearchWhere(query.search);
+  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
+  const pageSize = Math.min(
+    SITE_REVIEW_MAX_PAGE_SIZE,
+    Math.max(1, Math.trunc(query.pageSize ?? SITE_REVIEW_DEFAULT_PAGE_SIZE) || SITE_REVIEW_DEFAULT_PAGE_SIZE),
+  );
+  const [total, rows] = await Promise.all([
+    prisma.siteReview.count({ where }),
+    prisma.siteReview.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  return { data: rows.map(serialize), meta: { total, page, pageSize } };
 }
 
 /** Public: create a review, held for moderation (visible=false). */

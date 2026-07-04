@@ -3,12 +3,99 @@
 // app/src/lib/catalog.ts: rating = round(avg, 1 decimal), 0 when empty).
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { LeadStatus } from "@/generated/prisma/enums";
-import { serializeReview } from "@/lib/utils/serialize";
-import { phoneTail } from "@/lib/utils/phone";
+import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
+import { serializeReview, serializeReviewAdmin } from "@/lib/utils/serialize";
+import { leadSecretMatches } from "@/lib/services/leads.service";
+import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
+import { notifyAdminsReviewSubmitted } from "@/lib/services/notifications.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type { SubmitReviewInput } from "@/lib/validation/reviews";
-import type { ApiReview } from "@/lib/apiTypes";
+import type { ApiPage, ApiReview } from "@/lib/apiTypes";
+
+/**
+ * Alert admins that a customer left a review — Web Push + email. Fire-and-forget
+ * and fail-open: never blocks or fails the customer's submission.
+ */
+async function notifyAdminsNewReview(companyId: string, rating: number, author: string): Promise<void> {
+  try {
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+    const companyName = company?.name ?? "A company";
+
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN", isActive: true },
+      select: { email: true },
+    });
+    // Awaited (via allSettled) so the enclosing runAfterResponse keeps the
+    // serverless function alive until both channels actually send.
+    await Promise.allSettled([
+      pushAdmins({
+        title: "New review to approve",
+        body: `${companyName} — ${"★".repeat(rating)} from ${author}`,
+        url: "/admin",
+        tag: `review-${companyId}-${Date.now()}`,
+      }),
+      notifyAdminsReviewSubmitted({ companyName, rating, author, adminEmails: admins.map((a) => a.email) }),
+    ]);
+  } catch (err) {
+    console.error("[notify] new-review admin alert failed:", err);
+  }
+}
+
+export interface AdminReviewItem extends ApiReview {
+  companyId: string;
+  companyName: string;
+  companySlug: string;
+}
+
+/**
+ * Admin: recent verified customer reviews across all companies, newest first.
+ * Optionally filter by approval state (the moderation queue passes `false`).
+ */
+export async function listAllForAdmin(approved?: boolean): Promise<AdminReviewItem[]> {
+  const where: Prisma.ReviewWhereInput = { verified: true };
+  if (typeof approved === "boolean") where.approved = approved;
+  const rows = await prisma.review.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: { company: { select: { id: true, name: true, slug: true } } },
+  });
+  return rows.map((r) => ({
+    ...serializeReviewAdmin(r),
+    companyId: r.company.id,
+    companyName: r.company.name,
+    companySlug: r.company.slug,
+  }));
+}
+
+/** Admin: approve (or un-approve) a review, then recompute the company aggregate. */
+export async function setApproved(reviewId: string, approved: boolean): Promise<ApiReview> {
+  const review = await prisma.review.findUnique({
+    where: { id: reviewId },
+    select: { id: true, companyId: true },
+  });
+  if (!review) throw new NotFoundError("Review");
+  const updated = await prisma.$transaction(async (tx) => {
+    const r = await tx.review.update({ where: { id: reviewId }, data: { approved } });
+    await recompute(tx, review.companyId);
+    return r;
+  });
+  return serializeReviewAdmin(updated);
+}
+
+/** Admin: delete any review by id (recomputes the company aggregate). */
+export async function removeById(reviewId: string): Promise<void> {
+  const review = await prisma.review.findUnique({
+    where: { id: reviewId },
+    select: { id: true, companyId: true },
+  });
+  if (!review) throw new NotFoundError("Review");
+  await prisma.$transaction(async (tx) => {
+    await tx.review.delete({ where: { id: reviewId } });
+    await recompute(tx, review.companyId);
+  });
+}
 
 export interface ReviewInput {
   author: string;
@@ -19,12 +106,80 @@ export interface ReviewInput {
   district: string;
 }
 
+export interface ReviewListQuery {
+  search?: string; // matches author / text / district
+  rating?: number; // exact star filter (1..5)
+  page?: number;
+  pageSize?: number;
+}
+
+const REVIEW_DEFAULT_PAGE_SIZE = 12;
+const REVIEW_MAX_PAGE_SIZE = 50;
+
+/**
+ * Public: paginated + searchable reviews for one ACTIVE company (by slug). Lets the
+ * provider dashboard / public profile page over the COMPLETE review history instead
+ * of the 50-row cap baked into the company-detail payload. Newest first.
+ */
+export async function listByCompanySlug(
+  slug: string,
+  query: ReviewListQuery,
+): Promise<ApiPage<ApiReview>> {
+  const company = await prisma.company.findFirst({
+    where: { slug, status: CompanyStatus.ACTIVE },
+    select: { id: true },
+  });
+  // 404 for missing or non-ACTIVE — same as the profile endpoint.
+  if (!company) throw new NotFoundError("Company");
+
+  // Public/provider listing shows APPROVED reviews only (pending ones are hidden
+  // until an admin approves them).
+  const where: Prisma.ReviewWhereInput = { companyId: company.id, approved: true };
+  if (query.rating && query.rating >= 1 && query.rating <= 5) where.rating = query.rating;
+  const s = query.search?.trim();
+  if (s) {
+    where.OR = [
+      { author: { contains: s, mode: "insensitive" } },
+      { text: { contains: s, mode: "insensitive" } },
+      { district: { contains: s, mode: "insensitive" } },
+    ];
+  }
+
+  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
+  const pageSize = Math.min(
+    REVIEW_MAX_PAGE_SIZE,
+    Math.max(1, Math.trunc(query.pageSize ?? REVIEW_DEFAULT_PAGE_SIZE) || REVIEW_DEFAULT_PAGE_SIZE),
+  );
+
+  const [total, rows] = await Promise.all([
+    prisma.review.count({ where }),
+    prisma.review.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  return { data: rows.map(serializeReview), meta: { total, page, pageSize } };
+}
+
 type TxClient = Prisma.TransactionClient;
 
-/** Recompute and persist rating (avg, 1 decimal) + reviewCount for a company. */
+/**
+ * Recompute and persist rating (avg, 1 decimal) + reviewCount for a company.
+ * No-op when an admin has manually overridden the rating (ratingOverridden=true):
+ * their values stay until the override is cleared.
+ */
 async function recompute(client: TxClient, companyId: string): Promise<void> {
+  const company = await client.company.findUnique({
+    where: { id: companyId },
+    select: { ratingOverridden: true },
+  });
+  if (company?.ratingOverridden) return;
+
+  // Only APPROVED reviews contribute to the public rating/count.
   const agg = await client.review.aggregate({
-    where: { companyId },
+    where: { companyId, approved: true },
     _avg: { rating: true },
     _count: true,
   });
@@ -62,13 +217,15 @@ export async function add(
         text: input.text,
         date: input.date,
         district: input.district,
+        // Admin-curated reviews are published immediately.
+        approved: true,
       },
     });
     await recompute(tx, companyId);
     return created;
   });
 
-  return serializeReview(review);
+  return serializeReviewAdmin(review);
 }
 
 /** Admin: delete a review, then recompute the company's aggregate. */
@@ -109,17 +266,21 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
       customerName: true,
       district: true,
       phone: true,
+      trackingToken: true,
       status: true,
       reviewedAt: true,
     },
   });
-  // Missing ref and phone mismatch both return 404 — don't reveal valid refs.
-  if (!lead || phoneTail(lead.phone) !== phoneTail(input.phone)) {
+  // Missing ref and secret mismatch both return 404 — don't reveal valid refs.
+  if (!lead || !leadSecretMatches(lead, { token: input.token, phone: input.phone })) {
     throw new NotFoundError("Lead");
   }
   if (lead.status !== LeadStatus.COMPLETED) {
     throw new ConflictError("Only completed requests can be reviewed.");
   }
+  // Fast-path, friendly error for the common (non-racing) case. The authoritative
+  // guard is the conditional claim inside the transaction below — two concurrent
+  // submits can both pass this read, so it must NOT be the only check.
   if (lead.reviewedAt) {
     throw new ConflictError("This request has already been reviewed.");
   }
@@ -128,9 +289,20 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
   const date = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   const review = await prisma.$transaction(async (tx) => {
+    // Atomically claim the one-time review slot: only the first concurrent caller
+    // flips reviewedAt from null (the row lock serializes the rest), so only it
+    // proceeds. Losers match 0 rows → 409, and the whole transaction rolls back.
+    const claimed = await tx.lead.updateMany({
+      where: { id: lead.id, reviewedAt: null },
+      data: { reviewedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      throw new ConflictError("This request has already been reviewed.");
+    }
     const created = await tx.review.create({
       data: {
         companyId: lead.companyId,
+        leadId: lead.id, // links the review to its lead; UNIQUE backstops the claim
         author: lead.customerName,
         avatar,
         rating: input.rating,
@@ -140,10 +312,12 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
         verified: true,
       },
     });
-    await tx.lead.update({ where: { id: lead.id }, data: { reviewedAt: new Date() } });
     await recompute(tx, lead.companyId);
     return created;
   });
+
+  // Alert admins a new customer review came in (push + email) after the response.
+  runAfterResponse(() => notifyAdminsNewReview(lead.companyId, input.rating, lead.customerName));
 
   return serializeReview(review);
 }

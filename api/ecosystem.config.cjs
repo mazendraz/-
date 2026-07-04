@@ -17,7 +17,10 @@ module.exports = {
       instances: 1,
       exec_mode: "fork",
       autorestart: true,
-      max_memory_restart: "512M",
+      // Headroom for concurrent sharp image decodes (admin uploads can each decode
+      // up to ~50MP) on top of the Next.js baseline. 512M could trip a restart
+      // mid-upload; 1G is safe on a 4GB VPS. Lower only on a memory-constrained box.
+      max_memory_restart: "1G",
       env: {
         NODE_ENV: "production",
         PORT: "3000",

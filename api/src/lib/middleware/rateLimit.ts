@@ -99,6 +99,37 @@ function redisEnabled(): boolean {
   return Boolean(REDIS_URL && REDIS_TOKEN);
 }
 
+// ── Production safety guard ───────────────────────────────────────────────────
+// The in-memory limiter is per-process and resets on restart, so on a serverless
+// or multi-instance deploy (e.g. Vercel — the default in DEPLOY.md) it provides
+// effectively NO protection: each cold lambda starts with an empty counter. Fail
+// fast at server boot so this can never ship silently. Operators running a single
+// long-lived instance (PM2 fork) can opt in with RATE_LIMIT_ALLOW_INMEMORY=1.
+//
+// Pure + exported for testing; skipped during `next build` (NEXT_PHASE), since the
+// build imports modules before runtime env (Redis creds) is necessarily present.
+export function rateLimitConfigError(env: NodeJS.ProcessEnv): string | null {
+  const redis = Boolean(env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN);
+  const building = env.NEXT_PHASE === "phase-production-build";
+  if (
+    env.NODE_ENV === "production" &&
+    !building &&
+    !redis &&
+    env.RATE_LIMIT_ALLOW_INMEMORY !== "1"
+  ) {
+    return (
+      "Rate limiting is in-memory but NODE_ENV=production. In-memory limits do not " +
+      "hold across serverless/multi-instance deploys. Set UPSTASH_REDIS_REST_URL + " +
+      "UPSTASH_REDIS_REST_TOKEN for a distributed limiter, or set " +
+      "RATE_LIMIT_ALLOW_INMEMORY=1 if you run a single long-lived instance (PM2 fork)."
+    );
+  }
+  return null;
+}
+
+const configError = rateLimitConfigError(process.env);
+if (configError) throw new Error(configError);
+
 async function redisRateLimit(
   key: string,
   { limit, windowMs }: RateLimitOptions,

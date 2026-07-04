@@ -19,6 +19,15 @@ your-domain.com {
 
 	# API → Next.js backend (PM2 on :3000)
 	handle /api/* {
+		# Reject oversized request bodies at the edge — the outer layer of the
+		# body-size guard (the app also caps public JSON submits at 64KB; see
+		# bodyLimit.ts). Stops a bot forcing the backend to buffer/parse huge
+		# payloads. Set just above the app's 5MB image-upload cap (upload.service.ts)
+		# so admin uploads still pass; raise both together if you need larger uploads.
+		request_body {
+			max_size 6MB
+		}
+
 		reverse_proxy localhost:3000 {
 			# Strip any client-supplied X-Forwarded-For and re-set it from the real
 			# peer, so the app can't be tricked into trusting a spoofed client IP
@@ -31,6 +40,26 @@ your-domain.com {
 	# Everything else → static SPA with client-side routing fallback
 	handle {
 		root * /var/www/alassema/dist
+
+		# Content-Security-Policy — the main defense against XSS stealing the
+		# localStorage auth token. Shipped in REPORT-ONLY first: violations are
+		# reported to the browser console but nothing is blocked, so you can verify
+		# the whole site (home, category, company, request form, admin, provider)
+		# with DevTools open and fix any violation before enforcing.
+		#
+		# TO ENFORCE (after a few quiet days): rename the header below from
+		# `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
+		#
+		# Notes on this policy (same-origin deploy, so connect-src 'self' covers the API):
+		#   • script-src 'self' — NO 'unsafe-inline' (the locale-init script is now an
+		#     external /locale-init.js), so injected inline <script> is blocked.
+		#   • style-src allows 'unsafe-inline' — React sets inline style="" attributes;
+		#     style injection is low-risk. Google Fonts CSS is fetched from googleapis.
+		#   • img-src allows Supabase Storage (uploaded images) + data: URIs.
+		#   • frame-src/…cloudflare.com is only needed when Turnstile CAPTCHA is on;
+		#     remove it otherwise.
+		header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+
 		try_files {path} /index.html
 		file_server
 	}

@@ -1,5 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
+import { clientIp, rateLimit, rateLimitConfigError } from "@/lib/middleware/rateLimit";
+
+describe("rateLimitConfigError (production safety guard)", () => {
+  const redis = {
+    UPSTASH_REDIS_REST_URL: "https://x.upstash.io",
+    UPSTASH_REDIS_REST_TOKEN: "tok",
+  };
+
+  it("allows in-memory outside production", () => {
+    expect(rateLimitConfigError({ NODE_ENV: "development" } as never)).toBeNull();
+    expect(rateLimitConfigError({ NODE_ENV: "test" } as never)).toBeNull();
+  });
+
+  it("rejects in-memory in production without Redis", () => {
+    expect(rateLimitConfigError({ NODE_ENV: "production" } as never)).toMatch(/in-memory/i);
+  });
+
+  it("allows production when Redis is configured", () => {
+    expect(
+      rateLimitConfigError({ NODE_ENV: "production", ...redis } as never),
+    ).toBeNull();
+  });
+
+  it("allows production with the explicit single-instance opt-out", () => {
+    expect(
+      rateLimitConfigError({
+        NODE_ENV: "production",
+        RATE_LIMIT_ALLOW_INMEMORY: "1",
+      } as never),
+    ).toBeNull();
+  });
+
+  it("does not block the production build phase (runtime env not yet present)", () => {
+    expect(
+      rateLimitConfigError({
+        NODE_ENV: "production",
+        NEXT_PHASE: "phase-production-build",
+      } as never),
+    ).toBeNull();
+  });
+});
 
 // TRUSTED_PROXY_HOPS defaults to 1 (Caddy), so the real client is the RIGHTMOST
 // X-Forwarded-For entry. Anything to its left is client-supplied and ignored.
