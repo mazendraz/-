@@ -260,7 +260,7 @@ export default function Home() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                   {/* Logo */}
-                  <div className="absolute bottom-0 left-4 translate-y-1/2 w-12 h-12 rounded-xl overflow-hidden
+                  <div className="absolute top-4 left-4 z-10 w-12 h-12 rounded-xl overflow-hidden
                                   border-2 border-white shadow-md bg-white">
                     <img src={c.logo} alt="" className="w-full h-full object-cover" loading="lazy" />
                   </div>
