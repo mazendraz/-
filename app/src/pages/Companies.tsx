@@ -361,7 +361,7 @@ function CompanyCard({ company: c, delay }: { company: Company; delay: number })
         <div className="relative h-44 overflow-hidden">
           <img src={c.cover} alt={c.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="lazy" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-          <div className="absolute bottom-0 left-5 rtl:left-auto rtl:right-5 translate-y-1/2 w-14 h-14 rounded-xl overflow-hidden border-2 border-white shadow-md bg-white">
+          <div className="absolute top-5 left-5 rtl:left-auto rtl:right-5 z-10 w-14 h-14 rounded-xl overflow-hidden border-2 border-white shadow-md bg-white">
             <img src={c.logo} alt={`${c.name} logo`} className="w-full h-full object-cover" loading="lazy" />
           </div>
           {/* Save heart — top-right (convention) */}
