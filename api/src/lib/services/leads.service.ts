@@ -12,6 +12,10 @@ import {
   notifyCompanyProviders as pushCompanyProviders,
   notifyAdmins as pushAdmins,
 } from "@/lib/services/push.service";
+import {
+  notifyAdminTelegram,
+  notifyProviderTelegram,
+} from "@/lib/services/telegram.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type {
@@ -70,7 +74,7 @@ async function listWhere(
 export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
   const company = await prisma.company.findFirst({
     where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
-    select: { id: true, name: true, email: true, whatsapp: true },
+    select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
   });
   // 404 for both missing and non-ACTIVE — don't reveal suspended companies.
   if (!company) throw new NotFoundError("Company");
@@ -151,6 +155,12 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
             url: "/admin",
             tag: `lead-${serialized.id}`,
           }),
+          // Telegram (free) — instant chat message to the owner/admin chat
+          // (TELEGRAM_ADMIN_CHAT_ID) and to the provider once they've linked the
+          // bot (Company.telegramChatId). Same fail-open contract: skipped silently
+          // when the bot token / chat id isn't set.
+          notifyAdminTelegram(serialized, company.name),
+          notifyProviderTelegram(serialized, company.telegramChatId, company.name),
         ]);
       });
 

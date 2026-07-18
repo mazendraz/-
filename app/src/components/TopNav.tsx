@@ -81,22 +81,21 @@ export default function TopNav({ onOpenSearch }: Props) {
   const solidBg = !isHome || scrolled;
 
   const p = isHome ? scrollProgress : 1;
+  // Frosted panel in both states: dark tint over the hero, light frost once scrolled.
+  // Alpha stays well below 1 so the backdrop-blur is always visible through it.
+  const darkTint = (0.22 * (1 - p)).toFixed(3);
+  const lightTint = (0.72 * p).toFixed(3);
   const glassNavStyle: React.CSSProperties = {
-    backdropFilter: "blur(24px) saturate(200%)",
-    WebkitBackdropFilter: "blur(24px) saturate(200%)",
-    backgroundColor: `rgba(255,255,255,${(0.02 + p * 0.88).toFixed(3)})`,
-    boxShadow: p > 0.04
-      ? `0 1px 0 rgba(0,0,0,0.07), 0 8px 40px rgba(0,60,100,${(p * 0.08).toFixed(3)})`
-      : "none",
-    borderBottom: p > 0.04
-      ? `1px solid rgba(0,85,120,${(p * 0.1).toFixed(3)})`
-      : "1px solid rgba(255,255,255,0.08)",
+    backdropFilter: "blur(28px) saturate(190%)",
+    WebkitBackdropFilter: "blur(28px) saturate(190%)",
+    backgroundImage: [
+      `linear-gradient(180deg, rgba(255,255,255,${(0.10 + p * 0.10).toFixed(3)}) 0%, rgba(255,255,255,0) 55%)`,
+      `linear-gradient(rgba(10,26,45,${darkTint}), rgba(10,26,45,${darkTint}))`,
+      `linear-gradient(rgba(255,255,255,${lightTint}), rgba(255,255,255,${lightTint}))`,
+    ].join(", "),
+    boxShadow: `inset 0 1px 0 rgba(255,255,255,${(0.28 - p * 0.14).toFixed(3)}), 0 8px 40px rgba(0,40,80,${(0.10 + p * 0.08).toFixed(3)})`,
+    borderBottom: `1px solid rgba(${p > 0.5 ? "0,85,120" : "255,255,255"},${(0.18 + p * 0.02).toFixed(3)})`,
   };
-
-  // Logo is white/outlined — blue glow on solid bg keeps it readable on light nav.
-  const logoFilter: React.CSSProperties["filter"] = solidBg
-    ? "drop-shadow(0 0 8px rgba(0,100,210,0.65)) drop-shadow(0 0 2px rgba(0,60,160,0.4))"
-    : "drop-shadow(0 2px 16px rgba(0,0,0,0.6)) drop-shadow(0 0 6px rgba(0,0,0,0.35))";
 
   const linkBase = "text-[14px] font-semibold transition-all duration-200 px-4 py-2 rounded-lg";
   const linkActive = (isActive: boolean) =>
@@ -113,7 +112,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       {/* ── Desktop nav ─────────────────────────────────────────────────────── */}
       <nav
         className="fixed top-0 left-0 w-full z-50 hidden md:flex items-center px-8 lg:px-12"
-        style={{ ...glassNavStyle, height: "76px", transition: "background-color 0.3s ease, box-shadow 0.3s ease" }}
+        style={{ ...glassNavStyle, height: "76px", transition: "box-shadow 0.3s ease, border-color 0.3s ease" }}
       >
         {/* Left column — nav links */}
         <div className="flex flex-1 items-center gap-1">
@@ -129,7 +128,7 @@ export default function TopNav({ onOpenSearch }: Props) {
           <Link to="/" aria-label="Al Assemah — Home" className="flex items-center">
             <Logo
               className="object-contain"
-              style={{ height: "52px", width: "auto", filter: logoFilter, transition: "filter 0.3s ease" }}
+              style={{ height: "52px", width: "auto" }}
             />
           </Link>
         </div>
@@ -210,7 +209,7 @@ export default function TopNav({ onOpenSearch }: Props) {
         >
           <Logo
             className="object-contain"
-            style={{ height: "44px", width: "auto", filter: logoFilter, transition: "filter 0.3s ease" }}
+            style={{ height: "44px", width: "auto" }}
           />
         </Link>
 
@@ -262,7 +261,7 @@ export default function TopNav({ onOpenSearch }: Props) {
               <Link to="/" onClick={() => setDrawerOpen(false)} className="flex items-center">
                 <Logo
                   className="object-contain"
-                  style={{ height: "40px", width: "auto", filter: "drop-shadow(0 0 4px rgba(0,100,200,0.5))" }}
+                  style={{ height: "40px", width: "auto" }}
                 />
               </Link>
               <button

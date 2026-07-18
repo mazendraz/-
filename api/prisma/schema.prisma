@@ -107,6 +107,16 @@ model Company {
   // internal contact fields for notifications — NOT returned in the public payload
   email             String?
   whatsapp          String?
+  // Telegram chat id for the provider, captured when they link the bot (see
+  // telegram.service). Null → provider not linked, so Telegram lead alerts are
+  // skipped for them (Web Push still applies).
+  telegramChatId    String?
+  // Single-use deep-link token behind the dashboard's "Connect Telegram" button.
+  // The provider opens t.me/<bot>?start=<token>, so the link is proven by the
+  // token rather than by matching a shared phone. Cleared the moment it is
+  // redeemed; ignored past its expiry. Unique so a token identifies one company.
+  telegramLinkToken String?       @unique
+  telegramLinkExpires DateTime?
   // Optional per-page SEO overrides (admin-set). Null → frontend falls back to
   // the name/tagline-derived defaults.
   metaTitle         String?
