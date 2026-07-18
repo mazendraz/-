@@ -1,0 +1,338 @@
+// Telegram notifications on new leads (via the Bot API — no SDK, free). Sends an
+// instant chat message to the owner/admin chat, and — when a provider has linked
+// their Telegram — to that provider too. Designed to FAIL OPEN like the email /
+// push paths (see notifications.service / push.service): a missing bot token, a
+// missing chat id, or a send error never throws — lead creation must never break
+// or block because of notifications.
+//
+// Setup: create a bot with @BotFather to get TELEGRAM_BOT_TOKEN, then have each
+// recipient open the bot and press Start; their numeric chat id goes in
+// TELEGRAM_ADMIN_CHAT_ID (owner) or Company.telegramChatId (provider).
+import type { ApiLead } from "@/lib/apiTypes";
+import { prisma } from "@/lib/prisma";
+import { phoneTail } from "@/lib/utils/phone";
+
+/** True only when a bot token is configured. */
+export function isTelegramConfigured(): boolean {
+  return Boolean(process.env.TELEGRAM_BOT_TOKEN);
+}
+
+/**
+ * Escape text interpolated into an HTML-parse-mode message, so a customer- or
+ * admin-supplied value can never break (or inject) markup.
+ */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Build the Telegram message body for a new lead (HTML parse mode). Pure —
+ * unit-testable. `forAdmin` prefixes the company name so the owner knows which
+ * provider the lead landed on. Values are HTML-escaped so a customer-supplied
+ * field can never break the markup.
+ */
+export function buildLeadTelegramMessage(
+  lead: ApiLead,
+  companyName: string,
+  forAdmin = false,
+): string {
+  const e = escapeHtml;
+  const header = forAdmin
+    ? `🔔 <b>طلب جديد على ${e(companyName)}</b>`
+    : `🔔 <b>عندك طلب جديد على العاصمة</b>`;
+  return (
+    `${header}\n\n` +
+    `📄 رقم الطلب: <b>${e(lead.refNumber)}</b>\n` +
+    `🛠️ الخدمة: ${e(lead.service)}\n` +
+    `👤 العميل: ${e(lead.name)}\n` +
+    `📞 التليفون: ${e(lead.phone)}\n` +
+    `📍 المنطقة: ${e(lead.district)}\n` +
+    `💰 الميزانية: ${e(lead.budget)}\n` +
+    `📝 التفاصيل: ${e(lead.description)}`
+  );
+}
+
+/**
+ * Send one Telegram message to a chat id, with optional extra Bot API fields (e.g.
+ * reply_markup). Returns true if dispatched, false if skipped (not configured / no
+ * chat id). Never throws internally to callers that already wrap it — but the
+ * `notify*` helpers below catch, so this may throw on a non-2xx for the webhook.
+ */
+async function sendViaTelegram(
+  chatId: string | number,
+  text: string,
+  extra: Record<string, unknown> = {},
+): Promise<boolean> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || chatId === "" || chatId === undefined) return false;
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+      ...extra,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Telegram responded ${res.status}: ${await res.text()}`);
+  }
+  return true;
+}
+
+/**
+ * Notify the owner/admin of a new lead over Telegram, to TELEGRAM_ADMIN_CHAT_ID.
+ * Never throws. Returns true if dispatched, false if skipped.
+ */
+export async function notifyAdminTelegram(
+  lead: ApiLead,
+  companyName: string,
+): Promise<boolean> {
+  try {
+    if (!isTelegramConfigured()) {
+      console.info(
+        `[telegram] TELEGRAM_BOT_TOKEN not set — skipping admin Telegram for lead ${lead.refNumber}`,
+      );
+      return false;
+    }
+    const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    if (!chatId) {
+      console.info(
+        `[telegram] TELEGRAM_ADMIN_CHAT_ID not set — skipping admin Telegram for lead ${lead.refNumber}`,
+      );
+      return false;
+    }
+    return await sendViaTelegram(chatId, buildLeadTelegramMessage(lead, companyName, true));
+  } catch (err) {
+    console.error(`[telegram] admin send failed for lead ${lead.refNumber}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Notify a provider of a new lead over Telegram, to their linked chat id. Never
+ * throws. Returns true if dispatched, false if skipped (not configured / provider
+ * hasn't linked Telegram).
+ */
+export async function notifyProviderTelegram(
+  lead: ApiLead,
+  chatId: string | null | undefined,
+  companyName: string,
+): Promise<boolean> {
+  try {
+    if (!isTelegramConfigured() || !chatId) return false;
+    return await sendViaTelegram(chatId, buildLeadTelegramMessage(lead, companyName, false));
+  } catch (err) {
+    console.error(`[telegram] provider send failed for lead ${lead.refNumber}:`, err);
+    return false;
+  }
+}
+
+// ── Provider self-linking via the bot (webhook) ──────────────────────────────────
+// Bots can't message a user first, so the provider must always make the first move.
+// There are two ways in, and the first is strongly preferred:
+//
+//   1. Deep link (dashboard "Connect Telegram"). We mint a single-use token and
+//      send them to t.me/<bot>?start=<token>. Redeeming the token proves which
+//      company they are — no phone involved, so nothing to spoof or mistype.
+//   2. Phone share (they found the bot on their own). They tap "share my number"
+//      and we match it against Company.phone/whatsapp. Kept as a fallback.
+
+/** Minimal shapes of the Telegram Update fields we consume. */
+export interface TelegramUpdate {
+  message?: {
+    chat?: { id: number };
+    text?: string;
+    contact?: { phone_number: string; user_id?: number };
+  };
+}
+
+/** The bot's @username, needed to build t.me deep links. */
+export function telegramBotUsername(): string | null {
+  return process.env.TELEGRAM_BOT_USERNAME?.replace(/^@/, "") || null;
+}
+
+/**
+ * True when deep linking is fully configured. The bot token alone is enough to
+ * SEND messages, but a link also needs the username to address t.me.
+ */
+export function isTelegramLinkingConfigured(): boolean {
+  return isTelegramConfigured() && telegramBotUsername() !== null;
+}
+
+/** How long a freshly-issued deep-link token stays redeemable. */
+const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Mint a single-use deep link for `companyId` and return the t.me URL. Replaces any
+ * previous outstanding token for that company, so the newest button always wins and
+ * an abandoned one stops working. Returns null when linking isn't configured.
+ *
+ * The token is 32 base64url chars from a CSPRNG — comfortably inside Telegram's
+ * 64-char /start payload limit, and not guessable within the 15-minute window.
+ */
+export async function createProviderLinkUrl(companyId: string): Promise<string | null> {
+  const username = telegramBotUsername();
+  if (!isTelegramConfigured() || !username) return null;
+
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const token = Buffer.from(bytes).toString("base64url"); // 32 chars
+
+  await prisma.company.update({
+    where: { id: companyId },
+    data: {
+      telegramLinkToken: token,
+      telegramLinkExpires: new Date(Date.now() + LINK_TOKEN_TTL_MS),
+    },
+  });
+
+  return `https://t.me/${username}?start=${token}`;
+}
+
+/**
+ * Redeem a deep-link token: bind `chatId` to the company that owns it and burn the
+ * token so it can't be replayed. Returns the company name, or null when the token is
+ * unknown, already used, or expired.
+ */
+export async function linkProviderByToken(
+  token: string,
+  chatId: number | string,
+): Promise<string | null> {
+  const company = await prisma.company.findUnique({
+    where: { telegramLinkToken: token },
+    select: { id: true, name: true, telegramLinkExpires: true },
+  });
+  if (!company) return null;
+
+  // Expired: clear it so a stale token can't linger, and refuse.
+  if (!company.telegramLinkExpires || company.telegramLinkExpires.getTime() < Date.now()) {
+    await prisma.company.update({
+      where: { id: company.id },
+      data: { telegramLinkToken: null, telegramLinkExpires: null },
+    });
+    return null;
+  }
+
+  await prisma.company.update({
+    where: { id: company.id },
+    data: {
+      telegramChatId: String(chatId),
+      telegramLinkToken: null,
+      telegramLinkExpires: null,
+    },
+  });
+  return company.name;
+}
+
+/** Disconnect a company's Telegram, stopping its lead alerts on that channel. */
+export async function unlinkProvider(companyId: string): Promise<void> {
+  await prisma.company.update({
+    where: { id: companyId },
+    data: { telegramChatId: null, telegramLinkToken: null, telegramLinkExpires: null },
+  });
+}
+
+/**
+ * Link the Company whose phone (or whatsapp) matches `phone` to `chatId`. Matching
+ * is by the last 10 significant digits (phoneTail), so local/CC/E.164 forms all
+ * compare equal. Returns the linked company's name, or null if no match. Never
+ * throws to the caller beyond DB errors (the webhook wraps it).
+ */
+export async function linkProviderByPhone(
+  phone: string,
+  chatId: number | string,
+): Promise<string | null> {
+  const tail = phoneTail(phone);
+  if (tail.length < 8) return null; // implausibly short — ignore
+
+  // Small dataset (a handful of companies): fetch the candidates and match in JS so
+  // local vs. country-code storage differences never cause a miss.
+  const companies = await prisma.company.findMany({
+    select: { id: true, name: true, phone: true, whatsapp: true },
+  });
+  const match = companies.find(
+    (c) => phoneTail(c.phone) === tail || (c.whatsapp && phoneTail(c.whatsapp) === tail),
+  );
+  if (!match) return null;
+
+  await prisma.company.update({
+    where: { id: match.id },
+    data: { telegramChatId: String(chatId) },
+  });
+  return match.name;
+}
+
+/**
+ * Handle one inbound Telegram update from the webhook. Fail-open: any error is
+ * logged and swallowed so the webhook always 200s (Telegram retries otherwise).
+ *   • /start <token>  → redeem the dashboard deep link → confirm or reject.
+ *   • /start (bare)   → reply with a one-tap "share my number" button.
+ *   • a shared contact → match phone → store chat id → confirm or reject.
+ */
+export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
+  try {
+    const msg = update.message;
+    const chatId = msg?.chat?.id;
+    if (!chatId) return;
+
+    // "/start <token>" — the dashboard deep link. Preferred path: the token alone
+    // identifies the company, so we never touch the phone number.
+    const startPayload = msg.text?.match(/^\/start\s+(\S+)$/)?.[1];
+    if (startPayload) {
+      const name = await linkProviderByToken(startPayload, chatId);
+      await sendViaTelegram(
+        chatId,
+        name
+          ? `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(name)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`
+          : `⚠️ الرابط ده منتهي أو مستخدم قبل كده. ادخل على لوحة التحكم واضغط «ربط تليجرام» من تاني عشان تجيب رابط جديد.`,
+        { reply_markup: { remove_keyboard: true } },
+      );
+      return;
+    }
+
+    if (msg?.contact?.phone_number) {
+      // Only accept a contact the sender shared about THEMSELVES. The
+      // request_contact button always sets user_id to the sender, but a user can
+      // also forward someone else's contact card from the attachment menu — that
+      // arrives here identically. Without this check, anyone holding a provider's
+      // number could share their card and redirect that provider's lead alerts to
+      // their own chat.
+      if (msg.contact.user_id !== chatId) {
+        await sendViaTelegram(
+          chatId,
+          "⚠️ لازم تشارك رقمك انت شخصياً عن طريق زرار «شارك رقمي»، مش كارت جهة اتصال تانية.",
+          { reply_markup: { remove_keyboard: true } },
+        );
+        return;
+      }
+      const name = await linkProviderByPhone(msg.contact.phone_number, chatId);
+      await sendViaTelegram(
+        chatId,
+        name
+          ? `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(name)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`
+          : `⚠️ الرقم ده مش متسجّل عندنا كمزوّد خدمة. اتأكد إنك بتشارك نفس الرقم المسجّل في حسابك، أو كلّم الإدارة.`,
+        { reply_markup: { remove_keyboard: true } },
+      );
+      return;
+    }
+
+    // /start or any other text → prompt to share the number.
+    await sendViaTelegram(
+      chatId,
+      "أهلاً بيك 👋\nعشان يوصلك إشعار بكل أوردر جديد على شركتك، اضغط الزرار تحت وشارك رقم تليفونك المسجّل عندنا.",
+      {
+        reply_markup: {
+          keyboard: [[{ text: "📞 شارك رقمي", request_contact: true }]],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
+      },
+    );
+  } catch (err) {
+    console.error("[telegram] webhook update handling failed:", err);
+  }
+}

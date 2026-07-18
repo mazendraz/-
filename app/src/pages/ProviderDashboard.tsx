@@ -18,6 +18,7 @@ import {
 import SearchInput from "../components/SearchInput";
 import Logo from "../components/Logo";
 import NotificationToggle from "../components/NotificationToggle";
+import TelegramConnect from "../components/TelegramConnect";
 
 type ProviderTab = "overview" | "leads" | "projects" | "reviews" | "analytics" | "profile" | "settings";
 
@@ -408,6 +409,9 @@ export default function ProviderDashboard() {
                 <p className="text-body-md font-body-md text-outline mb-4 text-sm">Configure how you receive lead notifications.</p>
                 <div className="py-3 border-b border-outline-variant/20">
                   <NotificationToggle />
+                </div>
+                <div className="py-3 border-b border-outline-variant/20">
+                  <TelegramConnect />
                 </div>
                 {[
                   { label: "Email notifications for new leads", detail: "Receive an email whenever a new lead is submitted" },
