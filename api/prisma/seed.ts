@@ -39,7 +39,7 @@ async function main() {
     process.argv.includes("--force") || process.env.SEED_ALLOW_DESTRUCTIVE === "1";
 
   // Hard block: never seed the production database from a normal run.
-  const looksLikeProd = /pooler\.supabase\.com|supabase\.co/i.test(connectionString);
+  const looksLikeProd = /pooler\.supabase\.com|supabase\.co/i.test(connectionString ?? "");
   if (looksLikeProd && process.env.SEED_I_KNOW !== "1") {
     throw new Error(
       `Refusing to seed: DATABASE_URL points at a Supabase production host. ` +
