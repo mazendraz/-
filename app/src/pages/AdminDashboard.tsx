@@ -49,6 +49,9 @@ import {
 import {
   KpiCard, ChartCard, AreaLineChart, DonutChart, FunnelChart, BarList,
 } from "../components/Charts";
+import AvailabilityControl from "../components/AvailabilityControl";
+import WaitlistManager from "../components/WaitlistManager";
+import { setCompanyAvailability, isBusy, formatReopenDate } from "../lib/availability";
 
 type AdminTab = "overview" | "leads" | "companies" | "services" | "team" | "reviews" | "settings";
 
@@ -81,6 +84,7 @@ export default function AdminDashboard() {
 
   // Editor state
   const [editingCompany, setEditingCompany] = useState<{ company: Company | null } | null>(null);
+  const [busyToggleId, setBusyToggleId] = useState<string | null>(null); // company row availability quick-toggle in flight
   const [editingCategory, setEditingCategory] = useState<{ category: ServiceCategory | null } | null>(null);
 
   // Leads: server-driven search/pagination over the COMPLETE dataset when the API
@@ -283,6 +287,12 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-1.5">
                           <p className="font-bold text-[15px] text-on-surface truncate">{c.name}</p>
                           {c.featured !== false && <span className="material-symbols-outlined text-secondary text-[15px]" style={{ fontVariationSettings: "'FILL' 1" }} title="Featured">star</span>}
+                          {isBusy(c) && (
+                            <span className="flex items-center gap-0.5 bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                              title={c.busyUntil ? `Busy until ${formatReopenDate(c.busyUntil)}` : "Busy"}>
+                              <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>Busy
+                            </span>
+                          )}
                         </div>
                         <p className="text-[12px] text-outline truncate">{c.categoryLabel}</p>
                         <div className="flex items-center gap-2 text-[11px] text-outline mt-0.5">
@@ -292,6 +302,16 @@ export default function AdminDashboard() {
                       <div className="flex flex-col gap-1.5 flex-shrink-0">
                         <button onClick={() => setEditingCompany({ company: c })} className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors">
                           <span className="material-symbols-outlined text-[14px]">edit</span> Edit
+                        </button>
+                        <button
+                          onClick={() => { if (busyToggleId !== c.id) { setBusyToggleId(c.id); void setCompanyAvailability(c.id, { busy: !isBusy(c) }).finally(() => setBusyToggleId(null)); } }}
+                          disabled={busyToggleId === c.id}
+                          title={isBusy(c) ? "Mark available" : "Mark busy (no end date)"}
+                          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors disabled:opacity-60 ${
+                            isBusy(c) ? "text-amber-700 hover:bg-amber-50" : "text-outline hover:text-primary"
+                          }`}>
+                          <span className="material-symbols-outlined text-[14px]">{busyToggleId === c.id ? "progress_activity" : (isBusy(c) ? "event_available" : "event_busy")}</span>
+                          {isBusy(c) ? "Open" : "Busy"}
                         </button>
                         <Link to={`/companies/${c.slug}`} target="_blank" className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-primary transition-colors">
                           <span className="material-symbols-outlined text-[14px]">open_in_new</span> View
@@ -498,7 +518,7 @@ function AdminOverview({
 // ══════════════════════════════════════════════════════════════════════════
 //  COMPANY EDITOR
 // ══════════════════════════════════════════════════════════════════════════
-type EditorTab = "details" | "projects";
+type EditorTab = "details" | "projects" | "availability";
 
 function CompanyEditor({ company, categories, onClose }: {
   company: Company | null;
@@ -560,9 +580,10 @@ function CompanyEditor({ company, categories, onClose }: {
 
   return (
     <ModalShell title={isNew ? "Add Company" : `Edit — ${company!.name}`} onClose={onClose} wide>
-      {/* Sub-tabs */}
+      {/* Sub-tabs. Availability is per-company and uses its own endpoint, so it only
+          shows once the company exists (needs an id). */}
       <div className="flex gap-1 border-b border-outline-variant/20 px-1 -mt-2 mb-5">
-        {(["details", "projects"] as EditorTab[]).map((t) => (
+        {(["details", "projects", ...(isNew ? [] : ["availability" as const])] as EditorTab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2.5 text-[13px] font-bold capitalize border-b-2 transition-colors ${tab === t ? "text-primary border-primary" : "text-outline border-transparent hover:text-on-surface"}`}>
             {t}
@@ -690,6 +711,26 @@ function CompanyEditor({ company, categories, onClose }: {
 
       {tab === "projects" && (
         <ProjectsEditor projects={draft.projects} onChange={(p) => set("projects", p)} />
+      )}
+
+      {tab === "availability" && company && (
+        <div className="space-y-6">
+          <div>
+            <p className="text-[13px] text-outline mb-4 leading-relaxed">
+              Mark this company busy when it can't take new work. While busy, its public profile shows “Join the waiting list” instead of “Request Service”. Saved here immediately (separate from the company details above).
+            </p>
+            <AvailabilityControl
+              key={`${company.id}-${company.busy}-${company.busyUntil ?? ""}`}
+              initialBusy={isBusy(company)}
+              initialBusyUntil={company.busyUntil}
+              initialNote={company.busyNote}
+              onSave={(p) => setCompanyAvailability(company.id, p)}
+            />
+          </div>
+          <div className="border-t border-outline-variant/20 pt-6">
+            <WaitlistManager scope={{ kind: "admin", companyId: company.id }} />
+          </div>
+        </div>
       )}
 
       {/* Footer actions — sticky so Save is always reachable */}

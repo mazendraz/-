@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>تجربة لوحة تحكم المزوّد — العاصمة</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --primary:#005578; --primary-2:#0b6e99; --on-primary:#fff;
+  --surface:#f4f6f8; --card:#ffffff; --line:#e4e9ee;
+  --ink:#0f2733; --muted:#5b7280; --faint:#8ea0ad;
+  --green:#16a34a; --blue:#2563eb; --amber:#b8860b; --red:#dc2626;
+  --shadow:0 2px 14px rgba(11,60,90,.08);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Cairo',system-ui,sans-serif;background:var(--surface);color:var(--ink)}
+.material-symbols-outlined{font-family:'Material Symbols Outlined';font-weight:normal;font-style:normal;line-height:1;vertical-align:middle}
+.app{display:flex;min-height:100vh}
+
+/* Sidebar */
+.side{width:250px;background:#fff;border-left:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;flex-shrink:0}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 18px 14px}
+.brand .mark{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-2));color:#fff;display:grid;place-items:center;font-weight:800;font-size:18px}
+.brand b{font-size:16px}
+.brand small{display:block;color:var(--muted);font-size:11px;font-weight:600}
+.company{margin:6px 14px 10px;padding:10px;border:1px solid var(--line);border-radius:12px;display:flex;gap:10px;align-items:center}
+.company img{width:40px;height:40px;border-radius:9px;object-fit:cover}
+.company .t{font-weight:700;font-size:13px}
+.company .s{color:var(--muted);font-size:11px}
+.nav{padding:6px 10px;display:flex;flex-direction:column;gap:3px}
+.nav button{display:flex;align-items:center;gap:11px;width:100%;border:0;background:none;padding:10px 12px;border-radius:11px;cursor:pointer;font-family:inherit;font-size:14px;font-weight:600;color:var(--muted);text-align:right}
+.nav button .material-symbols-outlined{font-size:21px}
+.nav button:hover{background:#f0f4f7;color:var(--ink)}
+.nav button.on{background:var(--primary);color:#fff}
+.nav .badge{margin-inline-start:auto;background:var(--blue);color:#fff;font-size:11px;font-weight:800;min-width:20px;height:20px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
+.nav button.on .badge{background:rgba(255,255,255,.25)}
+.side .foot{margin-top:auto;padding:14px;border-top:1px solid var(--line);color:var(--faint);font-size:11px}
+
+/* Main */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 22px;position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px}
+.topbar h1{font-size:19px;margin:0;font-weight:800}
+.topbar .out{margin-inline-start:auto;display:flex;align-items:center;gap:6px;background:#f0f4f7;border:0;padding:8px 12px;border-radius:10px;font-family:inherit;font-weight:700;font-size:13px;color:var(--ink);cursor:pointer}
+.wrap{padding:22px;max-width:1150px}
+.panel{display:none}
+.panel.on{display:block;animation:fade .25s ease}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* Cards + grid */
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:18px}
+.card h3{margin:0 0 2px;font-size:15px}
+.card .sub{color:var(--faint);font-size:12px;font-weight:600;margin-bottom:12px}
+.card .head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.link{color:var(--primary);font-weight:800;font-size:13px;background:none;border:0;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:4px}
+
+/* KPI */
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px;position:relative;overflow:hidden}
+.kpi .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:#fff;margin-bottom:10px}
+.kpi .ic .material-symbols-outlined{font-size:21px}
+.kpi .val{font-size:26px;font-weight:800;line-height:1}
+.kpi .lab{color:var(--muted);font-size:12.5px;font-weight:600;margin-top:4px}
+.kpi .delta{position:absolute;top:16px;left:16px;font-size:12px;font-weight:800;color:var(--green)}
+
+/* Lead rows */
+.rows{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.row{display:flex;gap:14px;padding:15px 18px;border-bottom:1px solid #eef2f5;flex-wrap:wrap}
+.row:last-child{border-bottom:0}
+.row:hover{background:#fafcfd}
+.row .grow{flex:1;min-width:0}
+.ref{font-family:ui-monospace,monospace;color:var(--primary);font-size:12px;font-weight:700}
+.pill{font-size:11px;font-weight:800;padding:3px 9px;border-radius:20px;display:inline-block}
+.p-new{background:#dbeafe;color:#1d4ed8}.p-con{background:#e0e7ff;color:#4338ca}
+.p-prog{background:#fef3c7;color:#92400e}.p-done{background:#dcfce7;color:#166534}
+.p-cancel{background:#fee2e2;color:#991b1b}
+.row .name{font-weight:700;font-size:14px;margin:5px 0 2px}
+.row .meta{color:var(--muted);font-size:12.5px}
+.row .desc{color:#465a66;font-size:12.5px;margin-top:5px}
+.row .side2{display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+.row select{border:1px solid var(--line);border-radius:9px;padding:5px 9px;font-family:inherit;font-size:12px;color:var(--ink);background:#fff}
+.row .date{color:var(--faint);font-size:11.5px}
+
+/* Filters */
+.search{width:100%;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px}
+.search input{border:0;outline:0;flex:1;font-family:inherit;font-size:14px;background:none}
+.search .material-symbols-outlined{color:var(--faint)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:20px;padding:6px 14px;font-family:inherit;font-weight:700;font-size:12.5px;cursor:pointer}
+.chip.on{background:var(--primary);color:#fff;border-color:var(--primary)}
+.count{color:var(--faint);font-weight:700;font-size:12.5px}
+
+/* Charts (pure CSS/SVG) */
+.spark{display:flex;align-items:flex-end;gap:4px;height:90px}
+.spark span{flex:1;background:linear-gradient(180deg,var(--primary-2),var(--primary));border-radius:4px 4px 0 0;opacity:.85}
+.bars{display:flex;align-items:flex-end;gap:12px;height:150px;padding-top:10px}
+.bars .b{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.bars .b i{width:100%;max-width:34px;background:linear-gradient(180deg,var(--primary-2),var(--primary));border-radius:6px 6px 0 0;display:block}
+.bars .b em{font-style:normal;color:var(--muted);font-size:11px;font-weight:700}
+.donut{display:flex;align-items:center;gap:18px}
+.legend{display:flex;flex-direction:column;gap:8px;font-size:12.5px;font-weight:600}
+.legend div{display:flex;align-items:center;gap:8px}
+.legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.funnel{display:flex;flex-direction:column;gap:8px}
+.funnel .f{background:linear-gradient(90deg,var(--primary),var(--primary-2));color:#fff;border-radius:8px;padding:9px 14px;font-weight:700;font-size:13px;display:flex;justify-content:space-between;align-self:flex-start}
+
+/* Projects / reviews */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+.tile .ph{height:130px;background:linear-gradient(135deg,#cdd9e0,#9fb4c0);position:relative;display:grid;place-items:center;color:#fff}
+.tile .ph .material-symbols-outlined{font-size:40px;opacity:.7}
+.tile .yr{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px}
+.tile .st{position:absolute;top:8px;right:8px;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:20px}
+.st-app{background:#dcfce7;color:#166534}.st-pend{background:#fef3c7;color:#92400e}
+.tile .bd{padding:14px}
+.tile .bd b{font-size:14px}.tile .bd p{color:var(--muted);font-size:12.5px;margin:5px 0 0}
+.stars .material-symbols-outlined{font-size:15px;color:#e0a800}
+.rev{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.rev p{color:#465a66;font-size:13px;line-height:1.7;flex:1}
+.rev .who{display:flex;gap:10px;align-items:center;border-top:1px solid #eef2f5;padding-top:11px;margin-top:8px}
+.rev .av{width:34px;height:34px;border-radius:50%;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}
+.verified{font-size:10px;font-weight:800;color:var(--primary);background:#e5f0f5;padding:2px 7px;border-radius:20px}
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--primary);color:#fff;border:0;border-radius:11px;padding:9px 15px;font-family:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.toggle{width:42px;height:24px;background:var(--primary);border-radius:20px;position:relative;flex-shrink:0}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%}
+.setrow{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #eef2f5}
+.setrow:last-child{border:0}
+.setrow .t{font-weight:700;font-size:13.5px}.setrow .d{color:var(--faint);font-size:12px}
+.note{background:#e9f3f8;border:1px solid #cfe4ee;border-radius:12px;padding:13px 15px;display:flex;gap:10px;color:#345;font-size:13px;line-height:1.6}
+.note .material-symbols-outlined{color:var(--primary)}
+
+/* Tour */
+.tourbtn{position:fixed;bottom:22px;left:22px;z-index:60;background:var(--primary);color:#fff;border:0;border-radius:30px;padding:13px 20px;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer;box-shadow:0 6px 22px rgba(0,60,90,.35);display:flex;align-items:center;gap:8px}
+.tourmask{position:fixed;inset:0;z-index:55;display:none}
+.tourmask.on{display:block}
+.spot{position:absolute;border:3px solid var(--primary);border-radius:14px;box-shadow:0 0 0 4000px rgba(6,30,42,.62);transition:.3s;pointer-events:none}
+.bubble{position:fixed;z-index:57;background:#fff;border-radius:16px;padding:18px;width:330px;box-shadow:0 14px 40px rgba(0,0,0,.28)}
+.bubble .step{color:var(--primary);font-weight:800;font-size:12px}
+.bubble h4{margin:6px 0 6px;font-size:16px}
+.bubble p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.7}
+.bubble .act{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+.bubble .dots{display:flex;gap:5px}
+.bubble .dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.bubble .dots i.on{background:var(--primary);width:18px;border-radius:5px}
+.bubble button{border:0;border-radius:9px;padding:8px 15px;font-family:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.bubble .next{background:var(--primary);color:#fff}
+.bubble .skip{background:none;color:var(--faint)}
+
+@media(max-width:820px){.side{display:none}.g4{grid-template-columns:1fr 1fr}.g3,.g2,.tiles{grid-template-columns:1fr}.bubble{width:88vw;left:6vw!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="side">
+    <div class="brand"><div class="mark">ع</div><div><b>العاصمة</b><small>Provider Portal</small></div></div>
+    <div class="company" id="sp-company">
+      <img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><rect width='40' height='40' rx='9' fill='%23005578'/><text x='20' y='26' font-size='16' fill='white' text-anchor='middle' font-family='sans-serif'>PI</text></svg>" alt="logo"/>
+      <div><div class="t">Prestige Interiors</div><div class="s">تشطيبات وديكور</div></div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-tab="overview" class="on"><span class="material-symbols-outlined">dashboard</span> نظرة عامة</button>
+      <button data-tab="leads"><span class="material-symbols-outlined">inbox</span> الطلبات <span class="badge">4</span></button>
+      <button data-tab="projects"><span class="material-symbols-outlined">photo_library</span> المشاريع</button>
+      <button data-tab="reviews"><span class="material-symbols-outlined">star</span> التقييمات</button>
+      <button data-tab="analytics"><span class="material-symbols-outlined">bar_chart</span> التحليلات</button>
+      <button data-tab="profile"><span class="material-symbols-outlined">business</span> الملف</button>
+      <button data-tab="settings"><span class="material-symbols-outlined">settings</span> الإعدادات</button>
+    </nav>
+    <div class="foot">نسخة تجريبية توضيحية · بيانات وهمية</div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <h1 id="title">نظرة عامة</h1>
+      <button class="out"><span class="material-symbols-outlined" style="font-size:18px">logout</span> خروج</button>
+    </div>
+    <div class="wrap">
+
+      <!-- OVERVIEW -->
+      <section class="panel on" id="overview">
+        <div class="grid g4" id="kpis" style="margin-bottom:16px">
+          <div class="kpi"><div class="delta">▲ 18%</div><div class="ic" style="background:#005578"><span class="material-symbols-outlined">inbox</span></div><div class="val">142</div><div class="lab">إجمالي الطلبات</div></div>
+          <div class="kpi"><div class="ic" style="background:#2563eb"><span class="material-symbols-outlined">fiber_new</span></div><div class="val">4</div><div class="lab">طلبات جديدة</div></div>
+          <div class="kpi"><div class="ic" style="background:#16a34a"><span class="material-symbols-outlined">trending_up</span></div><div class="val">38%</div><div class="lab">معدل التحويل</div></div>
+          <div class="kpi"><div class="ic" style="background:#b8860b"><span class="material-symbols-outlined">grade</span></div><div class="val">4.8</div><div class="lab">التقييم</div></div>
+        </div>
+        <div class="grid g3" style="margin-bottom:16px">
+          <div class="card" style="grid-column:span 2" id="trend">
+            <div class="head"><div><h3>الطلبات عبر الوقت</h3><div class="sub">آخر 14 يوم</div></div><button class="link">الملف العام <span class="material-symbols-outlined" style="font-size:14px">open_in_new</span></button></div>
+            <div class="spark" id="spark"></div>
+          </div>
+          <div class="card"><div class="head"><div><h3>حسب الحالة</h3><div class="sub">مسار الطلبات</div></div></div>
+            <div class="donut">
+              <svg width="110" height="110" viewBox="0 0 42 42"><circle cx="21" cy="21" r="15.9" fill="none" stroke="#eef2f5" stroke-width="6"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#2563eb" stroke-width="6" stroke-dasharray="18 82" stroke-dashoffset="0"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#b8860b" stroke-width="6" stroke-dasharray="26 74" stroke-dashoffset="-18"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#16a34a" stroke-width="6" stroke-dasharray="38 62" stroke-dashoffset="-44"/>
+                <circle cx="21" cy="21" r="15.9" fill="none" stroke="#dc2626" stroke-width="6" stroke-dasharray="18 82" stroke-dashoffset="-82"/>
+                <text x="21" y="20" text-anchor="middle" font-size="7" font-weight="800" fill="#0f2733">142</text>
+                <text x="21" y="26" text-anchor="middle" font-size="3.4" fill="#8ea0ad">طلب</text></svg>
+              <div class="legend"><div><i style="background:#2563eb"></i> جديد</div><div><i style="background:#b8860b"></i> جاري</div><div><i style="background:#16a34a"></i> مكتمل</div><div><i style="background:#dc2626"></i> ملغي</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="recent">
+          <div class="head"><h3>أحدث الطلبات</h3><button class="link" onclick="go('leads')">عرض الكل</button></div>
+          <div class="rows" id="recent-rows"></div>
+        </div>
+      </section>
+
+      <!-- LEADS -->
+      <section class="panel" id="leads">
+        <div class="search"><span class="material-symbols-outlined">search</span><input placeholder="بحث بالاسم أو الهاتف أو رقم المرجع أو الخدمة…"/></div>
+        <div class="chips" id="leadchips"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span class="count" id="leadcount"></span><span class="pill p-new">4 جديد</span></div>
+        <div class="rows" id="lead-rows"></div>
+      </section>
+
+      <!-- PROJECTS -->
+      <section class="panel" id="projects">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+          <div><h3 style="margin:0 0 4px">مشاريع المعرض</h3><p style="margin:0;color:var(--muted);font-size:12.5px;max-width:440px;line-height:1.6">اعرض أعمالك. أي مشروع جديد أو معدّل تتم مراجعته من الأدمن قبل ظهوره على ملفك العام.</p></div>
+          <button class="btn"><span class="material-symbols-outlined" style="font-size:18px">add_photo_alternate</span> إضافة مشروع</button>
+        </div>
+        <div class="tiles" id="projtiles"></div>
+      </section>
+
+      <!-- REVIEWS -->
+      <section class="panel" id="reviews">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
+          <div style="font-size:34px;font-weight:800;color:var(--primary)">4.8</div>
+          <div><div class="stars">★★★★★</div><div style="color:var(--faint);font-size:12px;font-weight:600">68 تقييم</div></div>
+        </div>
+        <div class="chips"><span class="chip on">الكل</span><span class="chip">5★</span><span class="chip">4★</span><span class="chip">3★</span><span class="chip">2★</span><span class="chip">1★</span></div>
+        <div class="grid g3" id="revcards"></div>
+      </section>
+
+      <!-- ANALYTICS -->
+      <section class="panel" id="analytics">
+        <div class="grid g4" style="margin-bottom:16px">
+          <div class="kpi"><div class="ic" style="background:#16a34a"><span class="material-symbols-outlined">trending_up</span></div><div class="val">38%</div><div class="lab">معدل التحويل</div></div>
+          <div class="kpi"><div class="ic" style="background:#b8860b"><span class="material-symbols-outlined">grade</span></div><div class="val">4.8★</div><div class="lab">التقييم</div></div>
+          <div class="kpi"><div class="ic" style="background:#005578"><span class="material-symbols-outlined">reviews</span></div><div class="val">68</div><div class="lab">التقييمات</div></div>
+          <div class="kpi"><div class="ic" style="background:#0b6e99"><span class="material-symbols-outlined">construction</span></div><div class="val">24</div><div class="lab">مشاريع منجزة</div></div>
+        </div>
+        <div class="grid g2" style="margin-bottom:16px">
+          <div class="card"><div class="head"><div><h3>قمع التحويل</h3><div class="sub">استلام ← اكتمال</div></div></div>
+            <div class="funnel">
+              <div class="f" style="width:100%">استُلم <span>142</span></div>
+              <div class="f" style="width:82%">تم التواصل <span>116</span></div>
+              <div class="f" style="width:60%">قيد التنفيذ <span>85</span></div>
+              <div class="f" style="width:38%">مكتمل <span>54</span></div>
+            </div>
+          </div>
+          <div class="card"><div class="head"><div><h3>الطلبات الشهرية</h3><div class="sub">آخر 6 شهور</div></div></div>
+            <div class="bars">
+              <div class="b"><i style="height:45%"></i><em>فبراير</em></div>
+              <div class="b"><i style="height:62%"></i><em>مارس</em></div>
+              <div class="b"><i style="height:55%"></i><em>أبريل</em></div>
+              <div class="b"><i style="height:78%"></i><em>مايو</em></div>
+              <div class="b"><i style="height:88%"></i><em>يونيو</em></div>
+              <div class="b"><i style="height:100%"></i><em>يوليو</em></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PROFILE -->
+      <section class="panel" id="profile">
+        <div style="max-width:640px;display:flex;flex-direction:column;gap:18px">
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="height:110px;background:linear-gradient(120deg,#005578,#0b6e99)"></div>
+            <div style="padding:0 20px 20px">
+              <div style="margin-top:-28px;width:60px;height:60px;border-radius:16px;border:4px solid #fff;background:#005578;color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px">PI</div>
+              <h3 style="margin:10px 0 2px;font-size:20px">Prestige Interiors</h3>
+              <div style="color:var(--faint);font-size:13px;font-weight:600;margin-bottom:10px">تشطيبات وديكور داخلي</div>
+              <p style="color:#465a66;font-size:13.5px;line-height:1.8;margin:0">شركة متخصصة في التشطيبات الفاخرة والتصميم الداخلي للوحدات السكنية والتجارية في العاصمة الإدارية الجديدة، بخبرة تتجاوز 12 عاماً وأكثر من 24 مشروعاً منجزاً.</p>
+            </div>
+          </div>
+          <div class="card"><h3 style="margin:0 0 12px">الخدمات</h3>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <span class="chip">تشطيبات كاملة</span><span class="chip">تصميم داخلي</span><span class="chip">ديكورات جبس</span><span class="chip">مطابخ</span><span class="chip">دهانات</span><span class="chip">أرضيات</span>
+            </div>
+          </div>
+          <div class="card"><h3 style="margin:0 0 10px">بيانات التواصل</h3>
+            <div style="display:flex;align-items:center;gap:10px"><span class="material-symbols-outlined" style="color:var(--primary)">phone</span><span style="font-size:14px">0100 123 4567</span></div>
+          </div>
+          <div class="note"><span class="material-symbols-outlined">info</span><span>بيانات الملف تُدار من فريق أدمن العاصمة. لتحديث تفاصيلك، تواصل مع الأدمن.</span></div>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="panel" id="settings">
+        <div style="max-width:640px;display:flex;flex-direction:column;gap:18px">
+          <div class="card"><h3 style="margin:0 0 2px">تفضيلات الإشعارات</h3><div class="sub">تحكّم في طريقة استقبال إشعارات الطلبات.</div>
+            <div class="setrow"><div><div class="t">إشعارات المتصفح</div><div class="d">تنبيه فوري عند وصول طلب جديد</div></div><div class="toggle"></div></div>
+            <div class="setrow"><div><div class="t">الربط مع تليجرام</div><div class="d">استقبل الطلبات على بوت تليجرام</div></div><button class="btn" style="padding:7px 13px">ربط</button></div>
+            <div class="setrow"><div><div class="t">إشعارات البريد للطلبات الجديدة</div><div class="d">رسالة بريد عند تقديم طلب جديد</div></div><div class="toggle"></div></div>
+            <div class="setrow"><div><div class="t">إشعارات SMS للطلبات الجديدة</div><div class="d">رسالة نصية عند وصول طلب</div></div><div class="toggle"></div></div>
+            <div class="setrow"><div><div class="t">تقرير أسبوعي مُلخّص</div><div class="d">ملخّص أسبوعي لطلباتك ونشاطك</div></div><div class="toggle"></div></div>
+          </div>
+          <div class="card"><h3 style="margin:0 0 8px">الحساب</h3><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.6">حسابات المزوّدين تُدار من فريق أدمن العاصمة. تواصل مع الأدمن لأي تعديل.</p></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<button class="tourbtn" onclick="startTour()"><span class="material-symbols-outlined">play_circle</span> ابدأ الجولة الإرشادية</button>
+<div class="tourmask" id="mask"><div class="spot" id="spot"></div></div>
+<div class="bubble" id="bubble" style="display:none">
+  <div class="step" id="b-step"></div><h4 id="b-title"></h4><p id="b-text"></p>
+  <div class="act"><div class="dots" id="b-dots"></div><div style="display:flex;gap:8px"><button class="skip" onclick="endTour()">تخطّي</button><button class="next" id="b-next" onclick="nextStep()">التالي</button></div></div>
+</div>
+
+<script>
+// ---- sample data ----
+const LEADS=[
+  {ref:"LD-2043",st:"new",name:"أحمد مصطفى",ph:"0111 222 3344",svc:"تشطيب شقة 180م",dist:"R7 · العاصمة",bud:"250–350 ألف",desc:"شقة استلام محارة، مطلوب تشطيب سوبر لوكس خلال 3 شهور.",date:"18/7"},
+  {ref:"LD-2042",st:"new",name:"منى عبد الله",ph:"0100 998 7766",svc:"تصميم داخلي",dist:"R8 · العاصمة",bud:"80–120 ألف",desc:"فيلا دوبلكس، مطلوب تصميم داخلي كامل مع مود بورد.",date:"18/7"},
+  {ref:"LD-2039",st:"con",name:"كريم فؤاد",ph:"0122 456 7788",svc:"مطبخ + دهانات",dist:"الحي السكني الرابع",bud:"60–90 ألف",desc:"",date:"17/7"},
+  {ref:"LD-2035",st:"prog",name:"شركة نيو تاور",ph:"0155 321 4455",svc:"تشطيب مكتب إداري",dist:"الداون تاون",bud:"400 ألف+",desc:"مكتب 260م، تشطيب تجاري بمواصفات محددة.",date:"15/7"},
+  {ref:"LD-2028",st:"done",name:"هالة سمير",ph:"0106 777 1212",svc:"ديكورات جبس",dist:"R7 · العاصمة",bud:"30–50 ألف",desc:"",date:"11/7"},
+];
+const STL={new:["جديد","p-new"],con:["تم التواصل","p-con"],prog:["قيد التنفيذ","p-prog"],done:["مكتمل","p-done"],cancel:["ملغي","p-cancel"]};
+const REVIEWS=[
+  {r:5,t:"شغل نضيف جداً والتزام كامل بالمواعيد. الشقة طلعت زي ما اتفقنا بالظبط.",a:"م. أحمد",av:"أ",d:"R7 · مايو",v:true},
+  {r:5,t:"أفضل شركة تشطيبات تعاملت معها في العاصمة. تفاصيل دقيقة وسعر عادل.",a:"سارة ن.",av:"س",d:"الداون تاون · أبريل",v:true},
+  {r:4,t:"جودة ممتازة، حصل تأخير بسيط أسبوع بس النتيجة النهائية تستاهل.",a:"محمد ع.",av:"م",d:"R8 · أبريل",v:false},
+];
+const PROJECTS=[
+  {t:"بنتهاوس فاخر — R7",y:"2025",st:"app",ic:"weekend"},
+  {t:"مكتب إداري — الداون تاون",y:"2025",st:"app",ic:"chair"},
+  {t:"فيلا دوبلكس — R8",y:"2024",st:"pend",ic:"villa"},
+];
+const SPARK=[3,5,4,6,8,5,7,9,6,8,11,9,12,14];
+
+// ---- render ----
+function leadRow(l){const [lab,cls]=STL[l.st];
+  return `<div class="row"><div class="grow"><span class="ref">${l.ref}</span> <span class="pill ${cls}">${lab}</span>
+   <div class="name">${l.name} — ${l.ph}</div><div class="meta">${l.svc} · ${l.dist} · ${l.bud}</div>
+   ${l.desc?`<div class="desc">${l.desc}</div>`:""}</div>
+   <div class="side2"><select><option>${lab}</option><option>جديد</option><option>تم التواصل</option><option>قيد التنفيذ</option><option>مكتمل</option><option>ملغي</option></select><span class="date">${l.date}</span></div></div>`;}
+document.getElementById('recent-rows').innerHTML=LEADS.slice(0,5).map(leadRow).join('');
+document.getElementById('lead-rows').innerHTML=LEADS.map(leadRow).join('');
+document.getElementById('leadcount').textContent=LEADS.length+" طلب";
+document.getElementById('spark').innerHTML=SPARK.map(v=>`<span style="height:${v/14*100}%"></span>`).join('');
+const LF=["الكل","جديد","تم التواصل","قيد التنفيذ","مكتمل","ملغي"];
+document.getElementById('leadchips').innerHTML=LF.map((f,i)=>`<span class="chip ${i==0?'on':''}">${f}</span>`).join('');
+document.getElementById('revcards').innerHTML=REVIEWS.map(r=>`<div class="rev">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><span class="stars">${"★".repeat(r.r)}${"☆".repeat(5-r.r)}</span>${r.v?'<span class="verified">موثّق</span>':''}</div>
+  <p>"${r.t}"</p><div class="who"><div class="av">${r.av}</div><div><div style="font-weight:700;font-size:13px">${r.a}</div><div style="color:var(--faint);font-size:11.5px">${r.d}</div></div></div></div>`).join('');
+document.getElementById('projtiles').innerHTML=PROJECTS.map(p=>`<div class="tile"><div class="ph"><span class="material-symbols-outlined">${p.ic}</span>
+  <span class="yr">${p.y}</span><span class="st ${p.st=='app'?'st-app':'st-pend'}">${p.st=='app'?'منشور':'قيد المراجعة'}</span></div>
+  <div class="bd"><b>${p.t}</b><p>تشطيب وتصميم داخلي كامل بمواصفات فاخرة.</p></div></div>`).join('');
+
+// ---- tabs ----
+const TITLES={overview:"نظرة عامة",leads:"الطلبات",projects:"المشاريع",reviews:"التقييمات",analytics:"التحليلات",profile:"الملف",settings:"الإعدادات"};
+function go(tab){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.id==tab));
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab==tab));
+  document.getElementById('title').textContent=TITLES[tab];
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
+
+// chip toggle (visual)
+document.querySelectorAll('.chips').forEach(c=>c.addEventListener('click',e=>{if(e.target.classList.contains('chip')){c.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));e.target.classList.add('on');}}));
+
+// ---- guided tour ----
+const STEPS=[
+  {tab:"overview",sel:"#kpis",s:"1 / 8",t:"مؤشرات الأداء",x:"أول ما تفتح اللوحة بتلاقي 4 مؤشرات سريعة: إجمالي الطلبات، الطلبات الجديدة، معدل التحويل، والتقييم — كلها بتتحدث لحظياً."},
+  {tab:"overview",sel:"#trend",s:"2 / 8",t:"اتجاه الطلبات",x:"الرسم البياني بيوريك حركة الطلبات في آخر 14 يوم، وجنبه دائرة توزيع الطلبات حسب الحالة عشان تعرف مسار الشغل."},
+  {tab:"overview",sel:"#recent",s:"3 / 8",t:"أحدث الطلبات",x:"أحدث 5 طلبات بتظهر هنا مباشرة، وتقدر تغيّر حالة أي طلب من القائمة المنسدلة بدون ما تسيب الشاشة."},
+  {tab:"leads",sel:"#leads .search",s:"4 / 8",t:"إدارة الطلبات",x:"في تاب الطلبات تقدر تبحث بالاسم أو الهاتف أو رقم المرجع، وتفلتر حسب الحالة، وتحدّث كل طلب لحد ما يكتمل."},
+  {tab:"projects",sel:"#projects",s:"5 / 8",t:"معرض المشاريع",x:"اعرض أعمالك السابقة. أي مشروع جديد بيتراجع من الأدمن (قيد المراجعة → منشور) قبل ما يظهر على ملفك العام."},
+  {tab:"reviews",sel:"#reviews",s:"6 / 8",t:"التقييمات",x:"كل تقييمات العملاء في مكان واحد مع فلترة بعدد النجوم، وعلامة «موثّق» للتقييمات من عملاء حقيقيين."},
+  {tab:"analytics",sel:"#analytics",s:"7 / 8",t:"التحليلات",x:"تفصيل أعمق: قمع التحويل من الاستلام للاكتمال، والطلبات الشهرية، ومؤشرات المشاريع والتقييمات."},
+  {tab:"settings",sel:"#settings",s:"8 / 8",t:"الإعدادات",x:"اضبط إشعاراتك: متصفح، بريد، SMS، أو ربط بوت تليجرام عشان يوصلك كل طلب جديد فوراً."},
+];
+let si=0;
+function startTour(){si=0;document.getElementById('mask').classList.add('on');document.getElementById('bubble').style.display='block';showStep();}
+function endTour(){document.getElementById('mask').classList.remove('on');document.getElementById('bubble').style.display='none';}
+function nextStep(){si++;if(si>=STEPS.length){endTour();return;}showStep();}
+function showStep(){
+  const st=STEPS[si];go(st.tab);
+  document.getElementById('b-step').textContent=st.s;
+  document.getElementById('b-title').textContent=st.t;
+  document.getElementById('b-text').textContent=st.x;
+  document.getElementById('b-next').textContent=si==STEPS.length-1?"إنهاء":"التالي";
+  document.getElementById('b-dots').innerHTML=STEPS.map((_,i)=>`<i class="${i==si?'on':''}"></i>`).join('');
+  setTimeout(()=>{
+    const el=document.querySelector(st.sel);if(!el)return;
+    const r=el.getBoundingClientRect();const sp=document.getElementById('spot');
+    sp.style.top=(r.top-6)+'px';sp.style.left=(r.left-6)+'px';sp.style.width=(r.width+12)+'px';sp.style.height=(r.height+12)+'px';
+    const bb=document.getElementById('bubble');
+    let top=r.bottom+14;if(top+230>window.innerHeight)top=Math.max(14,r.top-240);
+    bb.style.top=top+'px';bb.style.left=Math.min(window.innerWidth-350,Math.max(14,r.left))+'px';
+  },260);
+}
+</script>
+</body>
+</html>

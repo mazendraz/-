@@ -53,6 +53,16 @@ enum ProjectStatus {
   REJECTED
 }
 
+// Lifecycle of a single waiting-list entry. WAITING = just joined; NOTIFIED = the
+// provider has reached out; CONVERTED = became a real request/customer; CANCELLED
+// = withdrawn / no longer relevant. Contact happens off-platform (phone).
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  CONVERTED
+  CANCELLED
+}
+
 model Category {
   id          String   @id @default(uuid())
   slug        String   @unique
@@ -104,6 +114,15 @@ model Company {
   featured          Boolean       @default(true)
   verified          Boolean       @default(false)
   status            CompanyStatus @default(ACTIVE)
+  // Availability ("busy") — provider- and admin-controlled. When busy is true the
+  // public profile swaps its "Request Service" CTA for "Join the waiting list".
+  // busyUntil is an optional auto-reopen instant: a company is EFFECTIVELY busy only
+  // while busy=true AND (busyUntil is null OR busyUntil is in the future), so once
+  // the date passes every read reports it available again (no cron needed — see
+  // serialize.ts isEffectivelyBusy). busyNote is an optional customer-facing reason.
+  busy              Boolean       @default(false)
+  busyUntil         DateTime?
+  busyNote          String?
   // internal contact fields for notifications — NOT returned in the public payload
   email             String?
   whatsapp          String?
@@ -130,11 +149,33 @@ model Company {
   leads     Lead[]
   users     User[]
   feedbacks Feedback[]
+  waitlist  WaitlistEntry[]
 
   @@index([slug])
   @@index([categoryId])
   @@index([status])
   @@index([featured])
+}
+
+// A customer who joined a company's waiting list while it was busy. Stores only
+// name + phone (contact is off-platform, matching the lead-generation model). The
+// provider/admin dashboards list these and move them through WaitlistStatus.
+model WaitlistEntry {
+  id        String         @id @default(uuid())
+  companyId String
+  name      String
+  phone     String
+  service   String? // optionally the service they're waiting for
+  note      String?        @db.Text
+  status    WaitlistStatus @default(WAITING)
+  createdAt DateTime       @default(now()) // returned as epoch ms in the API
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  // Serves the provider/admin waitlist list: WHERE companyId=? [AND status=?]
+  // ORDER BY createdAt DESC — filter + sort from one index.
+  @@index([companyId, status, createdAt])
 }
 
 model Project {

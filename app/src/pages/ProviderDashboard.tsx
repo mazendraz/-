@@ -19,8 +19,11 @@ import SearchInput from "../components/SearchInput";
 import Logo from "../components/Logo";
 import NotificationToggle from "../components/NotificationToggle";
 import TelegramConnect from "../components/TelegramConnect";
+import AvailabilityControl from "../components/AvailabilityControl";
+import WaitlistManager from "../components/WaitlistManager";
+import { setMyAvailability, isBusy, formatReopenDate } from "../lib/availability";
 
-type ProviderTab = "overview" | "leads" | "projects" | "reviews" | "analytics" | "profile" | "settings";
+type ProviderTab = "overview" | "leads" | "projects" | "reviews" | "analytics" | "availability" | "profile" | "settings";
 
 const TAB_CONFIG: { id: ProviderTab; icon: string; label: string }[] = [
   { id: "overview", icon: "dashboard", label: "Overview" },
@@ -28,6 +31,7 @@ const TAB_CONFIG: { id: ProviderTab; icon: string; label: string }[] = [
   { id: "projects", icon: "photo_library", label: "Projects" },
   { id: "reviews", icon: "star", label: "Reviews" },
   { id: "analytics", icon: "bar_chart", label: "Analytics" },
+  { id: "availability", icon: "event_busy", label: "Availability" },
   { id: "profile", icon: "business", label: "Profile" },
   { id: "settings", icon: "settings", label: "Settings" },
 ];
@@ -172,6 +176,25 @@ export default function ProviderDashboard() {
           {/* ── Overview ── */}
           {tab === "overview" && (
             <div className="space-y-5">
+              {/* Availability banner */}
+              <button onClick={() => setTab("availability")}
+                className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                  isBusy(company) ? "border-amber-300 bg-amber-50 hover:bg-amber-100/70" : "border-green-300 bg-green-50 hover:bg-green-100/70"
+                }`}>
+                <span className={`material-symbols-outlined text-[26px] ${isBusy(company) ? "text-amber-600" : "text-green-600"}`} style={{ fontVariationSettings: "'FILL' 1" }}>
+                  {isBusy(company) ? "event_busy" : "event_available"}
+                </span>
+                <div className="min-w-0 flex-grow">
+                  <p className="font-bold text-[15px] text-on-surface">{isBusy(company) ? "You're marked busy" : "You're available for new requests"}</p>
+                  <p className="text-[12px] text-outline">
+                    {isBusy(company)
+                      ? (company.busyUntil ? `Auto-reopens on ${formatReopenDate(company.busyUntil)} · customers see the waiting list` : "No end date · customers see the waiting list")
+                      : "Customers can send you requests as usual"}
+                  </p>
+                </div>
+                <span className="material-symbols-outlined text-outline text-[20px] flex-shrink-0">chevron_right</span>
+              </button>
+
               {/* KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <KpiCard icon="inbox" label="Total Leads" value={stats.total} delta={periodDelta(leads, 7)} spark={leadsPerDay(leads, 14).map((d) => d.value)} tint="#005578" />
@@ -356,6 +379,29 @@ export default function ProviderDashboard() {
                 </div>
               </div>
             )
+          )}
+
+          {/* ── Availability ── */}
+          {tab === "availability" && (
+            <div className="max-w-2xl space-y-6">
+              <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom">
+                <h3 className="font-headline-md text-headline-md text-on-surface mb-1">Availability</h3>
+                <p className="text-body-md font-body-md text-outline mb-5 text-sm">
+                  Mark yourself busy when you can't take new work. While busy, your public profile shows a “Join the waiting list” button instead of “Request Service”, and new customers land on your waiting list below.
+                </p>
+                <AvailabilityControl
+                  key={`${company.id}-${company.busy}-${company.busyUntil ?? ""}`}
+                  initialBusy={isBusy(company)}
+                  initialBusyUntil={company.busyUntil}
+                  initialNote={company.busyNote}
+                  onSave={setMyAvailability}
+                />
+              </div>
+
+              <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom">
+                <WaitlistManager scope={{ kind: "provider" }} />
+              </div>
+            </div>
           )}
 
           {/* ── Profile ── */}

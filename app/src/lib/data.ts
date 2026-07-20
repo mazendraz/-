@@ -49,6 +49,12 @@ export type Company = {
   badges: string[];       // e.g. ["Licensed", "Award-Winning"]
   featured?: boolean;     // show in home "Featured Companies" (default: true)
   verified?: boolean;     // admin-controlled verified badge (default: false for new companies)
+  // Availability ("busy"). `busy` is the effective state (server already resolved it
+  // against busyUntil). busyUntil = optional auto-reopen instant (epoch ms). busyNote
+  // = optional customer-facing reason. When busy, the profile shows the waiting-list CTA.
+  busy?: boolean;
+  busyUntil?: number | null;
+  busyNote?: string | null;
   ratingOverridden?: boolean; // admin set rating/reviewCount manually (skip review recompute)
   // Internal contact for lead notifications — admin-only (not shown publicly).
   email?: string;         // where new-lead emails are sent

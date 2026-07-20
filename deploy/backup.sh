@@ -1,19 +1,23 @@
 #!/usr/bin/env bash
-# Al Assema — nightly off-site backup of the Postgres database (and, optionally,
-# the Supabase Storage buckets). Run from cron on the VPS:
+# Al Assema — nightly backup of the Postgres database into TWO locations. Run from
+# cron on the VPS:
 #
 #   0 3 * * *  /var/www/alassema/deploy/backup.sh >> /var/log/alassema-backup.log 2>&1
 #
-# It is intentionally boring and safe: it only READS from the database (pg_dump),
-# writes a single dump file to a temp dir, uploads it off-site, prunes old copies,
-# and pings a dead-man's-switch URL on success (a MISSING ping is what alerts you).
+# It is intentionally boring and safe: it only READS from the database (pg_dump).
+# Two copies, so your data is never in one place only:
+#   1) LOCAL — kept on the VPS disk ($LOCAL_BACKUP_DIR). Hostinger's own auto-backup
+#      then captures it as part of the server snapshot. (always on)
+#   2) OFF-SITE — optionally uploaded via rclone to BACKUP_REMOTE (e.g. an rclone
+#      S3 remote pointed at Supabase Storage — the account you already have). If
+#      rclone/BACKUP_REMOTE isn't configured, the script just keeps copy #1.
 #
 # One-time setup:
-#   sudo apt-get install -y postgresql-client rclone
-#   rclone config          # create a remote named to match BACKUP_REMOTE below.
-#                          # Use a DIFFERENT provider/account than Supabase (e.g.
-#                          # Backblaze B2, Wasabi, or any S3) so one compromised
-#                          # account can't take out both prod and its backups.
+#   sudo apt-get install -y postgresql-client
+#   # For the off-site copy (optional but recommended): install rclone and add a
+#   # remote pointed at Supabase Storage (Settings → Storage → S3 access keys):
+#   sudo apt-get install -y rclone && rclone config     # name it e.g. "supa-s3"
+#   #   then set BACKUP_REMOTE below to "supa-s3:alassema-backups"
 #
 # See deploy/RESTORE.md for how to restore — and rehearse it at least once.
 set -euo pipefail
@@ -21,8 +25,10 @@ set -euo pipefail
 # ── Config (override via environment, or edit these defaults) ──────────────────
 # Path to the app env file that holds DATABASE_URL (never hard-code credentials).
 ENV_FILE="${BACKUP_ENV_FILE:-/var/www/alassema/api/.env}"
-# rclone destination "remote:bucket" (the remote name must exist in `rclone config`).
-BACKUP_REMOTE="${BACKUP_REMOTE:-b2:alassema-backups}"
+# Off-site rclone destination "remote:bucket" (the remote must exist in `rclone
+# config`). For the simple two-provider setup, point this at Supabase Storage,
+# e.g. "supa-s3:alassema-backups". Leave EMPTY to keep the local copy only.
+BACKUP_REMOTE="${BACKUP_REMOTE:-}"
 # Optional: an rclone S3 remote pointed at Supabase Storage (Settings → Storage →
 # S3 access keys). Leave empty to skip mirroring image buckets.
 STORAGE_REMOTE="${STORAGE_REMOTE:-}"
@@ -31,7 +37,9 @@ RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 # Optional dead-man's-switch URL (healthchecks.io / BetterStack heartbeat). Pinged
 # only on success; a missed ping triggers the alert. Leave empty to disable.
 HEALTHCHECK_URL="${BACKUP_HEALTHCHECK_URL:-}"
-TMP_DIR="${TMPDIR:-/tmp}"
+# Where to KEEP dumps ON the VPS (retained + pruned). This is your SECOND copy:
+# it lives on the server's disk so Hostinger's own auto-backup captures it too.
+LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/www/alassema/backups}"
 
 # ── Load DATABASE_URL from the app env ────────────────────────────────────────
 if [[ ! -f "$ENV_FILE" ]]; then
@@ -45,11 +53,8 @@ set +a
 : "${DATABASE_URL:?DATABASE_URL not set in $ENV_FILE}"
 
 STAMP="$(date +%Y-%m-%dT%H%M%S)"
-DUMP="$TMP_DIR/alassema-db-$STAMP.dump"
-
-# Always remove the local dump, even on failure (it contains all your data).
-cleanup() { rm -f "$DUMP"; }
-trap cleanup EXIT
+mkdir -p "$LOCAL_BACKUP_DIR"
+DUMP="$LOCAL_BACKUP_DIR/alassema-db-$STAMP.dump"
 
 # ── Dump (custom format = already compressed + supports selective restore) ────
 echo "→ [$STAMP] dumping database…"
@@ -59,21 +64,30 @@ pg_dump "$DATABASE_URL" \
   --file="$DUMP"
 echo "  dump size: $(du -h "$DUMP" | cut -f1)"
 
-# ── Upload off-site ───────────────────────────────────────────────────────────
-echo "→ uploading to $BACKUP_REMOTE/db/…"
-rclone copy "$DUMP" "$BACKUP_REMOTE/db/" --no-traverse
+# ── Upload off-site (SECOND location — e.g. an rclone remote pointed at Supabase
+#    Storage). Optional: if BACKUP_REMOTE/rclone isn't set up, we still have the
+#    retained local copy above (which Hostinger's disk backup captures). ─────────
+if [[ -n "$BACKUP_REMOTE" ]] && command -v rclone >/dev/null 2>&1; then
+  echo "→ uploading off-site to $BACKUP_REMOTE/db/…"
+  rclone copy "$DUMP" "$BACKUP_REMOTE/db/" --no-traverse
 
-# ── Optional: mirror Supabase Storage image buckets ───────────────────────────
-if [[ -n "$STORAGE_REMOTE" ]]; then
-  for bucket in logos covers gallery projects; do
-    echo "→ syncing storage bucket '$bucket'…"
-    rclone sync "$STORAGE_REMOTE:$bucket" "$BACKUP_REMOTE/storage/$bucket/"
-  done
+  # Optional: mirror Supabase Storage image buckets too.
+  if [[ -n "$STORAGE_REMOTE" ]]; then
+    for bucket in logos covers gallery projects; do
+      echo "→ syncing storage bucket '$bucket'…"
+      rclone sync "$STORAGE_REMOTE:$bucket" "$BACKUP_REMOTE/storage/$bucket/"
+    done
+  fi
+
+  echo "→ pruning off-site dumps older than ${RETENTION_DAYS}d…"
+  rclone delete "$BACKUP_REMOTE/db/" --min-age "${RETENTION_DAYS}d"
+else
+  echo "  (no off-site remote configured — keeping the local copy only)"
 fi
 
-# ── Prune old dumps ───────────────────────────────────────────────────────────
-echo "→ pruning db dumps older than ${RETENTION_DAYS}d…"
-rclone delete "$BACKUP_REMOTE/db/" --min-age "${RETENTION_DAYS}d"
+# ── Prune old LOCAL dumps ─────────────────────────────────────────────────────
+echo "→ pruning local dumps older than ${RETENTION_DAYS}d in $LOCAL_BACKUP_DIR…"
+find "$LOCAL_BACKUP_DIR" -name 'alassema-db-*.dump' -type f -mtime "+${RETENTION_DAYS}" -delete
 
 # ── Success heartbeat (dead-man's switch) ─────────────────────────────────────
 if [[ -n "$HEALTHCHECK_URL" ]]; then
@@ -81,4 +95,4 @@ if [[ -n "$HEALTHCHECK_URL" ]]; then
     echo "  (warning: heartbeat ping failed — backup itself succeeded)"
 fi
 
-echo "✓ [$STAMP] backup complete → $BACKUP_REMOTE/db/$(basename "$DUMP")"
+echo "✓ [$STAMP] backup complete → local: $DUMP${BACKUP_REMOTE:+ · off-site: $BACKUP_REMOTE/db/$(basename "$DUMP")}"

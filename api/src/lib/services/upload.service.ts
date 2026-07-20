@@ -5,6 +5,8 @@
 //   logos · covers · gallery · projects
 // The admin UI stores the returned URL in logo / cover / gallery[] / project.img.
 import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import sharp from "sharp";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { ValidationError } from "@/lib/utils/errors";
@@ -85,7 +87,28 @@ function validate(file: File, bucket: string): asserts bucket is UploadBucket {
   }
 }
 
-async function uploadToStorage(
+// Write to the VPS filesystem (served as static files by Caddy). Used when
+// STORAGE_DRIVER=local — this is what keeps images on Hostinger so the server's
+// own backup covers them.
+async function uploadToLocalDisk(
+  bucket: UploadBucket,
+  image: ProcessedImage,
+): Promise<string> {
+  const uploadsDir = process.env.UPLOADS_DIR;
+  const baseUrl = process.env.PUBLIC_UPLOADS_BASE_URL;
+  if (!uploadsDir || !baseUrl) {
+    throw new Error(
+      "Local storage not configured: set UPLOADS_DIR and PUBLIC_UPLOADS_BASE_URL",
+    );
+  }
+  const filename = `${randomUUID()}.${image.ext}`;
+  const dir = join(uploadsDir, bucket);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, filename), image.buffer);
+  return `${baseUrl.replace(/\/$/, "")}/${bucket}/${filename}`;
+}
+
+async function uploadToSupabase(
   bucket: UploadBucket,
   image: ProcessedImage,
 ): Promise<string> {
@@ -103,6 +126,19 @@ async function uploadToStorage(
   }
 
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+// STORAGE_DRIVER=local → VPS filesystem; anything else (default) → Supabase.
+// Switchable per-environment via env, so we can cut over (and keep Supabase as a
+// fallback during migration) without a code change.
+async function uploadToStorage(
+  bucket: UploadBucket,
+  image: ProcessedImage,
+): Promise<string> {
+  if (process.env.STORAGE_DRIVER === "local") {
+    return uploadToLocalDisk(bucket, image);
+  }
+  return uploadToSupabase(bucket, image);
 }
 
 /** Admin: validate, process, and upload an image. Returns its public URL. */

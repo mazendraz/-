@@ -8,6 +8,7 @@ import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { addFeedback, type FeedbackType } from "../lib/feedback";
+import { isBusy, formatReopenDate, joinWaitlist } from "../lib/availability";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
@@ -34,6 +35,7 @@ export default function CompanyProfile() {
   const [tab, setTab] = useState<Tab>("Overview");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   const lightboxCloseRef = useRef<HTMLButtonElement>(null);
   const swipeX = useRef<number | null>(null);
 
@@ -107,6 +109,11 @@ export default function CompanyProfile() {
     );
   }
 
+  // When the company is busy, the whole profile swaps its "Request Service" CTAs for
+  // a "Join the waiting list" action (see requestOrWaitlistCTA usages below).
+  const busy = isBusy(company);
+  const requestHref = `/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`;
+
   return (
     <div className="bg-surface min-h-screen pb-36 md:pb-0">
       {/* Mobile sticky CTA bar — sits directly above the bottom tab bar */}
@@ -115,14 +122,25 @@ export default function CompanyProfile() {
         style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <SaveButton slug={company.slug} className="!w-12 !h-12 flex-shrink-0 border border-outline-variant/30" />
-        <Link
-          to={`/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
-          className="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary
-                     py-3.5 rounded-xl font-bold text-[15px] shadow-bloom touch-press btn-press"
-        >
-          <span className="material-symbols-outlined text-[20px]">send</span>
-          {t(locale, "common_request_service")}
-        </Link>
+        {busy ? (
+          <button
+            onClick={() => setWaitlistOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-white
+                       py-3.5 rounded-xl font-bold text-[15px] shadow-bloom touch-press btn-press"
+          >
+            <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+            {t(locale, "waitlist_join_cta")}
+          </button>
+        ) : (
+          <Link
+            to={requestHref}
+            className="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary
+                       py-3.5 rounded-xl font-bold text-[15px] shadow-bloom touch-press btn-press"
+          >
+            <span className="material-symbols-outlined text-[20px]">send</span>
+            {t(locale, "common_request_service")}
+          </Link>
+        )}
       </div>
 
       {/* Hero cover */}
@@ -184,16 +202,44 @@ export default function CompanyProfile() {
               {/* Request CTA — desktop only; mobile uses sticky bar */}
               <div className="hidden sm:flex sm:flex-shrink-0 mt-2 sm:mt-0 gap-2">
                 <SaveButton slug={company.slug} variant="pill" />
-                <Link
-                  to={`/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
-                  className="flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-xl
-                             font-bold text-[14px] hover:bg-primary-container transition-colors shadow-bloom touch-press btn-press"
-                >
-                  <span className="material-symbols-outlined text-[20px]">send</span>
-                  {t(locale, "common_request_service")}
-                </Link>
+                {busy ? (
+                  <button
+                    onClick={() => setWaitlistOpen(true)}
+                    className="flex items-center justify-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl
+                               font-bold text-[14px] hover:bg-amber-600 transition-colors shadow-bloom touch-press btn-press"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+                    {t(locale, "waitlist_join_cta")}
+                  </button>
+                ) : (
+                  <Link
+                    to={requestHref}
+                    className="flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-xl
+                               font-bold text-[14px] hover:bg-primary-container transition-colors shadow-bloom touch-press btn-press"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">send</span>
+                    {t(locale, "common_request_service")}
+                  </Link>
+                )}
               </div>
             </div>
+
+            {/* Busy banner */}
+            {busy && (
+              <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                <span className="material-symbols-outlined text-amber-600 text-[22px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
+                <div className="min-w-0">
+                  <p className="font-bold text-[14px] text-amber-900">
+                    {company.busyUntil
+                      ? `${t(locale, "busy_banner_booked_until")} ${formatReopenDate(company.busyUntil, locale)}`
+                      : t(locale, "busy_banner_fully_booked")}
+                  </p>
+                  {company.busyNote
+                    ? <p className="text-[13px] text-amber-800 mt-0.5">{company.busyNote}</p>
+                    : <p className="text-[13px] text-amber-800 mt-0.5">{t(locale, "waitlist_modal_sub")}</p>}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Tabs */}
@@ -308,17 +354,35 @@ export default function CompanyProfile() {
                 </div>
 
                 {/* CTA card */}
-                <div className="bg-primary rounded-2xl p-5 shadow-bloom text-on-primary">
-                  <span className="material-symbols-outlined text-[32px] mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }}>handshake</span>
-                  <h3 className="font-headline-md text-headline-md mb-2">{t(locale, "profile_ready_title")}</h3>
-                  <p className="text-body-md font-body-md opacity-90 mb-4">{t(locale, "profile_ready_sub")}</p>
-                  <Link
-                    to={`/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
-                    className="block w-full text-center bg-white text-primary font-label-md text-label-md py-3 rounded-xl hover:bg-surface-container-low transition-colors font-bold"
-                  >
-                    {t(locale, "profile_request_company")}
-                  </Link>
-                </div>
+                {busy ? (
+                  <div className="bg-amber-500 rounded-2xl p-5 shadow-bloom text-white">
+                    <span className="material-symbols-outlined text-[32px] mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
+                    <h3 className="font-headline-md text-headline-md mb-2">
+                      {company.busyUntil
+                        ? `${t(locale, "busy_available_again")} ${formatReopenDate(company.busyUntil, locale)}`
+                        : t(locale, "busy_banner_fully_booked")}
+                    </h3>
+                    <p className="text-body-md font-body-md opacity-90 mb-4">{t(locale, "waitlist_modal_sub")}</p>
+                    <button
+                      onClick={() => setWaitlistOpen(true)}
+                      className="block w-full text-center bg-white text-amber-700 font-label-md text-label-md py-3 rounded-xl hover:bg-amber-50 transition-colors font-bold"
+                    >
+                      {t(locale, "waitlist_join_cta")}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-primary rounded-2xl p-5 shadow-bloom text-on-primary">
+                    <span className="material-symbols-outlined text-[32px] mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }}>handshake</span>
+                    <h3 className="font-headline-md text-headline-md mb-2">{t(locale, "profile_ready_title")}</h3>
+                    <p className="text-body-md font-body-md opacity-90 mb-4">{t(locale, "profile_ready_sub")}</p>
+                    <Link
+                      to={requestHref}
+                      className="block w-full text-center bg-white text-primary font-label-md text-label-md py-3 rounded-xl hover:bg-surface-container-low transition-colors font-bold"
+                    >
+                      {t(locale, "profile_request_company")}
+                    </Link>
+                  </div>
+                )}
 
                 {/* Report a problem */}
                 <button
@@ -354,13 +418,23 @@ export default function CompanyProfile() {
               </div>
               <div className="mt-10 bg-surface-container-lowest rounded-2xl p-8 text-center shadow-bloom">
                 <p className="text-body-lg font-body-lg text-outline mb-4">{t(locale, "profile_like_what")} {company.name}.</p>
-                <Link
-                  to={`/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`}
-                  className="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-md text-label-md hover:bg-primary-container transition-colors shadow-bloom"
-                >
-                  <span className="material-symbols-outlined text-[20px]">send</span>
-                  {t(locale, "common_request_service")}
-                </Link>
+                {busy ? (
+                  <button
+                    onClick={() => setWaitlistOpen(true)}
+                    className="inline-flex items-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl font-label-md text-label-md hover:bg-amber-600 transition-colors shadow-bloom"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+                    {t(locale, "waitlist_join_cta")}
+                  </button>
+                ) : (
+                  <Link
+                    to={requestHref}
+                    className="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-md text-label-md hover:bg-primary-container transition-colors shadow-bloom"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">send</span>
+                    {t(locale, "common_request_service")}
+                  </Link>
+                )}
               </div>
             </div>
           )}
@@ -394,6 +468,17 @@ export default function CompanyProfile() {
           companySlug={company.slug}
           companyName={company.name}
           onClose={() => setFeedbackOpen(false)}
+          locale={locale}
+        />
+      )}
+
+      {/* Waiting-list modal */}
+      {waitlistOpen && (
+        <WaitlistModal
+          companySlug={company.slug}
+          companyName={company.name}
+          services={company.services}
+          onClose={() => setWaitlistOpen(false)}
           locale={locale}
         />
       )}
@@ -613,6 +698,163 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                   server rejects the submission. Kept out of the tab order. The
                   data-*-ignore attrs stop password managers (1Password/LastPass/
                   Bitwarden) from autofilling it, which would falsely flag a real user. */}
+              <input
+                type="text"
+                name="hp_field"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                value={honeypot}
+                onChange={(e) => setHoneypot(e.target.value)}
+                className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+              />
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Waiting-list modal ────────────────────────────────────────────────────────
+// Shown when a busy company's "Join the waiting list" CTA is tapped. Mirrors the
+// FeedbackModal (honeypot + CAPTCHA + focus trap); on success the customer is queued
+// and the company contacts them off-platform.
+function WaitlistModal({ companySlug, companyName, services, onClose, locale }: {
+  companySlug: string;
+  companyName: string;
+  services: string[];
+  onClose: () => void;
+  locale: Locale;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [service, setService] = useState("");
+  const [note, setNote] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
+  const { containerRef, trapTab } = useDialogA11y(true, onClose);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (name.trim().length < 2) { setError(t(locale, "waitlist_err_name")); return; }
+    if (phone.trim().length < 8) { setError(t(locale, "waitlist_err_phone")); return; }
+    if (captchaConfigured() && !captchaToken) { setError(t(locale, "form_err_captcha")); return; }
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await joinWaitlist(
+        companySlug,
+        { name: name.trim(), phone: phone.trim(), service: service.trim(), note: note.trim() },
+        honeypot,
+        captchaToken,
+      );
+      setSubmitted(true);
+    } catch {
+      setError(t(locale, "waitlist_err_submit"));
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/45 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        ref={containerRef}
+        onKeyDown={trapTab}
+        role="dialog"
+        aria-modal
+        aria-label={t(locale, "waitlist_modal_title")}
+        className="bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20">
+          <h2 className="font-bold text-[17px] text-on-surface flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-500 text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
+            {t(locale, "waitlist_modal_title")}
+          </h2>
+          <button onClick={onClose} aria-label={t(locale, "common_close")} className="p-1.5 rounded-lg hover:bg-surface-container transition-colors">
+            <span className="material-symbols-outlined text-outline">close</span>
+          </button>
+        </div>
+
+        <div className="p-5">
+          {submitted ? (
+            <div className="text-center py-6">
+              <span className="material-symbols-outlined text-green-600 text-[48px] mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+              <p className="font-bold text-[17px] text-on-surface mb-1">{t(locale, "waitlist_success")}</p>
+              <p className="text-[14px] text-outline mb-5">{t(locale, "waitlist_success_sub")}</p>
+              <button onClick={onClose} className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-[14px]">{t(locale, "common_close")}</button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Regarding */}
+              <div className="flex items-center gap-2 bg-surface-container rounded-xl px-3 py-2.5 text-[13px] text-on-surface-variant">
+                <span className="material-symbols-outlined text-[16px] text-outline">business</span>
+                {t(locale, "feedback_regarding")} <span className="font-bold text-on-surface ms-1">{companyName}</span>
+              </div>
+
+              <p className="text-[13px] text-outline leading-relaxed">{t(locale, "waitlist_modal_sub")}</p>
+
+              {/* Name + Phone */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_your_name")} <span className="text-error">*</span></label>
+                  <input className="field-input !py-2 text-[13px]" value={name} onChange={(e) => { setName(e.target.value); if (error) setError(""); }} />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_phone")} <span className="text-error">*</span></label>
+                  <input className="field-input !py-2 text-[13px]" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); if (error) setError(""); }} />
+                </div>
+              </div>
+
+              {/* Service */}
+              <div>
+                <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_service")}</label>
+                {services.length > 0 ? (
+                  <select className="field-input !py-2 text-[13px]" value={service} onChange={(e) => setService(e.target.value)}>
+                    <option value="">—</option>
+                    {services.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                ) : (
+                  <input className="field-input !py-2 text-[13px]" value={service} onChange={(e) => setService(e.target.value)} />
+                )}
+              </div>
+
+              {/* Note */}
+              <div>
+                <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_note")}</label>
+                <textarea className="field-input resize-none" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
+              </div>
+
+              {error && <p className="text-[12px] text-error font-bold">{error}</p>}
+
+              {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
+              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full bg-amber-500 text-white py-3 rounded-xl font-bold text-[14px] transition-colors touch-press
+                  ${isSubmitting ? "opacity-80 cursor-not-allowed" : "hover:bg-amber-600 btn-press"}`}
+              >
+                {t(locale, "waitlist_send")}
+              </button>
+
+              {/* Honeypot — hidden from real users; bots auto-fill it. */}
               <input
                 type="text"
                 name="hp_field"

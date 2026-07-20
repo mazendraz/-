@@ -60,17 +60,31 @@ function isAdminSession(): boolean {
 export async function hydrateSiteReviewsFromApi(): Promise<void> {
   if (!isApiConfigured()) return;
   try {
+    const admin = isAdminSession();
     const reviews = await apiGet<SiteReview[]>(
-      isAdminSession() ? "/admin/site-reviews" : "/site-reviews",
+      admin ? "/admin/site-reviews" : "/site-reviews",
     );
-    localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
+    // Guard (public homepage only): never overwrite an already-populated list with
+    // an empty/invalid response. A cold or misconfigured backend, a transient
+    // 2xx-with-empty body, or a request that resolves to [] would otherwise wipe the
+    // reviews already on screen — and, since nothing re-populates them, they'd never
+    // come back. We replace the cache only when the API returns a non-empty array, or
+    // when there is nothing cached yet (so a genuine first-load empty still works).
+    // The admin moderation view always takes the authoritative result (it must be
+    // able to show a truly empty list after deletions/hiding).
+    const isValid = Array.isArray(reviews);
+    const shouldWrite = admin ? isValid : isValid && (reviews.length > 0 || read().length === 0);
+    if (shouldWrite) {
+      localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
+      window.dispatchEvent(new CustomEvent(EVENT));
+    }
     try {
       const s = await apiGet<{ enabled: boolean }>("/site-reviews/settings");
       localStorage.setItem(ENABLED_KEY, String(s.enabled));
+      window.dispatchEvent(new CustomEvent(EVENT));
     } catch {
       /* settings is best-effort; keep last known value */
     }
-    window.dispatchEvent(new CustomEvent(EVENT));
   } catch (err) {
     console.error("Site reviews hydration from API failed:", err);
   }

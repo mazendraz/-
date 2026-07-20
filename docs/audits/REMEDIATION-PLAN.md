@@ -12,7 +12,7 @@ Small, isolated changes. No design decisions needed. Ship as one PR.
 
 ### 0.1 Guard the seed script (A-3)
 
-**File:** [api/prisma/seed.ts](api/prisma/seed.ts)
+**File:** [api/prisma/seed.ts](../../api/prisma/seed.ts)
 
 Add before the first `deleteMany`:
 
@@ -34,7 +34,7 @@ if (leadCount > 0 && !force) {
 
 ### 0.2 Enforce JWT secret strength (SEC-3)
 
-**File:** [api/src/lib/auth.ts](api/src/lib/auth.ts) — extend `secretKey()`:
+**File:** [api/src/lib/auth.ts](../../api/src/lib/auth.ts) — extend `secretKey()`:
 
 ```ts
 function secretKey(): Uint8Array {
@@ -49,7 +49,7 @@ function secretKey(): Uint8Array {
 }
 ```
 
-(If you prefer failing at boot rather than first request, mirror the `rateLimitConfigError` pattern in [rateLimit.ts:111](api/src/lib/middleware/rateLimit.ts#L111) — a module-level check skipped during `NEXT_PHASE === "phase-production-build"`.)
+(If you prefer failing at boot rather than first request, mirror the `rateLimitConfigError` pattern in [rateLimit.ts:111](../../api/src/lib/middleware/rateLimit.ts#L111) — a module-level check skipped during `NEXT_PHASE === "phase-production-build"`.)
 
 **Verify:** unit test with a short secret + `NODE_ENV=production` → throws.
 
@@ -64,7 +64,7 @@ function secretKey(): Uint8Array {
 DATABASE_SSL_CA_PATH=""
 ```
 
-3. **File:** [api/src/lib/dbAdapter.ts](api/src/lib/dbAdapter.ts):
+3. **File:** [api/src/lib/dbAdapter.ts](../../api/src/lib/dbAdapter.ts):
 
 ```ts
 import { readFileSync } from "node:fs";
@@ -91,10 +91,10 @@ export function createPgAdapter(connectionString: string): PrismaPg {
 
 ### 0.4 Three trivial hardening tweaks (SEC-5, B-4)
 
-- [api/src/proxy.ts:54](api/src/proxy.ts#L54) — constant-time API key compare:
+- [api/src/proxy.ts:54](../../api/src/proxy.ts#L54) — constant-time API key compare:
   `crypto.timingSafeEqual` needs Node runtime; `proxy.ts` runs on Edge, so use a simple double-HMAC or length-safe manual compare, or just accept and document (the key is an optional extra gate). Simplest safe option in Edge: compare SHA-256 digests via `crypto.subtle.digest`.
-- [api/src/app/api/auth/login/route.ts:35](api/src/app/api/auth/login/route.ts#L35) — replace `await request.json()` with `await readJsonObject(request, 4096)` (same helper the other public POSTs use).
-- [api/ecosystem.config.cjs:20](api/ecosystem.config.cjs#L20) — `max_memory_restart: "1G"` (on a 4 GB VPS).
+- [api/src/app/api/auth/login/route.ts:35](../../api/src/app/api/auth/login/route.ts#L35) — replace `await request.json()` with `await readJsonObject(request, 4096)` (same helper the other public POSTs use).
+- [api/ecosystem.config.cjs:20](../../api/ecosystem.config.cjs#L20) — `max_memory_restart: "1G"` (on a 4 GB VPS).
 
 **Verify:** existing test suite still green (`npm test`, `npm run test:integration`).
 
@@ -148,7 +148,7 @@ rclone sync supabase-s3:logos b2:alassema-backups/storage/logos   # × 4 buckets
 ### 1.2 Monitoring + alerting (O-2)
 
 1. **Uptime:** BetterStack or UptimeRobot (free) → HTTP monitor on `https://<domain>/api/ready`, 1–5 min interval, alert to email + phone push. `/api/ready` already returns 503 when the DB is down — you get DB alerts for free.
-2. **Errors:** create a Sentry project (free tier), set `SENTRY_DSN` in `api/.env`, restart. The reporter is already wired ([report.ts](api/src/lib/observability/report.ts)) — every unhandled 500 ships automatically. Send one test error to confirm.
+2. **Errors:** create a Sentry project (free tier), set `SENTRY_DSN` in `api/.env`, restart. The reporter is already wired ([report.ts](../../api/src/lib/observability/report.ts)) — every unhandled 500 ships automatically. Send one test error to confirm.
 3. **Logs:** `pm2 install pm2-logrotate` + `pm2 set pm2-logrotate:max_size 50M` + `pm2 set pm2-logrotate:retain 14`.
 4. **Disk guard (2 min):** cron `df -h / | awk 'NR==2 {gsub("%","",$5); if ($5 > 85) print "disk", $5"%"}'` piped to a webhook, or just let BetterStack's server agent do it.
 
@@ -162,7 +162,7 @@ rclone sync supabase-s3:logos b2:alassema-backups/storage/logos   # × 4 buckets
 
 Next 16 ships `after()` (stable) — it runs work after the response streams, and on serverless it keeps the function alive; on the VPS it's equivalent to what you have. This makes **both** deploy targets in DEPLOY.md safe, so you don't have to delete either.
 
-**File:** [api/src/lib/services/leads.service.ts](api/src/lib/services/leads.service.ts) — in `create()`, replace the four `void …` dispatches (lines ~117–147) with:
+**File:** [api/src/lib/services/leads.service.ts](../../api/src/lib/services/leads.service.ts) — in `create()`, replace the four `void …` dispatches (lines ~117–147) with:
 
 ```ts
 import { after } from "next/server";
@@ -180,8 +180,8 @@ after(async () => {
 ```
 
 Apply the same wrap to the other fire-and-forget sites:
-- [reviews.service.ts:316](api/src/lib/services/reviews.service.ts#L316) (`notifyAdminsNewReview`)
-- [projects.service.ts](api/src/lib/services/projects.service.ts) (`notifyAdminsPendingProject`)
+- [reviews.service.ts:316](../../api/src/lib/services/reviews.service.ts#L316) (`notifyAdminsNewReview`)
+- [projects.service.ts](../../api/src/lib/services/projects.service.ts) (`notifyAdminsPendingProject`)
 
 Note: `after()` must run within a request scope — all three call sites are inside route-invoked services, so they qualify. The existing unit tests for the notification builders don't change; the integration tests still pass because `after()` executes callbacks in-process in the Node runtime.
 
@@ -189,9 +189,9 @@ Note: `after()` must run within a request scope — all three call sites are ins
 
 ### 2.2 Deploy the CSP (SEC-1, part 1)
 
-The policy is already drafted in [DEPLOY.md §7](DEPLOY.md). Roll it out in report-only first.
+The policy is already drafted in [DEPLOY.md §7](../deployment/DEPLOY.md). Roll it out in report-only first.
 
-**VPS path (Caddy serves the SPA)** — add to the `handle` block in [deploy/Caddyfile](deploy/Caddyfile):
+**VPS path (Caddy serves the SPA)** — add to the `handle` block in [deploy/Caddyfile](../../deploy/Caddyfile):
 
 ```caddy
 handle {
@@ -230,7 +230,7 @@ Before flipping DNS/announcing, confirm in one sitting:
 
 ### 3.1 Integration tests on the security ingress (T-1)
 
-Add to [api/tests/integration/api.int.test.ts](api/tests/integration/api.int.test.ts) (or a new `auth.int.test.ts`):
+Add to [api/tests/integration/api.int.test.ts](../../api/tests/integration/api.int.test.ts) (or a new `auth.int.test.ts`):
 
 - **Login:** correct creds → 200 + token; wrong password ×11 from different IPs (pass distinct `x-forwarded-for` via the existing `req()` helper) → 11th returns 429 with the *account* limiter message; correct password still succeeds afterwards (failure-only invariant); inactive user → 401 generic.
 - **proxy.ts:** unit-test `resolveAllowedOrigin` and the API-key gate as pure functions of (request, env) — assert production + empty allowlist ⇒ deny, probe paths bypass the key gate.
@@ -242,7 +242,7 @@ A 40-line k6 script in `deploy/loadtest/`: 50 rps of `POST /api/leads` from rota
 
 ### 3.3 Rollback-capable deploys (O-3)
 
-Restructure the server layout to release directories; change [deploy/deploy.sh](deploy/deploy.sh):
+Restructure the server layout to release directories; change [deploy/deploy.sh](../../deploy/deploy.sh):
 
 ```
 /var/www/alassema/
@@ -267,7 +267,7 @@ Add `pino`; create `lib/log.ts`; generate a request id in `withErrors` and inclu
 Target: `httpOnly; Secure; SameSite=Strict` cookie, same-origin (the Caddy deploy already serves app + API on one origin, which is what makes this cheap).
 
 1. **Login route:** also `Set-Cookie: session=<jwt>; HttpOnly; Secure; SameSite=Strict; Path=/api; Max-Age=<ttl>`; keep returning the body token temporarily (transition period).
-2. **`bearerToken()` in [auth.ts](api/src/lib/auth.ts):** fall back to the cookie when the Authorization header is absent.
+2. **`bearerToken()` in [auth.ts](../../api/src/lib/auth.ts):** fall back to the cookie when the Authorization header is absent.
 3. **CSRF:** with `SameSite=Strict` + JSON-only bodies + the existing CORS deny-by-default, risk is already minimal; belt-and-braces = require the existing `X-Api-Key`-style custom header (`X-Requested-With: fetch`) on cookie-authed mutations — any custom header forces a CORS preflight, which cross-origin attackers can't pass.
 4. **Frontend:** switch `credentials: "include"`, delete the localStorage read/write, keep an `/api/auth/me` bootstrap on load.
 5. **Logout:** clear the cookie server-side — this also gives you real logout for the first time.

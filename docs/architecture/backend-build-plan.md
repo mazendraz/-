@@ -6,7 +6,7 @@
 > "Done when" checks pass.
 >
 > Contract source of truth: [backend-plan.md](backend-plan.md) (architecture &
-> schema) + [app/src/lib/apiTypes.ts](app/src/lib/apiTypes.ts) (response shapes).
+> schema) + [app/src/lib/apiTypes.ts](../../app/src/lib/apiTypes.ts) (response shapes).
 > Stack: **Next.js API Routes · Supabase (Postgres + Auth + Storage) · Prisma**.
 
 ---
@@ -124,7 +124,7 @@ six tables, and `prisma generate` produces a typed client.
 service read functions.
 
 **Done when:** Each endpoint returns the exact contract shape (verified against
-[apiTypes.ts](app/src/lib/apiTypes.ts)); SUSPENDED/INACTIVE companies are hidden;
+[apiTypes.ts](../../app/src/lib/apiTypes.ts)); SUSPENDED/INACTIVE companies are hidden;
 pagination meta uses `{ total, page, pageSize }`.
 
 ---
@@ -150,7 +150,7 @@ pagination meta uses `{ total, page, pageSize }`.
 **Done when:** Submitting to an ACTIVE company returns `201` + a full `ApiLead`
 (with `refNumber`, numeric `createdAt`); submitting to a SUSPENDED company fails;
 hammering the endpoint trips `RATE_LIMITED`. Matches `addLead()` in
-[requests.ts](app/src/lib/requests.ts).
+[requests.ts](../../app/src/lib/requests.ts).
 
 ---
 
@@ -162,7 +162,7 @@ hammering the endpoint trips `RATE_LIMITED`. Matches `addLead()` in
 1. `POST /api/auth/login` (email + password) → `{ token, user }`. **Return the
    JWT in the body** (the client stores it in `localStorage` as
    `al-assema-token` and sends `Authorization: Bearer <token>` — see
-   [api.ts](app/src/lib/api.ts)). Hash passwords with argon2/bcrypt, or delegate
+   [api.ts](../../app/src/lib/api.ts)). Hash passwords with argon2/bcrypt, or delegate
    to Supabase Auth and re-issue a JWT.
 2. `POST /api/auth/logout` (invalidate token) and `GET /api/auth/me`
    (current user).
@@ -196,7 +196,7 @@ codes.
 5. **Reviews:** `POST /api/admin/companies/[id]/reviews`,
    `DELETE /api/admin/companies/[id]/reviews/[reviewId]` — **recompute
    `rating` + `reviewCount`** in `reviews.service` on every add/delete (mirrors
-   `addReview` in [catalog.ts](app/src/lib/catalog.ts)).
+   `addReview` in [catalog.ts](../../app/src/lib/catalog.ts)).
 6. All admin routes wrapped in `withAuth(withRole("ADMIN", ...))`.
 
 **Files:** `src/app/api/admin/categories/**`, `src/app/api/admin/companies/**`,
@@ -219,7 +219,7 @@ codes.
 3. Admin UI sets the returned URL into `logo` / `cover` / `gallery[]` /
    `project.img`.
 4. (Optional migration aid) Accept data URLs in image fields temporarily, since
-   the current frontend produces them via [image.ts](app/src/lib/image.ts).
+   the current frontend produces them via [image.ts](../../app/src/lib/image.ts).
 
 **Files:** `src/app/api/admin/upload/route.ts`, `upload.service.ts`.
 
@@ -258,7 +258,7 @@ all leads and can delete.
 
 **Steps:**
 1. Write `prisma/seed.ts` that imports the seed arrays from
-   [data.ts](app/src/lib/data.ts) (`SERVICE_CATEGORIES`, `COMPANIES` with their
+   [data.ts](../../app/src/lib/data.ts) (`SERVICE_CATEGORIES`, `COMPANIES` with their
    nested `projects`/`reviews`) and inserts categories → companies → projects →
    reviews, recomputing aggregates.
    ```bash
@@ -266,10 +266,10 @@ all leads and can delete.
    ```
 2. In the frontend, set `VITE_API_URL` (and optional `VITE_API_KEY`) in
    `.env.local`.
-3. Swap the `localStorage` bodies in [catalog.ts](app/src/lib/catalog.ts) and
-   [requests.ts](app/src/lib/requests.ts) for `apiFetch` calls behind
+3. Swap the `localStorage` bodies in [catalog.ts](../../app/src/lib/catalog.ts) and
+   [requests.ts](../../app/src/lib/requests.ts) for `apiFetch` calls behind
    `isApiConfigured()` — page/component signatures stay unchanged (per
-   [FRONTEND.md](app/FRONTEND.md) §10). `addLead` already branches on the API.
+   [FRONTEND.md](../../app/FRONTEND.md) §10). `addLead` already branches on the API.
 
 **Files:** `prisma/seed.ts`, `package.json` (`prisma.seed`), frontend
 `.env.local`, `catalog.ts`, `requests.ts`.
@@ -301,7 +301,7 @@ opens a profile, and a submitted request appears via `GET /admin/leads`.
 **Files:** `tests/**`, CI config.
 
 **Done when:** All suites green in CI, security checklist complete, contract
-snapshots match [apiTypes.ts](app/src/lib/apiTypes.ts).
+snapshots match [apiTypes.ts](../../app/src/lib/apiTypes.ts).
 
 ---
 

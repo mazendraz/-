@@ -1,0 +1,55 @@
+# ── Dependencies ──
+node_modules/
+.pnp
+.pnp.js
+
+# ── Builds / output ──
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ── Environment ──
+.env
+.env.local
+.env.*.local
+!.env.example
+!.env.test.example
+
+# ── Testing ──
+coverage/
+playwright-report/
+test-results/
+.playwright/
+
+# ── Logs ──
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Caches ──
+.cache/
+.turbo/
+.vite/
+.eslintcache
+
+# ── OS / editor ──
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ── Prisma ──
+prisma/*.db
+prisma/*.db-journal
+
+# ── مخرجات محلية / مؤقتة ──
+scratchpad/
+# ملاحظة: deliverables/ و app/inspect.mjs مش متتبّعين حاليًا.
+# لو عايزهم يتجاهلهم git، شيل التعليق عن السطرين دول:
+# deliverables/
+# app/inspect.mjs
