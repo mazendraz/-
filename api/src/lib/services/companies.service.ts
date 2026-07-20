@@ -380,6 +380,50 @@ export async function remove(id: string): Promise<void> {
   await prisma.company.delete({ where: { id } });
 }
 
+export interface AvailabilityInput {
+  busy: boolean;
+  busyUntil?: number | null; // epoch ms; null clears the auto-reopen date
+  busyNote?: string | null;
+}
+
+/**
+ * Set a company's availability ("busy") state. Shared by the provider self-service
+ * endpoint (scoped to their own company) and the admin endpoint. When busy is set
+ * false we also clear busyUntil so a stale reopen date can't linger. busyUntil is
+ * accepted as epoch ms (or null); the effective busy state is resolved at read time
+ * (see serialize.isEffectivelyBusy), so no scheduling is needed.
+ */
+export async function setAvailability(
+  id: string,
+  input: AvailabilityInput,
+): Promise<ApiCompany> {
+  const existing = await prisma.company.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!existing) throw new NotFoundError("Company");
+
+  const busyUntil = !input.busy
+    ? null // going available clears any reopen date
+    : input.busyUntil == null
+      ? null
+      : new Date(input.busyUntil);
+
+  const company = await prisma.company.update({
+    where: { id },
+    data: {
+      busy: input.busy,
+      busyUntil,
+      // Only touch the note when explicitly provided; "" clears it.
+      ...(input.busyNote === undefined
+        ? {}
+        : { busyNote: input.busyNote?.trim() || null }),
+    },
+    include: companyInclude,
+  });
+  return serializeCompanyAdmin(company);
+}
+
 /** Admin: change visibility status. */
 export async function setStatus(
   id: string,

@@ -4,6 +4,7 @@ import { isApiConfigured } from "../lib/api";
 import { DISTRICTS, BUDGETS, addLead, getMyLeads, type Lead } from "../lib/requests";
 import { useSettings, parseLines } from "../lib/settings";
 import { getCompany } from "../lib/catalog";
+import { isBusy, formatReopenDate } from "../lib/availability";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
@@ -183,6 +184,25 @@ export default function RequestForm() {
             </div>
           )}
         </div>
+
+        {/* Busy notice — this company can't take new requests right now; point the
+            customer to the waiting list on the profile. Doesn't hard-block submitting. */}
+        {company && isBusy(company) && (
+          <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-3.5 mb-4">
+            <span className="material-symbols-outlined text-amber-600 text-[20px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
+            <div className="flex-1">
+              <p className="text-[13px] text-amber-900 font-bold leading-snug">
+                {company.busyUntil
+                  ? `${companyName} ${t(locale, "busy_banner_booked_until").toLowerCase()} ${formatReopenDate(company.busyUntil, locale)}`
+                  : `${companyName} — ${t(locale, "busy_banner_fully_booked")}`}
+              </p>
+              <Link to={`/companies/${companySlug}`} className="text-[13px] text-amber-800 font-bold hover:underline inline-flex items-center gap-1 mt-1">
+                <span className="material-symbols-outlined text-[15px]">hourglass_top</span>
+                {t(locale, "waitlist_join_cta")}
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Smart pre-fill notice */}
         {prefilled && (

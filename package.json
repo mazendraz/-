@@ -1,0 +1,22 @@
+{
+  "name": "al-assema",
+  "version": "0.1.0",
+  "private": true,
+  "description": "العاصمة — منصة دليل خدمات للعاصمة الإدارية الجديدة (lead-generation). Monorepo: api (Next.js) + app (Vite/React).",
+  "scripts": {
+    "ship": "bash scripts/ship.sh",
+    "install:all": "npm --prefix api install && npm --prefix app install",
+    "dev:api": "npm --prefix api run dev",
+    "dev:app": "npm --prefix app run dev",
+    "build:api": "npm --prefix api run build",
+    "build:app": "npm --prefix app run build",
+    "build": "npm run build:api && npm run build:app",
+    "lint": "npm --prefix api run lint",
+    "test": "npm --prefix api test",
+    "test:app": "npm --prefix app run e2e",
+    "db:generate": "npm --prefix api run db:generate",
+    "db:migrate": "npm --prefix api run db:migrate",
+    "db:seed": "npm --prefix api run seed",
+    "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
+  }
+}

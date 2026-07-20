@@ -20,6 +20,9 @@ exports[`response envelope contract shapes > ApiPage<T> (page) 1`] = `
       "badges": [
         "Licensed",
       ],
+      "busy": false,
+      "busyNote": null,
+      "busyUntil": null,
       "category": "interior-design",
       "categoryLabel": "Interior Design",
       "completedProjects": 87,
@@ -101,6 +104,9 @@ exports[`serializer contract shapes > ApiCompany (raw profile) 1`] = `
   "badges": [
     "Licensed",
   ],
+  "busy": false,
+  "busyNote": null,
+  "busyUntil": null,
   "category": "interior-design",
   "categoryLabel": "Interior Design",
   "completedProjects": 87,
@@ -157,6 +163,9 @@ exports[`serializer contract shapes > ApiCompany card (list view — empty proje
   "badges": [
     "Licensed",
   ],
+  "busy": false,
+  "busyNote": null,
+  "busyUntil": null,
   "category": "interior-design",
   "categoryLabel": "Interior Design",
   "completedProjects": 87,

@@ -9,7 +9,8 @@ import type {
   LeadListQuery,
 } from "@/lib/services/leads.service";
 import type { AdminUserListQuery } from "@/lib/services/users.service";
-import type { ApiLeadStatus, ApiUserRole } from "@/lib/apiTypes";
+import type { WaitlistListQuery } from "@/lib/services/waitlist.service";
+import type { ApiLeadStatus, ApiUserRole, ApiWaitlistStatus } from "@/lib/apiTypes";
 
 const SORTS: readonly CompanySort[] = [
   "recommended",
@@ -89,6 +90,28 @@ export function parseAdminLeadListQuery(
     companyId: searchParams.get("companyId")?.trim() || undefined,
     from: toDate(searchParams.get("from")),
     to: toDate(searchParams.get("to")),
+  };
+}
+
+const WAITLIST_STATUSES: readonly ApiWaitlistStatus[] = [
+  "WAITING",
+  "NOTIFIED",
+  "CONVERTED",
+  "CANCELLED",
+];
+
+export function parseWaitlistListQuery(
+  searchParams: URLSearchParams,
+): WaitlistListQuery {
+  const statusParam = searchParams.get("status");
+  const status = WAITLIST_STATUSES.includes(statusParam as ApiWaitlistStatus)
+    ? (statusParam as ApiWaitlistStatus)
+    : undefined;
+  return {
+    page: toInt(searchParams.get("page")),
+    pageSize: toInt(searchParams.get("pageSize")),
+    status,
+    search: searchParams.get("search")?.trim() || undefined,
   };
 }
 

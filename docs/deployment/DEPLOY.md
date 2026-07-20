@@ -4,8 +4,8 @@
 
 | الجزء | المسار | النوع | الاستضافة المقترحة |
 | ----- | ------ | ----- | ------------------ |
-| الواجهة (Frontend) | [`app/`](app/) | Vite SPA ثابت (static) | Vercel / Netlify / أي static host |
-| الخدمة الخلفية (Backend) | [`api/`](api/) | Next.js API + Prisma | Vercel / أي Node host |
+| الواجهة (Frontend) | [`app/`](../../app/) | Vite SPA ثابت (static) | Vercel / Netlify / أي static host |
+| الخدمة الخلفية (Backend) | [`api/`](../../api/) | Next.js API + Prisma | Vercel / أي Node host |
 | قاعدة البيانات | — | Postgres | Supabase |
 | تخزين الصور | — | Object storage | Supabase Storage |
 
@@ -46,7 +46,7 @@ git push -u origin main
 3. لو الاستضافة **serverless** (Vercel functions): استخدم **Transaction
    pooler** (منفذ 6543) لـ `DATABASE_URL` والـ **Direct** (5432) لـ
    `DIRECT_URL`، وفعّل `directUrl` في
-   [`api/prisma/schema.prisma`](api/prisma/schema.prisma).
+   [`api/prisma/schema.prisma`](../../api/prisma/schema.prisma).
 
 ---
 
@@ -54,8 +54,8 @@ git push -u origin main
 
 1. في Vercel: **New Project** → اختار نفس الريبو.
 2. **Root Directory = `api`** (مهم جدًا).
-3. Vercel هيقرأ [`api/vercel.json`](api/vercel.json) اللي بيشغّل `prisma generate && next build`.
-4. حط متغيرات البيئة (من [`api/.env.example`](api/.env.example)) في
+3. Vercel هيقرأ [`api/vercel.json`](../../api/vercel.json) اللي بيشغّل `prisma generate && next build`.
+4. حط متغيرات البيئة (من [`api/.env.example`](../../api/.env.example)) في
    **Settings → Environment Variables**:
 
    | المتغير | القيمة |
@@ -115,8 +115,8 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
 ## 5. نشر الفرونت إند (`app/` على Vercel)
 
 1. **New Project** تاني على نفس الريبو، بس **Root Directory = `app`**.
-2. Vercel هيقرأ [`app/vercel.json`](app/vercel.json) (build + الـ SPA rewrites).
-3. حط متغيرات البيئة (من [`app/.env.example`](app/.env.example)):
+2. Vercel هيقرأ [`app/vercel.json`](../../app/vercel.json) (build + الـ SPA rewrites).
+3. حط متغيرات البيئة (من [`app/.env.example`](../../app/.env.example)):
 
    | المتغير | القيمة |
    | ------- | ------ |
@@ -169,25 +169,25 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
       `https://<api-domain>/api/sitemap` (بيضيف الشركات/التصنيفات تلقائيًا من غير
       redeploy). حط `PUBLIC_SITE_URL` بدومين **الفرونت** عشان روابط الـ `loc` تطلع
       صح، واعمل submit للرابط ده في Google Search Console (أو ضيفه في `robots.txt`
-      كـ `Sitemap:`). ملف [`app/public/sitemap.xml`](app/public/sitemap.xml)
+      كـ `Sitemap:`). ملف [`app/public/sitemap.xml`](../../app/public/sitemap.xml)
       الثابت بقى **متجاوَز** — احذفه، أو اعمل rewrite في
-      [`app/vercel.json`](app/vercel.json) من `/sitemap.xml` للـ API sitemap.
+      [`app/vercel.json`](../../app/vercel.json) من `/sitemap.xml` للـ API sitemap.
 - [ ] `JWT_TTL` قصير في الإنتاج (الافتراضي دلوقتي `1d`)، و`JWT_SECRET` قوي وسري.
 - [ ] **Security headers:** الهيدرز الأساسية (HSTS / nosniff / X-Frame-Options /
       Referrer-Policy / Permissions-Policy) مفعّلة تلقائيًا للباك إند
-      ([`api/next.config.ts`](api/next.config.ts)) وللفرونت
-      ([`app/vercel.json`](app/vercel.json)).
+      ([`api/next.config.ts`](../../api/next.config.ts)) وللفرونت
+      ([`app/vercel.json`](../../app/vercel.json)).
 - [ ] **CSP (دفاع أساسي ضد XSS) — بقى متوصّل:**
       > ملاحظة: التوكن بقى في **httpOnly cookie** (مش localStorage)، فـ XSS مش
       > بيقدر يسرقه؛ الـ CSP فاضلة مهمة كدفاع عميق ضد حقن السكربتات عمومًا.
 
       الـ CSP اتحطّ **Report-Only** بالفعل في التنصيبتين:
-      - VPS: [`deploy/Caddyfile`](deploy/Caddyfile) (بلوك الـ SPA).
-      - Vercel: [`app/vercel.json`](app/vercel.json) — **غيّر `REPLACE-WITH-API-DOMAIN`**
+      - VPS: [`deploy/Caddyfile`](../../deploy/Caddyfile) (بلوك الـ SPA).
+      - Vercel: [`app/vercel.json`](../../app/vercel.json) — **غيّر `REPLACE-WITH-API-DOMAIN`**
         في `connect-src` لدومين الباك إند (على VPS مش محتاج — نفس الـ origin).
 
       والـ locale-init script اتنقل لملف خارجي
-      ([`app/public/locale-init.js`](app/public/locale-init.js))، فـ `script-src`
+      ([`app/public/locale-init.js`](../../app/public/locale-init.js))، فـ `script-src`
       بقى `'self'` **من غير** `'unsafe-inline'` — يعني أي `<script>` محقون بيتمنع.
 
       **الخطوات:**
@@ -216,7 +216,7 @@ npm run create-admin -- --email you@site.com --password '<باسورد قوي>' 
 أما الإعدادات التشغيلية (Infra) فتظل عبر **متغيّرات البيئة** (تتغيّر مرّة عند النشر،
 مش محتاجة تعديل كود): `DATABASE_URL`/`DIRECT_URL`، `JWT_SECRET`/`JWT_TTL`،
 `CORS_ALLOWED_ORIGINS`، `API_KEY`، `PUBLIC_SITE_URL`، Redis، Resend، CAPTCHA،
-`SENTRY_DSN`. كلها موثّقة في [`api/.env.example`](api/.env.example).
+`SENTRY_DSN`. كلها موثّقة في [`api/.env.example`](../../api/.env.example).
 
 ---
 

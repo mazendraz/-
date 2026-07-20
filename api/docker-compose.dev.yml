@@ -1,0 +1,28 @@
+# قاعدة بيانات Postgres محلية للتطوير — ببيانات دائمة (volume)، عشان شغلك المحلي
+# يفضل موجود بعد إعادة التشغيل. (ملف docker-compose.yml التاني للاختبارات وبيمسح
+# البيانات؛ ده للتطوير اليومي.)
+#
+#   docker compose -f docker-compose.dev.yml up -d      # تشغيل
+#   docker compose -f docker-compose.dev.yml down        # إيقاف (البيانات تفضل)
+#   docker compose -f docker-compose.dev.yml down -v      # إيقاف + مسح البيانات
+#
+# api/.env مأشّر عليها بالفعل: postgresql://postgres:postgres@localhost:5433/alassema
+services:
+  db-dev:
+    image: postgres:16
+    container_name: alassema-db-dev
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: alassema
+    ports:
+      - "5433:5432"
+    volumes:
+      - alassema-dev-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d alassema"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  alassema-dev-db:

@@ -88,6 +88,14 @@ export interface ApiCompany {
   badges: string[];
   featured: boolean;
   verified: boolean;
+  // Availability. `busy` is the EFFECTIVE state (already resolved against busyUntil
+  // server-side, so a passed busyUntil reads as available). busyUntil is the optional
+  // auto-reopen instant (epoch ms; null = busy indefinitely). busyNote is an optional
+  // customer-facing reason. When busy, the public profile swaps its request CTA for
+  // the waiting-list CTA.
+  busy: boolean;
+  busyUntil?: number | null;
+  busyNote?: string | null;
   // Optional per-page SEO overrides; null/absent → frontend uses defaults.
   metaTitle?: string | null;
   metaDescription?: string | null;
@@ -98,6 +106,42 @@ export interface ApiCompany {
   // Admin-only: true when rating/reviewCount were set manually (not derived from
   // the Review table). Present only in admin payloads.
   ratingOverridden?: boolean;
+}
+
+// ── Availability + waiting list ─────────────────────────────────────────────────
+
+/** PATCH /provider/availability · PATCH /admin/companies/:id/availability body. */
+export interface ApiAvailabilityPayload {
+  busy: boolean;
+  busyUntil?: number | null; // epoch ms, or null to clear the auto-reopen date
+  busyNote?: string | null;
+}
+
+export type ApiWaitlistStatus = "WAITING" | "NOTIFIED" | "CONVERTED" | "CANCELLED";
+
+export interface ApiWaitlistEntry {
+  id: string;
+  companySlug: string;
+  companyName: string;
+  name: string;
+  phone: string;
+  service: string | null;
+  note: string | null;
+  status: ApiWaitlistStatus;
+  createdAt: number; // epoch ms
+}
+
+/** POST /companies/:slug/waitlist — public join body. */
+export interface ApiWaitlistPayload {
+  name: string;
+  phone: string;
+  service?: string;
+  note?: string;
+}
+
+/** PATCH /provider/waitlist/:id · /admin/companies/:id/waitlist/:entryId body. */
+export interface ApiWaitlistStatusPatch {
+  status: ApiWaitlistStatus;
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────

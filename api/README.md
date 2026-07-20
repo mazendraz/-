@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# api/ — الخدمة الخلفية (Al Assema)
 
-## Getting Started
+Next.js API Routes + Prisma ORM على Postgres (Supabase). بتوفّر REST API لدليل الخدمات: الشركات، المشاريع، المراجعات، الطلبات (leads)، لوحة الأدمن، ولوحة مقدّم الخدمة.
 
-First, run the development server:
+## التشغيل
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+
+# الإعدادات
+cp .env.example .env          # املأ القيم (DATABASE_URL, JWT secret, …)
+
+# قاعدة البيانات (أول مرة)
+npm run db:generate           # توليد Prisma client
+npm run db:migrate            # تطبيق الـ migrations
+npm run seed                  # بيانات تجريبية (اختياري)
+npm run create-admin          # إنشاء مستخدم أدمن
+
+# التطوير
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## السكربتات
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| السكربت | الوظيفة |
+| ------- | ------- |
+| `npm run dev` | خادم التطوير |
+| `npm run build` / `npm start` | بناء وتشغيل الإنتاج |
+| `npm run lint` | ESLint |
+| `npm test` | اختبارات الوحدة (Vitest) |
+| `npm run test:integration` | اختبارات التكامل (محتاجة DB) |
+| `npm run test:db:up` / `:down` | تشغيل/إيقاف Postgres محلي عبر Docker |
+| `npm run db:generate` / `db:migrate` / `seed` / `create-admin` | أدوات قاعدة البيانات |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## الهيكل
 
-## Learn More
+```
+src/
+├── app/api/          مسارات الـ API (route.ts لكل endpoint)
+└── lib/
+    ├── services/     منطق الأعمال (companies, leads, reviews, …)
+    ├── middleware/   auth · rate-limit · captcha · body-limit · guards
+    ├── validation/   مخططات Zod للتحقق من المدخلات
+    ├── observability/ تسجيل الأخطاء والمراقبة
+    └── utils/        أدوات مساعدة
+prisma/
+├── schema.prisma     موديلات قاعدة البيانات
+├── migrations/       الترحيلات
+└── seed.ts           بيانات البداية
+```
 
-To learn more about Next.js, take a look at the following resources:
+## الموديلات
+`Category` · `Company` · `Project` · `Review` · `Lead` · `User` · `PushSubscription` · `SiteReview` · `Feedback` · `AppSetting` · `AuditLog`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## وثائق ذات صلة
+- المعمارية الكاملة: [`../docs/architecture/backend-plan.md`](../docs/architecture/backend-plan.md)
+- الأمان: [`SECURITY.md`](SECURITY.md)
+- النشر: [`../docs/deployment/DEPLOY.md`](../docs/deployment/DEPLOY.md)

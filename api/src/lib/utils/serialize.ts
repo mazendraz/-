@@ -9,6 +9,7 @@ import type {
   Lead,
   Project,
   Review,
+  WaitlistEntry,
 } from "@/generated/prisma/client";
 import type {
   ApiAdminCategory,
@@ -18,6 +19,7 @@ import type {
   ApiLeadStatus,
   ApiProject,
   ApiReview,
+  ApiWaitlistEntry,
 } from "@/lib/apiTypes";
 
 // ── Primitives ────────────────────────────────────────────────────────────────
@@ -25,6 +27,16 @@ import type {
 /** DateTime → epoch milliseconds (ApiLead.createdAt is a Number). */
 export function toEpochMs(date: Date): number {
   return date.getTime();
+}
+
+/**
+ * Effective availability: a company is only busy while its `busy` flag is set AND
+ * its optional auto-reopen instant (busyUntil) is null or still in the future. Once
+ * busyUntil passes, every read reports the company available again — this is what
+ * makes "busy until <date>" auto-reopen without a background job.
+ */
+export function isEffectivelyBusy(c: Pick<Company, "busy" | "busyUntil">): boolean {
+  return c.busy === true && (c.busyUntil == null || c.busyUntil.getTime() > Date.now());
 }
 
 const STATUS_TO_LABEL: Record<LeadStatus, ApiLeadStatus> = {
@@ -166,6 +178,10 @@ function companyScalars(c: CompanyCardRow) {
     badges: c.badges,
     featured: c.featured,
     verified: c.verified,
+    // Effective busy state (resolved against busyUntil) — see isEffectivelyBusy.
+    busy: isEffectivelyBusy(c),
+    busyUntil: c.busyUntil ? toEpochMs(c.busyUntil) : null,
+    busyNote: c.busyNote ?? null,
     metaTitle: c.metaTitle ?? null,
     metaDescription: c.metaDescription ?? null,
   };
@@ -202,6 +218,24 @@ export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
     whatsapp: c.whatsapp ?? null,
     // Admin-only: lets the editor show whether the rating is a manual override.
     ratingOverridden: c.ratingOverridden,
+  };
+}
+
+export type WaitlistEntryWithCompany = WaitlistEntry & {
+  company: Pick<Company, "slug" | "name">;
+};
+
+export function serializeWaitlistEntry(e: WaitlistEntryWithCompany): ApiWaitlistEntry {
+  return {
+    id: e.id,
+    companySlug: e.company.slug,
+    companyName: e.company.name,
+    name: e.name,
+    phone: e.phone,
+    service: e.service ?? null,
+    note: e.note ?? null,
+    status: e.status,
+    createdAt: toEpochMs(e.createdAt),
   };
 }
 

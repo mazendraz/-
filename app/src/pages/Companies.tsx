@@ -10,6 +10,7 @@ import SaveButton from "../components/SaveButton";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import { isApiConfigured } from "../lib/api";
+import { isBusy } from "../lib/availability";
 import { useServerSearch } from "../hooks/useServerSearch";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
@@ -366,6 +367,12 @@ function CompanyCard({ company: c, delay }: { company: Company; delay: number })
           </div>
           {/* Save heart — top-right (convention) */}
           <SaveButton slug={c.slug} className="absolute top-3 right-3 rtl:right-auto rtl:left-3" />
+          {isBusy(c) && (
+            <span className="absolute bottom-3 left-3 rtl:left-auto rtl:right-3 z-10 flex items-center gap-1 bg-amber-500 text-white text-[11px] font-bold px-2 py-1 rounded-full shadow-md">
+              <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
+              {t(locale, "busy_badge")}
+            </span>
+          )}
         </div>
 
         <div className="pt-9 px-5 pb-5 flex-grow flex flex-col">

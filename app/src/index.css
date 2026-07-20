@@ -379,6 +379,35 @@
   flex-shrink: 0;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   REVIEWS MARQUEE — continuous right-to-left banner of all reviews
+════════════════════════════════════════════════════════════════════════════ */
+@keyframes reviewMarquee {
+  from { transform: translateX(0); }
+  /* The track renders the review list twice; shifting by half its width lands the
+     second copy exactly where the first began, so the loop is seamless. */
+  to   { transform: translateX(-50%); }
+}
+.review-marquee {
+  overflow: hidden;
+  /* Soft fade at both edges so cards glide in/out instead of clipping. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+          mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
+}
+.review-marquee-track {
+  display: flex;
+  width: max-content;
+  /* Duration is set inline (scales with the loop length); 60s is the fallback. */
+  animation: reviewMarquee 60s linear infinite;
+}
+/* Spacing lives on each card (not flex `gap`) so every item — including the one at
+   the seam — is uniformly spaced, which is what makes translateX(-50%) wrap without
+   a jump. */
+.review-marquee-track > * { margin-inline-end: 16px; }
+/* Pause on hover / focus-within so a reader can stop on a card. */
+.review-marquee:hover .review-marquee-track,
+.review-marquee:focus-within .review-marquee-track { animation-play-state: paused; }
+
 /* ── Bleed mobile margins for horizontal scroll ───────────────────────── */
 .mobile-bleed {
   margin-left: -16px;
@@ -540,6 +569,11 @@ select.field-input {
   .animate-float,
   .pulse-dot,
   .scroll-progress-bar { animation: none; }
+
+  /* Reviews marquee — stop the auto-scroll; let the strip be scrolled by hand. */
+  .review-marquee-track { animation: none; }
+  .review-marquee { overflow-x: auto; scrollbar-width: none; }
+  .review-marquee::-webkit-scrollbar { display: none; }
 
   /* Chart entrance */
   .chart-bar,

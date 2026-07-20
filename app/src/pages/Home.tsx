@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useCompanies, useCategoriesWithCounts, useCatalogStatus, useFeaturedProjects } from "../lib/catalog";
+import { isBusy } from "../lib/availability";
 import { CompanyCardSkeleton } from "../components/Skeleton";
 import { useSiteReviews, useReviewsEnabled, addSiteReview } from "../lib/siteReviews";
 import { useCountUp } from "../hooks/useCountUp";
@@ -272,6 +273,12 @@ export default function Home() {
                       <span className="text-[11px] font-bold text-primary">{t(locale, "common_verified")}</span>
                     </div>
                   )}
+                  {isBusy(c) && (
+                    <span className="absolute bottom-2.5 left-2.5 z-10 flex items-center gap-1 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md">
+                      <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
+                      {t(locale, "busy_badge")}
+                    </span>
+                  )}
                 </div>
 
                 {/* Info */}
@@ -406,27 +413,51 @@ export default function Home() {
               {t(locale, "home_reviews_share")}
             </button>
           </div>
-          <div className="mobile-scroll mobile-bleed md:grid md:grid-cols-3 md:gap-gutter">
-            {siteReviews.slice(0, 3).map((r) => (
-              <div
-                key={r.id}
-                className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom flex flex-col
-                           w-[275px] flex-shrink-0 md:w-auto card-lift"
-              >
-                <Stars n={r.rating} />
-                <p className="text-[14px] text-on-surface-variant my-4 flex-grow leading-relaxed">"{r.text}"</p>
-                <div className="flex items-center gap-3 pt-4 border-t border-outline-variant/15">
-                  <div className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-[16px] flex-shrink-0">
-                    {r.name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="font-bold text-[14px] text-on-surface">{r.name}</p>
-                    <p className="text-[12px] text-outline">{r.district}</p>
-                  </div>
+          {/* Continuous right-to-left marquee of ALL approved reviews. One "loop" is
+              repeated until it comfortably overflows the widest screen, then the whole
+              loop is duplicated once so the -50% wrap is seamless with no empty gap on
+              the right (see .review-marquee CSS). Speed scales with the loop length. */}
+          {siteReviews.length > 0 && (() => {
+            // Ensure a single loop has enough cards to exceed a wide viewport, so the
+            // right edge never runs dry before the animation repeats.
+            const MIN_LOOP_CARDS = 8;
+            const reps = Math.max(1, Math.ceil(MIN_LOOP_CARDS / siteReviews.length));
+            const loop = Array.from({ length: reps }, () => siteReviews).flat();
+            const track = [...loop, ...loop]; // duplicated → seamless translateX(-50%)
+            return (
+              <div className="review-marquee -mx-margin-mobile md:-mx-margin-desktop px-margin-mobile md:px-margin-desktop">
+                <div
+                  className="review-marquee-track py-2"
+                  style={{ animationDuration: `${loop.length * 6}s` }}
+                >
+                  {track.map((r, i) => {
+                    const isDuplicate = i >= loop.length;
+                    return (
+                      <div
+                        key={`${r.id}-${i}`}
+                        aria-hidden={isDuplicate ? true : undefined}
+                        tabIndex={isDuplicate ? -1 : 0}
+                        className="review-card bg-surface-container-lowest rounded-2xl p-6 shadow-bloom flex flex-col
+                                   w-[280px] md:w-[340px] flex-shrink-0"
+                      >
+                        <Stars n={r.rating} />
+                        <p className="text-[14px] text-on-surface-variant my-4 flex-grow leading-relaxed line-clamp-5">"{r.text}"</p>
+                        <div className="flex items-center gap-3 pt-4 border-t border-outline-variant/15">
+                          <div className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-[16px] flex-shrink-0">
+                            {r.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-[14px] text-on-surface">{r.name}</p>
+                            <p className="text-[12px] text-outline">{r.district}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </section>
 
       {/* The #contact anchor now lives in the footer (real, admin-managed contact). */}

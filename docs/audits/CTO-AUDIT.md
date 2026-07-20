@@ -54,11 +54,11 @@ The domain: a curated services marketplace (categories → companies → leads/r
 
 This is a **clean, disciplined, small codebase** (~5,900 lines of first-party lib code + ~45 thin route files, 20 commits). The layering is genuinely good, not aspirational:
 
-- **Routes are thin** — parse query/body, call a service, serialize. Example: [api/src/app/api/admin/users/route.ts](api/src/app/api/admin/users/route.ts).
-- **Composition middleware** (`withErrors → withAuth → withRole`) in [guards.ts](api/src/lib/middleware/guards.ts) gives every admin route an identical, auditable chain (`adminOnly(...)`). This is the correct pattern for Next.js route handlers, which have no framework-level middleware chain.
+- **Routes are thin** — parse query/body, call a service, serialize. Example: [api/src/app/api/admin/users/route.ts](../../api/src/app/api/admin/users/route.ts).
+- **Composition middleware** (`withErrors → withAuth → withRole`) in [guards.ts](../../api/src/lib/middleware/guards.ts) gives every admin route an identical, auditable chain (`adminOnly(...)`). This is the correct pattern for Next.js route handlers, which have no framework-level middleware chain.
 - **Services own business logic** and are the only layer touching Prisma.
-- **Serializers centralize the wire contract** ([serialize.ts](api/src/lib/utils/serialize.ts)) with deliberate public/admin shape splits (public payloads omit ids, internal contact fields, moderation state).
-- **Error handling is centralized** ([withErrors.ts](api/src/lib/utils/withErrors.ts)) with a typed error hierarchy and consistent `ApiErrorBody` output.
+- **Serializers centralize the wire contract** ([serialize.ts](../../api/src/lib/utils/serialize.ts)) with deliberate public/admin shape splits (public payloads omit ids, internal contact fields, moderation state).
+- **Error handling is centralized** ([withErrors.ts](../../api/src/lib/utils/withErrors.ts)) with a typed error hierarchy and consistent `ApiErrorBody` output.
 - Comments explain *why* (threat models, invariants, trade-offs) at a density I rarely see. Maintainability is high.
 
 SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport / auth / business logic / persistence / contract) are all real and respected. There is no dependency bloat: 12 runtime dependencies, all pulling their weight.
@@ -78,7 +78,7 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 #### A-2: API contract types duplicated between frontend and backend
 
 - **Severity:** Medium
-- **Description:** `api/src/lib/apiTypes.ts` and `app/src/lib/apiTypes.ts` are parallel copies of the wire contract. A snapshot test ([contract.test.ts](api/src/lib/contract.test.ts)) guards drift, but nothing structurally prevents it.
+- **Description:** `api/src/lib/apiTypes.ts` and `app/src/lib/apiTypes.ts` are parallel copies of the wire contract. A snapshot test ([contract.test.ts](../../api/src/lib/contract.test.ts)) guards drift, but nothing structurally prevents it.
 - **Why it is a problem:** Two sources of truth for the same contract. Every contract change is a two-file edit plus snapshot update; a missed edit produces a runtime mismatch TypeScript can't catch across packages.
 - **Real-world impact:** Silent field drift (e.g. a renamed field serialized by the API but typed differently in the app) surfaces as `undefined` in the UI, not as a build error.
 - **Recommended solution:** Extract a shared `packages/contract` (or a single file imported by both via a workspace), or generate the frontend types from the backend's. The monorepo layout already supports this.
@@ -88,7 +88,7 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 #### A-3: Seed script destroys production data if pointed at production
 
 - **Severity:** High (operational)
-- **Description:** [prisma/seed.ts](api/prisma/seed.ts) begins with `review.deleteMany() → project.deleteMany() → lead.deleteMany() → company.deleteMany() → category.deleteMany()`. `DEPLOY.md` instructs operators to run it once against the production database during setup.
+- **Description:** [prisma/seed.ts](../../api/prisma/seed.ts) begins with `review.deleteMany() → project.deleteMany() → lead.deleteMany() → company.deleteMany() → category.deleteMany()`. `DEPLOY.md` instructs operators to run it once against the production database during setup.
 - **Why it is a problem:** After launch, the same `npm run seed` against the production `DATABASE_URL` **silently deletes every real lead, review, and company**. Leads are customer data with commercial value; there is no confirmation prompt, no `NODE_ENV` guard, no dry-run.
 - **Real-world impact:** One habitual command run in the wrong terminal wipes the business's pipeline. Recovery depends entirely on Supabase backups (see O-1).
 - **Recommended solution:** Add a hard guard: refuse to run when the target DB already contains leads (or require `--force` + `SEED_ALLOW_DESTRUCTIVE=1`). Ten lines of code.
@@ -98,7 +98,7 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 #### A-4: Admin company update replaces approved projects wholesale
 
 - **Severity:** Low
-- **Description:** [companies.service.ts:344-355](api/src/lib/services/companies.service.ts#L344-L355) — sending `projects` in a company update deletes all APPROVED projects and recreates them.
+- **Description:** [companies.service.ts:344-355](../../api/src/lib/services/companies.service.ts#L344-L355) — sending `projects` in a company update deletes all APPROVED projects and recreates them.
 - **Why it is a problem:** Project row ids and `createdAt` churn on every editor save; anything referencing a project id (currently nothing external, but e.g. future analytics) breaks. It also resets `status` history.
 - **Real-world impact:** None today (public payloads omit project ids by design). Latent trap for future features.
 - **Recommended solution:** Diff-based upsert when projects gain any external references. Document the current behavior until then (it already is, in comments).
@@ -114,7 +114,7 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 **This is the strongest area of the project.** Concretely verified:
 
 - **Error handling:** every route is wrapped (`withErrors` or a guard that includes it — verified by grep across all 45 route files; the only unwrapped ones are `health`, `ready`, `sitemap`, which are deliberately infallible/fail-soft).
-- **Validation:** every write endpoint parses through Zod schemas with sane bounds; free-text is HTML-stripped **before** length checks ([sanitize.ts](api/src/lib/utils/sanitize.ts)) so markup-only input fails minimums. Query params go through defensive parsers ([query.ts](api/src/lib/utils/query.ts)) with clamped pagination everywhere.
+- **Validation:** every write endpoint parses through Zod schemas with sane bounds; free-text is HTML-stripped **before** length checks ([sanitize.ts](../../api/src/lib/utils/sanitize.ts)) so markup-only input fails minimums. Query params go through defensive parsers ([query.ts](../../api/src/lib/utils/query.ts)) with clamped pagination everywhere.
 - **Naming and consistency:** uniform service/route/validation naming; the same paging/serialization idioms repeat predictably.
 - **Logging:** consistent, prefixed (`[notify]`, `[push]`, `[audit]`, `[rateLimit]`), always includes an identifier (refNumber, companyId). No PII beyond what the log line needs. No structured logger, though (see O-2).
 - **No dead code found**; no unused dependencies found in `api/package.json`.
@@ -124,7 +124,7 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 #### Q-1: Duplicated paging/search-builder logic across services
 
 - **Severity:** Low
-- **Description:** `clampPaging` is copy-pasted in [leads.service.ts:36](api/src/lib/services/leads.service.ts#L36), [companies.service.ts:101](api/src/lib/services/companies.service.ts#L101), [users.service.ts:57](api/src/lib/services/users.service.ts#L57), and inline in reviews.service. `contains/insensitive` OR-search builders repeat in four services. The honeypot + CAPTCHA + bounded-read preamble is duplicated across the four public submit routes.
+- **Description:** `clampPaging` is copy-pasted in [leads.service.ts:36](../../api/src/lib/services/leads.service.ts#L36), [companies.service.ts:101](../../api/src/lib/services/companies.service.ts#L101), [users.service.ts:57](../../api/src/lib/services/users.service.ts#L57), and inline in reviews.service. `contains/insensitive` OR-search builders repeat in four services. The honeypot + CAPTCHA + bounded-read preamble is duplicated across the four public submit routes.
 - **Why it is a problem:** A future change to pagination rules or bot defense must be made in 4+ places; one missed spot is an inconsistency bug.
 - **Real-world impact:** Maintenance friction only; behavior is currently consistent.
 - **Recommended solution:** Extract `clampPaging` to `utils/`, and a `publicSubmitGuard(request, key, limits)` helper for the honeypot/CAPTCHA/body-limit preamble.
@@ -134,8 +134,8 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 #### Q-2: Regex-based HTML stripping as sanitization
 
 - **Severity:** Low
-- **Description:** [sanitize.ts](api/src/lib/utils/sanitize.ts) strips tags with regexes rather than a parser.
-- **Why it is a problem:** Regex HTML handling is famously bypassable *as a security control*. Here it is explicitly defense-in-depth (React escapes on render; API responses are JSON), so a bypass stores odd text, not executable markup. The email path separately escapes properly ([notifications.service.ts:23](api/src/lib/services/notifications.service.ts#L23)).
+- **Description:** [sanitize.ts](../../api/src/lib/utils/sanitize.ts) strips tags with regexes rather than a parser.
+- **Why it is a problem:** Regex HTML handling is famously bypassable *as a security control*. Here it is explicitly defense-in-depth (React escapes on render; API responses are JSON), so a bypass stores odd text, not executable markup. The email path separately escapes properly ([notifications.service.ts:23](../../api/src/lib/services/notifications.service.ts#L23)).
 - **Real-world impact:** Malformed-but-harmless text could persist (e.g. `<img src=x onerror=...>` split across the regex). No render surface executes it.
 - **Recommended solution:** Acceptable as-is given the layered model. If you ever add a non-React consumer (email digests with raw values, exports to Excel), swap to a real sanitizer (`sanitize-html`) at that boundary.
 - **Complexity:** Low.
@@ -159,26 +159,26 @@ SOLID/Clean-Architecture pedantry aside, the boundaries that matter (transport /
 
 This backend has had a real security pass — the recent commit history (`credential stuffing`, `body size caps`, `circuit breakers`, `id/status leaks`) is reflected in the code:
 
-- **Password hashing:** bcryptjs, cost 12, 72-char max enforced in validation ([users.ts](api/src/lib/validation/users.ts)).
-- **User-enumeration defenses:** dummy-hash timing equalization ([auth.ts:44-58](api/src/lib/auth.ts#L44-L58)), uniform "Invalid email or password", uniform 404 for missing-vs-unauthorized lead tracking.
-- **Brute-force protection:** per-IP login limit + per-account **failure-only** limiter (no self-lockout DoS) ([login/route.ts](api/src/app/api/auth/login/route.ts)).
-- **Abuse protection on public submits:** per-IP limits + **IP-independent site-wide and per-company circuit breakers** ([leads/route.ts](api/src/app/api/leads/route.ts)), honeypot, optional CAPTCHA, 64 KB bounded body reads ([bodyLimit.ts](api/src/lib/middleware/bodyLimit.ts)), 5-minute duplicate suppression.
-- **IP spoofing resistance:** X-Forwarded-For parsed from the right with `TRUSTED_PROXY_HOPS`, and Caddy overwrites client-supplied XFF ([Caddyfile:36](deploy/Caddyfile#L36)).
+- **Password hashing:** bcryptjs, cost 12, 72-char max enforced in validation ([users.ts](../../api/src/lib/validation/users.ts)).
+- **User-enumeration defenses:** dummy-hash timing equalization ([auth.ts:44-58](../../api/src/lib/auth.ts#L44-L58)), uniform "Invalid email or password", uniform 404 for missing-vs-unauthorized lead tracking.
+- **Brute-force protection:** per-IP login limit + per-account **failure-only** limiter (no self-lockout DoS) ([login/route.ts](../../api/src/app/api/auth/login/route.ts)).
+- **Abuse protection on public submits:** per-IP limits + **IP-independent site-wide and per-company circuit breakers** ([leads/route.ts](../../api/src/app/api/leads/route.ts)), honeypot, optional CAPTCHA, 64 KB bounded body reads ([bodyLimit.ts](../../api/src/lib/middleware/bodyLimit.ts)), 5-minute duplicate suppression.
+- **IP spoofing resistance:** X-Forwarded-For parsed from the right with `TRUSTED_PROXY_HOPS`, and Caddy overwrites client-supplied XFF ([Caddyfile:36](../../deploy/Caddyfile#L36)).
 - **SQL injection:** no raw SQL anywhere except `SELECT 1` in the readiness probe; everything is parameterized Prisma.
-- **Authorization:** consistent `adminOnly`/`providerOnly`/`authed` + `assertOwnership` on provider-scoped resources; provider upload bucket is **server-forced** to `projects`; JWT role claims are never trusted for identity — the user row is re-fetched and `isActive` re-checked per request ([auth.ts:108-126](api/src/lib/auth.ts#L108-L126)), which gives you working session revocation via deactivation.
-- **Upload security:** MIME allowlist, 5 MB cap, **decompression-bomb guard** (`limitInputPixels`), re-encode to WebP via sharp (strips EXIF/payloads), random UUID filenames ([upload.service.ts](api/src/lib/services/upload.service.ts)).
+- **Authorization:** consistent `adminOnly`/`providerOnly`/`authed` + `assertOwnership` on provider-scoped resources; provider upload bucket is **server-forced** to `projects`; JWT role claims are never trusted for identity — the user row is re-fetched and `isActive` re-checked per request ([auth.ts:108-126](../../api/src/lib/auth.ts#L108-L126)), which gives you working session revocation via deactivation.
+- **Upload security:** MIME allowlist, 5 MB cap, **decompression-bomb guard** (`limitInputPixels`), re-encode to WebP via sharp (strips EXIF/payloads), random UUID filenames ([upload.service.ts](../../api/src/lib/services/upload.service.ts)).
 - **Secrets:** `.env` is git-ignored (verified `git ls-files`); only `.env.example` is tracked; no secrets in code.
-- **Output discipline:** public serializers omit ids, emails, whatsapp, tracking tokens; admin lead lists never re-expose `trackingToken`; the lead tracking secret is 144-bit random, constant-time compared ([token.ts](api/src/lib/utils/token.ts)).
-- **CORS:** deny-by-default in production when the allowlist is unset ([proxy.ts:22-28](api/src/proxy.ts#L22-L28)). CSRF is structurally not applicable (Bearer header, no cookies).
-- **Security headers:** HSTS, nosniff, frame-deny, referrer/permissions policy on every response ([next.config.ts](api/next.config.ts)).
-- **Boot-time guard** that refuses production start with an in-memory rate limiter unless explicitly opted in ([rateLimit.ts:111-131](api/src/lib/middleware/rateLimit.ts#L111-L131)) — this is unusually thoughtful.
+- **Output discipline:** public serializers omit ids, emails, whatsapp, tracking tokens; admin lead lists never re-expose `trackingToken`; the lead tracking secret is 144-bit random, constant-time compared ([token.ts](../../api/src/lib/utils/token.ts)).
+- **CORS:** deny-by-default in production when the allowlist is unset ([proxy.ts:22-28](../../api/src/proxy.ts#L22-L28)). CSRF is structurally not applicable (Bearer header, no cookies).
+- **Security headers:** HSTS, nosniff, frame-deny, referrer/permissions policy on every response ([next.config.ts](../../api/next.config.ts)).
+- **Boot-time guard** that refuses production start with an in-memory rate limiter unless explicitly opted in ([rateLimit.ts:111-131](../../api/src/lib/middleware/rateLimit.ts#L111-L131)) — this is unusually thoughtful.
 
 ### Findings
 
 #### SEC-1: JWT in localStorage with no CSP deployed
 
 - **Severity:** High
-- **Description:** The auth token lives in `localStorage` (`al-assema-token`, [app/src/lib/api.ts:28](app/src/lib/api.ts#L28)) for up to `JWT_TTL` (default 1d). The recommended CSP exists **only as a commented template in DEPLOY.md** — it is not deployed. Tokens cannot be revoked before expiry except by deactivating the user.
+- **Description:** The auth token lives in `localStorage` (`al-assema-token`, [app/src/lib/api.ts:28](../../app/src/lib/api.ts#L28)) for up to `JWT_TTL` (default 1d). The recommended CSP exists **only as a commented template in DEPLOY.md** — it is not deployed. Tokens cannot be revoked before expiry except by deactivating the user.
 - **Why it is a problem:** localStorage tokens are readable by any JS that executes in the page. Every XSS anywhere in the SPA (a future dependency compromise, a missed injection in a new feature, a malicious npm postinstall in the frontend build) escalates directly to **admin session theft**. CSP is the compensating control the project itself identifies as "the line of defense" — and it isn't turned on.
 - **Real-world impact:** A single successful XSS = full admin takeover: delete companies, read all customer PII (names, phones), create admin accounts. For a paying-customer marketplace holding PII, this is the largest single risk in the system.
 - **Recommended solution:** (1) **Before launch:** deploy the documented CSP in report-only mode, fix violations, enforce. Keep `JWT_TTL=1d` or shorter. (2) **Post-launch:** migrate auth to an `httpOnly; Secure; SameSite=Strict` cookie + CSRF token, or add a short-lived access token + rotating refresh token with server-side revocation. The API is same-origin behind Caddy in the VPS deploy, which makes the cookie migration straightforward.
@@ -188,7 +188,7 @@ This backend has had a real security pass — the recent commit history (`creden
 #### SEC-2: Database TLS with certificate verification disabled
 
 - **Severity:** Medium
-- **Description:** [dbAdapter.ts:24](api/src/lib/dbAdapter.ts#L24) sets `ssl: { rejectUnauthorized: false }` for any `sslmode=require` URL — encrypted but **unauthenticated** TLS to the Supabase pooler, in both the app and the seed/admin scripts.
+- **Description:** [dbAdapter.ts:24](../../api/src/lib/dbAdapter.ts#L24) sets `ssl: { rejectUnauthorized: false }` for any `sslmode=require` URL — encrypted but **unauthenticated** TLS to the Supabase pooler, in both the app and the seed/admin scripts.
 - **Why it is a problem:** Without CA verification, an active man-in-the-middle between your VPS and Supabase (BGP hijack, compromised network path, DNS poisoning of `*.pooler.supabase.com`) can terminate TLS and harvest the Postgres credentials plus all traffic. The comment correctly notes this equals libpq's `sslmode=require` semantics — but libpq's default being weak doesn't make it right for production credentials.
 - **Real-world impact:** Low probability, catastrophic consequence (full DB credential + data exposure). It's a cheap fix, so the trade is bad.
 - **Recommended solution:** Download the Supabase project CA certificate (Dashboard → Database → SSL) and pass `ssl: { ca, rejectUnauthorized: true }` (env-configurable path/PEM). Keep the current behavior only as a documented fallback flag.
@@ -198,7 +198,7 @@ This backend has had a real security pass — the recent commit history (`creden
 #### SEC-3: No JWT_SECRET strength enforcement
 
 - **Severity:** Medium
-- **Description:** [auth.ts:62-66](api/src/lib/auth.ts#L62-L66) only checks the secret exists. A short/guessable secret (e.g. `secret123` set by a rushed operator) is accepted; HS256 tokens signed with a weak secret are offline-bruteforceable from any single captured token.
+- **Description:** [auth.ts:62-66](../../api/src/lib/auth.ts#L62-L66) only checks the secret exists. A short/guessable secret (e.g. `secret123` set by a rushed operator) is accepted; HS256 tokens signed with a weak secret are offline-bruteforceable from any single captured token.
 - **Why it is a problem:** Anyone who cracks the secret can mint an ADMIN token for any user id. The system's whole authorization model hangs on this one env var, and nothing validates it.
 - **Real-world impact:** Depends entirely on operator discipline. DEPLOY.md does say `openssl rand -base64 32`, but docs are not controls.
 - **Recommended solution:** In `secretKey()` (or at boot next to the rate-limit guard), throw in production if `JWT_SECRET.length < 32`.
@@ -208,7 +208,7 @@ This backend has had a real security pass — the recent commit history (`creden
 #### SEC-4: Fire-and-forget notifications are lost on the documented serverless target
 
 - **Severity:** Medium (High if you deploy to Vercel, None on VPS)
-- **Description:** Lead creation dispatches email/push via `void promise` after building the response ([leads.service.ts:117-147](api/src/lib/services/leads.service.ts#L117-L147)). The code's own comment says "in a serverless deploy, wrap this in the platform's `waitUntil`" — but **Vercel is the primary deployment path in DEPLOY.md**, and no `waitUntil` is implemented.
+- **Description:** Lead creation dispatches email/push via `void promise` after building the response ([leads.service.ts:117-147](../../api/src/lib/services/leads.service.ts#L117-L147)). The code's own comment says "in a serverless deploy, wrap this in the platform's `waitUntil`" — but **Vercel is the primary deployment path in DEPLOY.md**, and no `waitUntil` is implemented.
 - **Why it is a problem:** On serverless, the runtime may freeze/kill the instance as soon as the response returns; the in-flight Resend/web-push calls are silently dropped. Providers not hearing about leads is a *core product failure* for a lead-gen marketplace — and it will be intermittent and unreproducible (worst kind of bug).
 - **Real-world impact:** Lost lead notifications, lost revenue for providers, erosion of the product's main promise. On VPS/PM2 (long-lived process) this is a non-issue.
 - **Recommended solution:** Either (a) commit to the VPS deployment and delete the Vercel path from DEPLOY.md, or (b) wire `after()` (Next 16) / `waitUntil` around the notification dispatches. Option (b) is ~20 lines and makes both targets safe.
@@ -218,7 +218,7 @@ This backend has had a real security pass — the recent commit history (`creden
 #### SEC-5: API key and login body handled less strictly than peers
 
 - **Severity:** Low
-- **Description:** Two small asymmetries: (1) `proxy.ts:54` compares `X-Api-Key` with `!==` (not constant-time) — theoretical timing oracle on a shared-secret header; (2) the login route parses `request.json()` without the 64 KB bounded reader all other public POSTs use ([login/route.ts:35](api/src/app/api/auth/login/route.ts#L35)).
+- **Description:** Two small asymmetries: (1) `proxy.ts:54` compares `X-Api-Key` with `!==` (not constant-time) — theoretical timing oracle on a shared-secret header; (2) the login route parses `request.json()` without the 64 KB bounded reader all other public POSTs use ([login/route.ts:35](../../api/src/app/api/auth/login/route.ts#L35)).
 - **Why it is a problem:** (1) Timing attacks on short string compares over the network are borderline-practical at best, and the API key is an optional *additional* gate, not the auth system. (2) Oversized login bodies are capped by Caddy (6 MB) on the VPS path and by platform limits on Vercel, so the exposure is a few MB of JSON parsing per request within the per-IP login rate limit.
 - **Real-world impact:** Marginal. Included for completeness, not alarm.
 - **Recommended solution:** Use `timingSafeEqual` for the API key; use `readJsonObject(request, 4096)` in login.
@@ -228,7 +228,7 @@ This backend has had a real security pass — the recent commit history (`creden
 #### SEC-6: CAPTCHA and audit logging fail open
 
 - **Severity:** Low
-- **Description:** CAPTCHA verification allows submits through if the verifier is unreachable (default; `CAPTCHA_FAIL_CLOSED=1` exists) ([captcha.ts:64-76](api/src/lib/middleware/captcha.ts#L64-L76)). Audit logging never fails the audited action ([audit.service.ts](api/src/lib/services/audit.service.ts)).
+- **Description:** CAPTCHA verification allows submits through if the verifier is unreachable (default; `CAPTCHA_FAIL_CLOSED=1` exists) ([captcha.ts:64-76](../../api/src/lib/middleware/captcha.ts#L64-L76)). Audit logging never fails the audited action ([audit.service.ts](../../api/src/lib/services/audit.service.ts)).
 - **Why it is a problem:** Both are *deliberate, documented* availability-over-strictness choices, and for this product they are defensible: a CAPTCHA outage shouldn't kill lead flow (rate limits + honeypot still apply), and an audit-write failure shouldn't block an admin. The residual risks: a sophisticated attacker who can induce verifier failures gets CAPTCHA-free submits; a DB failure mode could leave destructive actions unaudited.
 - **Real-world impact:** Minor; the compensating layers are real.
 - **Recommended solution:** Accept. Revisit fail-closed for `/api/reviews` (reputation-bearing) once CAPTCHA is actually enabled.
@@ -243,18 +243,18 @@ This backend has had a real security pass — the recent commit history (`creden
 
 ### Overall assessment
 
-The Prisma schema ([schema.prisma](api/prisma/schema.prisma)) is well-designed for its size: sensible relations, deliberate cascade rules (documented per-relation: company delete cascades children; lead delete `SetNull`s its review; category delete `Restrict`ed), correct use of a partial-unique pattern (`leadId String? @unique` → one review per lead, enforced at the DB, nullable for curated reviews), and indexes on every FK and hot filter column. Migrations are hand-written, reviewed SQL with comments and correct backfills (verified [20260628150000_review_approval](api/prisma/migrations/20260628150000_review_approval/migration.sql): add column → backfill → index).
+The Prisma schema ([schema.prisma](../../api/prisma/schema.prisma)) is well-designed for its size: sensible relations, deliberate cascade rules (documented per-relation: company delete cascades children; lead delete `SetNull`s its review; category delete `Restrict`ed), correct use of a partial-unique pattern (`leadId String? @unique` → one review per lead, enforced at the DB, nullable for curated reviews), and indexes on every FK and hot filter column. Migrations are hand-written, reviewed SQL with comments and correct backfills (verified [20260628150000_review_approval](../../api/prisma/migrations/20260628150000_review_approval/migration.sql): add column → backfill → index).
 
 Transactions are used exactly where invariants need them: review add/delete + aggregate recompute, the one-time review claim (`updateMany where reviewedAt: null` — a correct atomic claim), project-list replacement. The denormalized `rating`/`reviewCount` cache with an explicit `ratingOverridden` escape hatch is a reasonable trade and is recomputed transactionally.
 
-**No N+1 queries found:** list endpoints use `include` with select-projected relations; the profile caps included reviews at 50; card lists skip heavy relations entirely ([companies.service.ts:38-56](api/src/lib/services/companies.service.ts#L38-L56)).
+**No N+1 queries found:** list endpoints use `include` with select-projected relations; the profile caps included reviews at 50; card lists skip heavy relations entirely ([companies.service.ts:38-56](../../api/src/lib/services/companies.service.ts#L38-L56)).
 
 ### Findings
 
 #### DB-1: `contains` searches will not scale past ~100k rows
 
 - **Severity:** Medium (at scale; none today)
-- **Description:** Admin/provider lead search ORs five `contains/insensitive` filters ([leads.service.ts:172-184](api/src/lib/services/leads.service.ts#L172-L184)); company and user search are similar. These compile to `ILIKE '%term%'`, which no btree index can serve.
+- **Description:** Admin/provider lead search ORs five `contains/insensitive` filters ([leads.service.ts:172-184](../../api/src/lib/services/leads.service.ts#L172-L184)); company and user search are similar. These compile to `ILIKE '%term%'`, which no btree index can serve.
 - **Why it is a problem:** Every search is a sequential scan. Fine at 10k leads; at 500k leads each admin search burns hundreds of ms of DB CPU, and the admin dashboard does it on every keystroke-ish interaction.
 - **Real-world impact:** Admin/provider dashboards degrade first, well before public pages. Not a launch blocker for a curated marketplace with dozens of companies.
 - **Recommended solution:** When lead volume grows: `pg_trgm` extension + GIN trigram indexes on the searched columns (Supabase supports it), or a `tsvector` column for leads.
@@ -275,7 +275,7 @@ Transactions are used exactly where invariants need them: review add/delete + ag
 
 - **Severity:** Low
 - **Description:** `Review.date` ("March 2024"), `Project.year`, `Company.verifiedSince` are presentation strings; `Lead.budget` is free text.
-- **Why it is a problem:** You can't sort/filter/localize on them; the English-formatted review date is generated server-side ([reviews.service.ts:285](api/src/lib/services/reviews.service.ts#L285)) for an Arabic-first product, and switching display format later means a data migration.
+- **Why it is a problem:** You can't sort/filter/localize on them; the English-formatted review date is generated server-side ([reviews.service.ts:285](../../api/src/lib/services/reviews.service.ts#L285)) for an Arabic-first product, and switching display format later means a data migration.
 - **Real-world impact:** i18n awkwardness and lost analytics ability (budget bands, review recency), not correctness.
 - **Recommended solution:** Store timestamps/ints, format at the edge. `createdAt` already exists on Review, so `date` is technically redundant — derive it client-side per locale.
 - **Complexity:** Medium (schema + frontend formatting).
@@ -284,7 +284,7 @@ Transactions are used exactly where invariants need them: review add/delete + ag
 #### DB-4: `assertNotLastAdmin` has a check-then-act race
 
 - **Severity:** Low
-- **Description:** [users.service.ts:41-48](api/src/lib/services/users.service.ts#L41-L48) counts other active admins, then updates/deletes outside any transaction. Two admins concurrently demoting/deleting each other can both pass the check → zero active admins.
+- **Description:** [users.service.ts:41-48](../../api/src/lib/services/users.service.ts#L41-L48) counts other active admins, then updates/deletes outside any transaction. Two admins concurrently demoting/deleting each other can both pass the check → zero active admins.
 - **Why it is a problem:** Lockout of the admin dashboard.
 - **Real-world impact:** Requires two admins performing opposing destructive actions in the same instant — unlikely, and recoverable via `npm run create-admin` (which re-promotes idempotently). That recovery path is why this is Low, not Medium.
 - **Recommended solution:** Wrap check + mutation in a serializable transaction, or re-check after update and revert.
@@ -316,7 +316,7 @@ There are no background jobs, no queues, and no heavy endpoints beyond image upl
 #### P-2: Admin company list serializes full relations per row
 
 - **Severity:** Low
-- **Description:** `listAll` for admins uses `companyInclude` (all projects + 50 newest reviews **per company**) ([companies.service.ts:239-249](api/src/lib/services/companies.service.ts#L239-L249)) even though the admin table UI needs card-level data; at pageSize 100 that's up to 5,000 review rows per request.
+- **Description:** `listAll` for admins uses `companyInclude` (all projects + 50 newest reviews **per company**) ([companies.service.ts:239-249](../../api/src/lib/services/companies.service.ts#L239-L249)) even though the admin table UI needs card-level data; at pageSize 100 that's up to 5,000 review rows per request.
 - **Why it is a problem:** Payload and query weight scale with page size × relation caps for data the list view mostly doesn't render.
 - **Real-world impact:** Slow admin list at large catalog sizes; irrelevant at dozens of companies.
 - **Recommended solution:** Card serializer for the admin list; full include only on the single-company fetch.
@@ -326,7 +326,7 @@ There are no background jobs, no queues, and no heavy endpoints beyond image upl
 #### P-3: Sequential Upstash round-trips on the lead submit path
 
 - **Severity:** Low
-- **Description:** With Redis rate limiting enabled, `POST /api/leads` performs up to **3 sequential** REST calls (per-IP → site-wide → per-company) plus CAPTCHA verification before the insert ([leads/route.ts](api/src/app/api/leads/route.ts)).
+- **Description:** With Redis rate limiting enabled, `POST /api/leads` performs up to **3 sequential** REST calls (per-IP → site-wide → per-company) plus CAPTCHA verification before the insert ([leads/route.ts](../../api/src/app/api/leads/route.ts)).
 - **Why it is a problem:** Each Upstash REST call is an HTTPS round-trip (~20–80 ms depending on region); worst case adds ~200 ms to the single most important user action.
 - **Real-world impact:** Slightly slower submits; no correctness issue. On the VPS/in-memory path this is zero.
 - **Recommended solution:** Batch the three INCR/EXPIRE pairs into one Upstash pipeline call (the pipeline API is already in use), and pick an Upstash region adjacent to the app.
@@ -339,11 +339,11 @@ There are no background jobs, no queues, and no heavy endpoints beyond image upl
 
 I traced the concurrency-sensitive and money-adjacent paths specifically. Notable **non-bugs** first, because they're places projects usually get wrong and this one didn't:
 
-- **One-review-per-lead race:** handled correctly — atomic `updateMany({ where: { reviewedAt: null } })` claim inside the transaction, with the `leadId @unique` constraint as backstop ([reviews.service.ts:287-313](api/src/lib/services/reviews.service.ts#L287-L313)).
-- **refNumber collision:** unique constraint + bounded retry loop on P2002 ([leads.service.ts:94-155](api/src/lib/services/leads.service.ts#L94-L155)).
+- **One-review-per-lead race:** handled correctly — atomic `updateMany({ where: { reviewedAt: null } })` claim inside the transaction, with the `leadId @unique` constraint as backstop ([reviews.service.ts:287-313](../../api/src/lib/services/reviews.service.ts#L287-L313)).
+- **refNumber collision:** unique constraint + bounded retry loop on P2002 ([leads.service.ts:94-155](../../api/src/lib/services/leads.service.ts#L94-L155)).
 - **Rating aggregate consistency:** recompute runs inside the same transaction as every review mutation, and respects the manual-override flag.
-- **Login timing/enumeration:** dummy-hash compare on nonexistent/inactive accounts; account-failure limiter keys on the **Zod-lowercased** email, so `Admin@x.com` vs `admin@x.com` can't split the counter (checked [validation/auth.ts](api/src/lib/validation/auth.ts)).
-- **Web-push hygiene:** dead subscriptions (404/410) are pruned; `Promise.allSettled` prevents one bad endpoint from failing the batch ([push.service.ts:59-95](api/src/lib/services/push.service.ts#L59-L95)).
+- **Login timing/enumeration:** dummy-hash compare on nonexistent/inactive accounts; account-failure limiter keys on the **Zod-lowercased** email, so `Admin@x.com` vs `admin@x.com` can't split the counter (checked [validation/auth.ts](../../api/src/lib/validation/auth.ts)).
+- **Web-push hygiene:** dead subscriptions (404/410) are pruned; `Promise.allSettled` prevents one bad endpoint from failing the batch ([push.service.ts:59-95](../../api/src/lib/services/push.service.ts#L59-L95)).
 
 ### Actual bugs / defects found
 
@@ -354,7 +354,7 @@ Covered as **SEC-4** — it is simultaneously the most probable *functional* pro
 #### B-2: Lead duplicate-suppression window races
 
 - **Severity:** Low
-- **Description:** The 5-minute dedup is a `findFirst` then `create` — two concurrent identical submits both pass the check ([leads.service.ts:78-91](api/src/lib/services/leads.service.ts#L78-L91)).
+- **Description:** The 5-minute dedup is a `findFirst` then `create` — two concurrent identical submits both pass the check ([leads.service.ts:78-91](../../api/src/lib/services/leads.service.ts#L78-L91)).
 - **Why it is a problem / impact:** Double-click faster than one DB round-trip produces two leads and two notification bursts. The code explicitly labels this a soft UX guard, and the primary defenses (rate limit, CAPTCHA) are elsewhere — so this is accepted behavior, not an oversight. Impact: an occasional duplicate lead an admin deletes.
 - **Recommended solution:** Accept; or add a partial unique index on `(companyId, phone, service)` filtered to recent rows if duplicates ever annoy anyone.
 - **Complexity:** Low.
@@ -363,7 +363,7 @@ Covered as **SEC-4** — it is simultaneously the most probable *functional* pro
 #### B-3: Redis rate-limit fallback halves protection during Upstash outages
 
 - **Severity:** Low
-- **Description:** On any Upstash error the limiter silently falls back to the per-process in-memory store ([rateLimit.ts:172-184](api/src/lib/middleware/rateLimit.ts#L172-L184)). In a multi-instance deployment, an Upstash outage means each instance enforces limits independently (N× the intended ceiling), with only a console.error trace.
+- **Description:** On any Upstash error the limiter silently falls back to the per-process in-memory store ([rateLimit.ts:172-184](../../api/src/lib/middleware/rateLimit.ts#L172-L184)). In a multi-instance deployment, an Upstash outage means each instance enforces limits independently (N× the intended ceiling), with only a console.error trace.
 - **Why it is a problem:** Degraded abuse protection exactly when an attacker might be causing the degradation. It fails *closed-ish* (still limiting per-instance), which is the right default — but it's invisible.
 - **Real-world impact:** Only matters in multi-instance mode, which nothing currently uses.
 - **Recommended solution:** Count fallback occurrences and surface via the readiness endpoint or Sentry, so a persistent Redis failure is noticed.
@@ -373,7 +373,7 @@ Covered as **SEC-4** — it is simultaneously the most probable *functional* pro
 #### B-4: `max_memory_restart: "512M"` vs sharp image processing
 
 - **Severity:** Low
-- **Description:** PM2 restarts the process at 512 MB RSS ([ecosystem.config.cjs:20](api/ecosystem.config.cjs#L20)). Next.js 16 baseline RSS plus 2–3 concurrent sharp decodes of near-50 MP images can plausibly cross 512 MB.
+- **Description:** PM2 restarts the process at 512 MB RSS ([ecosystem.config.cjs:20](../../api/ecosystem.config.cjs#L20)). Next.js 16 baseline RSS plus 2–3 concurrent sharp decodes of near-50 MP images can plausibly cross 512 MB.
 - **Why it is a problem:** A burst of admin uploads could trigger a mid-request process restart — dropped connections, brief downtime (single instance).
 - **Real-world impact:** Rare, self-healing, but confusing when it happens.
 - **Recommended solution:** Raise to 1G on a 4 GB VPS, or add `sharp.concurrency(1)`/a simple upload mutex.
@@ -416,12 +416,12 @@ Context matters: this is a curated, city-scale marketplace. "Users" below = mont
 
 ### What exists (and is good)
 
-- **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)): real Postgres service container, `prisma migrate deploy` against it, typecheck, lint, unit **and** integration tests, plus a frontend typecheck job. This is a legitimate CI gate, not theater.
+- **CI** ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)): real Postgres service container, `prisma migrate deploy` against it, typecheck, lint, unit **and** integration tests, plus a frontend typecheck job. This is a legitimate CI gate, not theater.
 - **Probes:** `/api/health` (liveness) and `/api/ready` (DB-checking readiness returning 503) — correctly split, correctly exempt from the API-key gate.
-- **Reverse proxy** ([deploy/Caddyfile](deploy/Caddyfile)): automatic TLS, body-size cap at the edge, XFF spoofing defense, same-origin serving that eliminates CORS entirely.
-- **Process manager** ([ecosystem.config.cjs](api/ecosystem.config.cjs)): deliberate single-fork mode documented against the rate-limiter constraint.
-- **Deploy script** ([deploy/deploy.sh](deploy/deploy.sh)): idempotent, migrations before restart, `set -euo pipefail`.
-- **Error reporting:** optional Sentry via a dependency-free envelope client ([report.ts](api/src/lib/observability/report.ts)).
+- **Reverse proxy** ([deploy/Caddyfile](../../deploy/Caddyfile)): automatic TLS, body-size cap at the edge, XFF spoofing defense, same-origin serving that eliminates CORS entirely.
+- **Process manager** ([ecosystem.config.cjs](../../api/ecosystem.config.cjs)): deliberate single-fork mode documented against the rate-limiter constraint.
+- **Deploy script** ([deploy/deploy.sh](../../deploy/deploy.sh)): idempotent, migrations before restart, `set -euo pipefail`.
+- **Error reporting:** optional Sentry via a dependency-free envelope client ([report.ts](../../api/src/lib/observability/report.ts)).
 
 ### Findings
 
@@ -511,7 +511,7 @@ Context matters: this is a curated, city-scale marketplace. "Users" below = mont
 ### What exists (verified by running through the files)
 
 - **Unit tests** (~1,750 lines across 21 files): auth, rate limiting (including the production boot-guard logic), body limits, CAPTCHA, role guards, error wrapper, sanitization, serializers, slug/refNumber generation, validation schemas, notification email builders, upload image processing, observability envelope building. The pure-function extraction style (e.g. `buildFromTemplate`, `processImage`, `rateLimitConfigError`) makes these real tests, not mock theater.
-- **Integration tests** (556 lines, [api.int.test.ts](api/tests/integration/api.int.test.ts)): real route handlers against real Postgres — lead submit → provider visibility → status transitions → verified review flow, ownership denial, suspended-company hiding, settings/templates round-trips, audit logs, sitemap, tracking-token gating. Runs in CI against the service container.
+- **Integration tests** (556 lines, [api.int.test.ts](../../api/tests/integration/api.int.test.ts)): real route handlers against real Postgres — lead submit → provider visibility → status transitions → verified review flow, ownership denial, suspended-company hiding, settings/templates round-trips, audit logs, sitemap, tracking-token gating. Runs in CI against the service container.
 - **Contract snapshot test** guarding the wire shapes.
 - **Frontend e2e** (Playwright: `admin.spec.ts`, `customer.spec.ts`) — exists; out of scope here.
 

@@ -102,8 +102,8 @@
 
 ## 3. قاعدة البيانات (Prisma Schema)
 
-> ✅ **الـ schema ده متطابق مع الأنواع الحية** في [data.ts](app/src/lib/data.ts)،
-> [requests.ts](app/src/lib/requests.ts)، و[apiTypes.ts](app/src/lib/apiTypes.ts)
+> ✅ **الـ schema ده متطابق مع الأنواع الحية** في [data.ts](../../app/src/lib/data.ts)،
+> [requests.ts](../../app/src/lib/requests.ts)، و[apiTypes.ts](../../app/src/lib/apiTypes.ts)
 > (اللي اتوحّد). شوف [قسم 16](#16-تطابق-العقد-مع-الفرونت-اند-contract-mapping) لجدول الربط الكامل.
 
 ```prisma
@@ -284,8 +284,8 @@ model User {
 
 ## 4. توحيد الردود (Response Shape)
 
-> ⚠️ **اتغيّر عشان يطابق عميل الـ HTTP الفعلي** في [api.ts](app/src/lib/api.ts)
-> و [apiTypes.ts](app/src/lib/apiTypes.ts). العميل بيعمل `res.json() as T` على طول
+> ⚠️ **اتغيّر عشان يطابق عميل الـ HTTP الفعلي** في [api.ts](../../app/src/lib/api.ts)
+> و [apiTypes.ts](../../app/src/lib/apiTypes.ts). العميل بيعمل `res.json() as T` على طول
 > (مفيش `success` wrapper)، و وقت الخطأ بيقرأ `.message` من جذر الـ JSON مباشرةً.
 
 **القوائم** → `ApiPage<T>`:
@@ -343,7 +343,7 @@ model User {
 - بيشمل `services[], gallery[], projects[], reviews[], badges[], rating, reviewCount, completedProjects, category, categoryLabel` … (كل حقول `ApiCompany`).
 
 #### `POST /leads`  ⭐ القلب الأساسي
-تقديم طلب خدمة. الفرونت بيبعت لـ `/leads` (مش تحت الشركة) — [requests.ts:103](app/src/lib/requests.ts#L103).
+تقديم طلب خدمة. الفرونت بيبعت لـ `/leads` (مش تحت الشركة) — [requests.ts:103](../../app/src/lib/requests.ts#L103).
 - **محمي بـ rate limit + بوت-بروتكشن** (مفتوح للعامة، بدون مصادقة).
 - Body (`ApiLeadPayload`):
 ```json
@@ -374,7 +374,7 @@ model User {
 | GET  | `/auth/me` | بيانات المستخدم الحالي |
 
 - ⚠️ **العميل بيستخدم Bearer token مخزّن في localStorage** (`al-assema-token`) ويبعته
-  في هيدر `Authorization: Bearer <token>` — [api.ts:24-29](app/src/lib/api.ts#L24).
+  في هيدر `Authorization: Bearer <token>` — [api.ts:24-29](../../app/src/lib/api.ts#L24).
   فـ `/auth/login` لازم يرجّع **JWT في جسم الرد** (مش httpOnly cookie بس)، والفرونت بيخزّنه.
 - فيه كمان هيدر اختياري `X-Api-Key` (`VITE_API_KEY`) لو حابب تحط بوابة عامة.
 - الباسورد متخزّن hashed (argon2/bcrypt) — أو سيب Supabase Auth يدير ده ويصدر الـ JWT.
@@ -429,7 +429,7 @@ model User {
 |--------|----------|-------|
 | POST | `/admin/upload` | رفع صورة (logo/cover/gallery/project) → يرجّع `{ url }` |
 
-> الفرونت حاليًا بيضغط الصور لـ data URLs ([image.ts](app/src/lib/image.ts)). مع باك اند حقيقي:
+> الفرونت حاليًا بيضغط الصور لـ data URLs ([image.ts](../../app/src/lib/image.ts)). مع باك اند حقيقي:
 > الأدمن يرفع الملف لـ `/admin/upload`، ياخد الـ URL، ويحطه في حقل `logo`/`cover`/`gallery[]`/`project.img`.
 
 #### Service Requests (Leads)
@@ -546,7 +546,7 @@ export const GET = withAuth(withRole("PROVIDER", async (req, { user }) => {
 - **التخزين**: الـ URL بيتحفظ في الحقل المناسب — `Company.logo` / `Company.cover` / عنصر في `Company.gallery[]` / `Project.img`.
 - **حد أقصى**: حجم الصورة ≤ 5MB.
 - **الصلاحيات**: الرفع للأدمن بس، القراءة public.
-- **بديل/ترحيل**: الفرونت الحالي بيولّد data URLs ([image.ts](app/src/lib/image.ts)) — لو حبّيت تقبلها مؤقتًا اقبل data URL في حقول الصور، بس الأفضل الرفع لـ Storage.
+- **بديل/ترحيل**: الفرونت الحالي بيولّد data URLs ([image.ts](../../app/src/lib/image.ts)) — لو حبّيت تقبلها مؤقتًا اقبل data URL في حقول الصور، بس الأفضل الرفع لـ Storage.
 
 ---
 

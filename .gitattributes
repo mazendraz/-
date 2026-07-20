@@ -1,2 +1,17 @@
-# Shell scripts must keep LF endings or they break on Linux (bad interpreter).
+# كل الملفات النصية تُخزَّن في الريبو بنهايات LF (يمنع لخبطة CRLF بين ويندوز واللينكس).
+* text=auto eol=lf
+
+# ملفات ثنائية (مايتلمسش فيها line endings).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.pptx binary
+*.woff binary
+*.woff2 binary
+
+# سكربتات الشل لازم تفضل LF أو هتكسر على اللينكس (bad interpreter).
 *.sh text eol=lf

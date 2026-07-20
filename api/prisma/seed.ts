@@ -27,27 +27,62 @@ function aggregate(reviews: { rating: number }[]): {
 async function main() {
   // Safety guard: this script DELETES the whole catalog before reseeding. That is
   // fine on a fresh/empty database, but catastrophic if run against production —
-  // it would wipe every real lead, review, and company. Leads are customer
-  // submissions and are never seeded, so their presence means "this is a live DB".
-  // Refuse unless the operator explicitly forces it.
-  const leadCount = await prisma.lead.count();
+  // it would wipe every real lead, review, and company.
+  //
+  // History note (2026-07-20): the old guard keyed off Lead.count() > 0 only. All
+  // leads were deleted earlier that day, so the guard passed and a stray seed run
+  // (with DATABASE_URL pointing at prod) erased the live catalog. The guard below
+  // is deliberately stricter: it treats the DB as "live" if it holds ANY users,
+  // companies, or leads, AND it hard-refuses whenever DATABASE_URL points at the
+  // Supabase production host — even with --force — unless SEED_I_KNOW is also set.
   const force =
     process.argv.includes("--force") || process.env.SEED_ALLOW_DESTRUCTIVE === "1";
-  if (leadCount > 0 && !force) {
+
+  // Hard block: never seed the production database from a normal run.
+  const looksLikeProd = /pooler\.supabase\.com|supabase\.co/i.test(connectionString);
+  if (looksLikeProd && process.env.SEED_I_KNOW !== "1") {
     throw new Error(
-      `Refusing to seed: the database already contains ${leadCount} lead(s). ` +
+      `Refusing to seed: DATABASE_URL points at a Supabase production host. ` +
+        `This script ERASES the entire catalog. If you *really* mean to rebuild ` +
+        `production, set SEED_I_KNOW=1 as well. Point DATABASE_URL at your LOCAL ` +
+        `dev database for normal seeding.`,
+    );
+  }
+
+  const [leadCount, userCount, companyCount] = await Promise.all([
+    prisma.lead.count(),
+    prisma.user.count(),
+    prisma.company.count(),
+  ]);
+  const looksLive = leadCount > 0 || userCount > 0 || companyCount > 0;
+  if (looksLive && !force) {
+    throw new Error(
+      `Refusing to seed: the database already looks live ` +
+        `(${userCount} user(s), ${companyCount} company(ies), ${leadCount} lead(s)). ` +
         `This script DELETES all companies, projects, leads, and reviews before ` +
         `reseeding. Re-run with --force (or SEED_ALLOW_DESTRUCTIVE=1) ONLY if you ` +
         `truly intend to erase and rebuild the catalog.`,
     );
   }
 
-  // Clear catalog (children first; company delete also cascades, but be explicit).
-  await prisma.review.deleteMany();
-  await prisma.project.deleteMany();
-  await prisma.lead.deleteMany();
-  await prisma.company.deleteMany();
-  await prisma.category.deleteMany();
+  // NON-DESTRUCTIVE: this seed never deletes anything anymore (that behaviour wiped
+  // production on 2026-07-20). It only inserts into an EMPTY catalog. If any catalog
+  // rows already exist, we abort instead of touching them — reset your LOCAL dev DB
+  // yourself (e.g. `docker compose -f docker-compose.dev.yml down -v && up -d`) if you
+  // really want a clean slate.
+  const [catCount, projCount, revCount] = await Promise.all([
+    prisma.category.count(),
+    prisma.project.count(),
+    prisma.review.count(),
+  ]);
+  if (companyCount > 0 || catCount > 0 || projCount > 0 || revCount > 0) {
+    throw new Error(
+      `Refusing to seed: the catalog is not empty ` +
+        `(${companyCount} companies, ${catCount} categories, ${projCount} projects, ` +
+        `${revCount} reviews). This seed only populates an EMPTY database and never ` +
+        `deletes data. Reset your local dev DB first if you want a fresh seed.`,
+    );
+  }
 
   // Categories — slug → generated id map for linking companies.
   const categoryIdBySlug = new Map<string, string>();
