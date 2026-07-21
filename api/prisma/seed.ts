@@ -101,7 +101,7 @@ async function main() {
   }
 
   // Companies (+ nested projects & reviews), with recomputed aggregates.
-  let companyCount = 0;
+  let seededCompanies = 0;
   for (const c of COMPANIES) {
     const categoryId = categoryIdBySlug.get(c.category);
     if (!categoryId) {
@@ -153,7 +153,7 @@ async function main() {
         },
       },
     });
-    companyCount += 1;
+    seededCompanies += 1;
   }
 
   // Keep the dev provider test user (provider@aura.test) linked to Aura Interiors
@@ -170,7 +170,7 @@ async function main() {
   }
 
   console.log(
-    `Seeded ${SERVICE_CATEGORIES.length} categories and ${companyCount} companies.`,
+    `Seeded ${SERVICE_CATEGORIES.length} categories and ${seededCompanies} companies.`,
   );
 }
 
