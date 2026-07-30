@@ -9,9 +9,13 @@ import * as chat from "@/lib/services/chat.service";
 
 export const dynamic = "force-dynamic";
 
-// The list view is opened far less often than a thread is polled, so this is
-// tighter than the per-thread poll limit.
-const RATE_LIMIT = { limit: 20, windowMs: 60_000 };
+// Matches the per-thread poll allowance. The list is legitimately requested from
+// more than one place (the messages page and the tab badge that appears on every
+// personal page), and a household or office behind one NAT address shares this
+// counter — so a ceiling tuned for a single tab turns into spurious failures for
+// real people. The client de-duplicates and caches; this is the backstop, and it
+// guards a read that costs one indexed query.
+const RATE_LIMIT = { limit: 60, windowMs: 60_000 };
 
 /**
  * POST /api/chat/summaries → one line per thread this customer owns.

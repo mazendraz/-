@@ -272,6 +272,7 @@ const STRINGS = {
     messages_back_to_list: "Back to conversations",
     messages_open_conversation: "Message the company",
     messages_needs_api: "Messages need a live connection to the Al Assema server.",
+    messages_err_load: "Couldn't load your messages.",
     common_retry: "Try again",
 
     // ── My requests ──
@@ -1534,6 +1535,7 @@ const STRINGS = {
     messages_back_to_list: "رجوع للمحادثات",
     messages_open_conversation: "محادثة مع الشركة",
     messages_needs_api: "الرسايل محتاجة اتصال فعلي بسيرفر العاصمة.",
+    messages_err_load: "تعذّر تحميل الرسايل.",
     common_retry: "حاول تاني",
 
     // ── My requests ──

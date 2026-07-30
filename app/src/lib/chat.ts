@@ -202,9 +202,61 @@ export interface CustomerThreadsResult {
   threads: ThreadSummary[];
   loading: boolean;
   /** Translation key, resolved by the caller so it follows the language toggle. */
-  errorKey: "chat_err_load" | null;
+  errorKey: "messages_err_load" | null;
   totalUnread: number;
   reload: () => void;
+}
+
+// ── Shared summary store ─────────────────────────────────────────────────────
+//
+// ONE fetch shared by every component that wants this data, not one per hook.
+//
+// Both PersonalTabs (for its unread badge) and the Messages page ask for the
+// same summaries, and React's StrictMode double-invokes effects in development —
+// so the naive version fired FOUR identical requests per page view and tripped
+// the endpoint's own rate limit after a few navigations. The page then showed a
+// hard error for what was really "we asked too many times".
+//
+// A short TTL plus in-flight de-duplication fixes the cause rather than raising
+// the ceiling, and has the side benefit that the badge is already populated when
+// the user opens the page.
+const SUMMARY_TTL_MS = 15_000;
+
+let summaryCache: { key: string; at: number; rows: ThreadSummary[] } | null = null;
+let summaryInFlight: { key: string; promise: Promise<ThreadSummary[]> } | null = null;
+const summaryListeners = new Set<() => void>();
+
+function notifySummaryListeners(): void {
+  for (const fn of summaryListeners) fn();
+}
+
+/** Drop the cache so the next read refetches. */
+export function invalidateThreadSummaries(): void {
+  summaryCache = null;
+}
+
+function loadSummaries(claims: LeadClaim[], force: boolean): Promise<ThreadSummary[]> {
+  const key = JSON.stringify(claims);
+  const fresh = summaryCache
+    && summaryCache.key === key
+    && Date.now() - summaryCache.at < SUMMARY_TTL_MS;
+  if (fresh && !force) return Promise.resolve(summaryCache!.rows);
+
+  // Join the request already in the air rather than starting a second one.
+  if (summaryInFlight && summaryInFlight.key === key) return summaryInFlight.promise;
+
+  const promise = fetchCustomerSummaries(claims)
+    .then((rows) => {
+      summaryCache = { key, at: Date.now(), rows };
+      notifySummaryListeners();
+      return rows;
+    })
+    .finally(() => {
+      if (summaryInFlight?.promise === promise) summaryInFlight = null;
+    });
+
+  summaryInFlight = { key, promise };
+  return promise;
 }
 
 /**
@@ -215,15 +267,22 @@ export interface CustomerThreadsResult {
  * customer has no account, so there is nothing else to key on.
  */
 export function useCustomerThreads(claims: LeadClaim[]): CustomerThreadsResult {
-  const [threads, setThreads] = useState<ThreadSummary[]>([]);
-  const [loading, setLoading] = useState(isApiConfigured() && claims.length > 0);
-  const [errorKey, setErrorKey] = useState<"chat_err_load" | null>(null);
-  const [tick, setTick] = useState(0);
-
   // Serialized: `claims` is rebuilt on every render of the caller, so depending
   // on the array itself would refetch in a loop.
   const claimsKey = JSON.stringify(claims);
-  const reload = useCallback(() => setTick((n) => n + 1), []);
+  const cached = summaryCache?.key === claimsKey ? summaryCache.rows : null;
+
+  const [threads, setThreads] = useState<ThreadSummary[]>(cached ?? []);
+  const [loading, setLoading] = useState(
+    isApiConfigured() && claims.length > 0 && cached === null,
+  );
+  const [errorKey, setErrorKey] = useState<"messages_err_load" | null>(null);
+  const [tick, setTick] = useState(0);
+
+  const reload = useCallback(() => {
+    invalidateThreadSummaries();
+    setTick((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     const parsed = JSON.parse(claimsKey) as LeadClaim[];
@@ -233,12 +292,23 @@ export function useCustomerThreads(claims: LeadClaim[]): CustomerThreadsResult {
       return;
     }
     let alive = true;
+    // Another component's fetch landing updates this one too.
+    const onShared = () => {
+      if (alive && summaryCache?.key === claimsKey) setThreads(summaryCache.rows);
+    };
+    summaryListeners.add(onShared);
+
     setLoading(true);
-    fetchCustomerSummaries(parsed)
+    loadSummaries(parsed, tick > 0)
       .then((rows) => { if (alive) { setThreads(rows); setErrorKey(null); } })
-      .catch(() => { if (alive) setErrorKey("chat_err_load"); })
+      .catch(() => {
+        // Keep whatever is already on screen: a failed REFRESH should not wipe
+        // conversations the customer can still read.
+        if (alive && !summaryCache) setErrorKey("messages_err_load");
+      })
       .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+
+    return () => { alive = false; summaryListeners.delete(onShared); };
   }, [claimsKey, tick]);
 
   const totalUnread = threads.reduce((sum, t) => sum + t.unread, 0);
