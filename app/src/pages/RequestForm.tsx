@@ -12,6 +12,7 @@ import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import RequestItemPicker from "../components/RequestItemPicker";
 import { readCart, clearCart, type CartItem } from "../lib/cart";
+import { chatAvailable } from "../lib/chat";
 
 type Step = "form" | "success";
 
@@ -571,10 +572,27 @@ function SuccessScreen({ lead, companyName, locale }: { lead: Lead; companyName:
           </p>
         </div>
 
+        {/* The customer does not have to wait for the company to write first —
+            the thread is created the moment either side sends into it. Without
+            this link the only way here was Requests → find the card → open the
+            chat button, so the request that had JUST been submitted was the
+            hardest one to start talking about. */}
+        {chatAvailable() && (
+          <Link to={`/messages?ref=${encodeURIComponent(lead.refNumber)}`}
+            className="flex items-center justify-center gap-2 w-full bg-primary text-on-primary py-3.5 rounded-xl font-bold text-[15px]
+                       hover:bg-primary-container transition-colors touch-press btn-press mb-3">
+            <span className="material-symbols-outlined text-[20px]">chat</span>
+            {t(locale, "form_message_company_now")}
+          </Link>
+        )}
+
         <div className="flex flex-col sm:flex-row gap-3">
           <Link to="/"
-            className="flex-1 bg-primary text-on-primary py-3.5 rounded-xl font-bold text-[15px]
-                       hover:bg-primary-container transition-colors text-center touch-press btn-press">
+            className={`flex-1 py-3.5 rounded-xl font-bold text-[15px] transition-colors text-center touch-press btn-press ${
+              chatAvailable()
+                ? "bg-surface-container-lowest text-on-surface hover:bg-surface-container-low border border-outline-variant/25"
+                : "bg-primary text-on-primary hover:bg-primary-container"
+            }`}>
             {t(locale, "common_back_to_home")}
           </Link>
           <Link to="/companies"

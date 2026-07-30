@@ -348,6 +348,7 @@ const STRINGS = {
     form_phone_label: "Phone",
     form_company: "Company",
     form_save_ref: "Save your reference number. We will call you within 24 hours to discuss your project in detail.",
+    form_message_company_now: "Message the company now",
 
     // ── Search overlay ──
     search_overlay_placeholder: "Search services, companies…",
@@ -1611,6 +1612,7 @@ const STRINGS = {
     form_phone_label: "الهاتف",
     form_company: "الشركة",
     form_save_ref: "احتفظ برقمك المرجعي. سنتصل بك خلال 24 ساعة لمناقشة مشروعك بالتفصيل.",
+    form_message_company_now: "ابعت رسالة للشركة دلوقتي",
 
     // ── Search overlay ──
     search_overlay_placeholder: "ابحث عن خدمات أو شركات…",
