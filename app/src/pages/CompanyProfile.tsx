@@ -10,7 +10,7 @@ import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { addFeedback, type FeedbackType } from "../lib/feedback";
-import { isBusy, formatReopenDate, joinWaitlist, availabilityLabel, availableAgainAt } from "../lib/availability";
+import { isBusy, formatReopenDate, joinWaitlist, rememberMyWaitlistEntry, availabilityLabel, availableAgainAt } from "../lib/availability";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
@@ -766,12 +766,15 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
     setIsSubmitting(true);
     setError("");
     try {
-      await joinWaitlist(
+      const entry = await joinWaitlist(
         companySlug,
         { name: name.trim(), phone: phone.trim(), service: service.trim(), note: note.trim() },
         honeypot,
         captchaToken,
       );
+      // Remember it on this device so it shows up in "My Requests" — mirrors how
+      // a submitted lead is remembered. Null in demo mode (nothing to track).
+      if (entry) rememberMyWaitlistEntry(entry);
       setSubmitted(true);
     } catch {
       setError(t(locale, "waitlist_err_submit"));

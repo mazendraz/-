@@ -19,10 +19,14 @@ import SearchInput from "../../components/SearchInput";
 import Pagination from "../../components/Pagination";
 import Logo from "../../components/Logo";
 import { useServerSearch } from "../../hooks/useServerSearch";
-import { setCompanyAvailability, isBusy, formatReopenDate, availableAgainAt } from "../../lib/availability";
+import {
+  setCompanyAvailability, isBusy, formatReopenDate, availableAgainAt,
+  setWaitlistStatus, deleteWaitlistEntry,
+  type WaitlistEntry, type WaitlistStatus,
+} from "../../lib/availability";
 import { type AdminTab, NAV } from "./nav";
 import { AdminOverview } from "./OverviewTab";
-import { LeadTable, LeadMobileCard, LeadModal } from "./LeadsTab";
+import { LeadTable, LeadMobileCard, LeadModal, WaitlistDetailModal, type LeadListRow } from "./LeadsTab";
 import { CompanyEditor } from "./CompanyEditor";
 import { CategoryEditor, CategoryCardActions } from "./CategoryEditor";
 import { TeamTab } from "./TeamTab";
@@ -50,7 +54,8 @@ export default function AdminDashboard() {
   const [teamPrefillCompany, setTeamPrefillCompany] = useState<string | null>(null);
 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [filterStatus, setFilterStatus] = useState<LeadStatus | "All">("All");
+  const [selectedWaitlist, setSelectedWaitlist] = useState<WaitlistEntry | null>(null);
+  const [filterStatus, setFilterStatus] = useState<LeadStatus | "All" | "Waitlist">("All");
   const [filterCompany, setFilterCompany] = useState("all");
   const [leadQuery, setLeadQuery] = useState("");
   const [companyQuery, setCompanyQuery] = useState("");
@@ -70,14 +75,32 @@ export default function AdminDashboard() {
     for (const c of companies) m.set(c.slug, c.id);
     return m;
   }, [companies]);
+  // A specific Lead status only ever matches leads (a waitlist join has no Lead
+  // status); "Waitlist" only ever matches waitlist entries. Each source is only
+  // fetched when it can actually contribute rows to the current filter.
+  const showLeads = filterStatus !== "Waitlist";
+  const showWaitlist = filterStatus === "All" || filterStatus === "Waitlist";
+  const filterCompanyId = filterCompany === "all" ? undefined : companyIdBySlug.get(filterCompany);
+
   const leadSearch = useServerSearch<Lead>(
     "/admin/leads",
     leadQuery,
     {
-      status: filterStatus === "All" ? undefined : filterStatus,
-      companyId: filterCompany === "all" ? undefined : companyIdBySlug.get(filterCompany),
+      status: showLeads && filterStatus !== "All" ? filterStatus : undefined,
+      companyId: filterCompanyId,
     },
-    { pageSize: 20, enabled: leadApiMode },
+    { pageSize: 20, enabled: leadApiMode && showLeads },
+  );
+  // Waiting-list entries across every company — merged into the same Leads tab,
+  // tagged and colored differently (see LeadListRow/LeadTable in LeadsTab.tsx).
+  // Pagination stays driven by leadSearch when both are shown together: real
+  // volume here is small (it only accumulates while a company is busy), so a
+  // perfectly unified cross-table sort isn't worth the complexity.
+  const waitlistSearch = useServerSearch<WaitlistEntry>(
+    "/admin/waitlist",
+    leadQuery,
+    { companyId: filterCompanyId },
+    { pageSize: 20, enabled: leadApiMode && showWaitlist },
   );
 
   const lq = leadQuery.trim().toLowerCase();
@@ -89,8 +112,23 @@ export default function AdminDashboard() {
   });
 
   // Unified view: server page in API mode, client-filtered list in demo mode.
+  // Demo mode (no API) has no waitlist data source, so it only ever shows leads.
   const leadList = leadApiMode ? leadSearch.data : filtered;
   const leadTotal = leadApiMode ? leadSearch.total : filtered.length;
+  const waitlistList = leadApiMode ? waitlistSearch.data : [];
+  const waitlistTotal = leadApiMode ? waitlistSearch.total : 0;
+
+  const leadRows: LeadListRow[] = leadList.map((data) => ({ kind: "lead", data }) as const);
+  const waitlistRows: LeadListRow[] = waitlistList.map((data) => ({ kind: "waitlist", data }) as const);
+  const mergedRows: LeadListRow[] = showLeads && showWaitlist
+    ? [...leadRows, ...waitlistRows].sort((a, b) => b.data.createdAt - a.data.createdAt)
+    : showWaitlist ? waitlistRows : leadRows;
+  const displayedTotal = showLeads && showWaitlist ? leadTotal + waitlistTotal : showWaitlist ? waitlistTotal : leadTotal;
+
+  const handleOpenRow = (row: LeadListRow) => {
+    if (row.kind === "lead") setSelectedLead(row.data);
+    else setSelectedWaitlist(row.data);
+  };
 
   // Mutations refresh the server page (after the PATCH/DELETE settles) so the
   // visible rows reflect the change even though they came from the backend.
@@ -99,6 +137,14 @@ export default function AdminDashboard() {
   };
   const handleLeadDelete = (id: string) => {
     void deleteLead(id).then(() => { if (leadApiMode) leadSearch.refresh(); });
+  };
+  const handleWaitlistStatus = (entry: WaitlistEntry, status: WaitlistStatus) => {
+    void setWaitlistStatus({ kind: "admin", companyId: entry.companyId }, entry.id, status)
+      .then(() => waitlistSearch.refresh());
+  };
+  const handleWaitlistDelete = (entry: WaitlistEntry) => {
+    void deleteWaitlistEntry({ kind: "admin", companyId: entry.companyId }, entry.id)
+      .then(() => waitlistSearch.refresh());
   };
 
   const cq = companyQuery.trim().toLowerCase();
@@ -203,37 +249,40 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               <SearchInput value={leadQuery} onChange={setLeadQuery} placeholder={t(locale, "admin_leads_search")} />
               <div className="flex flex-wrap gap-3 items-center">
-                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as LeadStatus | "All")} className="field-input !w-auto !py-2">
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as LeadStatus | "All" | "Waitlist")} className="field-input !w-auto !py-2">
                   <option value="All">{t(locale, "admin_all_statuses")}</option>
                   {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
+                  <option value="Waitlist">{t(locale, "requests_filter_waitlist")}</option>
                 </select>
                 <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="field-input !w-auto !py-2">
                   <option value="all">{t(locale, "admin_all_companies")}</option>
                   {companies.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
                 </select>
-                <span className="text-[13px] font-bold text-outline ml-auto">{leadTotal} {t(locale, leadTotal === 1 ? "admin_noun_lead" : "admin_noun_leads")}</span>
+                <span className="text-[13px] font-bold text-outline ml-auto">{displayedTotal} {t(locale, displayedTotal === 1 ? "admin_noun_lead" : "admin_noun_leads")}</span>
               </div>
-              {leadApiMode && leadSearch.error && (
-                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{leadSearch.error}</div>
+              {leadApiMode && (leadSearch.error || waitlistSearch.error) && (
+                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{leadSearch.error || waitlistSearch.error}</div>
               )}
-              {leadList.length === 0 ? (
+              {mergedRows.length === 0 ? (
                 <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
-                  <EmptyState msg={t(locale, leadApiMode && leadSearch.loading ? "admin_searching" : "admin_leads_none")} icon="search_off" />
+                  <EmptyState msg={t(locale, leadApiMode && (leadSearch.loading || waitlistSearch.loading) ? "admin_searching" : "admin_leads_none")} icon="search_off" />
                 </div>
               ) : (
                 <>
                   {/* Desktop table */}
                   <div className="hidden md:block bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
-                    <LeadTable leads={leadList} onOpen={setSelectedLead} onStatusChange={handleLeadStatus} />
+                    <LeadTable rows={mergedRows} onOpen={handleOpenRow} onLeadStatusChange={handleLeadStatus} onWaitlistStatusChange={handleWaitlistStatus} />
                   </div>
                   {/* Mobile cards */}
                   <div className="md:hidden space-y-3">
-                    {leadList.map((l) => <LeadMobileCard key={l.id} lead={l} onOpen={setSelectedLead} />)}
+                    {mergedRows.map((row) => <LeadMobileCard key={`${row.kind}-${row.data.id}`} row={row} onOpen={handleOpenRow} />)}
                   </div>
                 </>
               )}
               {leadApiMode && (
-                <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} noun={t(locale, "admin_noun_lead")} nounPlural={t(locale, "admin_noun_leads")} />
+                showWaitlist && !showLeads
+                  ? <Pagination page={waitlistSearch.page} pageCount={waitlistSearch.pageCount} total={waitlistSearch.total} pageSize={waitlistSearch.pageSize} onPage={waitlistSearch.setPage} noun={t(locale, "admin_noun_lead")} nounPlural={t(locale, "admin_noun_leads")} />
+                  : <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} noun={t(locale, "admin_noun_lead")} nounPlural={t(locale, "admin_noun_leads")} />
               )}
             </div>
           )}
@@ -394,6 +443,14 @@ export default function AdminDashboard() {
           onClose={() => setSelectedLead(null)}
           onStatusChange={(id, s) => { handleLeadStatus(id, s); setSelectedLead((l) => (l ? { ...l, status: s } : null)); }}
           onDelete={(id) => { handleLeadDelete(id); setSelectedLead(null); }}
+        />
+      )}
+      {selectedWaitlist && (
+        <WaitlistDetailModal
+          entry={selectedWaitlist}
+          onClose={() => setSelectedWaitlist(null)}
+          onStatusChange={(id, s) => { handleWaitlistStatus(selectedWaitlist, s); setSelectedWaitlist((e) => (e && e.id === id ? { ...e, status: s } : e)); }}
+          onDelete={() => { handleWaitlistDelete(selectedWaitlist); setSelectedWaitlist(null); }}
         />
       )}
       {editingCompany && (

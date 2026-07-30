@@ -89,7 +89,15 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
         newestRef.current = t.messages.reduce((max, m) => Math.max(max, m.createdAt), 0);
         setError("");
       })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : t(locale, "chat_err_load")); })
+      .catch((e) => {
+        // ALWAYS the translated key, never `e.message`. The server's messages
+        // are written in English for logs/developers ("Conversation not
+        // found") and are never localized — showing them raw put untranslated
+        // English in front of an Arabic-speaking customer on every genuine
+        // error, not just this one. Logged so the real cause is still visible
+        // in devtools.
+        if (alive) { console.error("[chat] load failed:", e); setError(t(locale, "chat_err_load")); }
+      })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [load]);
@@ -150,7 +158,8 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
       merge([sent]);
       lastActivityRef.current = Date.now(); // back to the fast cadence
     } catch (err) {
-      setError(err instanceof Error ? err.message : t(locale, "chat_err_send"));
+      console.error("[chat] send failed:", err); // same reasoning as the load path above
+      setError(t(locale, "chat_err_send"));
     } finally {
       setSending(false);
     }
@@ -223,9 +232,10 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
                         onClick={() => {
                           void onToggleHidden(m.id, !m.hidden)
                             .then(replace)
-                            .catch((err) => setError(
-                              err instanceof Error ? err.message : t(locale, "chat_err_moderate"),
-                            ));
+                            .catch((err) => {
+                              console.error("[chat] moderation action failed:", err);
+                              setError(t(locale, "chat_err_moderate"));
+                            });
                         }}
                         className="text-[10px] font-bold text-outline hover:text-error transition-colors"
                       >

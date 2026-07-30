@@ -1,6 +1,7 @@
 // Provider/admin availability ("busy") controls + the public waiting list.
 // In API mode these hit the backend; in demo mode (no VITE_API_URL) writes are a
 // best-effort no-op so the UI still works against the localStorage catalog.
+import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
 import { refreshCatalogFromApi } from "./catalog";
 import { formatDate } from "./format";
@@ -81,17 +82,19 @@ export interface WaitlistJoinInput {
 
 /**
  * Public: join a company's waiting list. In API mode the backend is authoritative
- * (a failed submission surfaces — don't fake success). In demo mode it resolves so
- * the modal shows its success state.
+ * (a failed submission surfaces — don't fake success) and the created entry is
+ * returned so the caller can remember it (see rememberMyWaitlistEntry) — that's
+ * what lets this device see it later in "My Requests". In demo mode there is
+ * nothing to remember, so it resolves to null and the modal just shows success.
  */
 export async function joinWaitlist(
   companySlug: string,
   input: WaitlistJoinInput,
   honeypot = "",
   captchaToken?: string | null,
-): Promise<void> {
-  if (!isApiConfigured()) return;
-  await apiPost<ApiWaitlistEntry>(`/companies/${companySlug}/waitlist`, {
+): Promise<WaitlistEntry | null> {
+  if (!isApiConfigured()) return null;
+  return apiPost<ApiWaitlistEntry>(`/companies/${companySlug}/waitlist`, {
     name: input.name,
     phone: input.phone,
     service: input.service || undefined,
@@ -99,6 +102,102 @@ export async function joinWaitlist(
     hp_field: honeypot,
     captchaToken: captchaToken ?? undefined,
   });
+}
+
+// ── Customer's own waitlist joins — "My Requests" ────────────────────────────
+// A customer has no account, so this device remembers which waitlist entries are
+// "mine" (id + phone) the same way requests.ts remembers "my" leads, and can
+// re-fetch their live status via the public track endpoint. Contact for the
+// waitlist itself stays off-platform (phone) — this only lets the customer SEE
+// their own status, it does not add any new capability to act on it.
+const WAITLIST_CACHE_KEY = "al-assema-waitlist-entries";
+const MINE_WAITLIST_KEY = "al-assema-my-waitlist";
+const WAITLIST_EVENT = "al-assema-waitlist-changed";
+
+function readWaitlistCache(): WaitlistEntry[] {
+  try {
+    const raw = localStorage.getItem(WAITLIST_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as WaitlistEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeWaitlistCache(list: WaitlistEntry[]) {
+  localStorage.setItem(WAITLIST_CACHE_KEY, JSON.stringify(list));
+  window.dispatchEvent(new CustomEvent(WAITLIST_EVENT));
+}
+
+function readMineWaitlistIds(): string[] {
+  try {
+    const raw = localStorage.getItem(MINE_WAITLIST_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remember a just-joined waiting-list entry as belonging to this device. */
+export function rememberMyWaitlistEntry(entry: WaitlistEntry) {
+  writeWaitlistCache([entry, ...readWaitlistCache().filter((e) => e.id !== entry.id)]);
+  const ids = readMineWaitlistIds();
+  if (!ids.includes(entry.id)) {
+    localStorage.setItem(MINE_WAITLIST_KEY, JSON.stringify([entry.id, ...ids]));
+  }
+}
+
+/** This device's own waiting-list joins, newest first. */
+export function getMyWaitlistEntries(): WaitlistEntry[] {
+  const mineIds = new Set(readMineWaitlistIds());
+  return readWaitlistCache()
+    .filter((e) => mineIds.has(e.id))
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+let myWaitlistHydrated = false;
+
+async function trackWaitlistEntry(id: string, phone: string): Promise<WaitlistEntry | null> {
+  try {
+    return await apiGet<WaitlistEntry>(
+      `/waitlist/track?id=${encodeURIComponent(id)}&phone=${encodeURIComponent(phone)}`,
+    );
+  } catch {
+    return null; // 404 (not found / phone mismatch) or network — keep the local copy
+  }
+}
+
+/** Refresh this device's waitlist entries' live status. Runs once per session. */
+export async function refreshMyWaitlistFromApi(): Promise<void> {
+  if (!isApiConfigured()) return;
+  const mine = getMyWaitlistEntries();
+  if (mine.length === 0) return;
+
+  const results = await Promise.allSettled(mine.map((e) => trackWaitlistEntry(e.id, e.phone)));
+  const byId = new Map<string, WaitlistEntry>();
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) byId.set(r.value.id, r.value);
+  }
+  if (byId.size === 0) return;
+
+  writeWaitlistCache(readWaitlistCache().map((e) => byId.get(e.id) ?? e));
+}
+
+export function useMyWaitlistEntries(): WaitlistEntry[] {
+  const [list, setList] = useState<WaitlistEntry[]>(() => getMyWaitlistEntries());
+  useEffect(() => {
+    const refresh = () => setList(getMyWaitlistEntries());
+    window.addEventListener(WAITLIST_EVENT, refresh);
+    window.addEventListener("storage", refresh);
+    if (!myWaitlistHydrated) {
+      myWaitlistHydrated = true;
+      void refreshMyWaitlistFromApi().then(refresh);
+    }
+    return () => {
+      window.removeEventListener(WAITLIST_EVENT, refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+  return list;
 }
 
 // ── Provider/admin: manage the waiting list ───────────────────────────────────

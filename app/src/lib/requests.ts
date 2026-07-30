@@ -112,8 +112,20 @@ function write(list: Lead[]) {
 
 // ── API hydration ───────────────────────────────────────────────────────────
 // When signed in (admin or provider), pull the authoritative lead list from the
-// API into the local cache. No-op for unauthenticated customers, so it's safe to
-// trigger from useLeads (the customer "My Requests" view just keeps its own).
+// API into the local cache.
+//
+// The comment this replaced assumed this only ever runs on the admin/provider
+// dashboards, "so the customer 'My Requests' view just keeps its own" — but both
+// read AND write the same localStorage KEY, and there is nothing stopping the
+// same browser from also being the customer's own device (a provider testing
+// their own site, an admin who also submitted a request, or simply a dev machine
+// used for both). Admin/provider list payloads never carry trackingToken (see
+// serializeLead — it is issued once, on creation, never resent on a read), so a
+// blind overwrite wiped it from every lead THIS device had ever submitted,
+// including ones with no relation to the admin/provider account at all. The
+// customer's own chat and review access then failed with "Conversation not
+// found" — a 404 that looked like a chat bug but was actually this cache getting
+// silently clobbered by an unrelated dashboard load in the background.
 export async function hydrateLeadsFromApi(): Promise<void> {
   if (!isApiConfigured() || !isAuthenticated()) return;
   const user = getCurrentUser();
@@ -123,7 +135,15 @@ export async function hydrateLeadsFromApi(): Promise<void> {
       : "/provider/leads?pageSize=100";
   try {
     const res = await apiGet<{ data: Lead[] }>(endpoint);
-    localStorage.setItem(KEY, JSON.stringify(res.data));
+    // Preserve any trackingToken this device already holds for a lead it also
+    // owns as a customer — the server's admin/provider view has no such field to
+    // give back, so merging (not replacing) is the only way to keep both true.
+    const previousById = new Map(read().map((l) => [l.id, l]));
+    const merged = res.data.map((l) => {
+      const mine = previousById.get(l.id)?.trackingToken;
+      return mine ? { ...l, trackingToken: mine } : l;
+    });
+    localStorage.setItem(KEY, JSON.stringify(merged));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch (err) {
     console.error("Leads hydration from API failed:", err);
