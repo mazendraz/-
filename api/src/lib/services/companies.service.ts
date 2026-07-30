@@ -32,27 +32,69 @@ export interface CompanyListQuery {
   sort?: CompanySort;
 }
 
+// Only windows that still matter — running or upcoming. Finished ones are
+// history and nothing reads them; fetching them would grow this query without
+// bound as the table ages.
+const relevantBusyWindows = {
+  where: { OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }] },
+  orderBy: { startsAt: "asc" },
+} satisfies Prisma.Company$busyWindowsArgs;
+
 // Relations needed to serialize a full ApiCompany (detail route + admin list).
 // Reviews are capped (most recent first) so one profile can't return tens of
 // thousands of rows; the true total stays in company.reviewCount.
 const companyInclude = {
   category: { select: { slug: true, label: true } },
+  busyWindows: relevantBusyWindows,
   projects: { orderBy: { sortOrder: "asc" } },
   reviews: { orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
+  // Exact lead count per row. The admin company cards used to derive this by
+  // filtering the browser's hydrated lead list — one capped page — so every
+  // card under-reported once the platform passed a hundred leads. A COUNT
+  // aggregate over the page being returned is cheap and can't drift.
+  _count: { select: { leads: true } },
 } satisfies Prisma.CompanyInclude;
 
 // Public profile: only APPROVED projects are shown (provider submissions stay
 // hidden until an admin approves them). Admin/provider views use companyInclude.
+
+const publicTierInclude = {
+  tiers: { where: { isPublished: true }, orderBy: { sortOrder: "asc" } },
+} satisfies Prisma.OfferingInclude;
+
 const publicCompanyInclude = {
   category: { select: { slug: true, label: true } },
+  busyWindows: relevantBusyWindows,
   projects: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } },
   reviews: { where: { approved: true }, orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
+  // Published AND active only. `isPublished` is the approval gate (a draft has
+  // never been reviewed); `isActive` is the provider's immediate on/off switch.
+  // A row failing either must not reach a customer.
+  offerings: {
+    where: { isPublished: true, isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    // Tiers are filtered too, not just the offering. A tier added to an
+    // already-published offering starts as a draft awaiting its own approval,
+    // and a tier price OVERRIDES the offering's for the line it matches — so an
+    // unfiltered include here would put an unreviewed price on a public profile.
+    include: publicTierInclude,
+  },
+  // The customer's basket total is reduced by these SERVER-side when the request
+  // is priced (leadItems.service), so the profile has to be able to show the same
+  // discount while they are still choosing. Without them the live estimate read
+  // HIGHER than what was actually recorded on the lead, and the one incentive to
+  // add another item was invisible at the moment it mattered.
+  bundleRules: {
+    where: { isPublished: true, isActive: true },
+    orderBy: { minItems: "asc" },
+  },
 } satisfies Prisma.CompanyInclude;
 
 // Card view (public list endpoints): only the category relation — NOT the heavy
 // projects/reviews arrays. Pairs with serializeCompanyCard.
 const companyCardInclude = {
   category: { select: { slug: true, label: true } },
+  busyWindows: relevantBusyWindows,
 } satisfies Prisma.CompanyInclude;
 
 // Mirrors the frontend Companies page sorters (pages/Companies.tsx).

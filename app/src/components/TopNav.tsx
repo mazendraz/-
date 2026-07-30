@@ -125,7 +125,7 @@ export default function TopNav({ onOpenSearch }: Props) {
 
         {/* Center column — logo, perfectly centered */}
         <div className="flex items-center justify-center flex-shrink-0">
-          <Link to="/" aria-label="Al Assemah — Home" className="flex items-center">
+          <Link to="/" aria-label={t(locale, "nav_home_aria")} className="flex items-center">
             <Logo
               className="object-contain"
               style={{ height: "52px", width: "auto" }}
@@ -139,7 +139,7 @@ export default function TopNav({ onOpenSearch }: Props) {
             onClick={onOpenSearch}
             className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200
               ${solidBg ? "text-on-surface-variant hover:text-primary hover:bg-primary/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
-            aria-label="Search"
+            aria-label={t(locale, "nav_search_aria")}
           >
             <span className="material-symbols-outlined text-[22px]">search</span>
           </button>
@@ -179,7 +179,7 @@ export default function TopNav({ onOpenSearch }: Props) {
               ${solidBg
                 ? "border-outline-variant/40 text-outline hover:text-primary hover:border-primary/50 hover:bg-primary/5"
                 : "border-white/30 text-white/70 hover:text-white hover:border-white/60"}`}
-            aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"}
+            aria-label={t(locale, "nav_switch_language")}
           >
             {t(locale, "lang_switch")}
           </button>
@@ -194,7 +194,7 @@ export default function TopNav({ onOpenSearch }: Props) {
         {/* Hamburger */}
         <button
           onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
+          aria-label={t(locale, "nav_open_menu")}
           className={`p-2 -ml-1 rounded-lg transition-colors touch-press
             ${solidBg ? "text-on-surface hover:bg-surface-container-low" : "text-white"}`}
         >
@@ -205,7 +205,7 @@ export default function TopNav({ onOpenSearch }: Props) {
         <Link
           to="/"
           className="absolute left-1/2 -translate-x-1/2 flex items-center"
-          aria-label="Al Assemah — Home"
+          aria-label={t(locale, "nav_home_aria")}
         >
           <Logo
             className="object-contain"
@@ -219,7 +219,7 @@ export default function TopNav({ onOpenSearch }: Props) {
             onClick={onOpenSearch}
             className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 touch-press
               ${solidBg ? "text-on-surface-variant hover:text-primary hover:bg-primary/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
-            aria-label="Search"
+            aria-label={t(locale, "nav_search_aria")}
           >
             <span className="material-symbols-outlined text-[22px]">search</span>
           </button>
@@ -267,7 +267,7 @@ export default function TopNav({ onOpenSearch }: Props) {
               <button
                 onClick={() => setDrawerOpen(false)}
                 className="p-2 rounded-lg hover:bg-surface-container-low transition-colors"
-                aria-label="Close menu"
+                aria-label={t(locale, "nav_close_menu")}
               >
                 <span className="material-symbols-outlined text-outline">close</span>
               </button>
@@ -331,7 +331,7 @@ export default function TopNav({ onOpenSearch }: Props) {
                 <button
                   onClick={() => setLocale(locale === "en" ? "ar" : "en")}
                   className="text-[12px] font-bold text-outline py-1.5 px-2.5 rounded-lg border border-outline-variant/40 hover:text-primary hover:border-primary/40 transition-colors"
-                  aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"}
+                  aria-label={t(locale, "nav_switch_language")}
                 >
                   {t(locale, "lang_switch")}
                 </button>

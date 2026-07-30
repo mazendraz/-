@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
+import { withMaintenance } from "@/lib/middleware/maintenance";
 import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 // POST /api/feedback → 201 + ApiFeedback. Resolves the company by slug (404 if none).
-export const POST = withErrors(async (request: NextRequest) => {
+export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   const rl = await rateLimit(`feedback:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
@@ -38,4 +39,4 @@ export const POST = withErrors(async (request: NextRequest) => {
   const payload = createFeedbackSchema.parse(raw);
   const feedback = await feedbackService.create(payload);
   return ok(feedback, 201);
-});
+}));

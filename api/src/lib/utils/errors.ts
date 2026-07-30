@@ -10,6 +10,7 @@ export type ErrorCode =
   | "RATE_LIMITED"
   | "PAYLOAD_TOO_LARGE"
   | "CONFLICT"
+  | "MAINTENANCE"
   | "INTERNAL_ERROR";
 
 export class AppError extends Error {
@@ -68,5 +69,16 @@ export class RateLimitError extends AppError {
 export class PayloadTooLargeError extends AppError {
   constructor(message = "Request body too large") {
     super("PAYLOAD_TOO_LARGE", message, 413);
+  }
+}
+
+/**
+ * The site is in admin-enabled maintenance. Thrown by `withMaintenance` on public
+ * write endpoints; reads stay open so an admin can preview the live site. 503 is
+ * correct here (temporary, retry later) — not 403, which implies "never allowed".
+ */
+export class MaintenanceError extends AppError {
+  constructor(message = "The site is temporarily down for maintenance") {
+    super("MAINTENANCE", message, 503);
   }
 }

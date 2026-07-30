@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { formatReopenDate, type AvailabilityPayload } from "../lib/availability";
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
 
 // epoch ms → yyyy-mm-dd (local) for <input type="date">; "" when null.
 function toDateInput(epochMs?: number | null): string {
@@ -31,6 +33,7 @@ export default function AvailabilityControl({
   initialNote?: string | null;
   onSave: (payload: AvailabilityPayload) => Promise<void>;
 }) {
+  const { locale } = useLocale();
   const [busy, setBusy] = useState(initialBusy);
   const [date, setDate] = useState(toDateInput(initialBusyUntil));
   const [note, setNote] = useState(initialNote ?? "");
@@ -42,14 +45,14 @@ export default function AvailabilityControl({
   const dateInPast = busy && untilMs != null && untilMs <= Date.now();
 
   async function save() {
-    if (dateInPast) { setError("Pick a reopen date in the future (or leave it empty for no end date)."); return; }
+    if (dateInPast) { setError(t(locale, "prov_avail_err_past")); return; }
     setSaving(true); setError(""); setSaved(false);
     try {
       await onSave({ busy, busyUntil: busy ? untilMs : null, busyNote: busy ? note.trim() : "" });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
-      setError("Couldn't save. Please try again.");
+      setError(t(locale, "prov_avail_err_save"));
     } finally {
       setSaving(false);
     }
@@ -65,11 +68,13 @@ export default function AvailabilityControl({
           <span className={`material-symbols-outlined text-[26px] ${busy ? "text-amber-600" : "text-green-600"}`}
             style={{ fontVariationSettings: "'FILL' 1" }}>{busy ? "event_busy" : "event_available"}</span>
           <div className="min-w-0">
-            <p className="font-bold text-[15px] text-on-surface">{busy ? "Busy — not taking new requests" : "Available for new requests"}</p>
+            <p className="font-bold text-[15px] text-on-surface">{t(locale, busy ? "prov_avail_busy_title" : "prov_avail_free_title")}</p>
             <p className="text-[12px] text-outline">
               {busy
-                ? (untilMs ? `Reopens on ${formatReopenDate(untilMs)}` : "No end date — stays busy until you switch back")
-                : "Your profile shows the normal “Request Service” button"}
+                ? (untilMs
+                    ? `${t(locale, "prov_avail_reopens_on")} ${formatReopenDate(untilMs, locale)}`
+                    : t(locale, "prov_avail_no_end"))
+                : t(locale, "prov_avail_free_desc")}
             </p>
           </div>
         </div>
@@ -83,14 +88,14 @@ export default function AvailabilityControl({
       {busy && (
         <div className="space-y-4 rounded-2xl border border-outline-variant/25 p-4">
           <div>
-            <label className="block text-[13px] font-bold text-on-surface mb-1.5">Busy until <span className="font-normal text-outline">(optional — auto-reopens on this date)</span></label>
+            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "prov_avail_until_label")} <span className="font-normal text-outline">{t(locale, "prov_avail_until_hint")}</span></label>
             <input type="date" className="field-input" value={date} min={toDateInput(Date.now())}
               onChange={(e) => { setDate(e.target.value); setSaved(false); }} />
-            {dateInPast && <p className="text-[12px] text-error font-bold mt-1">That date is in the past.</p>}
+            {dateInPast && <p className="text-[12px] text-error font-bold mt-1">{t(locale, "prov_avail_date_past")}</p>}
           </div>
           <div>
-            <label className="block text-[13px] font-bold text-on-surface mb-1.5">Note to customers <span className="font-normal text-outline">(optional)</span></label>
-            <input className="field-input" maxLength={200} value={note} placeholder="e.g. Fully booked this month — join the waiting list and we'll call you back."
+            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "prov_avail_note_label")} <span className="font-normal text-outline">{t(locale, "prov_avail_optional")}</span></label>
+            <input className="field-input" maxLength={200} value={note} placeholder={t(locale, "prov_avail_note_ph")}
               onChange={(e) => { setNote(e.target.value); setSaved(false); }} />
           </div>
         </div>
@@ -102,9 +107,9 @@ export default function AvailabilityControl({
         <button onClick={save} disabled={saving}
           className="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
           {saving && <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>}
-          {saving ? "Saving…" : "Save availability"}
+          {t(locale, saving ? "prov_avail_saving" : "prov_avail_save")}
         </button>
-        {saved && <span className="flex items-center gap-1 text-[13px] font-bold text-green-600"><span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span> Saved</span>}
+        {saved && <span className="flex items-center gap-1 text-[13px] font-bold text-green-600"><span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span> {t(locale, "prov_avail_saved")}</span>}
       </div>
     </div>
   );

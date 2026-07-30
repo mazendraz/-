@@ -73,7 +73,7 @@ export default function Home() {
         {/* Background — eager loaded, above the fold */}
         <img
           src={heroImage}
-          alt="New Administrative Capital skyline"
+          alt={t(locale, "home_hero_alt")}
           loading="eager"
           decoding="async"
           className="absolute inset-0 w-full h-full object-cover object-center"

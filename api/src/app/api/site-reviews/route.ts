@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
+import { withMaintenance } from "@/lib/middleware/maintenance";
 import { ok, okCached } from "@/lib/utils/response";
 import { ForbiddenError, RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
@@ -19,7 +20,7 @@ export const GET = withErrors(async () => {
 });
 
 // POST /api/site-reviews → 201 + ApiSiteReview, held for moderation (visible=false).
-export const POST = withErrors(async (request: NextRequest) => {
+export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   const rl = await rateLimit(`site-reviews:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
@@ -46,4 +47,4 @@ export const POST = withErrors(async (request: NextRequest) => {
 
   const payload = createSiteReviewSchema.parse(raw);
   return ok(await service.create(payload), 201);
-});
+}));

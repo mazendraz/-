@@ -40,6 +40,10 @@ const company = {
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
   category: { slug: "interior-design", label: "Interior Design" },
+  // Required on the row type (Feature F): the serializer derives effective
+  // availability from these, and an optional field would let a query that
+  // forgot to load them silently report a busy company as available.
+  busyWindows: [],
   projects: [
     {
       id: "p1",
@@ -66,7 +70,7 @@ const company = {
       createdAt: new Date("2026-01-01T00:00:00.000Z"),
     },
   ],
-} as CompanyWithRelations;
+} as unknown as CompanyWithRelations;
 
 const lead = {
   id: "lead-1",

@@ -3,13 +3,15 @@ import { Link, useSearchParams } from "react-router-dom";
 import { isApiConfigured } from "../lib/api";
 import { DISTRICTS, BUDGETS, addLead, getMyLeads, type Lead } from "../lib/requests";
 import { useSettings, parseLines } from "../lib/settings";
-import { getCompany } from "../lib/catalog";
-import { isBusy, formatReopenDate } from "../lib/availability";
+import { useCompanyDetail } from "../lib/catalog";
+import { isBusy, formatReopenDate, availableAgainAt } from "../lib/availability";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
+import RequestItemPicker from "../components/RequestItemPicker";
+import { readCart, clearCart, type CartItem } from "../lib/cart";
 
 type Step = "form" | "success";
 
@@ -45,7 +47,10 @@ export default function RequestForm() {
   const companyNameParam = params.get("companyName") ?? "";
   const serviceParam = params.get("service") ?? "";
 
-  const company = companySlug ? getCompany(companySlug) : undefined;
+  // The full record, not the cached card: list payloads carry offerings: []
+  // (serializeCompanyCard omits the relation), so the cached copy would never
+  // show the item picker.
+  const { company } = useCompanyDetail(companySlug);
   const companyName = company?.name ?? (companyNameParam || "Al Assema");
 
   // District/budget options are admin-configurable (Settings); fall back to the
@@ -67,6 +72,9 @@ export default function RequestForm() {
     district: lastLead?.district ?? "",
   });
   const [errors, setErrors] = useState<Partial<FormState>>({});
+  // Seeded from the basket the customer filled on the company profile, so
+  // arriving here does not silently lose what they already picked.
+  const [items, setItems] = useState<CartItem[]>(() => readCart(companySlug));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [shakeForm, setShakeForm] = useState(false);
@@ -120,13 +128,19 @@ export default function RequestForm() {
       const lead = await addLead({
         companySlug: companySlug || "general",
         companyName,
+        // With items the server overwrites this with their names; it stays the
+        // human-readable summary the older screens and emails read.
         service: form.service || "General Inquiry",
         name: form.name.trim(),
         phone: normalizePhone(form.phone),
         district: form.district,
         budget: form.budget,
         description: form.description.trim(),
+        ...(items.length > 0 ? { items } : {}),
       }, honeypot, captchaToken);
+      // The basket has become a request — leaving it would re-offer the same
+      // items next visit as if nothing had been sent.
+      if (companySlug) clearCart(companySlug);
       setSubmittedLead(lead);
       setStep("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -187,13 +201,18 @@ export default function RequestForm() {
 
         {/* Busy notice — this company can't take new requests right now; point the
             customer to the waiting list on the profile. Doesn't hard-block submitting. */}
-        {company && isBusy(company) && (
+        {company && isBusy(company) && (() => {
+          // Hoisted: resolved across the manual switch AND any running scheduled
+          // window, so a company busy because of a scheduled period still shows
+          // its return date instead of falling through to the date-less wording.
+          const backAt = availableAgainAt(company);
+          return (
           <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-2xl p-3.5 mb-4">
             <span className="material-symbols-outlined text-amber-600 text-[20px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
             <div className="flex-1">
               <p className="text-[13px] text-amber-900 font-bold leading-snug">
-                {company.busyUntil
-                  ? `${companyName} ${t(locale, "busy_banner_booked_until").toLowerCase()} ${formatReopenDate(company.busyUntil, locale)}`
+                {backAt
+                  ? `${companyName} ${t(locale, "busy_banner_booked_until_inline")} ${formatReopenDate(backAt, locale)}`
                   : `${companyName} — ${t(locale, "busy_banner_fully_booked")}`}
               </p>
               <Link to={`/companies/${companySlug}`} className="text-[13px] text-amber-800 font-bold hover:underline inline-flex items-center gap-1 mt-1">
@@ -202,7 +221,8 @@ export default function RequestForm() {
               </Link>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* Smart pre-fill notice */}
         {prefilled && (
@@ -275,8 +295,23 @@ export default function RequestForm() {
             )}
           </Field>
 
-          {/* Service selector — only if company has services */}
-          {company && company.services.length > 0 && (
+          {/* Multi-item picker when the company has priced offerings; otherwise
+              the original single-service dropdown, which is still the right UI
+              for a company the Feature B backfill hasn't reached. */}
+          {company && (company.offerings?.length ?? 0) > 0 ? (
+            <Field label={t(locale, "form_service_needed")}>
+              {() => (
+                <RequestItemPicker
+                  offerings={company.offerings ?? []}
+                  // Same rules the server prices with — an empty list here made
+                  // the estimate on this page disagree with the saved lead.
+                  bundleRules={company.bundleRules ?? []}
+                  value={items}
+                  onChange={setItems}
+                />
+              )}
+            </Field>
+          ) : company && company.services.length > 0 ? (
             <Field label={t(locale, "form_service_needed")}>
               {(p) => (
                 <select
@@ -292,7 +327,7 @@ export default function RequestForm() {
                 </select>
               )}
             </Field>
-          )}
+          ) : null}
 
           <Field label={t(locale, "form_district")} required error={errors.district}>
             {(p) => (

@@ -9,6 +9,7 @@ import type {
   LeadListQuery,
 } from "@/lib/services/leads.service";
 import type { AdminUserListQuery } from "@/lib/services/users.service";
+import type { StatsQuery } from "@/lib/services/stats.service";
 import type { WaitlistListQuery } from "@/lib/services/waitlist.service";
 import type { ApiLeadStatus, ApiUserRole, ApiWaitlistStatus } from "@/lib/apiTypes";
 
@@ -90,6 +91,17 @@ export function parseAdminLeadListQuery(
     companyId: searchParams.get("companyId")?.trim() || undefined,
     from: toDate(searchParams.get("from")),
     to: toDate(searchParams.get("to")),
+  };
+}
+
+/** Chart window sizes for the dashboard stats endpoints. Clamped in the service. */
+export function parseStatsQuery(
+  searchParams: URLSearchParams,
+): StatsQuery {
+  return {
+    days: toInt(searchParams.get("days")),
+    months: toInt(searchParams.get("months")),
+    deltaDays: toInt(searchParams.get("deltaDays")),
   };
 }
 

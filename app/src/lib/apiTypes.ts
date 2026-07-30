@@ -65,6 +65,15 @@ export interface ApiCompany {
   gallery: string[];
   projects: ApiProject[];
   reviews: ApiReview[];
+  /** Published + active offerings; empty on card/list endpoints. */
+  offerings?: ApiOffering[];
+  /**
+   * Published + active package discounts. Present on the public profile so the
+   * live estimate can apply the SAME discount the server applies when the request
+   * is priced — without it the on-screen total read higher than what was recorded
+   * on the lead. Empty on card/list endpoints, which do not load the relation.
+   */
+  bundleRules?: ApiBundleRule[];
   phone: string;
   location: string;
   yearsExperience: number;
@@ -79,6 +88,21 @@ export interface ApiCompany {
   busy: boolean;
   busyUntil?: number | null;
   busyNote?: string | null;
+  // ── Feature F: scheduled busy windows ──
+  // All derived at read time from the manual switch + any scheduled window; no
+  // cron, so they are correct the instant a period starts or ends.
+  /** When the current unavailability ends. null = open-ended, or not busy. */
+  nextAvailableAt?: number | null;
+  /** Start of the soonest period that has not begun — "busy from 5 Aug". */
+  upcomingBusyFrom?: number | null;
+  /** Customer-facing reason for the current unavailability. */
+  busyReason?: string | null;
+  /**
+   * Exact lead count for this company. Admin list payloads only — absent
+   * elsewhere. Present because deriving it in the browser from the hydrated
+   * lead list (one capped page) under-reported on every card past 100 leads.
+   */
+  leadCount?: number;
 }
 
 // ── Availability + waiting list ─────────────────────────────────────────────────
@@ -168,4 +192,128 @@ export interface ApiLeadPayload {
 /** PATCH /leads/:id — body shape */
 export interface ApiLeadStatusPatch {
   status: ApiLeadStatus;
+}
+
+// ── Offerings (Feature B) ─────────────────────────────────────────────────────
+// These live here, not in offerings.ts, because api/prisma/seed.ts imports
+// data.ts across the package boundary. Anything data.ts references is typechecked
+// under the API's tsconfig, which has no Vite types — so a type that transitively
+// reached `import.meta.env` would break the API build. This file has no imports
+// at all, so it is safe to reference from either side.
+
+export type ApiOfferingKind = "SERVICE" | "PRODUCT";
+export type ApiPricingModel = "FIXED" | "RANGE" | "PER_UNIT" | "ON_INSPECTION";
+export type ApiPriceUnit =
+  | "SQM" | "METER" | "PIECE" | "DOOR" | "WINDOW"
+  | "ROOM" | "APARTMENT" | "HOUR" | "DAY" | "JOB";
+
+// ── Lead statistics (dashboard aggregates) ─────────────────────────────────────
+
+/**
+ * GET /api/admin/stats (all companies) · GET /api/provider/stats (own company).
+ *
+ * Aggregates computed over the WHOLE lead table, not a page of it. The dashboards
+ * previously derived these in the browser from a 100-row hydration, so every
+ * total, percentage and chart silently stopped being true past 100 leads.
+ *
+ * Counts only — no lead rows — so the payload size is independent of table size.
+ */
+export interface ApiLeadStats {
+  total: number;
+  /** Every status present, explicitly 0 when none. */
+  byStatus: Record<ApiLeadStatus, number>;
+  /** Dense daily series ending today; `date` is "YYYY-MM-DD" in `timezone`. */
+  perDay: { date: string; count: number }[];
+  /** Dense monthly series ending this month; `date` is "YYYY-MM". */
+  perMonth: { date: string; count: number }[];
+  /** Top companies by volume. Admin only — empty on the provider endpoint. */
+  byCompany: {
+    companyId: string;
+    companySlug: string;
+    companyName: string;
+    logo: string;
+    rating: number;
+    leads: number;
+    completed: number;
+    /** Percent, already rounded. */
+    conversion: number;
+  }[];
+  /** Trailing window against the equal window before it, for the KPI delta. */
+  recent: { days: number; current: number; previous: number };
+  /**
+   * Catalog totals for the admin KPI row. Admin only — absent on the provider
+   * endpoint. Counted here because the admin company cache is a clamped page
+   * (pageSize=200 → 100), so its length is not a count past a hundred companies.
+   */
+  catalog?: { companies: number; activeCompanies: number; categories: number };
+  /** IANA zone the day/month buckets were resolved in. */
+  timezone: string;
+}
+
+export interface ApiOfferingTier {
+  id: string;
+  label: string;
+  qtyMin: number | null;
+  qtyMax: number | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  sortOrder: number;
+  /**
+   * False = a draft band awaiting publish approval. A tier price overrides the
+   * offering's for the line it matches, so a band added to an already-published
+   * offering is a new PUBLIC price and is held for review — never false in a
+   * public payload.
+   */
+  isPublished: boolean;
+}
+
+export interface ApiOffering {
+  id: string;
+  companyId: string;
+  name: string;
+  description: string | null;
+  kind: ApiOfferingKind;
+  pricingModel: ApiPricingModel;
+  priceMin: number | null;
+  priceMax: number | null;
+  unit: ApiPriceUnit | null;
+  minQty: number | null;
+  image: string | null;
+  note: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  isPublished: boolean;
+  priceUpdatedAt: number | null;
+  tiers: ApiOfferingTier[];
+}
+
+export interface ApiBundleRule {
+  id: string;
+  companyId: string;
+  label: string | null;
+  minItems: number;
+  discountPercent: number;
+  isActive: boolean;
+  isPublished: boolean;
+}
+
+/**
+ * One line of a multi-item request (Feature C).
+ *
+ * Every price is a SNAPSHOT from submission time. The row duplicates data that
+ * could be read back through the offering on purpose: a request records what the
+ * customer was quoted, and a later price change or rename must not rewrite it.
+ */
+export interface ApiLeadItem {
+  id: string;
+  /** Null once the offering is deleted; nameSnapshot keeps the line readable. */
+  offeringId: string | null;
+  nameSnapshot: string;
+  tierLabel: string | null;
+  qty: number;
+  pricingModel: ApiPricingModel;
+  unitPriceMin: number | null;
+  unitPriceMax: number | null;
+  lineMin: number | null;
+  lineMax: number | null;
 }

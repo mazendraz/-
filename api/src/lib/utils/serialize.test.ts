@@ -70,6 +70,13 @@ describe("serializeLead", () => {
       status: "New",
       reviewed: false,
       createdAt: createdAt.getTime(),
+      // Feature C. A classic single-service lead carries no items and no
+      // estimate — the fields are always present so the payload shape is stable.
+      items: [],
+      estimatedMin: null,
+      estimatedMax: null,
+      discountPercent: 0,
+      hasOnInspection: false,
     });
   });
 });
@@ -133,6 +140,10 @@ describe("serializeCompany", () => {
       createdAt: now,
       updatedAt: now,
       category: { slug: "interior-design", label: "Interior Design" },
+      // Required on the row type (Feature F): the serializer derives effective
+      // availability from these, and an optional field would let a query that
+      // forgot to load them silently report a busy company as available.
+      busyWindows: [],
       projects: [
         {
           id: "p1",
@@ -159,7 +170,7 @@ describe("serializeCompany", () => {
           createdAt: now,
         },
       ],
-    } as CompanyWithRelations;
+    } as unknown as CompanyWithRelations;
 
     const out = serializeCompany(company);
     expect(out.category).toBe("interior-design");

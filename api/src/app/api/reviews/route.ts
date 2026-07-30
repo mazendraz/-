@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
+import { withMaintenance } from "@/lib/middleware/maintenance";
 import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
@@ -15,7 +16,7 @@ const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 // POST /api/reviews → 201 + ApiReview. Customer review for their own completed
 // lead, gated by ref + phone. Curated/admin reviews use /admin/companies/[id]/reviews.
-export const POST = withErrors(async (request: NextRequest) => {
+export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   const rl = await rateLimit(`reviews:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
@@ -38,4 +39,4 @@ export const POST = withErrors(async (request: NextRequest) => {
 
   const payload = submitReviewSchema.parse(raw);
   return ok(await reviewsService.submitFromLead(payload), 201);
-});
+}));

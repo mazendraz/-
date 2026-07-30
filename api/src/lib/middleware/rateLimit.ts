@@ -83,10 +83,36 @@ function memoryRateLimit(
 // Periodically drop stale keys so the map doesn't grow unbounded in long-lived
 // dev processes. unref() so it never keeps the process alive.
 const SWEEP_MS = 5 * 60 * 1000;
+
+/**
+ * How old an entry must be before sweeping it is safe.
+ *
+ * This is NOT the sweep interval, and conflating the two was a real bug: the
+ * cutoff used to be `now - SWEEP_MS`, i.e. five minutes, while the login
+ * per-account failure limiter uses a FIFTEEN minute window. Timestamps between
+ * five and fifteen minutes old were still inside their window but got deleted, so
+ * the account lockout silently reset early and the intended 15-minute throttle
+ * was worth about five.
+ *
+ * An entry is only stale once it can no longer affect any decision — that is,
+ * once it is older than the LONGEST window any caller uses. Overshooting costs a
+ * few map entries; undershooting hands out free attempts.
+ */
+export const MAX_TRACKED_WINDOW_MS = 60 * 60 * 1000; // 1h — above every caller
+
+/**
+ * Is this key's history old enough to forget? Pure + exported for testing —
+ * the sweeper itself runs on a timer and is awkward to reach from a test.
+ */
+export function isSweepable(timestamps: number[], now = Date.now()): boolean {
+  const cutoff = now - MAX_TRACKED_WINDOW_MS;
+  return timestamps.every((t) => t <= cutoff);
+}
+
 const sweeper = setInterval(() => {
-  const cutoff = Date.now() - SWEEP_MS;
+  const now = Date.now();
   for (const [key, ts] of hits) {
-    if (ts.every((t) => t <= cutoff)) hits.delete(key);
+    if (isSweepable(ts, now)) hits.delete(key);
   }
 }, SWEEP_MS);
 sweeper.unref?.();

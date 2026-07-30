@@ -321,14 +321,17 @@ describe("company contact fields (admin-only)", () => {
 describe("featured projects (homepage showcase)", () => {
   it("returns featured projects of ACTIVE companies only, with company + category", async () => {
     await prisma.project.create({
-      data: { companyId: activeId, title: `${tag}-Feat`, img: "/img/x.jpg", description: "d", year: "2025", sortOrder: 0, featured: true },
+      // status must be APPROVED explicitly: Project.status defaults to PENDING since
+      // moderation landed, and listFeatured filters on APPROVED. Without this the
+      // fixture is invisible and the assertions below pass for the wrong reason.
+      data: { companyId: activeId, title: `${tag}-Feat`, img: "/img/x.jpg", description: "d", year: "2025", sortOrder: 0, featured: true, status: "APPROVED" },
     });
     await prisma.project.create({
-      data: { companyId: activeId, title: `${tag}-Plain`, img: "/img/y.jpg", description: "d", year: "2025", sortOrder: 1, featured: false },
+      data: { companyId: activeId, title: `${tag}-Plain`, img: "/img/y.jpg", description: "d", year: "2025", sortOrder: 1, featured: false, status: "APPROVED" },
     });
     const susp = await prisma.company.findFirst({ where: { slug: suspendedSlug }, select: { id: true } });
     await prisma.project.create({
-      data: { companyId: susp!.id, title: `${tag}-SuspFeat`, img: "/img/z.jpg", description: "d", year: "2025", sortOrder: 0, featured: true },
+      data: { companyId: susp!.id, title: `${tag}-SuspFeat`, img: "/img/z.jpg", description: "d", year: "2025", sortOrder: 0, featured: true, status: "APPROVED" },
     });
 
     const list = (await (await featuredProjectsGET()).json()) as Array<{ title: string; company: string; category: string }>;

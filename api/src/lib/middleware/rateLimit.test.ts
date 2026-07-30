@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { clientIp, rateLimit, rateLimitConfigError } from "@/lib/middleware/rateLimit";
+import {
+  clientIp, rateLimit, rateLimitConfigError,
+  isSweepable, MAX_TRACKED_WINDOW_MS,
+} from "@/lib/middleware/rateLimit";
 
 describe("rateLimitConfigError (production safety guard)", () => {
   const redis = {
@@ -91,5 +94,30 @@ describe("rateLimit (in-memory)", () => {
     const opts = { limit: 1, windowMs: 60_000 };
     expect((await rateLimit(`a:${Math.random()}`, opts)).ok).toBe(true);
     expect((await rateLimit(`b:${Math.random()}`, opts)).ok).toBe(true);
+  });
+});
+
+// The sweeper's cutoff used to be the SWEEP INTERVAL (5 min) rather than the
+// longest window any caller uses. The login per-account failure limiter runs a
+// 15-minute window, so entries 5–15 minutes old were still live but were being
+// deleted — the account lockout reset early and the 15-minute throttle was worth
+// about five. These pin the cutoff to "older than any window we track".
+describe("stale-entry sweeping", () => {
+  const now = Date.now();
+
+  it("keeps entries that are still inside the longest tracked window", () => {
+    // 10 minutes old: past the sweep interval, but well inside the 15-minute
+    // login lockout window. Forgetting this hands out free attempts.
+    expect(isSweepable([now - 10 * 60_000], now)).toBe(false);
+    // Right at the edge of the login window.
+    expect(isSweepable([now - 15 * 60_000], now)).toBe(false);
+  });
+
+  it("forgets entries older than every window", () => {
+    expect(isSweepable([now - MAX_TRACKED_WINDOW_MS - 1], now)).toBe(true);
+  });
+
+  it("keeps a key alive if ANY of its timestamps is still recent", () => {
+    expect(isSweepable([now - 2 * MAX_TRACKED_WINDOW_MS, now - 1000], now)).toBe(false);
   });
 });

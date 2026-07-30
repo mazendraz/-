@@ -70,7 +70,12 @@ app/
 │   │   ├── RequestForm.tsx
 │   │   ├── MyRequests.tsx
 │   │   ├── NotFound.tsx
-│   │   ├── AdminDashboard.tsx
+│   │   ├── admin/              # Admin console: shell + one file per section
+│   │   │   ├── index.tsx       #   shell (sidebar, tab routing, shared state)
+│   │   │   ├── nav.ts          #   AdminTab type + NAV model
+│   │   │   ├── *Tab.tsx        #   Overview / Leads / Team / Reviews / Settings
+│   │   │   ├── CompanyEditor.tsx · CategoryEditor.tsx · ProjectApprovals.tsx
+│   │   │   └── components/     #   shared: ModalShell, fields, confirm, EmptyState
 │   │   └── ProviderDashboard.tsx
 │   │
 │   ├── components/           # Reusable presentational + layout components
@@ -220,8 +225,14 @@ submission date, district, and budget.
 ### NotFound ([NotFound.tsx](src/pages/NotFound.tsx))
 Friendly 404 with links back to Home / Companies.
 
-### AdminDashboard ([AdminDashboard.tsx](src/pages/AdminDashboard.tsx)) — ~1,000 LOC
-The operations console. Sidebar (desktop rail / mobile drawer) with tabs:
+### AdminDashboard ([admin/index.tsx](src/pages/admin/index.tsx))
+The operations console. Split across [src/pages/admin/](src/pages/admin/): `index.tsx`
+is the shell (sidebar, top bar, tab routing, shared lead/company state), one file per
+section, and `components/` for pieces shared between sections
+(`ModalShell`+`LField`, `fields` = tag/image/gallery inputs, `confirm`, `EmptyState`,
+`SidebarBody`). Tab identity and the nav model live in `nav.ts`.
+
+Sidebar (desktop rail / mobile drawer) with tabs:
 - **Overview** — KPI cards (total/new leads, conversion, companies), leads-over-time
   area chart, status donut, conversion funnel, top-companies bar list, company
   leaderboard, recent activity. Shows a "Load demo data" empty state.

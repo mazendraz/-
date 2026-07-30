@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
+import { withMaintenance } from "@/lib/middleware/maintenance";
 import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
@@ -17,7 +18,7 @@ const RATE_LIMIT = { limit: 5, windowMs: 60_000 };
 
 // POST /api/companies/[slug]/waitlist → 201 + ApiWaitlistEntry. Resolves the company
 // by slug (404 if none / not ACTIVE). Same guard stack as POST /feedback.
-export const POST = withErrors(async (request: NextRequest, ctx: Ctx) => {
+export const POST = withErrors(withMaintenance(async (request: NextRequest, ctx: Ctx) => {
   const { slug } = await ctx.params;
 
   const rl = await rateLimit(`waitlist:${clientIp(request)}`, RATE_LIMIT);
@@ -41,4 +42,4 @@ export const POST = withErrors(async (request: NextRequest, ctx: Ctx) => {
   const payload = waitlistJoinSchema.parse(raw);
   const entry = await waitlistService.join(slug, payload);
   return ok(entry, 201);
-});
+}));

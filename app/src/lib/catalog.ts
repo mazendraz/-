@@ -186,6 +186,9 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
       year: p.year,
       featured: p.featured ?? false,
     })),
+    // Already filtered server-side to published + active; the client never has
+    // to decide what a visitor may see.
+    offerings: c.offerings ?? [],
   };
 }
 
@@ -366,12 +369,25 @@ export function getCategory(slug: string): ServiceCategory | undefined {
   return getCategories().find((c) => c.slug === slug);
 }
 
-/** Category list with live company counts derived from the company store. */
+/**
+ * Category list with live company counts derived from the company store.
+ *
+ * DEMO MODE ONLY for the recount. In API mode the server already sends a `count`
+ * computed over the whole table, and the cached company list is a clamped page
+ * (pageSize=200 → 100) — so recounting from it under-reports as soon as the
+ * platform passes a hundred companies.
+ *
+ * The old code was `….length || cat.count`, which also meant a category that had
+ * genuinely dropped to ZERO companies fell back through the falsy `0` and kept
+ * displaying its previous count forever.
+ */
 export function getCategoriesWithCounts(): ServiceCategory[] {
+  const categories = getCategories();
+  if (isApiConfigured()) return categories;
   const companies = getCompanies();
-  return getCategories().map((cat) => ({
+  return categories.map((cat) => ({
     ...cat,
-    count: companies.filter((c) => c.category === cat.slug).length || cat.count,
+    count: companies.filter((c) => c.category === cat.slug).length,
   }));
 }
 
@@ -526,6 +542,63 @@ export function useCompanyDetail(slug: string): { company: Company | undefined; 
 /** Reactive hydration status (loading/ready/error) for loading & error UI. */
 export function useCatalogStatus(): CatalogStatus {
   return useCatalogValue(getCatalogStatus);
+}
+
+/**
+ * The signed-in provider's OWN company, from /provider/profile.
+ *
+ * NOT the public catalog, and that distinction is the whole point. The public
+ * list is ACTIVE-only and capped at 100 rows (companies.service MAX_PAGE_SIZE),
+ * so resolving a provider's own company by searching it locked out anyone whose
+ * company was INACTIVE/SUSPENDED, or — once the platform passes 100 active
+ * companies — anyone ranked past the cap. They landed on the "no company" screen
+ * with no way to reach their leads, messages or availability at all.
+ *
+ * /provider/profile is scoped to their own companyId server-side and carries
+ * neither restriction.
+ *
+ * Demo mode (no API, so no session) has no such endpoint; callers fall back to
+ * the local catalog there.
+ */
+export function useMyCompany(): {
+  company: Company | undefined;
+  loading: boolean;
+  error: boolean;
+} {
+  const apiMode = isApiConfigured();
+  const [state, setState] = useState<{
+    company?: Company;
+    loading: boolean;
+    error: boolean;
+  }>({ loading: apiMode, error: false });
+
+  useEffect(() => {
+    if (!apiMode) {
+      setState({ loading: false, error: false });
+      return;
+    }
+    let alive = true;
+    const load = () => {
+      apiGet<{ company: Company }>("/provider/profile")
+        .then((res) => {
+          if (alive) setState({ company: res.company, loading: false, error: false });
+        })
+        .catch(() => {
+          if (alive) setState((s) => ({ ...s, loading: false, error: true }));
+        });
+    };
+    load();
+    // Availability saves and approved change requests both call
+    // refreshCatalogFromApi(), which fires EVENT. Re-read on it so this copy
+    // can't sit stale behind a write the provider just made.
+    window.addEventListener(EVENT, load);
+    return () => {
+      alive = false;
+      window.removeEventListener(EVENT, load);
+    };
+  }, [apiMode]);
+
+  return { company: state.company, loading: state.loading, error: state.error };
 }
 
 export interface FeaturedProject {

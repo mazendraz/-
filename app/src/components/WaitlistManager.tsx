@@ -2,9 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { isApiConfigured } from "../lib/api";
 import {
   listWaitlist, setWaitlistStatus, deleteWaitlistEntry,
-  WAITLIST_STATUSES, WAITLIST_STATUS_LABELS, WAITLIST_STATUS_COLORS,
+  WAITLIST_STATUSES, WAITLIST_STATUS_KEYS, WAITLIST_STATUS_COLORS,
   type WaitlistScope, type WaitlistEntry, type WaitlistStatus,
 } from "../lib/availability";
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
+import { formatDate } from "../lib/format";
 
 const FILTERS: (WaitlistStatus | "All")[] = ["All", ...WAITLIST_STATUSES];
 
@@ -15,6 +18,7 @@ const FILTERS: (WaitlistStatus | "All")[] = ["All", ...WAITLIST_STATUSES];
  * off-platform (phone) — the buttons only track state.
  */
 export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
+  const { locale } = useLocale();
   const apiMode = isApiConfigured();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [filter, setFilter] = useState<WaitlistStatus | "All">("All");
@@ -28,7 +32,7 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
     if (!apiMode) { setLoading(false); return; }
     setLoading(true); setError("");
     try { setEntries(await listWaitlist(scope)); }
-    catch { setError("Couldn't load the waiting list."); }
+    catch { setError(t(locale, "prov_wl_err_load")); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiMode, scopeKey]);
@@ -40,14 +44,14 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
     // optimistic
     setEntries((list) => list.map((e) => (e.id === id ? { ...e, status } : e)));
     try { await setWaitlistStatus(scope, id, status); }
-    catch { setError("Couldn't update that entry."); await reload(); }
+    catch { setError(t(locale, "prov_wl_err_update")); await reload(); }
     finally { setBusyId(null); }
   }
 
   async function remove(id: string) {
     setBusyId(id); setError("");
     try { await deleteWaitlistEntry(scope, id); setEntries((list) => list.filter((e) => e.id !== id)); }
-    catch { setError("Couldn't remove that entry."); }
+    catch { setError(t(locale, "prov_wl_err_remove")); }
     finally { setBusyId(null); }
   }
 
@@ -57,7 +61,7 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
   if (!apiMode) {
     return (
       <div className="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-bloom">
-        <p className="text-body-md font-body-md text-outline">Connect the live API to see and manage your waiting list.</p>
+        <p className="text-body-md font-body-md text-outline">{t(locale, "prov_wl_demo")}</p>
       </div>
     );
   }
@@ -68,11 +72,11 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
         <div>
           <h3 className="font-bold text-[16px] text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-primary text-[20px]">hourglass_top</span>
-            Waiting list
-            {waitingCount > 0 && <span className="bg-amber-100 text-amber-800 text-[12px] font-bold px-2 py-0.5 rounded-full">{waitingCount} waiting</span>}
+            {t(locale, "prov_wl_title")}
+            {waitingCount > 0 && <span className="bg-amber-100 text-amber-800 text-[12px] font-bold px-2 py-0.5 rounded-full">{waitingCount} {t(locale, "prov_wl_waiting_suffix")}</span>}
           </h3>
           <p className="text-[12px] text-outline mt-0.5 max-w-md leading-relaxed">
-            People who asked to be contacted while you were busy. Call them back, then mark them Notified or Converted.
+            {t(locale, "prov_wl_desc")}
           </p>
         </div>
       </div>
@@ -84,7 +88,7 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
             className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-bold transition-colors border ${
               filter === f ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-outline-variant"
             }`}>
-            {f === "All" ? "All" : WAITLIST_STATUS_LABELS[f]}
+            {f === "All" ? t(locale, "prov_wl_filter_all") : t(locale, WAITLIST_STATUS_KEYS[f])}
           </button>
         ))}
       </div>
@@ -93,12 +97,12 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
 
       <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
         {loading && entries.length === 0 ? (
-          <div className="p-10 text-center text-[14px] text-outline"><span className="spinner spinner-primary mx-auto mb-3 block" /> Loading…</div>
+          <div className="p-10 text-center text-[14px] text-outline"><span className="spinner spinner-primary mx-auto mb-3 block" /> {t(locale, "prov_wl_loading")}</div>
         ) : shown.length === 0 ? (
           <div className="text-center py-14 px-6">
             <span className="material-symbols-outlined text-outline text-[48px] mb-3 block">event_available</span>
             <p className="text-body-lg font-body-lg text-outline max-w-sm mx-auto">
-              {entries.length === 0 ? "No one is on the waiting list yet." : "No entries match this filter."}
+              {t(locale, entries.length === 0 ? "prov_wl_empty" : "prov_wl_no_match")}
             </p>
           </div>
         ) : (
@@ -108,10 +112,10 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
                 <div className="flex-grow min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
                     <span className="font-label-md text-label-md text-on-surface">{e.name}</span>
-                    <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[e.status]}`}>{WAITLIST_STATUS_LABELS[e.status]}</span>
+                    <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[e.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[e.status])}</span>
                   </div>
                   <a href={`tel:${e.phone}`} className="text-[14px] font-bold text-primary hover:underline">{e.phone}</a>
-                  {e.service && <p className="text-label-sm font-label-sm text-outline">Waiting for: {e.service}</p>}
+                  {e.service && <p className="text-label-sm font-label-sm text-outline">{t(locale, "prov_wl_waiting_for")} {e.service}</p>}
                   {e.note && <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{e.note}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -122,14 +126,14 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
                       onChange={(ev) => changeStatus(e.id, ev.target.value as WaitlistStatus)}
                       className="border border-outline-variant rounded-lg px-2.5 py-1 text-label-sm text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-60"
                     >
-                      {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{WAITLIST_STATUS_LABELS[s]}</option>)}
+                      {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
                     </select>
-                    <button onClick={() => remove(e.id)} disabled={busyId === e.id} title="Remove"
+                    <button onClick={() => remove(e.id)} disabled={busyId === e.id} title={t(locale, "prov_wl_remove")}
                       className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
                       <span className="material-symbols-outlined text-[18px]">{busyId === e.id ? "progress_activity" : "delete"}</span>
                     </button>
                   </div>
-                  <span className="text-label-sm font-label-sm text-outline">{new Date(e.createdAt).toLocaleDateString()}</span>
+                  <span className="text-label-sm font-label-sm text-outline">{formatDate(e.createdAt, locale)}</span>
                 </div>
               </div>
             ))}

@@ -5,6 +5,7 @@ import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
+import { withMaintenance } from "@/lib/middleware/maintenance";
 import { createLeadSchema } from "@/lib/validation/leads";
 import * as leadsService from "@/lib/services/leads.service";
 
@@ -36,7 +37,7 @@ function tooMany(retryAfterMs: number): RateLimitError {
 }
 
 // POST /api/leads → 201 + RAW ApiLead. Resolves the company by slug (must be ACTIVE).
-export const POST = withErrors(async (request: NextRequest) => {
+export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   const rl = await rateLimit(`leads:${clientIp(request)}`, RATE_LIMIT);
   if (!rl.ok) throw tooMany(rl.retryAfterMs);
 
@@ -72,4 +73,4 @@ export const POST = withErrors(async (request: NextRequest) => {
 
   const lead = await leadsService.create(payload);
   return ok(lead, 201);
-});
+}));

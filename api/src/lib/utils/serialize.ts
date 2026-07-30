@@ -4,18 +4,25 @@
 // lead.companySlug/companyName) that come from relations.
 import { LeadStatus } from "@/generated/prisma/enums";
 import type {
+  BundleRule,
   Category,
   Company,
+  BusyWindow,
   Lead,
+  LeadItem,
+  Offering,
+  OfferingTier,
   Project,
   Review,
   WaitlistEntry,
 } from "@/generated/prisma/client";
+import { serializeOffering, serializeBundleRule } from "@/lib/services/offerings.service";
 import type {
   ApiAdminCategory,
   ApiCategory,
   ApiCompany,
   ApiLead,
+  ApiLeadItem,
   ApiLeadStatus,
   ApiProject,
   ApiReview,
@@ -30,13 +37,81 @@ export function toEpochMs(date: Date): number {
 }
 
 /**
- * Effective availability: a company is only busy while its `busy` flag is set AND
- * its optional auto-reopen instant (busyUntil) is null or still in the future. Once
- * busyUntil passes, every read reports the company available again — this is what
- * makes "busy until <date>" auto-reopen without a background job.
+ * Effective availability. A company is unavailable when EITHER holds:
+ *
+ *   • the manual switch is on and has not auto-expired
+ *     (busy === true AND (busyUntil is null OR still in the future))
+ *   • any scheduled window is currently running
+ *     (startsAt <= now AND (endsAt is null OR still in the future))
+ *
+ * Everything is derived at READ time — no cron, nothing to fall behind. A window
+ * or a busyUntil passes and the very next read reports the company available.
+ *
+ * `windows` is REQUIRED and deliberately has no `= []` default. A default would
+ * not "keep old call sites working", it would make them silently WRONG: any path
+ * that forgot to load the windows would show a busy company as available, and a
+ * customer would send a request to someone who cannot take it. Making it
+ * mandatory turns that into a compile error instead.
  */
-export function isEffectivelyBusy(c: Pick<Company, "busy" | "busyUntil">): boolean {
-  return c.busy === true && (c.busyUntil == null || c.busyUntil.getTime() > Date.now());
+export function isEffectivelyBusy(
+  c: Pick<Company, "busy" | "busyUntil">,
+  windows: Pick<BusyWindow, "startsAt" | "endsAt">[],
+): boolean {
+  const now = Date.now();
+  const manual = c.busy === true && (c.busyUntil == null || c.busyUntil.getTime() > now);
+  if (manual) return true;
+  return windows.some(
+    (w) => w.startsAt.getTime() <= now && (w.endsAt == null || w.endsAt.getTime() > now),
+  );
+}
+
+/** When the current unavailability ends. null = no end date, or not busy. */
+export function nextAvailableAt(
+  c: Pick<Company, "busy" | "busyUntil">,
+  windows: Pick<BusyWindow, "startsAt" | "endsAt">[],
+): number | null {
+  const now = Date.now();
+  const ends: number[] = [];
+  if (c.busy === true && c.busyUntil != null && c.busyUntil.getTime() > now) {
+    ends.push(c.busyUntil.getTime());
+  }
+  for (const w of windows) {
+    if (w.startsAt.getTime() <= now && w.endsAt != null && w.endsAt.getTime() > now) {
+      ends.push(w.endsAt.getTime());
+    }
+  }
+  // Open-ended unavailability (busy with no busyUntil, or a window with no
+  // endsAt) yields nothing here — correctly, since there is no date to show.
+  if (ends.length === 0) return null;
+  // The LAST end wins: overlapping periods mean the company is busy until the
+  // furthest one finishes, not the nearest.
+  return Math.max(...ends);
+}
+
+/** Start of the soonest window that has not begun yet — "busy from 5 Aug". */
+export function upcomingBusyFrom(
+  windows: Pick<BusyWindow, "startsAt" | "endsAt">[],
+): number | null {
+  const now = Date.now();
+  const future = windows
+    .filter((w) => w.startsAt.getTime() > now)
+    .map((w) => w.startsAt.getTime());
+  return future.length ? Math.min(...future) : null;
+}
+
+/** Customer-facing reason for the current unavailability, if there is one. */
+export function busyReason(
+  c: Pick<Company, "busy" | "busyUntil" | "busyNote">,
+  windows: Pick<BusyWindow, "startsAt" | "endsAt" | "note">[],
+): string | null {
+  const now = Date.now();
+  if (c.busy === true && (c.busyUntil == null || c.busyUntil.getTime() > now) && c.busyNote) {
+    return c.busyNote;
+  }
+  const active = windows.find(
+    (w) => w.startsAt.getTime() <= now && (w.endsAt == null || w.endsAt.getTime() > now),
+  );
+  return active?.note ?? null;
 }
 
 const STATUS_TO_LABEL: Record<LeadStatus, ApiLeadStatus> = {
@@ -69,10 +144,25 @@ export type CompanyWithRelations = Company & {
   category: Pick<Category, "slug" | "label">;
   projects: Project[];
   reviews: Review[];
+  // Required for the same reason as on CompanyCardRow — see the note there.
+  busyWindows: BusyWindow[];
+  // Optional so the detail/public queries that don't ask for it still typecheck;
+  // only the admin list needs it.
+  _count?: { leads: number };
+  // Optional so callers that predate Feature B still typecheck. A missing value
+  // serializes to [] — the profile just shows no priced offerings, which is the
+  // correct reading of "this query did not ask for them".
+  offerings?: (Offering & { tiers: OfferingTier[] })[];
+  // Same contract as `offerings`: absent means "not asked for", which serializes
+  // to [] and therefore to no discount in the client's preview.
+  bundleRules?: BundleRule[];
 };
 
 export type LeadWithCompany = Lead & {
   company: Pick<Company, "slug" | "name">;
+  // Optional so callers predating Feature C still typecheck; a missing value
+  // serializes to [] — the classic single-service request.
+  items?: LeadItem[];
 };
 
 // ── Entity serializers ────────────────────────────────────────────────────────
@@ -151,10 +241,18 @@ export function serializeCategoryAdmin(
 // the list/card serializer needs.
 export type CompanyCardRow = Company & {
   category: Pick<Category, "slug" | "label">;
+  // REQUIRED, not optional. Same reason isEffectivelyBusy takes a mandatory
+  // parameter: an optional field with a `?? []` fallback would let a query that
+  // forgot to load the windows compile fine and quietly report a busy company as
+  // available. Making it required means TypeScript names every call site that
+  // needs fixing. Load it via include (single company) or grouped in memory from
+  // one query (list endpoints) — never per row.
+  busyWindows: BusyWindow[];
 };
 
 // Scalar + category fields shared by the card and full serializers.
 function companyScalars(c: CompanyCardRow) {
+  const windows = c.busyWindows;
   return {
     id: c.id,
     slug: c.slug,
@@ -178,10 +276,14 @@ function companyScalars(c: CompanyCardRow) {
     badges: c.badges,
     featured: c.featured,
     verified: c.verified,
-    // Effective busy state (resolved against busyUntil) — see isEffectivelyBusy.
-    busy: isEffectivelyBusy(c),
+    // Effective busy state — the manual switch OR any running scheduled window,
+    // all resolved at read time (see isEffectivelyBusy).
+    busy: isEffectivelyBusy(c, windows),
     busyUntil: c.busyUntil ? toEpochMs(c.busyUntil) : null,
     busyNote: c.busyNote ?? null,
+    nextAvailableAt: nextAvailableAt(c, windows),
+    upcomingBusyFrom: upcomingBusyFrom(windows),
+    busyReason: busyReason(c, windows),
     metaTitle: c.metaTitle ?? null,
     metaDescription: c.metaDescription ?? null,
   };
@@ -195,7 +297,9 @@ function companyScalars(c: CompanyCardRow) {
  * profile/provider pages fetch the full record by slug to fill the arrays.
  */
 export function serializeCompanyCard(c: CompanyCardRow): ApiCompany {
-  return { ...companyScalars(c), projects: [], reviews: [] };
+  // Card payloads deliberately skip the heavy relations — list endpoints ask for
+  // dozens of companies at once and none of this is rendered on a card.
+  return { ...companyScalars(c), projects: [], reviews: [], offerings: [] };
 }
 
 export function serializeCompany(c: CompanyWithRelations): ApiCompany {
@@ -203,6 +307,8 @@ export function serializeCompany(c: CompanyWithRelations): ApiCompany {
     ...companyScalars(c),
     projects: c.projects.map(serializeProject),
     reviews: c.reviews.map(serializeReview),
+    offerings: (c.offerings ?? []).map(serializeOffering),
+    bundleRules: (c.bundleRules ?? []).map(serializeBundleRule),
   };
 }
 
@@ -218,6 +324,8 @@ export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
     whatsapp: c.whatsapp ?? null,
     // Admin-only: lets the editor show whether the rating is a manual override.
     ratingOverridden: c.ratingOverridden,
+    // Exact, from a COUNT — not derived from whatever lead page the browser has.
+    ...(c._count ? { leadCount: c._count.leads } : {}),
   };
 }
 
@@ -254,5 +362,29 @@ export function serializeLead(l: LeadWithCompany): ApiLead {
     status: leadStatusToLabel(l.status),
     reviewed: l.reviewedAt != null, // true only when a review date is set
     createdAt: toEpochMs(l.createdAt),
+    // Feature C. Prices here are snapshots from submission — never recomputed.
+    items: (l.items ?? []).map(serializeLeadItem),
+    // Coerced rather than passed straight through: a real row always has these,
+    // but a serializer that can emit `undefined` produces a payload whose keys
+    // come and go, and every client ends up guarding each field.
+    estimatedMin: l.estimatedMin ?? null,
+    estimatedMax: l.estimatedMax ?? null,
+    discountPercent: l.discountPercent ?? 0,
+    hasOnInspection: l.hasOnInspection ?? false,
+  };
+}
+
+function serializeLeadItem(i: LeadItem): ApiLeadItem {
+  return {
+    id: i.id,
+    offeringId: i.offeringId,
+    nameSnapshot: i.nameSnapshot,
+    tierLabel: i.tierLabel,
+    qty: i.qty,
+    pricingModel: i.pricingModel as ApiLeadItem["pricingModel"],
+    unitPriceMin: i.unitPriceMin,
+    unitPriceMax: i.unitPriceMax,
+    lineMin: i.lineMin,
+    lineMax: i.lineMax,
   };
 }

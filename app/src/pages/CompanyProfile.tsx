@@ -2,13 +2,15 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
+import OfferingCards from "../components/OfferingCards";
+import RequestBar from "../components/RequestBar";
 import { useCompanyDetail, useCatalogStatus } from "../lib/catalog";
 import LazyImage from "../components/LazyImage";
 import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { addFeedback, type FeedbackType } from "../lib/feedback";
-import { isBusy, formatReopenDate, joinWaitlist } from "../lib/availability";
+import { isBusy, formatReopenDate, joinWaitlist, availabilityLabel, availableAgainAt } from "../lib/availability";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
@@ -112,6 +114,9 @@ export default function CompanyProfile() {
   // When the company is busy, the whole profile swaps its "Request Service" CTAs for
   // a "Join the waiting list" action (see requestOrWaitlistCTA usages below).
   const busy = isBusy(company);
+  // Resolved across the manual switch AND any running scheduled window; null =
+  // open-ended, which the copy below handles with its date-less wording.
+  const backAt = availableAgainAt(company);
   const requestHref = `/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`;
 
   return (
@@ -143,6 +148,18 @@ export default function CompanyProfile() {
         )}
       </div>
 
+      {/* Basket summary — only renders once something has been added. */}
+      {/* The discount is applied SERVER-side when the request is priced, so the
+          basket has to show it too — otherwise the running total reads higher
+          than what gets recorded, and the reason to add another item is
+          invisible at the moment the customer is deciding. */}
+      <RequestBar
+        companySlug={company.slug}
+        offerings={company.offerings ?? []}
+        bundleRules={company.bundleRules ?? []}
+        requestHref={requestHref}
+      />
+
       {/* Hero cover */}
       <div className="relative w-full h-64 md:h-96 overflow-hidden">
         <LazyImage src={company.cover} alt={company.name} eager wrapperClassName="absolute inset-0" className="w-full h-full object-cover" />
@@ -173,6 +190,9 @@ export default function CompanyProfile() {
                       <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span> {t(locale, "common_verified")}
                     </span>
                   )}
+                  {/* Availability, stated quietly. An upcoming period is shown as
+                      information — it must not discourage a request today. */}
+                  <AvailabilityBadge company={company} locale={locale} />
                 </div>
                 <p className="text-label-md font-label-md text-outline mb-2">{company.categoryLabel}</p>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -230,8 +250,8 @@ export default function CompanyProfile() {
                 <span className="material-symbols-outlined text-amber-600 text-[22px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
                 <div className="min-w-0">
                   <p className="font-bold text-[14px] text-amber-900">
-                    {company.busyUntil
-                      ? `${t(locale, "busy_banner_booked_until")} ${formatReopenDate(company.busyUntil, locale)}`
+                    {backAt
+                      ? `${t(locale, "busy_banner_booked_until")} ${formatReopenDate(backAt, locale)}`
                       : t(locale, "busy_banner_fully_booked")}
                   </p>
                   {company.busyNote
@@ -275,18 +295,13 @@ export default function CompanyProfile() {
                   <p className="text-body-lg font-body-lg text-on-surface-variant leading-relaxed">{company.about}</p>
                 </section>
 
-                {/* Services */}
-                <section>
-                  <h2 className="font-headline-md text-headline-md text-on-surface mb-4">{t(locale, "profile_services_offered")}</h2>
-                  <div className="flex flex-wrap gap-3">
-                    {company.services.map((s) => (
-                      <div key={s} className="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 shadow-sm">
-                        <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                        <span className="text-label-md font-label-md text-on-surface">{s}</span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+                {/* Services & products — priced cards, falling back to the
+                    legacy `services` chips for companies with no offerings yet. */}
+                <OfferingCards
+                  offerings={company.offerings ?? []}
+                  services={company.services}
+                  companySlug={company.slug}
+                />
 
                 {/* Recent projects preview */}
                 <section>
@@ -358,8 +373,8 @@ export default function CompanyProfile() {
                   <div className="bg-amber-500 rounded-2xl p-5 shadow-bloom text-white">
                     <span className="material-symbols-outlined text-[32px] mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
                     <h3 className="font-headline-md text-headline-md mb-2">
-                      {company.busyUntil
-                        ? `${t(locale, "busy_available_again")} ${formatReopenDate(company.busyUntil, locale)}`
+                      {backAt
+                        ? `${t(locale, "busy_available_again")} ${formatReopenDate(backAt, locale)}`
                         : t(locale, "busy_banner_fully_booked")}
                     </h3>
                     <p className="text-body-md font-body-md opacity-90 mb-4">{t(locale, "waitlist_modal_sub")}</p>
@@ -874,5 +889,36 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
         </div>
       </div>
     </div>
+  );
+}
+
+
+/**
+ * A one-line availability chip beside the company name.
+ *
+ * Reads the fields the server already derived (busy / nextAvailableAt /
+ * upcomingBusyFrom) rather than recomputing from windows on the client — a
+ * second implementation could disagree with the CTA on the same page.
+ */
+function AvailabilityBadge({ company, locale }: {
+  company: { busy?: boolean | null; busyUntil?: number | null; nextAvailableAt?: number | null;
+             upcomingBusyFrom?: number | null; busyReason?: string | null; responseTime?: string };
+  locale: Locale;
+}) {
+  const { state, text } = availabilityLabel(company, locale);
+  const style =
+    state === "busy" ? "bg-amber-100 text-amber-800"
+    : state === "upcoming" ? "bg-surface-container text-on-surface-variant"
+    : "bg-green-100 text-green-800";
+  const icon = state === "busy" ? "event_busy" : state === "upcoming" ? "event_upcoming" : "check_circle";
+
+  return (
+    <span
+      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-label-sm ${style}`}
+      title={company.busyReason ?? undefined}
+    >
+      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "FILL 1" }}>{icon}</span>
+      {text}
+    </span>
   );
 }

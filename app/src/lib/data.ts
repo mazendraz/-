@@ -40,6 +40,13 @@ export type Company = {
   gallery: string[];
   projects: Project[];
   reviews: Review[];
+  // Published + active offerings (Feature B). Optional so demo-mode fixtures and
+  // card payloads, which never carry them, still satisfy the type.
+  offerings?: import("./apiTypes").ApiOffering[];
+  // Published + active package discounts, from the detail endpoint. The live
+  // estimate needs these to show the SAME discount the server applies when the
+  // request is priced; hardcoding [] made the on-screen total read too high.
+  bundleRules?: import("./apiTypes").ApiBundleRule[];
   phone: string;
   location: string;
   // Trust signals (admin-set)
@@ -56,6 +63,10 @@ export type Company = {
   busyUntil?: number | null;
   busyNote?: string | null;
   ratingOverridden?: boolean; // admin set rating/reviewCount manually (skip review recompute)
+  // Exact lead count, from the admin list endpoint only. Deriving it in the
+  // browser from the hydrated lead list under-reported on every card, because
+  // that list is one capped page rather than the whole table.
+  leadCount?: number;
   // Internal contact for lead notifications — admin-only (not shown publicly).
   email?: string;         // where new-lead emails are sent
   whatsapp?: string;      // provider WhatsApp number (optional channel)

@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
+import type { StringKey } from "./i18n";
 
 export type LeadStatus = "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled";
 
 export interface Lead {
+  // Feature C — snapshots taken at submission; never recomputed on read.
+  items?: import("./apiTypes").ApiLeadItem[];
+  estimatedMin?: number | null;
+  estimatedMax?: number | null;
+  discountPercent?: number;
+  hasOnInspection?: boolean;
   id: string;
   refNumber: string;   // e.g. AA-20240610-X4K2
   companySlug: string;
@@ -31,6 +38,19 @@ export const LEAD_STATUSES: LeadStatus[] = [
   "Completed",
   "Cancelled",
 ];
+
+/**
+ * Display keys for each lead status. The LeadStatus values themselves are the API
+ * contract ("New", "Contacted", …) and must not change — this maps them to
+ * translatable labels. Resolve with t(locale, LEAD_STATUS_KEYS[status]).
+ */
+export const LEAD_STATUS_KEYS: Record<LeadStatus, StringKey> = {
+  New: "lead_status_new",
+  Contacted: "lead_status_contacted",
+  "In Progress": "lead_status_in_progress",
+  Completed: "lead_status_completed",
+  Cancelled: "lead_status_cancelled",
+};
 
 export const STATUS_COLORS: Record<LeadStatus, string> = {
   New: "bg-blue-100 text-blue-700",
@@ -152,7 +172,16 @@ export async function refreshMyLeadsFromApi(): Promise<void> {
   if (byRef.size === 0) return;
 
   // Merge server truth over the local copy, keyed by the stable reference number.
-  write(read().map((l) => byRef.get(l.refNumber) ?? l));
+  //
+  // trackingToken is carried over explicitly: the API returns it ONLY in the
+  // creation response, never in a read, so this device's copy is the only place
+  // it exists. Spreading the server row over the local one would drop it, and
+  // with it the customer's ability to open their own chat — a silent 404 that
+  // only appears after the list happens to refresh.
+  write(read().map((l) => {
+    const fresh = byRef.get(l.refNumber);
+    return fresh ? { ...fresh, trackingToken: fresh.trackingToken ?? l.trackingToken } : l;
+  }));
 }
 
 /**
@@ -193,7 +222,14 @@ export function getLeadsForCompany(companySlug: string): Lead[] {
 }
 
 export async function addLead(
-  data: Omit<Lead, "id" | "refNumber" | "status" | "createdAt">,
+  // Feature C: `items` carries the chosen lines WITHOUT prices — the server reads
+  // those from the catalogue, so a basket can never be submitted with a total the
+  // browser made up. Omit it for the classic single-service request.
+  // `items` is omitted from the Lead base and re-declared: on a Lead it is the
+  // server's priced snapshot, but on the way IN it is just a selection.
+  data: Omit<Lead, "id" | "refNumber" | "status" | "createdAt" | "items"> & {
+    items?: { offeringId: string; qty?: number; tierId?: string | null }[];
+  },
   // Honeypot value — real users leave this empty; bots fill it and the server
   // rejects the submission. Not part of the Lead shape, so it's passed sidecar.
   honeypot = "",
@@ -215,8 +251,12 @@ export async function addLead(
     rememberMyRequest(created.id);
     return created;
   }
+  // Demo mode: no server, so nothing prices the selection. The selection itself
+  // is dropped rather than stored — a Lead.items entry means "priced snapshot",
+  // and writing unpriced stand-ins there would make the record lie.
+  const { items: _selection, ...rest } = data;
   const lead: Lead = {
-    ...data,
+    ...rest,
     id: generateId(),
     refNumber: generateRef(),
     status: "New",

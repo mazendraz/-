@@ -1,5 +1,9 @@
 /**
- * Debounced, paginated, abortable server-side search/list hook.
+ * Debounced, paginated, cancelling server-side search/list hook.
+ *
+ * The AbortSignal is handed to fetch, so superseding a request (another
+ * keystroke, a page change) or unmounting genuinely cancels it — it does not just
+ * discard the response after the fact.
  *
  * Replaces the "hydrate one capped page then filter in React state" pattern: the
  * search term + filters are sent to the backend, so results include matching rows
@@ -13,7 +17,7 @@
  * The search term is debounced; changing the term or any filter resets to page 1.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { apiGet, ApiError, isApiConfigured } from "../lib/api";
+import { apiGet, ApiError, isAbort, isApiConfigured } from "../lib/api";
 
 export interface ApiPage<T> {
   data: T[];
@@ -106,12 +110,15 @@ export function useServerSearch<T>(
       setError(null);
       try {
         const url = buildQuery(path, search, page, pageSize, JSON.parse(paramsKey));
-        const res = await apiGet<ApiPage<T>>(url);
+        // The signal is passed THROUGH to fetch, so a superseded request is
+        // actually cancelled rather than merely having its result discarded.
+        const res = await apiGet<ApiPage<T>>(url, ctl.signal);
         if (!ctl.signal.aborted) {
           setResult({ data: res.data, total: res.meta.total });
         }
       } catch (err) {
-        if (!ctl.signal.aborted) {
+        // An abort is this hook superseding itself; there is nothing to report.
+        if (!ctl.signal.aborted && !isAbort(err)) {
           setError(err instanceof ApiError ? err.message : "Search failed. Please try again.");
           setResult({ data: [], total: 0 });
         }

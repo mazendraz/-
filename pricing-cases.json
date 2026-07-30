@@ -1,0 +1,213 @@
+{
+  "_comment": [
+    "Shared test fixtures for the request-total calculation.",
+    "",
+    "The same maths is implemented TWICE — api/src/lib/services/pricing.ts (the",
+    "authority, whose numbers are persisted) and app/src/lib/pricing.ts (the live",
+    "preview while the customer builds a request). Two implementations drift.",
+    "This file is what stops it: a test on each side reads these cases at runtime",
+    "with fs.readFileSync and asserts the same expected output.",
+    "",
+    "This is deliberate technical debt. The clean fix is a shared workspace",
+    "package, which restructures the whole monorepo. Acceptable while the maths",
+    "stays this small — if it grows, promote it to a package.",
+    "",
+    "Add a case here BEFORE fixing a pricing bug, so both sides get the fix."
+  ],
+  "cases": [
+    {
+      "name": "single fixed-price item matches the old single-service behaviour",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 12000, "unitPriceMax": null }
+        ],
+        "bundleRules": []
+      },
+      "expected": {
+        "subtotalMin": 12000, "subtotalMax": 12000,
+        "totalMin": 12000, "totalMax": 12000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 1
+      }
+    },
+    {
+      "name": "range item uses both bounds",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "RANGE", "unitPriceMin": 10000, "unitPriceMax": 18000 }
+        ],
+        "bundleRules": []
+      },
+      "expected": {
+        "subtotalMin": 10000, "subtotalMax": 18000,
+        "totalMin": 10000, "totalMax": 18000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 1
+      }
+    },
+    {
+      "name": "quantity multiplies both bounds",
+      "input": {
+        "items": [
+          { "qty": 3, "pricingModel": "RANGE", "unitPriceMin": 1000, "unitPriceMax": 2000 }
+        ],
+        "bundleRules": []
+      },
+      "expected": {
+        "subtotalMin": 3000, "subtotalMax": 6000,
+        "totalMin": 3000, "totalMax": 6000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 1
+      }
+    },
+    {
+      "name": "per-unit item with no max falls back to the min for the upper bound",
+      "input": {
+        "items": [
+          { "qty": 50, "pricingModel": "PER_UNIT", "unitPriceMin": 2500, "unitPriceMax": null }
+        ],
+        "bundleRules": []
+      },
+      "expected": {
+        "subtotalMin": 125000, "subtotalMax": 125000,
+        "totalMin": 125000, "totalMax": 125000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 1
+      }
+    },
+    {
+      "name": "bundle rule applies once when the item count reaches the threshold",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 20000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 30000, "unitPriceMax": null }
+        ],
+        "bundleRules": [{ "minItems": 3, "discountPercent": 15 }]
+      },
+      "expected": {
+        "subtotalMin": 60000, "subtotalMax": 60000,
+        "totalMin": 51000, "totalMax": 51000,
+        "discountPercent": 15, "hasOnInspection": false, "pricedCount": 3
+      }
+    },
+    {
+      "name": "bundle rule does not apply below the threshold",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 20000, "unitPriceMax": null }
+        ],
+        "bundleRules": [{ "minItems": 3, "discountPercent": 15 }]
+      },
+      "expected": {
+        "subtotalMin": 30000, "subtotalMax": 30000,
+        "totalMin": 30000, "totalMax": 30000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 2
+      }
+    },
+    {
+      "name": "the best qualifying rule wins, and only one is applied",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null }
+        ],
+        "bundleRules": [
+          { "minItems": 2, "discountPercent": 5 },
+          { "minItems": 4, "discountPercent": 20 },
+          { "minItems": 9, "discountPercent": 40 }
+        ]
+      },
+      "expected": {
+        "subtotalMin": 50000, "subtotalMax": 50000,
+        "totalMin": 40000, "totalMax": 40000,
+        "discountPercent": 20, "hasOnInspection": false, "pricedCount": 5
+      }
+    },
+    {
+      "name": "an inspection item counts toward the threshold but takes no discount",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 20000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "ON_INSPECTION", "unitPriceMin": null, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "ON_INSPECTION", "unitPriceMin": null, "unitPriceMax": null }
+        ],
+        "bundleRules": [{ "minItems": 3, "discountPercent": 15 }]
+      },
+      "expected": {
+        "subtotalMin": 20000, "subtotalMax": 20000,
+        "totalMin": 17000, "totalMax": 17000,
+        "discountPercent": 15, "hasOnInspection": true, "pricedCount": 1
+      }
+    },
+    {
+      "name": "all items quoted on inspection produce NO total, not zero",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "ON_INSPECTION", "unitPriceMin": null, "unitPriceMax": null },
+          { "qty": 2, "pricingModel": "ON_INSPECTION", "unitPriceMin": null, "unitPriceMax": null }
+        ],
+        "bundleRules": [{ "minItems": 2, "discountPercent": 10 }]
+      },
+      "expected": {
+        "subtotalMin": null, "subtotalMax": null,
+        "totalMin": null, "totalMax": null,
+        "discountPercent": 0, "hasOnInspection": true, "pricedCount": 0
+      }
+    },
+    {
+      "name": "an empty request has no total",
+      "input": { "items": [], "bundleRules": [] },
+      "expected": {
+        "subtotalMin": null, "subtotalMax": null,
+        "totalMin": null, "totalMax": null,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 0
+      }
+    },
+    {
+      "name": "an inactive or unpublished rule never applies",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 10000, "unitPriceMax": null }
+        ],
+        "bundleRules": []
+      },
+      "expected": {
+        "subtotalMin": 30000, "subtotalMax": 30000,
+        "totalMin": 30000, "totalMax": 30000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 3
+      }
+    },
+    {
+      "name": "discount rounds to whole pounds",
+      "input": {
+        "items": [
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 3333, "unitPriceMax": null },
+          { "qty": 1, "pricingModel": "FIXED", "unitPriceMin": 3333, "unitPriceMax": null }
+        ],
+        "bundleRules": [{ "minItems": 2, "discountPercent": 7 }]
+      },
+      "expected": {
+        "subtotalMin": 6666, "subtotalMax": 6666,
+        "totalMin": 6199, "totalMax": 6199,
+        "discountPercent": 7, "hasOnInspection": false, "pricedCount": 2
+      }
+    },
+    {
+      "name": "a tier price overrides the offering price for that line",
+      "input": {
+        "items": [
+          { "qty": 2, "pricingModel": "RANGE", "unitPriceMin": 5000, "unitPriceMax": 7000 }
+        ],
+        "bundleRules": []
+      },
+      "expected": {
+        "subtotalMin": 10000, "subtotalMax": 14000,
+        "totalMin": 10000, "totalMax": 14000,
+        "discountPercent": 0, "hasOnInspection": false, "pricedCount": 1
+      }
+    }
+  ]
+}

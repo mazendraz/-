@@ -80,6 +80,16 @@ export interface ApiCompany {
   gallery: string[];
   projects: ApiProject[];
   reviews: ApiReview[];
+  // Published + active offerings only (see companies.service publicCompanyInclude).
+  // Empty on card/list endpoints, which do not load the relation.
+  offerings: ApiOffering[];
+  /**
+   * Published + active package discounts. Present on the public profile so the
+   * live estimate can apply the SAME discount the server applies when the request
+   * is priced — without it the on-screen total read higher than what was recorded
+   * on the lead. Empty on card/list endpoints, which do not load the relation.
+   */
+  bundleRules?: ApiBundleRule[];
   phone: string;
   location: string;
   yearsExperience: number;
@@ -96,6 +106,21 @@ export interface ApiCompany {
   busy: boolean;
   busyUntil?: number | null;
   busyNote?: string | null;
+  // ── Feature F: scheduled busy windows ──
+  // All derived at read time from the manual switch + any scheduled window; no
+  // cron, so they are correct the instant a period starts or ends.
+  /** When the current unavailability ends. null = open-ended, or not busy. */
+  nextAvailableAt?: number | null;
+  /** Start of the soonest period that has not begun — "busy from 5 Aug". */
+  upcomingBusyFrom?: number | null;
+  /** Customer-facing reason for the current unavailability. */
+  busyReason?: string | null;
+  /**
+   * Exact lead count for this company. Admin list payloads only — absent
+   * elsewhere. Present because deriving it in the browser from the hydrated
+   * lead list (one capped page) under-reported on every card past 100 leads.
+   */
+  leadCount?: number;
   // Optional per-page SEO overrides; null/absent → frontend uses defaults.
   metaTitle?: string | null;
   metaDescription?: string | null;
@@ -194,6 +219,31 @@ export interface ApiLead {
   // (stored client-side), never in admin/provider list payloads.
   trackingToken?: string;
   createdAt: number; // epoch ms
+  // ── Feature C: multi-item requests ──
+  // Empty for the classic single-service request. Every price below is a SNAPSHOT
+  // from submission time and is never recomputed — a later price change must not
+  // rewrite what this customer was quoted.
+  items?: ApiLeadItem[];
+  estimatedMin?: number | null;
+  estimatedMax?: number | null;
+  discountPercent?: number;
+  /** At least one line is quoted on site, so the estimate is not the whole job. */
+  hasOnInspection?: boolean;
+}
+
+/** One line of a multi-item request. */
+export interface ApiLeadItem {
+  id: string;
+  /** Null once the offering is deleted; nameSnapshot keeps the line readable. */
+  offeringId: string | null;
+  nameSnapshot: string;
+  tierLabel: string | null;
+  qty: number;
+  pricingModel: "FIXED" | "RANGE" | "PER_UNIT" | "ON_INSPECTION";
+  unitPriceMin: number | null;
+  unitPriceMax: number | null;
+  lineMin: number | null;
+  lineMax: number | null;
 }
 
 /** POST /leads — body shape */
@@ -206,6 +256,9 @@ export interface ApiLeadPayload {
   district: string;
   budget: string;
   description: string;
+  /** Feature C. Omit for a single-service request. Prices are NEVER sent by the
+   *  client — the server reads them from the catalogue. */
+  items?: { offeringId: string; qty?: number; tierId?: string | null }[];
 }
 
 /** PATCH /leads/:id — body shape */
@@ -369,7 +422,73 @@ export interface ApiLegalPages {
   privacy: string;
 }
 
+// ── Maintenance / site status ──────────────────────────────────────────────────
+
+/**
+ * GET /api/status (public, `no-store`) · GET/PUT /api/admin/maintenance.
+ *
+ * Deliberately NOT part of ApiPlatformSettings: /api/settings is served with
+ * `okCached()` (max-age=30, s-maxage=60, stale-while-revalidate=300), so flipping
+ * maintenance through that payload could take up to five minutes to reach users.
+ * This is the single source of truth for maintenance state — never duplicate it.
+ *
+ * `enabled` is the only field the gate reads; the rest is presentation.
+ * Blank title/message = the frontend's localized defaults.
+ */
+export interface ApiMaintenanceStatus {
+  enabled: boolean;
+  title_en: string;
+  title_ar: string;
+  message_en: string;
+  message_ar: string;
+  /** Epoch ms for the "back in ..." countdown; null = no ETA shown. */
+  eta: number | null;
+}
+
 // ── Audit log (admin-only) ─────────────────────────────────────────────────────
+
+// ── Lead statistics (dashboard aggregates) ─────────────────────────────────────
+
+/**
+ * GET /api/admin/stats (all companies) · GET /api/provider/stats (own company).
+ *
+ * Aggregates computed over the WHOLE lead table, not a page of it. The dashboards
+ * previously derived these in the browser from a 100-row hydration, so every
+ * total, percentage and chart silently stopped being true past 100 leads.
+ *
+ * Counts only — no lead rows — so the payload size is independent of table size.
+ */
+export interface ApiLeadStats {
+  total: number;
+  /** Every status present, explicitly 0 when none. */
+  byStatus: Record<ApiLeadStatus, number>;
+  /** Dense daily series ending today; `date` is "YYYY-MM-DD" in `timezone`. */
+  perDay: { date: string; count: number }[];
+  /** Dense monthly series ending this month; `date` is "YYYY-MM". */
+  perMonth: { date: string; count: number }[];
+  /** Top companies by volume. Admin only — empty on the provider endpoint. */
+  byCompany: {
+    companyId: string;
+    companySlug: string;
+    companyName: string;
+    logo: string;
+    rating: number;
+    leads: number;
+    completed: number;
+    /** Percent, already rounded. */
+    conversion: number;
+  }[];
+  /** Trailing window against the equal window before it, for the KPI delta. */
+  recent: { days: number; current: number; previous: number };
+  /**
+   * Catalog totals for the admin KPI row. Admin only — absent on the provider
+   * endpoint. Counted here because the admin company cache is a clamped page
+   * (pageSize=200 → 100), so its length is not a count past a hundred companies.
+   */
+  catalog?: { companies: number; activeCompanies: number; categories: number };
+  /** IANA zone the day/month buckets were resolved in. */
+  timezone: string;
+}
 
 /** GET /admin/audit-logs → ApiPage<ApiAuditLog>. Append-only admin action trail. */
 export interface ApiAuditLog {
@@ -381,4 +500,56 @@ export interface ApiAuditLog {
   entityId: string;
   meta: Record<string, unknown> | null;
   createdAt: number; // epoch ms
+}
+
+// ── Offerings (Feature B) ──────────────────────────────────────────────────────
+
+/** A quantity band on an offering: "one room" / "2-3 rooms". */
+export interface ApiOfferingTier {
+  id: string;
+  label: string;
+  qtyMin: number | null;
+  qtyMax: number | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  sortOrder: number;
+}
+
+/**
+ * A priced service or product. Prices are whole Egyptian pounds — no piastres,
+ * and no currency field: every comparison in the product assumes one currency,
+ * so the column would be dead weight until multi-currency is a real requirement.
+ *
+ * Only rows with isPublished && isActive appear on a public profile.
+ */
+export interface ApiOffering {
+  id: string;
+  companyId: string;
+  name: string;
+  description: string | null;
+  kind: "SERVICE" | "PRODUCT";
+  pricingModel: "FIXED" | "RANGE" | "PER_UNIT" | "ON_INSPECTION";
+  priceMin: number | null;
+  priceMax: number | null;
+  unit: string | null;
+  minQty: number | null;
+  image: string | null;
+  note: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  isPublished: boolean;
+  /** Epoch ms of the last price change — drives "prices updated N days ago". */
+  priceUpdatedAt: number | null;
+  tiers: ApiOfferingTier[];
+}
+
+/** Package discount applied once a request reaches minItems items. */
+export interface ApiBundleRule {
+  id: string;
+  companyId: string;
+  label: string | null;
+  minItems: number;
+  discountPercent: number;
+  isActive: boolean;
+  isPublished: boolean;
 }

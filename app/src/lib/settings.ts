@@ -146,6 +146,84 @@ export function saveLegalPages(patch: Partial<LegalPages>): Promise<LegalPages> 
   return apiPut<LegalPages>("/admin/pages", patch);
 }
 
+// ── Maintenance / site status ──────────────────────────────────────────────────
+// Read from /api/status, NOT /api/settings. /settings is served with a
+// max-age=30 / s-maxage=60 / stale-while-revalidate=300 cache, so routing
+// maintenance through it could delay taking the site down by up to five minutes.
+// /status is `no-store`. One source of truth — never mirror these fields into
+// PlatformSettings.
+export interface MaintenanceStatus {
+  enabled: boolean;
+  title_en: string;
+  title_ar: string;
+  message_en: string;
+  message_ar: string;
+  /** Epoch ms for the "back in ..." countdown; null = no ETA. */
+  eta: number | null;
+}
+
+export const MAINTENANCE_OFF: MaintenanceStatus = {
+  enabled: false,
+  title_en: "",
+  title_ar: "",
+  message_en: "",
+  message_ar: "",
+  eta: null,
+};
+
+/** Public: current maintenance state. */
+export function fetchMaintenance(): Promise<MaintenanceStatus> {
+  return apiGet<MaintenanceStatus>("/status");
+}
+
+/** Admin: fetch for editing. */
+export function fetchMaintenanceAdmin(): Promise<MaintenanceStatus> {
+  return apiGet<MaintenanceStatus>("/admin/maintenance");
+}
+
+export function saveMaintenance(patch: Partial<MaintenanceStatus>): Promise<MaintenanceStatus> {
+  return apiPut<MaintenanceStatus>("/admin/maintenance", patch);
+}
+
+/**
+ * Maintenance state for the public shell.
+ *
+ * `loading` matters: RootLayout must not flash the real site for a moment before
+ * the maintenance screen lands, nor blank the site while the first request is in
+ * flight. Callers render nothing until loading resolves.
+ *
+ * Demo mode (no VITE_API_URL) has no backend to ask, so it is never in
+ * maintenance — the screen is unreachable there by design.
+ */
+export function useMaintenance(): { status: MaintenanceStatus; loading: boolean } {
+  const [status, setStatus] = useState<MaintenanceStatus>(MAINTENANCE_OFF);
+  const [loading, setLoading] = useState(isApiConfigured());
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let alive = true;
+    const load = () => {
+      fetchMaintenance()
+        .then((s) => { if (alive) setStatus(s); })
+        // A failed /status read must not take the site down. If the backend is
+        // unreachable, useBackendHealth() owns that story (offline screen).
+        .catch(() => { if (alive) setStatus(MAINTENANCE_OFF); })
+        .finally(() => { if (alive) setLoading(false); });
+    };
+    load();
+    // Re-check when the tab regains focus, so someone who left a tab open sees
+    // maintenance without a manual reload. No interval — no idle polling.
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  return { status, loading };
+}
+
 export function useSettings(): PlatformSettings {
   const [settings, setSettings] = useState<PlatformSettings>(read);
   useEffect(() => {

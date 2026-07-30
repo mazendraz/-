@@ -1,17 +1,33 @@
-import { useRouteError, Link } from "react-router-dom";
+import { useRouteError } from "react-router-dom";
+import CrashScreen from "../components/CrashScreen";
+import { getCurrentUser } from "../lib/auth";
 
+/**
+ * The router's `errorElement` — anything a route throws lands here.
+ *
+ * Renders CrashScreen (zero-dependency) rather than a locale-aware screen: if a
+ * route blew up because of the settings store or the locale provider, a screen
+ * that touches those would throw again and leave a blank page.
+ */
 export default function ErrorPage() {
-  const error = useRouteError() as { statusText?: string; message?: string } | null;
-  return (
-    <div className="min-h-screen bg-surface flex flex-col items-center justify-center text-center px-6">
-      <span className="material-symbols-outlined text-outline text-[64px] mb-4">error</span>
-      <h1 className="text-headline-lg font-headline-lg text-on-surface mb-2">Something went wrong</h1>
-      <p className="text-body-md font-body-md text-outline mb-6 max-w-md">
-        {error?.statusText ?? error?.message ?? "An unexpected error occurred."}
-      </p>
-      <Link to="/" className="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-[15px] hover:bg-primary-container transition-colors">
-        Go Home
-      </Link>
-    </div>
-  );
+  const error = useRouteError();
+  return <CrashScreen error={error} showDetails={shouldShowDetails()} />;
+}
+
+/**
+ * Stack traces are for whoever can act on them — an admin, or a developer who
+ * asked for them with ?debug=1. Showing a raw stack to a customer leaks internal
+ * structure and tells them nothing useful.
+ *
+ * Wrapped in try/catch on purpose: this runs on the error path, where
+ * localStorage may be unavailable (private mode, disabled cookies). It must never
+ * be the reason the error screen itself fails.
+ */
+function shouldShowDetails(): boolean {
+  try {
+    if (new URLSearchParams(window.location.search).get("debug") === "1") return true;
+    return getCurrentUser()?.role === "ADMIN";
+  } catch {
+    return false;
+  }
 }

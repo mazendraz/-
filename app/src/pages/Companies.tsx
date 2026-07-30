@@ -10,7 +10,7 @@ import SaveButton from "../components/SaveButton";
 import SearchInput from "../components/SearchInput";
 import Pagination from "../components/Pagination";
 import { isApiConfigured } from "../lib/api";
-import { isBusy } from "../lib/availability";
+import { isBusy, formatReopenDate } from "../lib/availability";
 import { useServerSearch } from "../hooks/useServerSearch";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
@@ -44,6 +44,10 @@ export default function Companies() {
   const { locale } = useLocale();
   const [category, setCategory] = useState("all");
   const [minRating, setMinRating] = useState(0);
+  // "Available now" is applied CLIENT-side even in API mode: effective
+  // availability is derived per row by the serializer, so it is not something the
+  // list query can filter on without duplicating that logic in SQL.
+  const [availableOnly, setAvailableOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("recommended");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -82,6 +86,7 @@ export default function Companies() {
     let list = COMPANIES.filter((c) => {
       if (category !== "all" && c.category !== category) return false;
       if (c.rating < minRating) return false;
+      if (availableOnly && isBusy(c)) return false;
       if (q && ![c.name, c.tagline, c.categoryLabel, ...c.services].some((v) => v.toLowerCase().includes(q))) return false;
       return true;
     });
@@ -273,6 +278,18 @@ export default function Companies() {
               </button>
             </div>
 
+            {/* Availability */}
+            <p className="text-[12px] font-black uppercase tracking-wider text-outline mb-2.5">{t(locale, "companies_availability")}</p>
+            <button
+              onClick={() => setAvailableOnly((v) => !v)}
+              aria-pressed={availableOnly}
+              className={`w-full flex items-center gap-2 py-2.5 px-3 rounded-xl text-[13px] font-bold border transition-colors mb-6
+                ${availableOnly ? "bg-primary text-on-primary border-primary" : "bg-surface-container border-transparent text-on-surface-variant"}`}
+            >
+              <span className="material-symbols-outlined text-[17px]">{availableOnly ? "check_circle" : "circle"}</span>
+              {t(locale, "companies_available_now")}
+            </button>
+
             {/* Rating */}
             <p className="text-[12px] font-black uppercase tracking-wider text-outline mb-2.5">{t(locale, "companies_min_rating")}</p>
             <div className="grid grid-cols-4 gap-2 mb-6">
@@ -379,7 +396,7 @@ function CompanyCard({ company: c, delay }: { company: Company; delay: number })
           <div className="flex items-center gap-1.5 mb-0.5">
             <h3 className="font-bold text-[18px] text-on-surface group-hover:text-primary transition-colors">{c.name}</h3>
             {c.verified && (
-              <span className="material-symbols-outlined text-primary text-[16px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }} title="Verified">verified</span>
+              <span className="material-symbols-outlined text-primary text-[16px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }} title={t(locale, "companies_verified_title")}>verified</span>
             )}
           </div>
           <p className="text-[13px] font-bold text-outline mb-2">{c.categoryLabel}</p>

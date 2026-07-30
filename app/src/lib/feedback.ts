@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
+import type { StringKey } from "./i18n";
 
 export type FeedbackType = "problem" | "suggestion" | "inquiry";
 
@@ -43,10 +44,11 @@ function fromApi(f: ApiFeedback): Feedback {
   };
 }
 
-export const FEEDBACK_TYPE_LABELS: Record<FeedbackType, string> = {
-  problem: "Problem Report",
-  suggestion: "Suggestion",
-  inquiry: "General Inquiry",
+// Keys, not labels — the admin screens render them with t(locale, …).
+export const FEEDBACK_TYPE_KEYS: Record<FeedbackType, StringKey> = {
+  problem: "admin_fb_type_problem",
+  suggestion: "admin_fb_type_suggestion",
+  inquiry: "admin_fb_type_inquiry",
 };
 
 export const FEEDBACK_TYPE_ICONS: Record<FeedbackType, string> = {

@@ -1,13 +1,20 @@
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
+
 interface Props {
   page: number;
   pageCount: number;
   total: number;
   pageSize: number;
   onPage: (page: number) => void;
-  /** Optional noun for the count label, e.g. "lead". Defaults to "result". */
-  noun?: string;
-  /** Plural form when it isn't simply `noun + "s"` (e.g. "companies"). */
-  nounPlural?: string;
+  /**
+   * Singular and plural noun for the count label, ALREADY TRANSLATED by the
+   * caller — e.g. t(locale, "admin_noun_lead") / t(locale, "admin_noun_leads").
+   * Both are required: the old `noun + "s"` default only worked in English and
+   * put untranslated words on Arabic screens.
+   */
+  noun: string;
+  nounPlural: string;
   className?: string;
 }
 
@@ -22,20 +29,21 @@ export default function Pagination({
   total,
   pageSize,
   onPage,
-  noun = "result",
+  noun,
   nounPlural,
   className = "",
 }: Props) {
+  const { locale } = useLocale();
   if (total === 0) return null;
 
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
-  const plural = total === 1 ? noun : (nounPlural ?? `${noun}s`);
+  const plural = total === 1 ? noun : nounPlural;
 
   return (
     <div className={`flex items-center justify-between gap-3 flex-wrap ${className}`}>
       <p className="text-[13px] text-outline">
-        <span className="font-bold text-on-surface">{from}–{to}</span> of{" "}
+        <span className="font-bold text-on-surface">{from}–{to}</span> {t(locale, "pagination_of")}{" "}
         <span className="font-bold text-on-surface">{total}</span> {plural}
       </p>
       {pageCount > 1 && (
@@ -45,7 +53,7 @@ export default function Pagination({
             onClick={() => onPage(page - 1)}
             disabled={page <= 1}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[13px] font-bold text-on-surface bg-surface-container hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            aria-label="Previous page"
+            aria-label={t(locale, "pagination_prev")}
           >
             <span className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_left</span>
           </button>
@@ -57,7 +65,7 @@ export default function Pagination({
             onClick={() => onPage(page + 1)}
             disabled={page >= pageCount}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[13px] font-bold text-on-surface bg-surface-container hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            aria-label="Next page"
+            aria-label={t(locale, "pagination_next")}
           >
             <span className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_right</span>
           </button>

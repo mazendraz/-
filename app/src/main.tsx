@@ -6,7 +6,9 @@ import "./index.css";
 import RootLayout from "./RootLayout";
 import Home from "./pages/Home"; // eager — the landing page / LCP, must paint instantly
 import ErrorPage from "./pages/ErrorPage"; // eager — needed to render route errors
+import ErrorBoundary from "./components/ErrorBoundary"; // eager — the crash net must never be a lazy chunk
 import RequireAuth from "./components/AuthGate";
+import { LocaleProvider } from "./context/LocaleContext";
 
 // Everything else is code-split so the initial load only ships Home + chrome.
 // Each route's JS is fetched on first navigation (and cached thereafter).
@@ -20,7 +22,7 @@ const GuidedStart = lazy(() => import("./pages/GuidedStart"));
 const Saved = lazy(() => import("./pages/Saved"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const LegalPage = lazy(() => import("./pages/LegalPage"));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminDashboard = lazy(() => import("./pages/admin"));
 const ProviderDashboard = lazy(() => import("./pages/ProviderDashboard"));
 
 function DashboardFallback() {
@@ -51,29 +53,44 @@ const router = createBrowserRouter([
       { path: "*", element: <NotFound /> },
     ],
   },
-  // Internal dashboards — lazy-loaded, no public nav/footer chrome
+  // Internal dashboards — lazy-loaded, no public nav/footer chrome.
+  //
+  // Each carries its OWN LocaleProvider: these routes are siblings of
+  // RootLayout, not children, so they never see the provider mounted there.
+  // Until phase 7 the dashboards were hard-coded English and nobody noticed;
+  // once they started calling t() they got the context DEFAULT ("ar") and were
+  // stuck in Arabic no matter what the language toggle said.
   {
     path: "/admin",
     errorElement: <ErrorPage />,
     element: (
-      <RequireAuth role="ADMIN">
-        <Suspense fallback={<DashboardFallback />}><AdminDashboard /></Suspense>
-      </RequireAuth>
+      <LocaleProvider>
+        <RequireAuth role="ADMIN">
+          <Suspense fallback={<DashboardFallback />}><AdminDashboard /></Suspense>
+        </RequireAuth>
+      </LocaleProvider>
     ),
   },
   {
     path: "/provider",
     errorElement: <ErrorPage />,
     element: (
-      <RequireAuth role="PROVIDER">
-        <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>
-      </RequireAuth>
+      <LocaleProvider>
+        <RequireAuth role="PROVIDER">
+          <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>
+        </RequireAuth>
+      </LocaleProvider>
     ),
   },
 ]);
 
+// ErrorBoundary sits ABOVE RouterProvider on purpose. The router's errorElement
+// only catches throws from inside a route; anything that fails above it — the
+// router itself, a top-level provider — would otherwise render a blank page.
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <ErrorBoundary>
+      <RouterProvider router={router} />
+    </ErrorBoundary>
   </React.StrictMode>
 );

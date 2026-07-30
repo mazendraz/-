@@ -388,6 +388,18 @@
      second copy exactly where the first began, so the loop is seamless. */
   to   { transform: translateX(-50%); }
 }
+/* RTL mirror. `translateX` is physical — it ignores `dir` — but the flex track is
+   NOT: under RTL the cards are laid out from the right, so the track's right edge
+   sits on the container's right edge and the duplicate copy hangs off to the LEFT.
+   Reusing the LTR keyframes there drags the cards further left, away from the only
+   copy that could refill the strip, so the banner empties out and never comes back.
+   Shifting +50% instead slides the duplicate copy into place — same seamless loop,
+   mirrored. */
+@keyframes reviewMarqueeRtl {
+  from { transform: translateX(0); }
+  to   { transform: translateX(50%); }
+}
+[dir="rtl"] .review-marquee-track { animation-name: reviewMarqueeRtl; }
 .review-marquee {
   overflow: hidden;
   /* Soft fade at both edges so cards glide in/out instead of clipping. */
@@ -571,7 +583,10 @@ select.field-input {
   .scroll-progress-bar { animation: none; }
 
   /* Reviews marquee — stop the auto-scroll; let the strip be scrolled by hand. */
-  .review-marquee-track { animation: none; }
+  /* The `[dir="rtl"]` selector is repeated so this matches the specificity of the
+     RTL override above — otherwise the mirrored animation would survive here. */
+  .review-marquee-track,
+  [dir="rtl"] .review-marquee-track { animation: none; }
   .review-marquee { overflow-x: auto; scrollbar-width: none; }
   .review-marquee::-webkit-scrollbar { display: none; }
 

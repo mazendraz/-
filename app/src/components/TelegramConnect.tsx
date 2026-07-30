@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
 import {
   getTelegramStatus,
   createTelegramLink,
@@ -16,6 +18,7 @@ import {
  * that never changes.
  */
 export default function TelegramConnect() {
+  const { locale } = useLocale();
   const [status, setStatus] = useState<TelegramStatus | "loading">("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +76,7 @@ export default function TelegramConnect() {
         }
       }, 3000);
     } catch {
-      setError("Couldn't create the link. Please try again.");
+      setError(t(locale, "prov_tg_err_create"));
     } finally {
       setBusy(false);
     }
@@ -86,7 +89,7 @@ export default function TelegramConnect() {
     try {
       setStatus(await disconnectTelegram());
     } catch {
-      setError("Couldn't disconnect. Please try again.");
+      setError(t(locale, "prov_tg_err_disconnect"));
     } finally {
       setBusy(false);
     }
@@ -105,12 +108,10 @@ export default function TelegramConnect() {
         </span>
         <div className="flex-1">
           <p className="font-label-lg text-label-lg text-on-surface">
-            Telegram alerts {linked && <span className="text-primary">· Connected</span>}
+            {t(locale, "prov_tg_title")} {linked && <span className="text-primary">· {t(locale, "prov_tg_connected")}</span>}
           </p>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            {linked
-              ? "New leads are sent to your Telegram the moment they arrive."
-              : "Get every new lead as an instant Telegram message on your phone."}
+            {t(locale, linked ? "prov_tg_on_desc" : "prov_tg_off_desc")}
           </p>
         </div>
         <button
@@ -123,14 +124,13 @@ export default function TelegramConnect() {
               : "bg-primary text-on-primary hover:opacity-90"
           }`}
         >
-          {busy ? "..." : linked ? "Disconnect" : "Connect"}
+          {busy ? "…" : t(locale, linked ? "prov_tg_disconnect" : "prov_tg_connect")}
         </button>
       </div>
 
       {waiting && !linked && (
         <p className="font-body-sm text-body-sm text-on-surface-variant">
-          Waiting for you to press <strong>Start</strong> in Telegram… you can leave this
-          page open. The link expires in 15 minutes.
+          {t(locale, "prov_tg_waiting_before")} <strong>{t(locale, "prov_tg_waiting_start")}</strong> {t(locale, "prov_tg_waiting_after")}
         </p>
       )}
       {error && <p className="font-body-sm text-body-sm text-error">{error}</p>}

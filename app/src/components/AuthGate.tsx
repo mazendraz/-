@@ -3,8 +3,15 @@ import { Link } from "react-router-dom";
 import { login, logout, useAuth, type AuthUser, type Role } from "../lib/auth";
 import { ApiError } from "../lib/api";
 import Logo from "./Logo";
+import { useLocale } from "../context/LocaleContext";
+import { t, type Locale, type StringKey } from "../lib/i18n";
 
-const ROLE_LABEL: Record<Role, string> = { ADMIN: "Admin", PROVIDER: "Provider" };
+const ROLE_LABEL_KEY: Record<Role, StringKey> = {
+  ADMIN: "auth_role_admin",
+  PROVIDER: "auth_role_provider",
+};
+
+const roleLabel = (role: Role, locale: Locale) => t(locale, ROLE_LABEL_KEY[role]);
 
 function Spinner() {
   return (
@@ -15,6 +22,7 @@ function Spinner() {
 }
 
 function LoginScreen({ requiredRole }: { requiredRole: Role }) {
+  const { locale } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,9 +38,9 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
       // useAuth picks up the session via the auth-changed event.
     } catch (err) {
       setError(
-        err instanceof ApiError && err.status === 401
-          ? "Incorrect email or password."
-          : "Couldn't sign in. Please try again.",
+        t(locale, err instanceof ApiError && err.status === 401
+          ? "auth_err_credentials"
+          : "auth_err_generic"),
       );
     } finally {
       setBusy(false);
@@ -45,8 +53,10 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
         <div className="flex flex-col items-center gap-3 mb-6">
           <Logo className="h-14 w-14 rounded-2xl object-contain" />
           <div className="text-center">
-            <h1 className="font-display font-bold text-[22px] text-on-surface">Al Assemah</h1>
-            <p className="text-[13px] text-outline">{ROLE_LABEL[requiredRole]} sign in</p>
+            <h1 className="font-display font-bold text-[22px] text-on-surface">Al Assema</h1>
+            <p className="text-[13px] text-outline">
+              {roleLabel(requiredRole, locale)} {t(locale, "auth_sign_in_suffix")}
+            </p>
           </div>
         </div>
 
@@ -58,7 +68,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
             </div>
           )}
           <label className="block">
-            <span className="text-[12px] font-bold text-on-surface-variant mb-1.5 block">Email</span>
+            <span className="text-[12px] font-bold text-on-surface-variant mb-1.5 block">{t(locale, "auth_email")}</span>
             <input
               type="email"
               required
@@ -66,11 +76,11 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
               className="field-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              placeholder={t(locale, "auth_email_placeholder")}
             />
           </label>
           <label className="block">
-            <span className="text-[12px] font-bold text-on-surface-variant mb-1.5 block">Password</span>
+            <span className="text-[12px] font-bold text-on-surface-variant mb-1.5 block">{t(locale, "auth_password")}</span>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
@@ -83,7 +93,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={t(locale, showPassword ? "auth_hide_password" : "auth_show_password")}
                 aria-pressed={showPassword}
                 className="absolute inset-y-0 end-0 flex items-center pe-3 text-outline hover:text-on-surface-variant transition-colors focus:outline-none"
               >
@@ -98,7 +108,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
             disabled={busy}
             className="w-full bg-primary text-on-primary rounded-xl py-3 font-bold text-[14px] hover:bg-primary-container transition-colors btn-press disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {busy ? "Signing in…" : "Sign in"}
+            {t(locale, busy ? "auth_signing_in" : "auth_sign_in")}
           </button>
         </form>
 
@@ -107,7 +117,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
           className="mt-5 flex items-center justify-center gap-1 text-[13px] font-bold text-outline hover:text-on-surface transition-colors"
         >
           <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-          Back to site
+          {t(locale, "auth_back_to_site")}
         </Link>
       </div>
     </div>
@@ -115,6 +125,7 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
 }
 
 function AccessDenied({ requiredRole, user }: { requiredRole: Role; user: AuthUser }) {
+  const { locale } = useLocale();
   return (
     <div className="min-h-screen bg-surface-container flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-surface-container-lowest rounded-3xl shadow-bloom p-8 text-center page-enter">
@@ -122,19 +133,19 @@ function AccessDenied({ requiredRole, user }: { requiredRole: Role; user: AuthUs
           <span className="material-symbols-outlined text-[28px]">lock</span>
         </div>
         <h1 className="font-display font-bold text-[20px] text-on-surface mb-1">
-          {ROLE_LABEL[requiredRole]} access required
+          {roleLabel(requiredRole, locale)} {t(locale, "auth_access_required_suffix")}
         </h1>
         <p className="text-[13px] text-outline mb-5">
-          You're signed in as <span className="font-bold text-on-surface-variant">{user.email}</span> ({user.role}).
+          {t(locale, "auth_signed_in_as")} <span className="font-bold text-on-surface-variant">{user.email}</span> ({user.role}).
         </p>
         <button
           onClick={() => logout()}
           className="w-full bg-primary text-on-primary rounded-xl py-3 font-bold text-[14px] hover:bg-primary-container transition-colors btn-press"
         >
-          Sign out
+          {t(locale, "auth_sign_out")}
         </button>
         <Link to="/" className="mt-4 inline-block text-[13px] font-bold text-outline hover:text-on-surface transition-colors">
-          Back to site
+          {t(locale, "auth_back_to_site")}
         </Link>
       </div>
     </div>

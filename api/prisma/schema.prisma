@@ -64,19 +64,19 @@ enum WaitlistStatus {
 }
 
 model Category {
-  id          String   @id @default(uuid())
-  slug        String   @unique
-  label       String // the frontend calls it label, not name
-  description String   @db.Text
-  icon        String // Material Symbols icon name
-  cover       String? // ApiCategory.cover — category cover image
-  isActive    Boolean  @default(true)
+  id              String   @id @default(uuid())
+  slug            String   @unique
+  label           String // the frontend calls it label, not name
+  description     String   @db.Text
+  icon            String // Material Symbols icon name
+  cover           String? // ApiCategory.cover — category cover image
+  isActive        Boolean  @default(true)
   // Optional per-page SEO overrides (admin-set). Null → frontend falls back to
   // the label/description-derived defaults.
   metaTitle       String?
   metaDescription String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   companies Company[]
 
@@ -87,69 +87,74 @@ model Category {
 }
 
 model Company {
-  id                String        @id @default(uuid())
-  categoryId        String
-  slug              String        @unique
-  name              String
-  tagline           String // short one-liner
-  about             String        @db.Text
-  logo              String
-  cover             String // large cover image
-  services          String[] // Postgres text[]
-  gallery           String[] // gallery image URLs
-  badges            String[] // ["Licensed", "Award-Winning"]
-  phone             String
-  location          String
-  yearsExperience   Int           @default(0)
-  responseTime      String // "within 2 hours"
-  verifiedSince     String // "2021"
-  completedProjects Int           @default(0) // manual admin number (!= projects.length)
+  id                  String        @id @default(uuid())
+  categoryId          String
+  slug                String        @unique
+  name                String
+  tagline             String // short one-liner
+  about               String        @db.Text
+  logo                String
+  cover               String // large cover image
+  services            String[] // Postgres text[]
+  gallery             String[] // gallery image URLs
+  badges              String[] // ["Licensed", "Award-Winning"]
+  phone               String
+  location            String
+  yearsExperience     Int           @default(0)
+  responseTime        String // "within 2 hours"
+  verifiedSince       String // "2021"
+  completedProjects   Int           @default(0) // manual admin number (!= projects.length)
   // aggregate cache — recomputed from Review on any change, UNLESS ratingOverridden
   // is true, in which case an admin set rating/reviewCount manually and the review
   // recompute leaves them alone (see reviews.service recompute). Clearing the flag
   // recomputes from real reviews again.
-  rating            Float         @default(0)
-  reviewCount       Int           @default(0)
-  ratingOverridden  Boolean       @default(false)
-  featured          Boolean       @default(true)
-  verified          Boolean       @default(false)
-  status            CompanyStatus @default(ACTIVE)
+  rating              Float         @default(0)
+  reviewCount         Int           @default(0)
+  ratingOverridden    Boolean       @default(false)
+  featured            Boolean       @default(true)
+  verified            Boolean       @default(false)
+  status              CompanyStatus @default(ACTIVE)
   // Availability ("busy") — provider- and admin-controlled. When busy is true the
   // public profile swaps its "Request Service" CTA for "Join the waiting list".
   // busyUntil is an optional auto-reopen instant: a company is EFFECTIVELY busy only
   // while busy=true AND (busyUntil is null OR busyUntil is in the future), so once
   // the date passes every read reports it available again (no cron needed — see
   // serialize.ts isEffectivelyBusy). busyNote is an optional customer-facing reason.
-  busy              Boolean       @default(false)
-  busyUntil         DateTime?
-  busyNote          String?
+  busy                Boolean       @default(false)
+  busyUntil           DateTime?
+  busyNote            String?
   // internal contact fields for notifications — NOT returned in the public payload
-  email             String?
-  whatsapp          String?
+  email               String?
+  whatsapp            String?
   // Telegram chat id for the provider, captured when they link the bot (see
   // telegram.service). Null → provider not linked, so Telegram lead alerts are
   // skipped for them (Web Push still applies).
-  telegramChatId    String?
+  telegramChatId      String?
   // Single-use deep-link token behind the dashboard's "Connect Telegram" button.
   // The provider opens t.me/<bot>?start=<token>, so the link is proven by the
   // token rather than by matching a shared phone. Cleared the moment it is
   // redeemed; ignored past its expiry. Unique so a token identifies one company.
-  telegramLinkToken String?       @unique
+  telegramLinkToken   String?       @unique
   telegramLinkExpires DateTime?
   // Optional per-page SEO overrides (admin-set). Null → frontend falls back to
   // the name/tagline-derived defaults.
-  metaTitle         String?
-  metaDescription   String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  metaTitle           String?
+  metaDescription     String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
-  category  Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  projects  Project[]
-  reviews   Review[]
-  leads     Lead[]
-  users     User[]
-  feedbacks Feedback[]
-  waitlist  WaitlistEntry[]
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  projects       Project[]
+  reviews        Review[]
+  leads          Lead[]
+  users          User[]
+  feedbacks      Feedback[]
+  waitlist       WaitlistEntry[]
+  changeRequests ChangeRequest[]
+  offerings      Offering[]
+  bundleRules    BundleRule[]
+  busyWindows    BusyWindow[]
+  conversations  Conversation[]
 
   @@index([slug])
   @@index([categoryId])
@@ -179,19 +184,19 @@ model WaitlistEntry {
 }
 
 model Project {
-  id          String   @id @default(uuid())
+  id          String        @id @default(uuid())
   companyId   String
   title       String
   img         String // matches ApiProject.img + data.ts
-  description String   @db.Text
+  description String        @db.Text
   year        String // display string e.g. "2024"
-  sortOrder   Int      @default(0)
+  sortOrder   Int           @default(0)
   // Curated for the homepage "Featured Projects" showcase (admin-set).
-  featured    Boolean  @default(false)
+  featured    Boolean       @default(false)
   // Moderation state. New rows default to PENDING (provider submissions); admin
   // creations are set APPROVED in the service. Only APPROVED show publicly.
   status      ProjectStatus @default(PENDING)
-  createdAt   DateTime @default(now())
+  createdAt   DateTime      @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -236,30 +241,41 @@ model Review {
 }
 
 model Lead {
-  id           String     @id @default(uuid())
-  refNumber    String     @unique // AA-YYYYMMDD-XXXX — generated server-side
+  id            String     @id @default(uuid())
+  refNumber     String     @unique // AA-YYYYMMDD-XXXX — generated server-side
   // High-entropy secret (generated at creation) that gates public status tracking
   // and the one-time review, replacing the guessable phone number. Nullable so
   // leads created before this column existed fall back to phone-tail matching.
   trackingToken String?
-  companyId    String
-  service      String // requested service (text)
-  customerName String // ApiLead.name
-  phone        String
-  district     String
-  budget       String
-  description  String     @db.Text
-  status       LeadStatus @default(NEW)
+  companyId     String
+  service       String // requested service (text)
+  customerName  String // ApiLead.name
+  phone         String
+  district      String
+  budget        String
+  description   String     @db.Text
+  status        LeadStatus @default(NEW)
   // Set once the customer leaves a (verified) review for this lead — gates the
   // one-time review flow so a completed request can be reviewed exactly once.
-  reviewedAt   DateTime?
-  createdAt    DateTime   @default(now()) // returned as epoch ms (Number) in the API
-  updatedAt    DateTime   @updatedAt
+  reviewedAt    DateTime?
+  createdAt     DateTime   @default(now()) // returned as epoch ms (Number) in the API
+  updatedAt     DateTime   @updatedAt
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Estimate captured at submission time. NOT recomputed on read: if a provider
+  // raises a price next month, what the customer was quoted must not change.
+  estimatedMin    Int?
+  estimatedMax    Int?
+  discountPercent Int?    @default(0)
+  // True when at least one item is quoted after inspection, so the UI can show
+  // "+ items quoted on site" instead of implying the estimate is the whole job.
+  hasOnInspection Boolean @default(false)
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // companySlug + companyName are returned derived from this relation.
   // The (at most one) verified review submitted for this completed lead.
-  review  Review?
+  review       Review?
+  items        LeadItem[]
+  conversation Conversation?
 
   @@index([companyId])
   @@index([status])
@@ -280,7 +296,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   pushSubscriptions PushSubscription[]
 
   @@index([email])
@@ -364,4 +380,293 @@ model AuditLog {
   @@index([createdAt])
   @@index([entity, entityId])
   @@index([actorId])
+}
+
+// ── Change requests (provider edits awaiting admin approval) ──────────────────
+// DELIBERATELY GENERIC. Feature B (Offerings, tiers, bundle rules) reuses this
+// exact model and the same admin review screen rather than growing a second
+// approval system — two approval systems in one product means two behaviours,
+// two UIs, and a confused admin.
+//
+// No CREATE operation: a row is always created as a draft first (isPublished =
+// false, from Feature B onward), so an id exists before any request is filed.
+// PUBLISH means "make this existing draft public for the first time".
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ChangeEntity {
+  COMPANY
+  OFFERING
+  OFFERING_TIER
+  BUNDLE_RULE
+}
+
+enum ChangeOperation {
+  PUBLISH
+  UPDATE
+  DELETE
+}
+
+model ChangeRequest {
+  id            String              @id @default(uuid())
+  companyId     String // owning company — drives filtering and permissions
+  entity        ChangeEntity
+  // Required, never null. For COMPANY this equals companyId. Being non-nullable is
+  // what makes the partial unique index below actually work: Postgres treats every
+  // NULL as distinct, so a nullable column would silently allow duplicates.
+  entityId      String
+  operation     ChangeOperation     @default(UPDATE)
+  submittedById String // User.id of the provider who filed it
+  changes       Json // only the changed fields: { field: newValue }
+  snapshot      Json // the same fields' values at submit time (diff + conflict detection)
+  note          String? // provider's message to the admin
+  status        ChangeRequestStatus @default(PENDING)
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String? // rejection reason — shown to the provider
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // NOTE: "one PENDING per (entity, entityId)" is enforced by a PARTIAL unique
+  // index, which Prisma's schema language cannot express. It lives as raw SQL in
+  // the migration: change_request_one_pending. Do not try to model it here.
+
+  @@index([status, createdAt])
+  @@index([companyId, status])
+  @@index([entity, entityId, status])
+}
+
+// ── Offerings (per-company priced services / products) ───────────────────────
+// Draft/published model. The row's OWN state decides the write path:
+//   isPublished = false → draft the provider owns → direct writes
+//   isPublished = true  → public content → every edit goes through ChangeRequest
+// There is deliberately NO review status on the row itself: if there were, a
+// published offering would drop out of the public profile the moment its owner
+// fixed a typo, which is content deletion dressed up as moderation.
+
+enum OfferingKind {
+  SERVICE
+  PRODUCT
+}
+
+enum PricingModel {
+  FIXED
+  RANGE
+  PER_UNIT
+  ON_INSPECTION
+}
+
+// A closed set, not free text. "م²" / "متر مربع" / "m2" typed by three different
+// providers are the same unit to a human and three different units to a GROUP BY,
+// which silently breaks the category price reference.
+enum PriceUnit {
+  SQM
+  METER
+  PIECE
+  DOOR
+  WINDOW
+  ROOM
+  APARTMENT
+  HOUR
+  DAY
+  JOB
+}
+
+model Offering {
+  id                  String       @id @default(uuid())
+  companyId           String
+  name                String
+  description         String?      @db.Text
+  kind                OfferingKind @default(SERVICE)
+  pricingModel        PricingModel @default(RANGE)
+  // Egyptian pounds, whole numbers — no piastres anywhere in the product, and no
+  // `currency` column: it would be a dead column today and every comparison
+  // already assumes one currency. Multi-currency is its own migration.
+  priceMin            Int?
+  priceMax            Int?
+  unit                PriceUnit? // required when pricingModel = PER_UNIT
+  minQty              Int? // e.g. a 50 m² minimum
+  image               String?
+  note                String? // "price excludes materials"
+  // sortOrder + isActive are the ONLY provider-writable fields on a published
+  // row that skip review (see the Feature B exception): they are display order
+  // and operational visibility, and change no content or price.
+  sortOrder           Int          @default(0)
+  isActive            Boolean      @default(true)
+  isPublished         Boolean      @default(false)
+  // Set only by the backfill. Gives the migration an idempotency key without
+  // imposing a permanent @@unique on `name`, which would stop a company ever
+  // having two offerings called "Installation" under different headings.
+  migratedFromService String?
+  priceUpdatedAt      DateTime? // drives "prices updated N days ago"
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  tiers   OfferingTier[]
+  items   LeadItem[]
+
+  @@unique([companyId, migratedFromService])
+  @@index([companyId, isPublished, isActive, sortOrder])
+}
+
+// Quantity bands: "one room" / "2–3 rooms" / "whole apartment".
+model OfferingTier {
+  id         String @id @default(uuid())
+  offeringId String
+  label      String
+  qtyMin     Int?
+  qtyMax     Int?
+  priceMin   Int?
+  priceMax   Int?
+  sortOrder  Int    @default(0)
+  // A tier carries its own PRICE, and a tier price overrides the offering's for
+  // that line (see leadItems.service). Without this flag a provider could add a
+  // tier to an already-published offering and it went straight onto the public
+  // profile — the one write path in Feature B that skipped review entirely.
+  //
+  // Same contract as Offering.isPublished: false = a draft only the provider
+  // sees, and the generic PUBLISH change-request flips it. Defaults to false so
+  // a newly written row is closed until reviewed; the migration backfills
+  // existing rows to true, since they are already live and must stay visible.
+  isPublished Boolean @default(false)
+
+  offering Offering @relation(fields: [offeringId], references: [id], onDelete: Cascade)
+
+  @@index([offeringId, sortOrder])
+}
+
+// Bundle discount — consumed by Feature C (multi-item requests), defined here so
+// the pricing tables all land in one migration.
+model BundleRule {
+  id              String   @id @default(uuid())
+  companyId       String
+  label           String?
+  minItems        Int // applies once the basket has at least this many items
+  discountPercent Int // 1..50, enforced in validation
+  isActive        Boolean  @default(true)
+  isPublished     Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, isActive])
+}
+
+// One line on a multi-item request.
+//
+// Every price here is a SNAPSHOT taken when the request was submitted. The row
+// deliberately duplicates data that could be read back through `offering` —
+// because that is exactly the point: if the provider raises a price, or renames
+// or deletes the offering next month, what this customer was quoted must not
+// change. A request is a record of an agreement, not a live view of a price list.
+model LeadItem {
+  id           String       @id @default(uuid())
+  leadId       String
+  // Null once the offering is deleted (SetNull). The snapshot fields below are
+  // what keep the line readable after that.
+  offeringId   String?
+  nameSnapshot String
+  tierLabel    String?
+  qty          Int          @default(1)
+  pricingModel PricingModel
+  unitPriceMin Int?
+  unitPriceMax Int?
+  lineMin      Int? // qty * unitPriceMin
+  lineMax      Int?
+
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  offering Offering? @relation(fields: [offeringId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+}
+
+// ── Scheduled busy windows ───────────────────────────────────────────────────
+// Adds scheduling ON TOP of the existing manual busy/busyUntil switch — it does
+// not replace it. A company is busy if EITHER says so.
+//
+// No cron, by design. "Busy right now" is derived at read time from these rows,
+// exactly like busyUntil already works, so a window opens and closes on its own
+// with nothing scheduled to run and nothing to fall behind.
+model BusyWindow {
+  id             String    @id @default(uuid())
+  companyId      String
+  startsAt       DateTime
+  // null = open-ended, until someone closes it. At most ONE of these per company
+  // (see busyWindows.service): an open window overlaps every future window
+  // forever, so allowing two would make scheduling impossible.
+  endsAt         DateTime?
+  note           String? // "Eid holiday" · "large project"
+  // Set when an admin created it. Providers can see but not edit or delete those
+  // — otherwise an admin marking a company unavailable could be undone by the
+  // company itself.
+  createdByAdmin Boolean   @default(false)
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Serves the hot read: WHERE companyId IN (...) AND (endsAt IS NULL OR endsAt > now)
+  // ORDER BY startsAt — filter + sort from one index.
+  @@index([companyId, startsAt])
+}
+
+// ── Chat (customer ↔ provider, with admin oversight) ─────────────────────────
+// One thread per request. The customer reaches it with the request's reference
+// number plus its tracking token — no account, matching the existing tracking
+// gate.
+
+enum MessageSender {
+  CUSTOMER
+  PROVIDER
+  ADMIN
+}
+
+model Conversation {
+  // @unique on leadId is what makes getOrCreateConversation safe to upsert
+  // concurrently: two simultaneous opens can't create two threads.
+  leadId         String    @unique
+  id             String    @id @default(uuid())
+  companyId      String
+  lastMessageAt  DateTime?
+  // Unread counters per side. Denormalized on purpose — the provider's thread
+  // list and the customer's request list both need a badge, and counting
+  // messages per conversation on every read would be a query per row.
+  customerUnread Int       @default(0)
+  providerUnread Int       @default(0)
+  closed         Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  lead     Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([companyId, lastMessageAt])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  conversationId String
+  sender         MessageSender
+  senderUserId   String? // provider/admin only; customers have no account
+  body           String        @db.Text
+  attachment     String?
+  // Admin moderation. Hidden messages stay in the table and stay visible to
+  // admins — removing the row would destroy the record of what was said.
+  hidden         Boolean       @default(false)
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Serves the hot poll: WHERE conversationId=? AND createdAt > ? ORDER BY createdAt.
+  @@index([conversationId, createdAt])
 }

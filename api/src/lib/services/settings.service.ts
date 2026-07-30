@@ -4,7 +4,12 @@
 // contact details, social links. Reads merge stored values over defaults, so a
 // fresh deployment is fully functional before an admin touches anything.
 import { prisma } from "@/lib/prisma";
-import type { ApiEmailTemplates, ApiLegalPages, ApiPlatformSettings } from "@/lib/apiTypes";
+import type {
+  ApiEmailTemplates,
+  ApiLegalPages,
+  ApiMaintenanceStatus,
+  ApiPlatformSettings,
+} from "@/lib/apiTypes";
 
 export const PLATFORM_SETTING_KEYS = [
   "site_name",
@@ -160,6 +165,112 @@ export async function updateLegalPages(patch: Partial<ApiLegalPages>): Promise<A
     );
   }
   return getLegalPages();
+}
+
+// ── Maintenance / site status ──────────────────────────────────────────────────
+// Kept OUT of PLATFORM_SETTING_KEYS on purpose: getPlatformSettings() feeds the
+// public /api/settings, which is served via okCached() with a 30s/60s/300s cache.
+// Maintenance has to take effect immediately, so it gets its own uncached read
+// (/api/status) and its own admin endpoint (/api/admin/maintenance).
+const MAINTENANCE_KEYS = {
+  enabled: "maintenance_enabled",
+  title_en: "maintenance_title_en",
+  title_ar: "maintenance_title_ar",
+  message_en: "maintenance_message_en",
+  message_ar: "maintenance_message_ar",
+  eta: "maintenance_eta",
+} as const;
+
+/** Field names an admin may write (everything except the derived read shape). */
+export type MaintenancePatch = Partial<{
+  enabled: boolean;
+  title_en: string;
+  title_ar: string;
+  message_en: string;
+  message_ar: string;
+  /** Epoch ms, or null to clear the countdown. */
+  eta: number | null;
+}>;
+
+const MAINTENANCE_OFF: ApiMaintenanceStatus = {
+  enabled: false,
+  title_en: "",
+  title_ar: "",
+  message_en: "",
+  message_ar: "",
+  eta: null,
+};
+
+/**
+ * Public: current maintenance state.
+ *
+ * FAIL-SOFT — on any DB error this returns "not in maintenance" rather than
+ * throwing. If the database is down, the maintenance flag is unknowable, and the
+ * right screen for that is the `offline` one driven by /api/ready. Throwing here
+ * would turn a DB blip into a hard failure on a route whose whole job is to
+ * report status.
+ */
+export async function getMaintenanceStatus(): Promise<ApiMaintenanceStatus> {
+  try {
+    const rows = await prisma.appSetting.findMany({
+      where: { key: { in: Object.values(MAINTENANCE_KEYS) } },
+    });
+    const byKey = new Map(rows.map((r) => [r.key, r.value]));
+    const rawEta = byKey.get(MAINTENANCE_KEYS.eta) ?? "";
+    const eta = /^\d+$/.test(rawEta) ? Number(rawEta) : NaN;
+    return {
+      enabled: byKey.get(MAINTENANCE_KEYS.enabled) === "true",
+      title_en: byKey.get(MAINTENANCE_KEYS.title_en) ?? "",
+      title_ar: byKey.get(MAINTENANCE_KEYS.title_ar) ?? "",
+      message_en: byKey.get(MAINTENANCE_KEYS.message_en) ?? "",
+      message_ar: byKey.get(MAINTENANCE_KEYS.message_ar) ?? "",
+      eta: Number.isFinite(eta) ? eta : null,
+    };
+  } catch (err) {
+    console.error("[settings] getMaintenanceStatus failed — assuming live:", err);
+    return { ...MAINTENANCE_OFF };
+  }
+}
+
+/**
+ * Just the gate flag, for `withMaintenance`. Same fail-soft contract: a DB error
+ * means writes stay OPEN. Failing closed would mean a transient DB hiccup silently
+ * rejects every public submission with a "we're doing maintenance" message that
+ * isn't true — worse than letting the write attempt through and failing honestly.
+ */
+export async function isMaintenanceEnabled(): Promise<boolean> {
+  try {
+    const row = await prisma.appSetting.findUnique({
+      where: { key: MAINTENANCE_KEYS.enabled },
+    });
+    return row?.value === "true";
+  } catch (err) {
+    console.error("[settings] isMaintenanceEnabled failed — allowing writes:", err);
+    return false;
+  }
+}
+
+/** Admin: upsert the provided maintenance fields; returns the full status. */
+export async function updateMaintenanceStatus(
+  patch: MaintenancePatch,
+): Promise<ApiMaintenanceStatus> {
+  const entries: [string, string][] = [];
+  if (patch.enabled !== undefined) entries.push([MAINTENANCE_KEYS.enabled, String(patch.enabled)]);
+  if (patch.title_en !== undefined) entries.push([MAINTENANCE_KEYS.title_en, patch.title_en]);
+  if (patch.title_ar !== undefined) entries.push([MAINTENANCE_KEYS.title_ar, patch.title_ar]);
+  if (patch.message_en !== undefined) entries.push([MAINTENANCE_KEYS.message_en, patch.message_en]);
+  if (patch.message_ar !== undefined) entries.push([MAINTENANCE_KEYS.message_ar, patch.message_ar]);
+  // null clears the countdown; "" is stored so the row exists and reads as "no ETA".
+  if (patch.eta !== undefined) entries.push([MAINTENANCE_KEYS.eta, patch.eta === null ? "" : String(patch.eta)]);
+
+  if (entries.length > 0) {
+    await prisma.$transaction(
+      entries.map(([key, value]) =>
+        prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } }),
+      ),
+    );
+  }
+  return getMaintenanceStatus();
 }
 
 /** Admin: upsert the provided keys (others left unchanged); returns the full set. */

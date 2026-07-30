@@ -1,5 +1,7 @@
 import { useRef, useState, useId } from "react";
 import type { Point, Segment } from "../lib/analytics";
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ChartCard — consistent panel wrapper
@@ -199,8 +201,9 @@ export function BarChart({
 //  Horizontal labelled bars (for "by company" etc.)
 // ══════════════════════════════════════════════════════════════════════════
 export function BarList({ data, color = "#005578", valueSuffix = "" }: { data: Point[]; color?: string; valueSuffix?: string }) {
+  const { locale } = useLocale();
   const max = Math.max(1, ...data.map((d) => d.value));
-  if (data.length === 0) return <p className="text-[13px] text-outline text-center py-6">No data yet.</p>;
+  if (data.length === 0) return <p className="text-[13px] text-outline text-center py-6">{t(locale, "chart_no_data")}</p>;
   return (
     <div className="space-y-3">
       {data.map((d, i) => (
@@ -226,6 +229,7 @@ export function DonutChart({
 }: {
   data: Segment[]; size?: number; thickness?: number; centerValue?: string | number; centerLabel?: string;
 }) {
+  const { locale } = useLocale();
   const total = data.reduce((s, d) => s + d.value, 0);
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
@@ -235,7 +239,7 @@ export function DonutChart({
   if (total === 0) {
     return (
       <div className="flex items-center justify-center text-[13px] text-outline" style={{ height: size }}>
-        No data yet.
+        {t(locale, "chart_no_data")}
       </div>
     );
   }
@@ -291,6 +295,7 @@ export function DonutChart({
 //  FunnelChart
 // ══════════════════════════════════════════════════════════════════════════
 export function FunnelChart({ stages }: { stages: Segment[] }) {
+  const { locale } = useLocale();
   const max = Math.max(1, stages[0]?.value ?? 1);
   return (
     <div className="space-y-2.5">
@@ -304,7 +309,7 @@ export function FunnelChart({ stages }: { stages: Segment[] }) {
               <span className="font-bold text-on-surface">{s.label}</span>
               <span className="text-outline">
                 <span className="font-black text-on-surface">{s.value}</span>
-                {i > 0 && <span className="ml-1.5 text-[11px]">({dropoff}% of prev)</span>}
+                {i > 0 && <span className="ml-1.5 text-[11px]">({dropoff}% {t(locale, "chart_of_prev")})</span>}
               </span>
             </div>
             <div className="h-7 bg-surface-container rounded-lg overflow-hidden">

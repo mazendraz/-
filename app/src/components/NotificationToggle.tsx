@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
 import { getPushState, enablePush, disablePush, type PushState } from "../lib/push";
 
 /**
@@ -8,6 +10,7 @@ import { getPushState, enablePush, disablePush, type PushState } from "../lib/pu
  * browser blocked notifications or the server has no VAPID keys configured.
  */
 export default function NotificationToggle() {
+  const { locale } = useLocale();
   const [state, setState] = useState<PushState | "loading">("loading");
   const [busy, setBusy] = useState(false);
 
@@ -33,8 +36,7 @@ export default function NotificationToggle() {
   if (state === "unsupported") {
     return (
       <p className="font-body-sm text-body-sm text-on-surface-variant">
-        This browser doesn't support push notifications. On iPhone, add Al Assema to
-        your Home Screen first, then enable notifications.
+        {t(locale, "prov_push_unsupported")}
       </p>
     );
   }
@@ -52,12 +54,10 @@ export default function NotificationToggle() {
         </span>
         <div className="flex-1">
           <p className="font-label-lg text-label-lg text-on-surface">
-            Push notifications on this device
+            {t(locale, "prov_push_title")}
           </p>
           <p className="font-body-sm text-body-sm text-on-surface-variant">
-            {subscribed
-              ? "You'll get an alert here for every new lead, even when the dashboard is closed."
-              : "Get an instant alert for every new lead — even when the dashboard is closed."}
+            {t(locale, subscribed ? "prov_push_on_desc" : "prov_push_off_desc")}
           </p>
         </div>
         <button
@@ -70,13 +70,12 @@ export default function NotificationToggle() {
               : "bg-primary text-on-primary hover:opacity-90"
           }`}
         >
-          {busy ? "..." : subscribed ? "Disable" : "Enable"}
+          {busy ? "…" : t(locale, subscribed ? "prov_push_disable" : "prov_push_enable")}
         </button>
       </div>
       {denied && (
         <p className="font-body-sm text-body-sm text-error">
-          Notifications are blocked in your browser settings. Allow them for this site
-          to enable alerts.
+          {t(locale, "prov_push_denied")}
         </p>
       )}
     </div>

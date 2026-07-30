@@ -17,6 +17,8 @@ import {
   notifyProviderTelegram,
 } from "@/lib/services/telegram.service";
 import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import { resolveItems } from "@/lib/services/leadItems.service";
+import type { CreateLeadInput } from "@/lib/validation/leads";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type {
   ApiLead,
@@ -36,6 +38,7 @@ const DEDUP_WINDOW_MS = 5 * 60_000;
 
 const leadInclude = {
   company: { select: { slug: true, name: true } },
+  items: { orderBy: { id: "asc" } },
 } as const;
 
 function clampPaging(query: { page?: number; pageSize?: number }): {
@@ -71,7 +74,7 @@ async function listWhere(
  * Public: create a lead. Resolves the company by slug (must be ACTIVE), generates
  * a unique refNumber, sets status NEW, and returns the full RAW ApiLead.
  */
-export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
+export async function create(payload: CreateLeadInput): Promise<ApiLead> {
   const company = await prisma.company.findFirst({
     where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
     select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
@@ -79,12 +82,22 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
   // 404 for both missing and non-ACTIVE — don't reveal suspended companies.
   if (!company) throw new NotFoundError("Company");
 
+  // Resolve the selected items against the live catalogue FIRST: prices are read
+  // server-side and snapshotted onto the lead, so a later price change never
+  // rewrites what this customer was quoted.
+  const resolved = payload.items?.length
+    ? await resolveItems(company.id, payload.items)
+    : null;
+  // With items, Lead.service becomes their comma-joined names — the older lists,
+  // emails and CSV export keep working without knowing about items at all.
+  const serviceText = resolved ? resolved.serviceSummary : payload.service;
+
   // Reject a near-identical re-submit (double-click / retry / basic bot loop).
   const recentDuplicate = await prisma.lead.findFirst({
     where: {
       companyId: company.id,
       phone: payload.phone,
-      service: payload.service,
+      service: serviceText,
       createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
     },
     select: { id: true },
@@ -103,13 +116,38 @@ export async function create(payload: ApiLeadPayload): Promise<ApiLead> {
           companyId: company.id,
           refNumber: generateRefNumber(),
           trackingToken: generateTrackingToken(),
-          service: payload.service,
+          service: serviceText,
           customerName: payload.name,
           phone: payload.phone,
           district: payload.district,
           budget: payload.budget,
           description: payload.description,
           status: LeadStatus.NEW,
+          // A thread from the start, so the customer can message as soon as the
+          // request lands. Leads that predate this are handled lazily by
+          // getOrCreateConversation — see chat.service.
+          conversation: { create: { companyId: company.id } },
+          ...(resolved
+            ? {
+                estimatedMin: resolved.estimatedMin,
+                estimatedMax: resolved.estimatedMax,
+                discountPercent: resolved.discountPercent,
+                hasOnInspection: resolved.hasOnInspection,
+                items: {
+                  create: resolved.lines.map((l) => ({
+                    offeringId: l.offeringId,
+                    nameSnapshot: l.nameSnapshot,
+                    tierLabel: l.tierLabel,
+                    qty: l.qty,
+                    pricingModel: l.pricingModel,
+                    unitPriceMin: l.unitPriceMin,
+                    unitPriceMax: l.unitPriceMax,
+                    lineMin: l.lineMin,
+                    lineMax: l.lineMax,
+                  })),
+                },
+              }
+            : {}),
         },
         include: leadInclude,
       });

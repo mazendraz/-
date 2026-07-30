@@ -71,3 +71,27 @@ export const updateLegalPagesSchema = z
   .refine((o) => Object.keys(o).length > 0, { message: "At least one page is required" });
 
 export type UpdateLegalPagesInput = z.infer<typeof updateLegalPagesSchema>;
+
+// PUT /admin/maintenance — the "site is down for maintenance" screen.
+// Separate from updateSettingsSchema because maintenance is NOT part of the cached
+// public /api/settings payload (see ApiMaintenanceStatus for why).
+export const updateMaintenanceSchema = z
+  .object({
+    enabled: z.boolean(),
+    title_en: text(160),
+    title_ar: text(160),
+    message_en: text(1000),
+    message_ar: text(1000),
+    // Epoch ms for the countdown; null clears it. Bounded so a mistyped value
+    // can't render a countdown decades out (or in the past, which reads as broken).
+    eta: z
+      .number()
+      .int()
+      .positive()
+      .max(4102444800000, "ETA is unreasonably far in the future") // 2100-01-01
+      .nullable(),
+  })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
+
+export type UpdateMaintenanceInput = z.infer<typeof updateMaintenanceSchema>;
