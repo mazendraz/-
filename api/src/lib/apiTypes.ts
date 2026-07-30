@@ -146,6 +146,7 @@ export type ApiWaitlistStatus = "WAITING" | "NOTIFIED" | "CONVERTED" | "CANCELLE
 
 export interface ApiWaitlistEntry {
   id: string;
+  companyId: string;
   companySlug: string;
   companyName: string;
   name: string;

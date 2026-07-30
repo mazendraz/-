@@ -4,7 +4,7 @@ import {
   useCustomerThreads, fetchCustomerThread, sendCustomerMessage,
   chatAvailable, POLL_IDLE_MS, type ThreadSummary,
 } from "../lib/chat";
-import { useMyLeadClaims } from "../lib/requests";
+import { useMyLeads, useMyLeadClaims, type Lead } from "../lib/requests";
 import ChatThread from "../components/ChatThread";
 import PersonalTabs from "../components/PersonalTabs";
 import { usePageMeta } from "../hooks/usePageMeta";
@@ -28,18 +28,47 @@ export default function Messages() {
   const { locale } = useLocale();
   usePageMeta("Messages | Al Assema", "Your conversations with the companies you contacted.");
 
+  // The full local Lead records (ref, token, phone, companyName/slug — everything
+  // needed to open a specific thread) are already in this device's storage the
+  // instant a request is submitted. `claims` (ref+token+phone only) feeds the
+  // background summaries fetch that builds the LIST; `myLeads` is used directly
+  // below so opening ONE specific conversation never has to wait on that fetch.
+  const myLeads = useMyLeads();
   const claims = useMyLeadClaims();
   const { threads, loading, errorKey, reload } = useCustomerThreads(claims);
 
   // `?ref=` deep-links straight into one conversation — that is how the button
-  // on a request card gets here, so it must land on the thread rather than the
-  // list with the customer left to find it again.
+  // on a request card and the request-success screen get here.
   const [params] = useSearchParams();
   const deepLinkRef = params.get("ref");
   const [activeRef, setActiveRef] = useState<string | null>(deepLinkRef);
 
-  const active = threads.find((th) => th.refNumber === activeRef) ?? null;
-  const claim = claims.find((c) => c.ref === activeRef);
+  // Resolved from THIS DEVICE'S OWN LEAD, not from `threads`.
+  //
+  // `threads` is a network round trip; the list it renders can be slow, briefly
+  // empty, or momentarily fail for reasons that have nothing to do with whether
+  // this specific conversation exists — a rate-limited retry, a page opened right
+  // after the request was submitted, one summary among many failing to resolve.
+  // None of that is a reason to block opening a thread the browser can already
+  // prove is the customer's own (the reference + tracking token, right here in
+  // localStorage, WERE the credential from the moment the request was created).
+  //
+  // Without this, the earlier version blocked on `threads` even for a same-tab
+  // deep link straight from "just submitted" — a fresh network hiccup showed the
+  // generic "No conversations yet" screen instead of the one specific
+  // conversation the customer had just been sent here to open.
+  const activeLead: Lead | undefined = myLeads.find((l) => l.refNumber === activeRef);
+  // The richer view (unread count, last-message preview) once the list has it —
+  // falls back to the lead's own fields so the header and thread still render
+  // immediately even on the very first paint.
+  const activeSummary = threads.find((th) => th.refNumber === activeRef);
+  const active = activeLead
+    ? {
+        refNumber: activeLead.refNumber,
+        companyName: activeSummary?.companyName || activeLead.companyName,
+        companySlug: activeLead.companySlug,
+      }
+    : null;
 
   // Opening a thread marks it read server-side, so clear the badge here too
   // rather than leaving a stale count until the next refresh.
@@ -63,13 +92,17 @@ export default function Messages() {
 
   const load = useMemo(
     () => (after?: number) =>
-      fetchCustomerThread({ ref: claim!.ref, token: claim!.token, phone: claim!.phone, after }),
-    [claim],
+      fetchCustomerThread({
+        ref: activeLead!.refNumber, token: activeLead!.trackingToken, phone: activeLead!.phone, after,
+      }),
+    [activeLead],
   );
   const send = useMemo(
     () => (body: string) =>
-      sendCustomerMessage({ ref: claim!.ref, token: claim!.token, phone: claim!.phone, body }),
-    [claim],
+      sendCustomerMessage({
+        ref: activeLead!.refNumber, token: activeLead!.trackingToken, phone: activeLead!.phone, body,
+      }),
+    [activeLead],
   );
 
   const shell = (children: React.ReactNode) => (
@@ -97,7 +130,75 @@ export default function Messages() {
     );
   }
 
-  // ── Loading ──
+  // ── Deep-linked to a request this device holds, but not (yet, or ever) among
+  //     the fetched threads: still open it. See the note on `activeLead` above —
+  //     the lead itself is the credential, independent of the summaries fetch.
+  if (active) {
+    return shell(
+      <div className="grid grid-cols-1 md:grid-cols-[18rem_1fr] gap-4">
+        {/* List — hidden on mobile once a conversation is open. Shows whatever
+            has loaded so far; never blocks the open conversation on its right. */}
+        <div className="hidden md:block bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
+          {loading && threads.length === 0 ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-6 h-6 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            </div>
+          ) : (
+            <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} locale={locale} />
+          )}
+        </div>
+
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-4">
+          <div className="flex items-center gap-2 mb-3 pb-3 border-b border-outline-variant/15">
+            {/* Mobile-only way back to the list, since the list is hidden */}
+            <button
+              onClick={() => { setActiveRef(null); reload(); }}
+              className="md:hidden p-1.5 -ms-1.5 rounded-lg hover:bg-surface-container transition-colors flex-shrink-0"
+              aria-label={t(locale, "messages_back_to_list")}
+            >
+              <span className="material-symbols-outlined text-outline rtl-flip">arrow_back</span>
+            </button>
+            <div className="min-w-0 flex-1">
+              <Link to={`/companies/${active.companySlug}`}
+                className="font-bold text-[14px] text-on-surface truncate hover:text-primary transition-colors block">
+                {active.companyName}
+              </Link>
+              <p className="text-[12px] text-outline truncate font-mono">{active.refNumber}</p>
+            </div>
+          </div>
+          <ChatThread
+            key={active.refNumber}
+            viewer="customer"
+            className="h-[26rem]"
+            load={load}
+            send={send}
+          />
+        </div>
+      </div>,
+    );
+  }
+
+  // ── A `?ref=` was given, but no lead by that reference exists on this device
+  //     (a different browser, cleared storage, or the link is simply wrong).
+  //     Distinct from the general empty state: the customer followed a specific
+  //     link, so "browse companies" is not the useful next step — going back to
+  //     their own request list is.
+  if (deepLinkRef && !activeLead) {
+    return shell(
+      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center">
+        <span className="material-symbols-outlined text-outline text-[44px] mb-3 block">search_off</span>
+        <p className="text-[14px] text-on-surface-variant mb-5 max-w-sm mx-auto">
+          {t(locale, "messages_ref_not_found")}
+        </p>
+        <Link to="/requests"
+          className="inline-block bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
+          {t(locale, "requests_tab")}
+        </Link>
+      </div>,
+    );
+  }
+
+  // ── Loading (list view, nothing deep-linked) ──
   if (loading && threads.length === 0) {
     return shell(
       <div className="flex items-center justify-center py-20">
@@ -150,90 +251,69 @@ export default function Messages() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-[18rem_1fr] gap-4">
-        {/* Thread list — hidden on mobile once a conversation is open */}
-        <div className={`bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden ${active ? "hidden md:block" : ""}`}>
-          <div className="divide-y divide-outline-variant/15 max-h-[32rem] overflow-y-auto">
-            {threads.map((th) => {
-              const unread = unreadOf(th);
-              const isActive = th.refNumber === activeRef;
-              return (
-                <button
-                  key={th.refNumber}
-                  onClick={() => openThread(th.refNumber)}
-                  className={`w-full text-start px-4 py-3 transition-colors touch-press ${
-                    isActive ? "bg-primary/8" : "hover:bg-surface-container/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[13.5px] truncate ${unread > 0 ? "font-black text-on-surface" : "font-bold text-on-surface"}`}>
-                      {th.companyName}
-                    </span>
-                    {unread > 0 && (
-                      <span className="bg-primary text-on-primary text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center flex-shrink-0">
-                        {unread}
-                      </span>
-                    )}
-                  </div>
-                  {th.lastMessagePreview ? (
-                    <p className={`text-[12px] truncate mt-0.5 ${unread > 0 ? "text-on-surface-variant font-medium" : "text-outline"}`}>
-                      {th.lastMessageSender === "CUSTOMER" && `${t(locale, "messages_you_prefix")} `}
-                      {th.lastMessagePreview}
-                    </p>
-                  ) : (
-                    <p className="text-[12px] text-outline mt-0.5 italic">{t(locale, "messages_no_messages_yet")}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[11px] text-outline font-mono truncate">{th.refNumber}</span>
-                    {th.lastMessageAt && (
-                      <span className="text-[11px] text-outline ms-auto flex-shrink-0">
-                        {new Date(th.lastMessageAt).toLocaleString(intlLocale(locale), {
-                          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                        })}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
+          <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} locale={locale} />
         </div>
-
-        {/* Conversation */}
-        <div className={`bg-surface-container-lowest rounded-2xl shadow-bloom p-4 ${active ? "" : "hidden md:block"}`}>
-          {active && claim ? (
-            <>
-              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-outline-variant/15">
-                {/* Mobile-only way back to the list, since the list is hidden */}
-                <button
-                  onClick={() => { setActiveRef(null); reload(); }}
-                  className="md:hidden p-1.5 -ms-1.5 rounded-lg hover:bg-surface-container transition-colors flex-shrink-0"
-                  aria-label={t(locale, "messages_back_to_list")}
-                >
-                  <span className="material-symbols-outlined text-outline rtl-flip">arrow_back</span>
-                </button>
-                <div className="min-w-0 flex-1">
-                  <Link to={`/companies/${active.companySlug}`}
-                    className="font-bold text-[14px] text-on-surface truncate hover:text-primary transition-colors block">
-                    {active.companyName}
-                  </Link>
-                  <p className="text-[12px] text-outline truncate font-mono">{active.refNumber}</p>
-                </div>
-              </div>
-              <ChatThread
-                key={active.refNumber}
-                viewer="customer"
-                className="h-[26rem]"
-                load={load}
-                send={send}
-              />
-            </>
-          ) : (
-            <div className="flex items-center justify-center h-[26rem]">
-              <p className="text-[13px] text-outline">{t(locale, "messages_pick")}</p>
-            </div>
-          )}
+        <div className="hidden md:flex bg-surface-container-lowest rounded-2xl shadow-bloom p-4 items-center justify-center h-[26rem]">
+          <p className="text-[13px] text-outline">{t(locale, "messages_pick")}</p>
         </div>
       </div>
     </>,
+  );
+}
+
+/** The thread list, shared by the "a conversation is open" and "browsing" layouts. */
+function ThreadList({ threads, activeRef, onOpen, unreadOf, locale }: {
+  threads: ThreadSummary[];
+  activeRef: string | null;
+  onOpen: (ref: string) => void;
+  unreadOf: (th: ThreadSummary) => number;
+  locale: "en" | "ar";
+}) {
+  return (
+    <div className="divide-y divide-outline-variant/15 max-h-[32rem] overflow-y-auto">
+      {threads.map((th) => {
+        const unread = unreadOf(th);
+        const isActive = th.refNumber === activeRef;
+        return (
+          <button
+            key={th.refNumber}
+            onClick={() => onOpen(th.refNumber)}
+            className={`w-full text-start px-4 py-3 transition-colors touch-press ${
+              isActive ? "bg-primary/8" : "hover:bg-surface-container/50"
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-[13.5px] truncate ${unread > 0 ? "font-black text-on-surface" : "font-bold text-on-surface"}`}>
+                {th.companyName}
+              </span>
+              {unread > 0 && (
+                <span className="bg-primary text-on-primary text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center flex-shrink-0">
+                  {unread}
+                </span>
+              )}
+            </div>
+            {th.lastMessagePreview ? (
+              <p className={`text-[12px] truncate mt-0.5 ${unread > 0 ? "text-on-surface-variant font-medium" : "text-outline"}`}>
+                {th.lastMessageSender === "CUSTOMER" && `${t(locale, "messages_you_prefix")} `}
+                {th.lastMessagePreview}
+              </p>
+            ) : (
+              <p className="text-[12px] text-outline mt-0.5 italic">{t(locale, "messages_no_messages_yet")}</p>
+            )}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[11px] text-outline font-mono truncate">{th.refNumber}</span>
+              {th.lastMessageAt && (
+                <span className="text-[11px] text-outline ms-auto flex-shrink-0">
+                  {new Date(th.lastMessageAt).toLocaleString(intlLocale(locale), {
+                    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                  })}
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }

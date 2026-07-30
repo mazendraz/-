@@ -34,3 +34,12 @@ export const waitlistStatusSchema = z.object({
   status: z.enum(["WAITING", "NOTIFIED", "CONVERTED", "CANCELLED"]),
 });
 export type WaitlistStatusInput = z.infer<typeof waitlistStatusSchema>;
+
+// GET /waitlist/track?id=&phone= — public lookup. The id plus the phone the
+// customer joined with (the only shared secret a waitlist join has) is the
+// credential — mirrors the leads track endpoint's phone fallback.
+export const trackWaitlistSchema = z.object({
+  id: z.string().trim().min(1),
+  phone: z.string().trim().min(8).max(30),
+});
+export type TrackWaitlistInput = z.infer<typeof trackWaitlistSchema>;

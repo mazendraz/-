@@ -336,6 +336,7 @@ export type WaitlistEntryWithCompany = WaitlistEntry & {
 export function serializeWaitlistEntry(e: WaitlistEntryWithCompany): ApiWaitlistEntry {
   return {
     id: e.id,
+    companyId: e.companyId,
     companySlug: e.company.slug,
     companyName: e.company.name,
     name: e.name,

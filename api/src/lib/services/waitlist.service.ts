@@ -7,6 +7,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { CompanyStatus, WaitlistStatus } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/utils/errors";
 import { serializeWaitlistEntry } from "@/lib/utils/serialize";
+import { phoneTail } from "@/lib/utils/phone";
 import type {
   ApiPage,
   ApiWaitlistEntry,
@@ -51,11 +52,32 @@ export async function join(
   return serializeWaitlistEntry(row);
 }
 
+/**
+ * Public: look up a customer's own waiting-list entry by id, gated by the phone
+ * they joined with (the only shared secret a waitlist join has — matches the
+ * legacy phone-fallback already accepted for leads). A missing id and a phone
+ * mismatch throw the SAME 404 — never reveal which ids exist.
+ */
+export async function trackByIdAndPhone(
+  id: string,
+  phone: string,
+): Promise<ApiWaitlistEntry> {
+  const entry = await prisma.waitlistEntry.findUnique({
+    where: { id },
+    include: waitlistInclude,
+  });
+  if (!entry || phoneTail(entry.phone) !== phoneTail(phone)) {
+    throw new NotFoundError("Waitlist entry");
+  }
+  return serializeWaitlistEntry(entry);
+}
+
 export interface WaitlistListQuery {
   page?: number;
   pageSize?: number;
   status?: ApiWaitlistStatus;
   search?: string; // matches name / phone / service
+  companyId?: string;
 }
 
 function searchWhere(search?: string): Prisma.WaitlistEntryWhereInput {
@@ -77,6 +99,37 @@ export async function listByCompany(
 ): Promise<ApiPage<ApiWaitlistEntry>> {
   const where: Prisma.WaitlistEntryWhereInput = {
     companyId,
+    ...(query.status ? { status: query.status as WaitlistStatus } : {}),
+    ...searchWhere(query.search),
+  };
+  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
+  const pageSize = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE),
+  );
+  const [total, rows] = await Promise.all([
+    prisma.waitlistEntry.count({ where }),
+    prisma.waitlistEntry.findMany({
+      where,
+      include: waitlistInclude,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+  return { data: rows.map(serializeWaitlistEntry), meta: { total, page, pageSize } };
+}
+
+/**
+ * Admin: paginated waiting list across EVERY company (newest first), optionally
+ * narrowed to one company. Mirrors listByCompany but companyId is a filter rather
+ * than a hard requirement — backs the admin Leads tab's merged lead/waitlist view.
+ */
+export async function listAll(
+  query: WaitlistListQuery = {},
+): Promise<ApiPage<ApiWaitlistEntry>> {
+  const where: Prisma.WaitlistEntryWhereInput = {
+    ...(query.companyId ? { companyId: query.companyId } : {}),
     ...(query.status ? { status: query.status as WaitlistStatus } : {}),
     ...searchWhere(query.search),
   };

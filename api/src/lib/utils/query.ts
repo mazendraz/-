@@ -127,6 +127,17 @@ export function parseWaitlistListQuery(
   };
 }
 
+/** Same as parseWaitlistListQuery, plus the companyId filter — for the admin
+ *  global waiting-list endpoint (mirrors parseAdminLeadListQuery). */
+export function parseAdminWaitlistListQuery(
+  searchParams: URLSearchParams,
+): WaitlistListQuery {
+  return {
+    ...parseWaitlistListQuery(searchParams),
+    companyId: searchParams.get("companyId")?.trim() || undefined,
+  };
+}
+
 const USER_ROLES: readonly ApiUserRole[] = ["ADMIN", "PROVIDER"];
 
 export function parseAdminUserListQuery(
