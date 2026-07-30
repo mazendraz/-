@@ -59,6 +59,7 @@ export default function AdminDashboard() {
   // Editor state
   const [editingCompany, setEditingCompany] = useState<{ company: Company | null } | null>(null);
   const [busyToggleId, setBusyToggleId] = useState<string | null>(null); // company row availability quick-toggle in flight
+  const [busyError, setBusyError] = useState<string | null>(null); // company id whose toggle just failed
   const [editingCategory, setEditingCategory] = useState<{ category: ServiceCategory | null } | null>(null);
 
   // Leads: server-driven search/pagination over the COMPLETE dataset when the API
@@ -281,7 +282,18 @@ export default function AdminDashboard() {
                           <span className="material-symbols-outlined text-[14px]">edit</span> {t(locale, "admin_edit")}
                         </button>
                         <button
-                          onClick={() => { if (busyToggleId !== c.id) { setBusyToggleId(c.id); void setCompanyAvailability(c.id, { busy: !isBusy(c) }).finally(() => setBusyToggleId(null)); } }}
+                          onClick={() => {
+                            if (busyToggleId === c.id) return; // in flight — ignore a second click
+                            setBusyToggleId(c.id);
+                            setBusyError(null);
+                            void setCompanyAvailability(c.id, { busy: !isBusy(c) })
+                              // A rejected request used to be an unhandled promise:
+                              // the spinner stopped, the row did not change, and
+                              // nothing said why. Silence looked exactly like a
+                              // button that does nothing.
+                              .catch(() => setBusyError(c.id))
+                              .finally(() => setBusyToggleId(null));
+                          }}
                           disabled={busyToggleId === c.id}
                           title={t(locale, isBusy(c) ? "admin_mark_available" : "admin_mark_busy")}
                           className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors disabled:opacity-60 ${
@@ -290,6 +302,11 @@ export default function AdminDashboard() {
                           <span className="material-symbols-outlined text-[14px]">{busyToggleId === c.id ? "progress_activity" : (isBusy(c) ? "event_available" : "event_busy")}</span>
                           {t(locale, isBusy(c) ? "admin_open" : "admin_busy")}
                         </button>
+                        {busyError === c.id && (
+                          <p className="text-[11px] font-bold text-error max-w-[9rem] leading-snug">
+                            {t(locale, "admin_busy_toggle_failed")}
+                          </p>
+                        )}
                         <Link to={`/companies/${c.slug}`} target="_blank" className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-primary transition-colors">
                           <span className="material-symbols-outlined text-[14px]">open_in_new</span> {t(locale, "admin_view")}
                         </Link>

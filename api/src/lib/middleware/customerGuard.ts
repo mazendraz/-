@@ -50,3 +50,55 @@ export async function resolveCustomerLead(request: NextRequest): Promise<Custome
   }
   return { id: lead.id, refNumber: lead.refNumber, companyId: lead.companyId };
 }
+
+/** One (reference, secret) pair the customer is claiming to own. */
+export interface LeadClaim {
+  ref: string;
+  token?: string;
+  phone?: string;
+}
+
+/** Hard cap — a customer with more open requests than this is not a real case. */
+export const MAX_CLAIMS = 50;
+
+/**
+ * Resolve a BATCH of claims, keeping only the ones whose secret checks out.
+ *
+ * Silently drops the ones that don't rather than throwing. A batch is assembled
+ * from whatever this browser has in localStorage, which legitimately goes stale —
+ * a request deleted by an admin, or a token from an older install. One dead entry
+ * must not blank the customer's whole message list.
+ *
+ * Each claim is verified independently against its OWN lead, with the same
+ * comparison helper as the single-lead path, so batching grants no access that
+ * asking one at a time would not.
+ */
+export async function resolveCustomerLeads(claims: LeadClaim[]): Promise<CustomerLead[]> {
+  const refs = [...new Set(claims.map((c) => c.ref.trim()).filter(Boolean))].slice(0, MAX_CLAIMS);
+  if (refs.length === 0) return [];
+
+  const leads = await prisma.lead.findMany({
+    where: { refNumber: { in: refs } },
+    select: { id: true, refNumber: true, companyId: true, trackingToken: true, phone: true },
+  });
+
+  // Grouped, not a ref→claim map. A Map keeps the LAST entry for a repeated key,
+  // so a payload naming the same reference twice would have thrown away a valid
+  // secret in favour of whichever came last. Access is granted when ANY supplied
+  // secret for that reference verifies — which grants nothing extra, since
+  // holding one correct secret is the whole test.
+  const claimsByRef = new Map<string, LeadClaim[]>();
+  for (const c of claims) {
+    const ref = c.ref.trim();
+    const list = claimsByRef.get(ref);
+    if (list) list.push(c);
+    else claimsByRef.set(ref, [c]);
+  }
+
+  return leads.flatMap((lead) => {
+    const forRef = claimsByRef.get(lead.refNumber) ?? [];
+    const owns = forRef.some((c) => leadSecretMatches(lead, { token: c.token, phone: c.phone }));
+    if (!owns) return [];
+    return [{ id: lead.id, refNumber: lead.refNumber, companyId: lead.companyId }];
+  });
+}

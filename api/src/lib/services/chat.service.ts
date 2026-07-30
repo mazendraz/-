@@ -275,13 +275,89 @@ export async function postMessage(params: {
   return serializeMessage(message as MessageRow, params.sender === "ADMIN" ? "admin" : "customer");
 }
 
-/** Clear the badge for whichever side just opened the thread. */
+/**
+ * Clear the badge for whichever side just opened the thread.
+ *
+ * `updateMany` with a `> 0` guard, not `update`: a full read happens on every
+ * poll of a thread that has no messages yet (the client has no `after` cursor to
+ * send), so an unconditional write turned an idle open chat into one UPDATE
+ * every 8 seconds, forever, to set a zero that was already zero.
+ */
 export async function markRead(conversationId: string, viewer: Viewer): Promise<void> {
   if (viewer === "admin") return; // admins have no unread badge of their own
-  await prisma.conversation.update({
-    where: { id: conversationId },
-    data: viewer === "customer" ? { customerUnread: 0 } : { providerUnread: 0 },
+  const field = viewer === "customer" ? "customerUnread" : "providerUnread";
+  await prisma.conversation.updateMany({
+    where: { id: conversationId, [field]: { gt: 0 } },
+    data: { [field]: 0 },
   });
+}
+
+// ── Customer thread summaries ────────────────────────────────────────────────
+
+export interface ApiThreadSummary {
+  refNumber: string;
+  conversationId: string;
+  companyName: string;
+  companySlug: string;
+  lastMessageAt: number | null;
+  /** First line of the newest message, for the list preview. */
+  lastMessagePreview: string | null;
+  lastMessageSender: MessageSenderValue | null;
+  unread: number;
+  closed: boolean;
+}
+
+/** How much of the newest message the list preview carries. */
+const PREVIEW_LENGTH = 120;
+
+/**
+ * Summaries for a customer's own threads, in one round trip.
+ *
+ * Exists so the messages list does NOT have to open each thread to build itself:
+ * a full read marks the thread as read, so listing that way would clear every
+ * unread badge before the customer had seen a single message — the list would
+ * destroy the very state it is trying to display.
+ *
+ * Caller has already verified each lead belongs to this customer.
+ */
+export async function getSummaries(
+  leads: { id: string; refNumber: string }[],
+): Promise<ApiThreadSummary[]> {
+  if (leads.length === 0) return [];
+  const byId = new Map(leads.map((l) => [l.id, l.refNumber]));
+
+  const conversations = await prisma.conversation.findMany({
+    where: { leadId: { in: [...byId.keys()] } },
+    include: {
+      company: { select: { name: true, slug: true } },
+      // Newest visible message only — the list shows one line per thread.
+      messages: {
+        where: { hidden: false },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { body: true, sender: true, createdAt: true },
+      },
+    },
+  });
+
+  return conversations
+    .map((c) => {
+      const last = c.messages[0];
+      return {
+        refNumber: byId.get(c.leadId)!,
+        conversationId: c.id,
+        companyName: c.company.name,
+        companySlug: c.company.slug,
+        lastMessageAt: c.lastMessageAt?.getTime() ?? null,
+        lastMessagePreview: last ? last.body.replace(/\s+/g, " ").slice(0, PREVIEW_LENGTH) : null,
+        lastMessageSender: last ? (last.sender as MessageSenderValue) : null,
+        unread: c.customerUnread,
+        closed: c.closed,
+      };
+    })
+    // Most recently active first; threads with no messages yet sit at the end
+    // rather than jumping the queue on their creation time.
+    .sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
 }
 
 /** Provider access check — a thread belongs to exactly one company. */

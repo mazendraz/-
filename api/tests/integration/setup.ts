@@ -43,3 +43,47 @@ if (!LOCAL_HOSTS.has(host) && process.env.ALLOW_REMOTE_TEST_DB !== "1") {
       `Or set ALLOW_REMOTE_TEST_DB=1 to override (NOT recommended against prod).`,
   );
 }
+
+// ── Known-good preconditions ──────────────────────────────────────────────────
+// The suite shares the developer's local database, so it inherits whatever state
+// was left in the admin UI. Maintenance mode is the one that bites: it makes
+// EVERY public write return 503, which surfaced here as eight unrelated chat
+// tests failing with "expected 503 to be 201" — a real afternoon lost to a
+// switch someone flipped in another tab.
+//
+// Forced off for the run and restored afterwards, so a developer who left the
+// site in maintenance finds it exactly as they left it.
+import { afterAll, beforeAll } from "vitest";
+
+// Imported INSIDE the hooks, not at module scope: `import` is hoisted above the
+// dotenv calls above, and constructing the Prisma client reads DATABASE_URL at
+// import time — so a static import here throws "DATABASE_URL is not set" before
+// the env this file exists to load has been applied.
+async function db() {
+  const [{ prisma }, { MAINTENANCE_ENABLED_KEY }] = await Promise.all([
+    import("@/lib/prisma"),
+    import("@/lib/services/settings.service"),
+  ]);
+  return { prisma, key: MAINTENANCE_ENABLED_KEY };
+}
+
+let maintenanceWasOn = false;
+
+beforeAll(async () => {
+  const { prisma, key } = await db();
+  const row = await prisma.appSetting.findUnique({ where: { key } });
+  maintenanceWasOn = row?.value === "true";
+  if (maintenanceWasOn) {
+    await prisma.appSetting.update({ where: { key }, data: { value: "false" } });
+  }
+});
+
+afterAll(async () => {
+  if (!maintenanceWasOn) return;
+  const { prisma, key } = await db();
+  await prisma.appSetting.upsert({
+    where: { key },
+    create: { key, value: "true" },
+    update: { value: "true" },
+  });
+});

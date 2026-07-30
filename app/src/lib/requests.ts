@@ -351,6 +351,18 @@ export function getMyLeads(): Lead[] {
   return getLeads().filter((l) => mineIds.has(l.id));
 }
 
+/**
+ * This device's leads reduced to what the chat endpoints need to prove ownership.
+ *
+ * A customer has no account: the reference number plus its tracking token IS the
+ * credential. Kept here rather than in the chat module because this file owns
+ * what "my requests" means, and the messages list must be exactly that set.
+ */
+export function useMyLeadClaims(): { ref: string; token?: string; phone: string }[] {
+  const mine = useMyLeads();
+  return mine.map((l) => ({ ref: l.refNumber, token: l.trackingToken, phone: l.phone }));
+}
+
 export function useMyLeads(): Lead[] {
   const all = useLeads();
   const [mineIds, setMineIds] = useState<Set<string>>(() => new Set(readMine()));

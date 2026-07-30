@@ -5,10 +5,17 @@ import { sanitizedText, sanitizedOptionalText } from "@/lib/utils/sanitize";
 // PATCH /provider/availability · PATCH /admin/companies/:id/availability.
 // busyUntil is an epoch-ms instant (or null to clear the auto-reopen date). When
 // busy is false the date/note are irrelevant; the service clears busyUntil then.
+//
+// busyNote is NULLABLE, not merely optional. ApiAvailabilityPayload declares it
+// `string | null`, and the client sends an explicit null to mean "no note" — so
+// an `.optional()`-only schema rejected the payload the client actually sends.
+// That is what made the admin list's availability toggle appear inert: every
+// click 400'd on `busyNote` and the row never changed. The service already
+// treats null as "clear it", so only this line was wrong.
 export const availabilitySchema = z.object({
   busy: z.boolean(),
   busyUntil: z.number().int().nonnegative().nullable().optional(),
-  busyNote: sanitizedOptionalText(200).optional(),
+  busyNote: sanitizedOptionalText(200).nullable().optional(),
 });
 export type AvailabilityInput = z.infer<typeof availabilitySchema>;
 

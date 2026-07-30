@@ -1,7 +1,6 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { formatPrice } from "../lib/pricing";
-import ChatThread from "../components/ChatThread";
-import { fetchCustomerThread, sendCustomerMessage, chatAvailable } from "../lib/chat";
+import { chatAvailable } from "../lib/chat";
 import { Link } from "react-router-dom";
 import { useMyLeads, submitReview, type Lead, type LeadStatus } from "../lib/requests";
 import { getCompany } from "../lib/catalog";
@@ -37,9 +36,6 @@ export default function MyRequests() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<LeadStatus | "All">("All");
   const [reviewing, setReviewing] = useState<Lead | null>(null);
-  // One thread open at a time — several polling at once on the same page would
-  // multiply requests for no benefit.
-  const [chatting, setChatting] = useState<Lead | null>(null);
 
   const q = query.trim().toLowerCase();
   const leads = all.filter((l) => {
@@ -192,24 +188,19 @@ export default function MyRequests() {
                     <Detail icon="payments" label={t(locale, "requests_budget")} val={lead.budget} />
                   </div>
 
-                  {/* Conversation with the company — no account needed; the
-                      reference + tracking token is the credential. */}
+                  {/* Conversation with the company. The thread itself lives on
+                      /messages now — keeping a second copy inline meant a reply
+                      was only ever discoverable by expanding each request one at
+                      a time, with nothing polling while they were collapsed. */}
                   {chatAvailable() && (
                     <div className="px-4 pb-1">
-                      <button
-                        onClick={() => setChatting((c) => (c?.id === lead.id ? null : lead))}
-                        className="w-full flex items-center justify-center gap-2 bg-surface-container text-on-surface py-2.5 rounded-xl font-bold text-[13px] hover:bg-surface-container-high transition-colors"
+                      <Link
+                        to={`/messages?ref=${encodeURIComponent(lead.refNumber)}`}
+                        className="w-full flex items-center justify-center gap-2 bg-surface-container text-on-surface py-2.5 rounded-xl font-bold text-[13px] hover:bg-surface-container-high transition-colors touch-press"
                       >
                         <span className="material-symbols-outlined text-[18px]">chat</span>
-                        {chatting?.id === lead.id
-                          ? (locale === "ar" ? "إخفاء المحادثة" : "Hide conversation")
-                          : (locale === "ar" ? "محادثة مع الشركة" : "Message the company")}
-                      </button>
-                      {chatting?.id === lead.id && (
-                        <div className="mt-3 rounded-xl border border-outline-variant/20 p-3">
-                          <LeadChat lead={lead} />
-                        </div>
-                      )}
+                        {t(locale, "messages_open_conversation")}
+                      </Link>
                     </div>
                   )}
 
@@ -264,29 +255,6 @@ export default function MyRequests() {
       )}
     </div>
   );
-}
-
-/**
- * The customer's thread for one request.
- *
- * Its own component so `load`/`send` can be memoized. Inline arrows gave
- * ChatThread a new `load` identity on every render of the parent list, and both
- * its initial-read effect and its poll loop key on that — so any re-render of
- * MyRequests (a filter keystroke, a lead-store event) tore the thread down,
- * re-fetched it from scratch, restarted the poll timer and re-fired markRead.
- * ProviderChat and the admin ChatTab already memoize for exactly this reason.
- */
-function LeadChat({ lead }: { lead: Lead }) {
-  const { refNumber, trackingToken, phone } = lead;
-  const load = useCallback(
-    (after?: number) => fetchCustomerThread({ ref: refNumber, token: trackingToken, phone, after }),
-    [refNumber, trackingToken, phone],
-  );
-  const send = useCallback(
-    (body: string) => sendCustomerMessage({ ref: refNumber, token: trackingToken, phone, body }),
-    [refNumber, trackingToken, phone],
-  );
-  return <ChatThread viewer="customer" className="h-80" load={load} send={send} />;
 }
 
 function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar"; onClose: () => void }) {

@@ -172,8 +172,18 @@ export async function updateLegalPages(patch: Partial<ApiLegalPages>): Promise<A
 // public /api/settings, which is served via okCached() with a 30s/60s/300s cache.
 // Maintenance has to take effect immediately, so it gets its own uncached read
 // (/api/status) and its own admin endpoint (/api/admin/maintenance).
+/**
+ * The AppSetting key holding the maintenance switch.
+ *
+ * Exported so the integration-test bootstrap can force it off for a run: the
+ * suite shares the developer's local database, and a switch left on in the admin
+ * UI makes every public write 503 — which reads as a pile of unrelated test
+ * failures rather than as "the site is in maintenance".
+ */
+export const MAINTENANCE_ENABLED_KEY = "maintenance_enabled";
+
 const MAINTENANCE_KEYS = {
-  enabled: "maintenance_enabled",
+  enabled: MAINTENANCE_ENABLED_KEY,
   title_en: "maintenance_title_en",
   title_ar: "maintenance_title_ar",
   message_en: "maintenance_message_en",

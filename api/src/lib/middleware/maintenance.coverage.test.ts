@@ -25,6 +25,12 @@ const EXEMPT: Record<string, string> = {
   "telegram/webhook/route.ts":
     "Inbound callback from the Telegram Bot API, authenticated by a webhook secret, " +
     "not a user submission. 503ing it makes Telegram retry and eventually disable the webhook.",
+  "chat/summaries/route.ts":
+    "A READ that is POST only because its body carries tracking tokens — the same " +
+    "reason the single-thread endpoint takes its token in a header rather than the " +
+    "query string. It creates and modifies nothing, so it falls under the existing " +
+    "'reads stay open during maintenance' rule; the verb is about keeping secrets " +
+    "out of access logs, not about writing.",
 };
 
 /** Auth-gated prefixes: these are not public, and their dashboards stay usable. */

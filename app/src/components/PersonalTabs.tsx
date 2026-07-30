@@ -1,18 +1,26 @@
 import { Link } from "react-router-dom";
 import { useSaved } from "../hooks/useSaved";
-import { useMyLeads } from "../lib/requests";
+import { useMyLeads, useMyLeadClaims } from "../lib/requests";
+import { useCustomerThreads } from "../lib/chat";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 
-/** Segmented control linking the two personal areas: Saved ↔ Requests. */
-export default function PersonalTabs({ active }: { active: "saved" | "requests" }) {
+export type PersonalTab = "saved" | "requests" | "messages";
+
+/** Segmented control linking the personal areas: Saved ↔ Requests ↔ Messages. */
+export default function PersonalTabs({ active }: { active: PersonalTab }) {
   const { locale } = useLocale();
   const { count: savedCount } = useSaved();
   const requestCount = useMyLeads().length;
+  // Unread replies, not thread count: a number next to "Messages" should mean
+  // "this many are waiting for you", the same as every other badge in the app.
+  const claims = useMyLeadClaims();
+  const { totalUnread } = useCustomerThreads(claims);
 
-  const tabs: { key: "saved" | "requests"; labelKey: StringKey; icon: string; to: string; count: number }[] = [
+  const tabs: { key: PersonalTab; labelKey: StringKey; icon: string; to: string; count: number }[] = [
     { key: "saved", labelKey: "saved_tab", icon: "favorite", to: "/saved", count: savedCount },
     { key: "requests", labelKey: "requests_tab", icon: "receipt_long", to: "/requests", count: requestCount },
+    { key: "messages", labelKey: "messages_tab", icon: "forum", to: "/messages", count: totalUnread },
   ];
 
   return (

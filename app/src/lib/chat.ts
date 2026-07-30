@@ -5,7 +5,7 @@
 // HEADER, never the query string — a thread that polls every few seconds would
 // otherwise write that secret into the access log hundreds of times per
 // conversation.
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetch, apiGet, apiPost, apiPatch, isApiConfigured } from "./api";
 
 export type MessageSender = "CUSTOMER" | "PROVIDER" | "ADMIN";
@@ -66,6 +66,37 @@ export function sendCustomerMessage(params: {
     { method: "POST", body: JSON.stringify({ body: params.body }) },
     leadHeaders(params.token, params.phone),
   );
+}
+
+/** One line per thread, for the messages list. */
+export interface ThreadSummary {
+  refNumber: string;
+  conversationId: string;
+  companyName: string;
+  companySlug: string;
+  lastMessageAt: number | null;
+  lastMessagePreview: string | null;
+  lastMessageSender: MessageSender | null;
+  unread: number;
+  closed: boolean;
+}
+
+export interface LeadClaim {
+  ref: string;
+  token?: string;
+  phone?: string;
+}
+
+/**
+ * Summaries for every thread this browser holds a reference to.
+ *
+ * POST because the body carries a list of tracking tokens — the same reason the
+ * single-thread endpoint takes its token in a header rather than the query
+ * string. One round trip instead of N, and crucially it does NOT mark anything
+ * read, so the unread counts survive being listed.
+ */
+export function fetchCustomerSummaries(claims: LeadClaim[]): Promise<ThreadSummary[]> {
+  return apiPost<ThreadSummary[]>("/chat/summaries", { items: claims });
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -163,4 +194,53 @@ export function pollInterval(lastActivityAt: number, now = Date.now()): number {
 
 export function chatAvailable(): boolean {
   return isApiConfigured();
+}
+
+// ── Customer thread list ─────────────────────────────────────────────────────
+
+export interface CustomerThreadsResult {
+  threads: ThreadSummary[];
+  loading: boolean;
+  /** Translation key, resolved by the caller so it follows the language toggle. */
+  errorKey: "chat_err_load" | null;
+  totalUnread: number;
+  reload: () => void;
+}
+
+/**
+ * Every conversation this device can prove it owns.
+ *
+ * The claims come from the leads in localStorage, so this is exactly the set of
+ * requests submitted from this browser — the same basis "My Requests" uses. A
+ * customer has no account, so there is nothing else to key on.
+ */
+export function useCustomerThreads(claims: LeadClaim[]): CustomerThreadsResult {
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [loading, setLoading] = useState(isApiConfigured() && claims.length > 0);
+  const [errorKey, setErrorKey] = useState<"chat_err_load" | null>(null);
+  const [tick, setTick] = useState(0);
+
+  // Serialized: `claims` is rebuilt on every render of the caller, so depending
+  // on the array itself would refetch in a loop.
+  const claimsKey = JSON.stringify(claims);
+  const reload = useCallback(() => setTick((n) => n + 1), []);
+
+  useEffect(() => {
+    const parsed = JSON.parse(claimsKey) as LeadClaim[];
+    if (!isApiConfigured() || parsed.length === 0) {
+      setThreads([]);
+      setLoading(false);
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    fetchCustomerSummaries(parsed)
+      .then((rows) => { if (alive) { setThreads(rows); setErrorKey(null); } })
+      .catch(() => { if (alive) setErrorKey("chat_err_load"); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [claimsKey, tick]);
+
+  const totalUnread = threads.reduce((sum, t) => sum + t.unread, 0);
+  return { threads, loading, errorKey, totalUnread, reload };
 }

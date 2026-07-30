@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { hashPassword, signToken } from "@/lib/auth";
 
 import { GET as customerGET, POST as customerPOST } from "@/app/api/chat/route";
+import { POST as summariesPOST } from "@/app/api/chat/summaries/route";
 import { GET as providerListGET } from "@/app/api/provider/chat/route";
 import { GET as providerGET, POST as providerPOST } from "@/app/api/provider/chat/[conversationId]/route";
 import { GET as adminGET, POST as adminPOST, PATCH as adminPATCH } from "@/app/api/admin/chat/[conversationId]/route";
@@ -177,6 +178,108 @@ describe("delta polling", () => {
     const bodies = delta.messages.map((m: { body: string }) => m.body);
     expect(bodies).toContain("second");
     expect(bodies).not.toContain("first");
+  });
+});
+
+// The customer's messages list. Every assertion here is about a bug that made
+// the old inline-per-request chat unusable: replies were undiscoverable, and the
+// only way to build a list marked everything read in the process.
+describe("customer thread summaries", () => {
+  const summarise = (items: unknown[]) =>
+    summariesPOST(req({ url: "/api/chat/summaries", method: "POST", body: { items } }));
+
+  it("drops a stale reference without losing the valid ones", async () => {
+    // A browser's storage legitimately goes stale — a request an admin deleted,
+    // or an entry from an older install. One dead reference must not blank out
+    // the customer's whole message list, so it is skipped rather than an error.
+    const res = await summarise([
+      { ref: refNumber, token: trackingToken },
+      { ref: "AA-00000000-XXXX", token: "nope" },
+    ]);
+    expect(res.status).toBe(200);
+    const rows = await res.json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].refNumber).toBe(refNumber);
+    expect(rows[0].companyName).toBeTruthy();
+  });
+
+  it("returns nothing for a real reference with a forged secret", async () => {
+    const rows = await (await summarise([{ ref: refNumber, token: "forged" }])).json();
+    expect(rows).toEqual([]);
+  });
+
+  it("still resolves a reference that also appears with a wrong secret", async () => {
+    // Grouped rather than last-wins: a Map keyed by reference would have kept
+    // the forged entry and thrown the valid one away.
+    const rows = await (await summarise([
+      { ref: refNumber, token: "forged" },
+      { ref: refNumber, token: trackingToken },
+    ])).json();
+    expect(rows).toHaveLength(1);
+  });
+
+  // The reason this endpoint exists at all.
+  it("does NOT mark anything read", async () => {
+    const conversation = await prisma.conversation.findUnique({ where: { leadId } });
+    await prisma.conversation.update({
+      where: { id: conversation!.id }, data: { customerUnread: 4 },
+    });
+
+    const rows = await (await summariesPOST(req({
+      url: "/api/chat/summaries", method: "POST",
+      body: { items: [{ ref: refNumber, token: trackingToken }] },
+    }))).json();
+
+    expect(rows[0].unread).toBe(4);
+    // Building the list must not destroy the state the list is displaying.
+    const after = await prisma.conversation.findUnique({ where: { id: conversation!.id } });
+    expect(after!.customerUnread).toBe(4);
+
+    // ...whereas actually opening the thread does clear it.
+    await customerRead();
+    const opened = await prisma.conversation.findUnique({ where: { id: conversation!.id } });
+    expect(opened!.customerUnread).toBe(0);
+  });
+
+  it("returns an empty list rather than failing when nothing is claimed", async () => {
+    const res = await summariesPOST(req({
+      url: "/api/chat/summaries", method: "POST", body: { items: [] },
+    }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it("rejects a payload that is not a list", async () => {
+    const res = await summariesPOST(req({
+      url: "/api/chat/summaries", method: "POST", body: { items: "all of them" },
+    }));
+    expect(res.status).toBe(400);
+  });
+});
+
+// Polling a thread that has no messages yet sends no `after` cursor, so it is a
+// FULL read every time — and a full read used to write unconditionally. An idle
+// open chat was issuing one UPDATE every 8 seconds to set a zero to zero.
+describe("read-marking does not write when there is nothing to clear", () => {
+  it("leaves the row untouched when the counter is already zero", async () => {
+    const conversation = await prisma.conversation.findUnique({ where: { leadId } });
+    await prisma.conversation.update({
+      where: { id: conversation!.id }, data: { customerUnread: 0 },
+    });
+
+    const version = async () => {
+      const [row] = await prisma.$queryRaw<{ xmin: string }[]>`
+        SELECT xmin::text FROM "Conversation" WHERE id = ${conversation!.id}
+      `;
+      return row.xmin;
+    };
+
+    const before = await version();
+    await customerRead();
+    await customerRead();
+    await customerRead();
+    // Same row version = Postgres never rewrote the tuple.
+    expect(await version()).toBe(before);
   });
 });
 
