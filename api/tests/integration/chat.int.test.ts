@@ -208,6 +208,31 @@ describe("customer thread summaries", () => {
     expect(rows).toEqual([]);
   });
 
+  // The regression this whole endpoint used to have: it queried Conversation,
+  // and a Conversation row is only created the first time someone opens the
+  // thread (getOrCreateConversation). A customer's own request, submitted
+  // moments ago and never opened by either side, has no such row — so it
+  // silently disappeared from their own message list, with nothing to click to
+  // start the conversation the feature exists for.
+  it("lists a request that has never been opened, with no conversation row yet", async () => {
+    const freshRef = `AA-${tag}-fresh`;
+    const freshToken = `tok-${tag}-fresh`;
+    await prisma.lead.create({
+      data: {
+        refNumber: freshRef, trackingToken: freshToken, companyId,
+        service: "s", customerName: "Never Opened", phone: "01000000000",
+        district: "R7", budget: "b", description: "d",
+      },
+    });
+
+    const rows = await (await summarise([{ ref: freshRef, token: freshToken }])).json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].conversationId).toBeNull();
+    expect(rows[0].companyName).toBeTruthy(); // from the lead's company, not the (absent) conversation
+    expect(rows[0].lastMessagePreview).toBeNull();
+    expect(rows[0].unread).toBe(0);
+  });
+
   it("still resolves a reference that also appears with a wrong secret", async () => {
     // Grouped rather than last-wins: a Map keyed by reference would have kept
     // the forged entry and thrown the valid one away.

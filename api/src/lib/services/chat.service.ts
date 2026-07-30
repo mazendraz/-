@@ -296,7 +296,8 @@ export async function markRead(conversationId: string, viewer: Viewer): Promise<
 
 export interface ApiThreadSummary {
   refNumber: string;
-  conversationId: string;
+  /** Null until someone actually opens the thread — see getSummaries. */
+  conversationId: string | null;
   companyName: string;
   companySlug: string;
   lastMessageAt: number | null;
@@ -318,41 +319,62 @@ const PREVIEW_LENGTH = 120;
  * unread badge before the customer had seen a single message — the list would
  * destroy the very state it is trying to display.
  *
+ * ── Every LEAD gets a row, not every Conversation ────────────────────────────
+ * A Conversation is created lazily, the first time anyone opens the thread (see
+ * getOrCreateConversation) — a request nobody has messaged about yet has no row
+ * in that table at all. Building this list by querying Conversation therefore
+ * made a customer's OWN, freshly-submitted request disappear from their message
+ * list entirely, with nothing to click to start the conversation the feature
+ * exists for. The lead is the source of truth for "this is one of mine"; the
+ * conversation, when one exists, only adds what has been said so far.
+ *
  * Caller has already verified each lead belongs to this customer.
  */
 export async function getSummaries(
-  leads: { id: string; refNumber: string }[],
+  leads: { id: string; refNumber: string; companyId: string }[],
 ): Promise<ApiThreadSummary[]> {
   if (leads.length === 0) return [];
-  const byId = new Map(leads.map((l) => [l.id, l.refNumber]));
 
-  const conversations = await prisma.conversation.findMany({
-    where: { leadId: { in: [...byId.keys()] } },
-    include: {
-      company: { select: { name: true, slug: true } },
+  const [conversations, companies] = await Promise.all([
+    prisma.conversation.findMany({
+      where: { leadId: { in: leads.map((l) => l.id) } },
       // Newest visible message only — the list shows one line per thread.
-      messages: {
-        where: { hidden: false },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-        select: { body: true, sender: true, createdAt: true },
+      include: {
+        messages: {
+          where: { hidden: false },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { body: true, sender: true, createdAt: true },
+        },
       },
-    },
-  });
+    }),
+    // The company name/slug come from the LEAD's company, not the conversation's
+    // — a lead with no conversation yet still has to show who it was sent to.
+    prisma.company.findMany({
+      where: { id: { in: [...new Set(leads.map((l) => l.companyId))] } },
+      select: { id: true, name: true, slug: true },
+    }),
+  ]);
+  const byLeadId = new Map(conversations.map((c) => [c.leadId, c]));
+  const companyById = new Map(companies.map((c) => [c.id, c]));
 
-  return conversations
-    .map((c) => {
-      const last = c.messages[0];
+  return leads
+    .map((lead) => {
+      const c = byLeadId.get(lead.id);
+      const company = companyById.get(lead.companyId);
+      const last = c?.messages[0];
       return {
-        refNumber: byId.get(c.leadId)!,
-        conversationId: c.id,
-        companyName: c.company.name,
-        companySlug: c.company.slug,
-        lastMessageAt: c.lastMessageAt?.getTime() ?? null,
+        refNumber: lead.refNumber,
+        // Null tells the client no thread exists yet — it opens on first send,
+        // same as every other lazily-created conversation in this feature.
+        conversationId: c?.id ?? null,
+        companyName: company?.name ?? "",
+        companySlug: company?.slug ?? "",
+        lastMessageAt: c?.lastMessageAt?.getTime() ?? null,
         lastMessagePreview: last ? last.body.replace(/\s+/g, " ").slice(0, PREVIEW_LENGTH) : null,
         lastMessageSender: last ? (last.sender as MessageSenderValue) : null,
-        unread: c.customerUnread,
-        closed: c.closed,
+        unread: c?.customerUnread ?? 0,
+        closed: c?.closed ?? false,
       };
     })
     // Most recently active first; threads with no messages yet sit at the end

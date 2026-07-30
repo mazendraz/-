@@ -71,7 +71,8 @@ export function sendCustomerMessage(params: {
 /** One line per thread, for the messages list. */
 export interface ThreadSummary {
   refNumber: string;
-  conversationId: string;
+  /** Null until the customer or the company sends the first message. */
+  conversationId: string | null;
   companyName: string;
   companySlug: string;
   lastMessageAt: number | null;
