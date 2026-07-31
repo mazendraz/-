@@ -475,6 +475,31 @@ describe("admin moderation", () => {
     expect(noMatch.data).toEqual([]);
   });
 
+  // Postgres sorts NULLs FIRST by default on a DESC column — without an
+  // explicit nulls:"last" on lastMessageAt, a conversation nobody has ever
+  // messaged in floated to the very top of the list, ahead of one with real,
+  // recent activity. That made "sorted by date" look broken to anyone
+  // actually using the list.
+  it("keeps a conversation with recent activity ahead of one nobody has messaged in yet", async () => {
+    const untouched = await prisma.lead.create({
+      data: {
+        refNumber: `AA-${tag}-untouched`, trackingToken: `tok-${tag}-untouched`, companyId,
+        service: "s", customerName: "Never Messaged", phone: "01055555555", district: "R7",
+        budget: "b", description: "d",
+      },
+    });
+    await prisma.conversation.create({ data: { leadId: untouched.id, companyId } });
+
+    const rows = await (await adminListGET(
+      req({ url: `/api/admin/chat?companyId=${companyId}`, token: adminToken }), undefined as never,
+    )).json();
+    const messagedIndex = rows.data.findIndex((c: { id: string }) => c.id === conversationId);
+    const untouchedIndex = rows.data.findIndex((c: { leadId: string }) => c.leadId === untouched.id);
+    expect(messagedIndex).toBeGreaterThanOrEqual(0);
+    expect(untouchedIndex).toBeGreaterThanOrEqual(0);
+    expect(messagedIndex).toBeLessThan(untouchedIndex);
+  });
+
   it("hides a message from the customer and the provider but NOT from admins", async () => {
     await hidePATCH(
       req({ method: "PATCH", body: { hidden: true }, token: adminToken }),

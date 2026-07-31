@@ -206,7 +206,13 @@ export async function getThread(
 export async function listForCompany(companyId: string): Promise<ApiConversation[]> {
   const rows = await prisma.conversation.findMany({
     where: { companyId },
-    orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+    // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
+    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
+    // null) jumped to the very top, ahead of ones with real, recent activity.
+    // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
+    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
+    // null) jumped to the very top, ahead of ones with real, recent activity.
+    orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: MAX_PAGE_SIZE,
     include: {
       lead: { select: { refNumber: true, customerName: true } },
@@ -259,7 +265,13 @@ export async function listAll(query: AdminListQuery): Promise<ApiPage<ApiConvers
     prisma.conversation.count({ where }),
     prisma.conversation.findMany({
       where,
-      orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
+      // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
+    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
+    // null) jumped to the very top, ahead of ones with real, recent activity.
+    // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
+    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
+    // null) jumped to the very top, ahead of ones with real, recent activity.
+    orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
