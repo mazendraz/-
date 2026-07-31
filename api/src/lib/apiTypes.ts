@@ -446,6 +446,19 @@ export interface ApiMaintenanceStatus {
   eta: number | null;
 }
 
+// ── Admin notification preferences ─────────────────────────────────────────────
+
+/**
+ * GET/PUT /api/admin/notification-settings. Admin-only, and deliberately scoped
+ * to chat: leads must always reach an admin, so there is no toggle for those —
+ * only the chat channel (which fires on every customer message, far more often
+ * than a new lead) has a mute switch. Providers get no equivalent — they asked
+ * to keep every notification.
+ */
+export interface ApiAdminNotificationSettings {
+  chatEnabled: boolean;
+}
+
 // ── Audit log (admin-only) ─────────────────────────────────────────────────────
 
 // ── Lead statistics (dashboard aggregates) ─────────────────────────────────────

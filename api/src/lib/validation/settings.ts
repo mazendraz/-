@@ -95,3 +95,13 @@ export const updateMaintenanceSchema = z
   .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
 
 export type UpdateMaintenanceInput = z.infer<typeof updateMaintenanceSchema>;
+
+// PUT /admin/notification-settings — admin's chat-notification mute switch.
+export const updateAdminNotificationSettingsSchema = z
+  .object({ chatEnabled: z.boolean() })
+  .partial()
+  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
+
+export type UpdateAdminNotificationSettingsInput = z.infer<
+  typeof updateAdminNotificationSettingsSchema
+>;

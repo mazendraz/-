@@ -11,6 +11,7 @@ import {
   notifyAdminChatTelegram,
   notifyProviderChatTelegram,
 } from "@/lib/services/telegram.service";
+import { isAdminChatNotifyEnabled } from "@/lib/services/settings.service";
 
 export const MAX_MESSAGE_LENGTH = 2000;
 const DEFAULT_PAGE_SIZE = 20;
@@ -379,6 +380,9 @@ function notifyNewMessage(
   const bodyPreview = preview(body);
 
   runAfterResponse(async () => {
+    // Admins can mute the CHAT channel specifically (see ApiAdminNotificationSettings)
+    // — leads always get through regardless, this toggle only affects this path.
+    const notifyAdmin = sender === "CUSTOMER" && (await isAdminChatNotifyEnabled());
     await Promise.allSettled([
       notifyCompanyProviders(conversation.company.id, {
         title: `رسالة جديدة — ${conversation.lead!.refNumber}`,
@@ -387,7 +391,7 @@ function notifyNewMessage(
         tag: `chat-${conversation.id}`,
       }),
       notifyProviderChatTelegram(conversation.company.telegramChatId, text),
-      ...(sender === "CUSTOMER"
+      ...(notifyAdmin
         ? [
             pushAdmins({
               title: `رسالة جديدة — ${conversation.company.name}`,

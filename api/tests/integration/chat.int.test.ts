@@ -13,6 +13,10 @@ import { GET as adminListGET } from "@/app/api/admin/chat/route";
 import { GET as providerGET, POST as providerPOST } from "@/app/api/provider/chat/[conversationId]/route";
 import { GET as adminGET, POST as adminPOST, PATCH as adminPATCH } from "@/app/api/admin/chat/[conversationId]/route";
 import { PATCH as hidePATCH } from "@/app/api/admin/chat/[conversationId]/messages/[messageId]/route";
+import {
+  ADMIN_CHAT_NOTIFY_KEY,
+  setAdminChatNotifyEnabled,
+} from "@/lib/services/settings.service";
 
 const tag = `chat-${Date.now()}`;
 
@@ -423,6 +427,26 @@ describe("unread counters", () => {
 
     await customerRead();
     expect((await prisma.conversation.findUnique({ where: { leadId } }))!.customerUnread).toBe(0);
+  });
+});
+
+describe("admin chat-notification mute", () => {
+  afterAll(async () => {
+    // Never leave the shared setting muted for whatever runs after this file.
+    await prisma.appSetting.deleteMany({ where: { key: ADMIN_CHAT_NOTIFY_KEY } });
+  });
+
+  // The mute only gates the notification side-channel (push/Telegram to admins);
+  // it must never affect the conversation itself — the message still has to be
+  // written, and the provider still has to hear about it.
+  it("still delivers the message and raises the provider's badge while muted", async () => {
+    await setAdminChatNotifyEnabled(false);
+    const before = await prisma.conversation.findUnique({ where: { leadId } });
+    const res = await customerSend("does this still arrive while admins are muted?");
+    expect(res.status).toBe(201);
+    const after = await prisma.conversation.findUnique({ where: { leadId } });
+    expect(after!.providerUnread).toBeGreaterThan(before!.providerUnread);
+    await setAdminChatNotifyEnabled(true);
   });
 });
 

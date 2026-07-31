@@ -5,6 +5,7 @@
 // fresh deployment is fully functional before an admin touches anything.
 import { prisma } from "@/lib/prisma";
 import type {
+  ApiAdminNotificationSettings,
   ApiEmailTemplates,
   ApiLegalPages,
   ApiMaintenanceStatus,
@@ -281,6 +282,49 @@ export async function updateMaintenanceStatus(
     );
   }
   return getMaintenanceStatus();
+}
+
+// ── Admin notification preferences ──────────────────────────────────────────────
+// Chat only — see ApiAdminNotificationSettings for why leads have no toggle.
+// Own key, not part of PLATFORM_SETTING_KEYS: this is an admin operational
+// preference, not public site config, so it must never ride along in the cached
+// public /api/settings payload.
+export const ADMIN_CHAT_NOTIFY_KEY = "admin_chat_notify_enabled";
+
+/**
+ * Admin: whether chat messages should notify admins (push + Telegram).
+ *
+ * FAIL-SOFT to enabled — same reasoning as isMaintenanceEnabled: a DB hiccup
+ * should never silently go mute on something an admin actually wants to hear
+ * about, and the missing-row case (nobody has ever touched this setting) must
+ * read as "on", since that is the default every admin already had before this
+ * toggle existed.
+ */
+export async function isAdminChatNotifyEnabled(): Promise<boolean> {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: ADMIN_CHAT_NOTIFY_KEY } });
+    return row?.value !== "false";
+  } catch (err) {
+    console.error("[settings] isAdminChatNotifyEnabled failed — assuming enabled:", err);
+    return true;
+  }
+}
+
+/** Admin: the notification-preferences panel's current state. */
+export async function getAdminNotificationSettings(): Promise<ApiAdminNotificationSettings> {
+  return { chatEnabled: await isAdminChatNotifyEnabled() };
+}
+
+/** Admin: flip the chat-notify preference; returns the full settings shape. */
+export async function setAdminChatNotifyEnabled(
+  enabled: boolean,
+): Promise<ApiAdminNotificationSettings> {
+  await prisma.appSetting.upsert({
+    where: { key: ADMIN_CHAT_NOTIFY_KEY },
+    create: { key: ADMIN_CHAT_NOTIFY_KEY, value: String(enabled) },
+    update: { value: String(enabled) },
+  });
+  return getAdminNotificationSettings();
 }
 
 /** Admin: upsert the provided keys (others left unchanged); returns the full set. */

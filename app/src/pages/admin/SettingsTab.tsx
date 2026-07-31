@@ -9,6 +9,7 @@ import {
 } from "../../lib/settings";
 import { isApiConfigured } from "../../lib/api";
 import NotificationToggle from "../../components/NotificationToggle";
+import AdminChatNotifyToggle from "../../components/AdminChatNotifyToggle";
 import { LField } from "./components/ModalShell";
 import { TagField, ImageUpload } from "./components/fields";
 import { ConfirmAction } from "./components/confirm";
@@ -53,6 +54,10 @@ export function SettingsTab({ leadCount }: { leadCount: number }) {
 
       <SettingCard icon="notifications_active" title={t(locale, "admin_set_push_title")} desc={t(locale, "admin_set_push_desc")}>
         <NotificationToggle />
+      </SettingCard>
+
+      <SettingCard icon="forum" title={t(locale, "admin_set_chat_notify_card_title")} desc={t(locale, "admin_set_chat_notify_card_desc")}>
+        <AdminChatNotifyToggle />
       </SettingCard>
 
       {demoMode ? (

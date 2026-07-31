@@ -185,6 +185,25 @@ export function saveMaintenance(patch: Partial<MaintenanceStatus>): Promise<Main
   return apiPut<MaintenanceStatus>("/admin/maintenance", patch);
 }
 
+// ── Admin notification preferences ──────────────────────────────────────────────
+// Chat only — leads always notify (both admin and provider); this is the
+// admin-only mute switch for the far-noisier chat channel. Providers get no
+// equivalent control — they keep every notification.
+export interface AdminNotificationSettings {
+  chatEnabled: boolean;
+}
+
+/** Admin: current chat-notification preference. */
+export function fetchAdminNotificationSettings(): Promise<AdminNotificationSettings> {
+  return apiGet<AdminNotificationSettings>("/admin/notification-settings");
+}
+
+export function saveAdminNotificationSettings(
+  patch: Partial<AdminNotificationSettings>,
+): Promise<AdminNotificationSettings> {
+  return apiPut<AdminNotificationSettings>("/admin/notification-settings", patch);
+}
+
 /**
  * Maintenance state for the public shell.
  *
