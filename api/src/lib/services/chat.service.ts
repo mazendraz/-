@@ -4,12 +4,38 @@ import type { AuthUser } from "@/lib/auth";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/utils/errors";
 import type { ApiPage } from "@/lib/apiTypes";
 import * as audit from "@/lib/services/audit.service";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
+import { notifyCompanyProviders, notifyAdmins as pushAdmins } from "@/lib/services/push.service";
+import {
+  buildChatTelegramMessage,
+  notifyAdminChatTelegram,
+  notifyProviderChatTelegram,
+} from "@/lib/services/telegram.service";
 
 export const MAX_MESSAGE_LENGTH = 2000;
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
 /** Cap on a single fetch — a thread can grow, a response should not. */
 const MAX_MESSAGES = 200;
+/** How much of the newest message a thread-list subtitle carries. */
+const PREVIEW_LENGTH = 120;
+
+function preview(body: string): string {
+  return body.replace(/\s+/g, " ").slice(0, PREVIEW_LENGTH);
+}
+
+/** The single newest VISIBLE message per conversation — a list-row subtitle,
+ *  never the full thread. Hidden (moderated) messages never leak into a
+ *  preview: hiding one from the customer/provider then showing its text as
+ *  the list's subtitle would defeat the point of hiding it. */
+const LAST_MESSAGE_INCLUDE = {
+  messages: {
+    where: { hidden: false },
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: { body: true, sender: true, createdAt: true },
+  },
+} satisfies Record<string, unknown>;
 
 export type MessageSenderValue = "CUSTOMER" | "PROVIDER" | "ADMIN";
 export type Viewer = "customer" | "provider" | "admin";
@@ -32,6 +58,14 @@ export interface ApiConversation {
   companyName?: string;
   customerName?: string;
   lastMessageAt: number | null;
+  /**
+   * First line of the newest visible message — the WhatsApp-style subtitle a
+   * thread list shows instead of just a name and a reference number. Undefined
+   * when the caller didn't ask for it (only the LIST endpoints load it; the
+   * single-thread GET has the real messages array and needs no summary of it).
+   */
+  lastMessagePreview?: string | null;
+  lastMessageSender?: MessageSenderValue | null;
   customerUnread: number;
   providerUnread: number;
   closed: boolean;
@@ -62,9 +96,13 @@ type ConversationRow = {
   closed: boolean; createdAt: Date;
   lead?: { refNumber: string; customerName: string } | null;
   company?: { name: string } | null;
+  // Present only when the caller included LAST_MESSAGE_INCLUDE — the single-
+  // thread GET has no use for it (it already has the real messages array).
+  messages?: { body: string; sender: MessageSenderValue; createdAt: Date }[];
 };
 
 function serializeConversation(c: ConversationRow): ApiConversation {
+  const last = c.messages?.[0];
   return {
     id: c.id,
     leadId: c.leadId,
@@ -72,6 +110,11 @@ function serializeConversation(c: ConversationRow): ApiConversation {
     ...(c.lead ? { refNumber: c.lead.refNumber, customerName: c.lead.customerName } : {}),
     ...(c.company ? { companyName: c.company.name } : {}),
     lastMessageAt: c.lastMessageAt?.getTime() ?? null,
+    // Only emitted when `messages` was actually loaded — an absent field reads
+    // as "not asked for", never as "no message yet" (that case is `null`).
+    ...(c.messages
+      ? { lastMessagePreview: last ? preview(last.body) : null, lastMessageSender: last?.sender ?? null }
+      : {}),
     customerUnread: c.customerUnread,
     providerUnread: c.providerUnread,
     closed: c.closed,
@@ -165,7 +208,11 @@ export async function listForCompany(companyId: string): Promise<ApiConversation
     where: { companyId },
     orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
     take: MAX_PAGE_SIZE,
-    include: { lead: { select: { refNumber: true, customerName: true } }, company: { select: { name: true } } },
+    include: {
+      lead: { select: { refNumber: true, customerName: true } },
+      company: { select: { name: true } },
+      ...LAST_MESSAGE_INCLUDE,
+    },
   });
   return rows.map(serializeConversation);
 }
@@ -215,7 +262,11 @@ export async function listAll(query: AdminListQuery): Promise<ApiPage<ApiConvers
       orderBy: [{ lastMessageAt: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { lead: { select: { refNumber: true, customerName: true } }, company: { select: { name: true } } },
+      include: {
+        lead: { select: { refNumber: true, customerName: true } },
+        company: { select: { name: true } },
+        ...LAST_MESSAGE_INCLUDE,
+      },
     }),
   ]);
   return { data: rows.map(serializeConversation), meta: { total, page, pageSize } };
@@ -243,7 +294,12 @@ export async function postMessage(params: {
 
   const conversation = await prisma.conversation.findUnique({
     where: { id: params.conversationId },
-    select: { id: true, closed: true },
+    select: {
+      id: true,
+      closed: true,
+      company: { select: { id: true, name: true, telegramChatId: true } },
+      lead: { select: { refNumber: true, customerName: true } },
+    },
   });
   if (!conversation) throw new NotFoundError("Conversation");
   if (conversation.closed) {
@@ -272,7 +328,66 @@ export async function postMessage(params: {
     }),
   ]);
 
+  // Debounced (see shouldNotify) so three quick messages read as one alert, not
+  // three. A provider's own reply has nowhere to go — the customer has no
+  // account, so no push subscription and no Telegram link exist for them.
+  if (shouldNotify(params.conversationId)) {
+    notifyNewMessage(conversation, params.sender, body);
+  }
+
   return serializeMessage(message as MessageRow, params.sender === "ADMIN" ? "admin" : "customer");
+}
+
+/**
+ * Push + Telegram for a just-posted message, run after the response is sent
+ * (see runAfterResponse) so a slow or failing channel never delays the send
+ * itself. CUSTOMER → provider + admin (the admin heads-up mirrors the lead
+ * notification pattern); ADMIN stepping in → provider only; PROVIDER → nobody,
+ * since the customer side has no account to hold a subscription or a link.
+ */
+function notifyNewMessage(
+  conversation: {
+    id: string;
+    company: { id: string; name: string; telegramChatId: string | null };
+    lead: { refNumber: string; customerName: string } | null;
+  },
+  sender: MessageSenderValue,
+  body: string,
+): void {
+  if (sender === "PROVIDER" || !conversation.lead) return;
+
+  const senderLabel = sender === "CUSTOMER" ? "العميل" : "الإدارة";
+  const text = buildChatTelegramMessage({
+    refNumber: conversation.lead.refNumber,
+    companyName: conversation.company.name,
+    customerName: conversation.lead.customerName,
+    senderLabel,
+    body,
+  });
+  const bodyPreview = preview(body);
+
+  runAfterResponse(async () => {
+    await Promise.allSettled([
+      notifyCompanyProviders(conversation.company.id, {
+        title: `رسالة جديدة — ${conversation.lead!.refNumber}`,
+        body: bodyPreview,
+        url: "/provider?tab=messages",
+        tag: `chat-${conversation.id}`,
+      }),
+      notifyProviderChatTelegram(conversation.company.telegramChatId, text),
+      ...(sender === "CUSTOMER"
+        ? [
+            pushAdmins({
+              title: `رسالة جديدة — ${conversation.company.name}`,
+              body: bodyPreview,
+              url: "/admin?tab=chat",
+              tag: `chat-${conversation.id}`,
+            }),
+            notifyAdminChatTelegram(text),
+          ]
+        : []),
+    ]);
+  });
 }
 
 /**
@@ -308,9 +423,6 @@ export interface ApiThreadSummary {
   closed: boolean;
 }
 
-/** How much of the newest message the list preview carries. */
-const PREVIEW_LENGTH = 120;
-
 /**
  * Summaries for a customer's own threads, in one round trip.
  *
@@ -339,14 +451,7 @@ export async function getSummaries(
     prisma.conversation.findMany({
       where: { leadId: { in: leads.map((l) => l.id) } },
       // Newest visible message only — the list shows one line per thread.
-      include: {
-        messages: {
-          where: { hidden: false },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { body: true, sender: true, createdAt: true },
-        },
-      },
+      include: LAST_MESSAGE_INCLUDE,
     }),
     // The company name/slug come from the LEAD's company, not the conversation's
     // — a lead with no conversation yet still has to show who it was sent to.
@@ -371,7 +476,7 @@ export async function getSummaries(
         companyName: company?.name ?? "",
         companySlug: company?.slug ?? "",
         lastMessageAt: c?.lastMessageAt?.getTime() ?? null,
-        lastMessagePreview: last ? last.body.replace(/\s+/g, " ").slice(0, PREVIEW_LENGTH) : null,
+        lastMessagePreview: last ? preview(last.body) : null,
         lastMessageSender: last ? (last.sender as MessageSenderValue) : null,
         unread: c?.customerUnread ?? 0,
         closed: c?.closed ?? false,

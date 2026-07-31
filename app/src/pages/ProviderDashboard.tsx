@@ -27,7 +27,12 @@ import AvailabilityControl from "../components/AvailabilityControl";
 import BusyWindowsEditor from "../components/BusyWindowsEditor";
 import ProviderChat from "../components/ProviderChat";
 import WaitlistManager from "../components/WaitlistManager";
-import { setMyAvailability, isBusy, formatReopenDate, availableAgainAt } from "../lib/availability";
+import {
+  setMyAvailability, isBusy, formatReopenDate, availableAgainAt,
+  setWaitlistStatus, deleteWaitlistEntry,
+  WAITLIST_STATUSES, WAITLIST_STATUS_KEYS, WAITLIST_STATUS_COLORS,
+  type WaitlistEntry, type WaitlistStatus,
+} from "../lib/availability";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import { formatDate } from "../lib/format";
@@ -46,6 +51,15 @@ const TAB_CONFIG: { id: ProviderTab; icon: string; labelKey: StringKey }[] = [
   { id: "profile", icon: "business", labelKey: "prov_tab_profile" },
   { id: "settings", icon: "settings", labelKey: "prov_tab_settings" },
 ];
+
+/**
+ * One row in the merged Leads view — a real lead or a waiting-list join that
+ * joined while the company was busy. Tagged so LeadRows can render each with its
+ * own status vocabulary/color while sharing one list and one sort order.
+ */
+type LeadListRow =
+  | { kind: "lead"; data: Lead }
+  | { kind: "waitlist"; data: WaitlistEntry };
 
 export default function ProviderDashboard() {
   const { locale } = useLocale();
@@ -67,12 +81,17 @@ export default function ProviderDashboard() {
   const demoSlug = selectedSlug || allCompanies[0]?.slug || "";
   const demoDetail = useCompanyDetail(apiMode ? "" : demoSlug);
 
-  const [tab, setTab] = useState<ProviderTab>("overview");
+  // `?tab=messages` deep-links a chat push notification straight to the
+  // Messages tab — read once on load, same as `company` above.
+  const [tab, setTab] = useState<ProviderTab>(() => {
+    const requested = params.get("tab");
+    return TAB_CONFIG.some((c) => c.id === requested) ? (requested as ProviderTab) : "overview";
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // List search / filter state
   const [leadQuery, setLeadQuery] = useState("");
-  const [leadStatus, setLeadStatus] = useState<LeadStatus | "All">("All");
+  const [leadStatus, setLeadStatus] = useState<LeadStatus | "All" | "Waitlist">("All");
   const [reviewQuery, setReviewQuery] = useState("");
   const [reviewRating, setReviewRating] = useState(0);
 
@@ -86,14 +105,36 @@ export default function ProviderDashboard() {
   // the in-memory filter further down is the demo-mode (localStorage) path. This
   // hook must run before the `if (!company)` early return below (rules of hooks).
   const leadApiMode = apiMode;
+  // A specific Lead status only ever matches leads (a waitlist join has no Lead
+  // status); "Waitlist" only ever matches waitlist entries — each source is only
+  // fetched when it can actually contribute rows to the current filter.
+  const showLeads = leadStatus !== "Waitlist";
+  const showWaitlist = leadStatus === "All" || leadStatus === "Waitlist";
   const leadSearch = useServerSearch<Lead>(
     "/provider/leads",
     leadQuery,
-    { status: leadStatus === "All" ? undefined : leadStatus },
-    { pageSize: 20, enabled: leadApiMode },
+    { status: showLeads && leadStatus !== "All" ? leadStatus : undefined },
+    { pageSize: 20, enabled: leadApiMode && showLeads },
+  );
+  // The provider's own waiting-list joins — merged into the same Leads tab,
+  // tagged and colored differently (see LeadListRow/LeadRows below). Pagination
+  // stays driven by leadSearch when both are shown together: real volume here is
+  // small (it only accumulates while the company is busy), so a perfectly
+  // unified cross-source sort isn't worth the complexity.
+  const waitlistSearch = useServerSearch<WaitlistEntry>(
+    "/provider/waitlist",
+    leadQuery,
+    {},
+    { pageSize: 20, enabled: leadApiMode && showWaitlist },
   );
   const handleLeadStatus = (id: string, status: LeadStatus) => {
     void updateLeadStatus(id, status).then(() => { if (leadApiMode) leadSearch.refresh(); });
+  };
+  const handleWaitlistStatus = (entry: WaitlistEntry, status: WaitlistStatus) => {
+    void setWaitlistStatus({ kind: "provider" }, entry.id, status).then(() => waitlistSearch.refresh());
+  };
+  const handleWaitlistDelete = (entry: WaitlistEntry) => {
+    void deleteWaitlistEntry({ kind: "provider" }, entry.id).then(() => waitlistSearch.refresh());
   };
 
   // Reviews: server-driven search/pagination over the COMPLETE review history
@@ -165,10 +206,19 @@ export default function ProviderDashboard() {
     const matchQuery = !lq || [l.name, l.phone, l.refNumber, l.service, l.district].some((v) => v.toLowerCase().includes(lq));
     return matchStatus && matchQuery;
   });
-  // Server page in API mode, client-filtered list in demo mode.
+  // Server page in API mode, client-filtered list in demo mode. Demo mode (no
+  // API) has no waitlist data source, so it only ever shows leads.
   const leadList = leadApiMode ? leadSearch.data : filteredLeads;
   const leadTotal = leadApiMode ? leadSearch.total : filteredLeads.length;
+  const waitlistList = leadApiMode ? waitlistSearch.data : [];
+  const waitlistTotal = leadApiMode ? waitlistSearch.total : 0;
 
+  const leadRows: LeadListRow[] = leadList.map((data) => ({ kind: "lead", data }) as const);
+  const waitlistRows: LeadListRow[] = waitlistList.map((data) => ({ kind: "waitlist", data }) as const);
+  const mergedRows: LeadListRow[] = showLeads && showWaitlist
+    ? [...leadRows, ...waitlistRows].sort((a, b) => b.data.createdAt - a.data.createdAt)
+    : showWaitlist ? waitlistRows : leadRows;
+  const displayedTotal = showLeads && showWaitlist ? leadTotal + waitlistTotal : showWaitlist ? waitlistTotal : leadTotal;
 
   const rq = reviewQuery.trim().toLowerCase();
   const filteredReviews = company.reviews.filter((r) => {
@@ -179,7 +229,7 @@ export default function ProviderDashboard() {
   const reviewList = leadApiMode ? reviewSearch.data : filteredReviews;
   const reviewTotal = leadApiMode ? reviewSearch.total : filteredReviews.length;
 
-  const LEAD_FILTERS: (LeadStatus | "All")[] = ["All", "New", "Contacted", "In Progress", "Completed", "Cancelled"];
+  const LEAD_FILTERS: (LeadStatus | "All" | "Waitlist")[] = ["All", "New", "Contacted", "In Progress", "Completed", "Cancelled", "Waitlist"];
 
   return (
     <div className="min-h-screen bg-surface-container flex">
@@ -278,7 +328,12 @@ export default function ProviderDashboard() {
                   // handleLeadStatus, not the raw mutation: it also refreshes the
                   // server-paginated Leads tab, so a status changed here doesn't
                   // leave a stale row behind on the other tab.
-                  <LeadRows leads={leads.slice(0, 5)} onStatusChange={handleLeadStatus} />
+                  <LeadRows
+                    rows={leads.slice(0, 5).map((data) => ({ kind: "lead", data }) as const)}
+                    onLeadStatusChange={handleLeadStatus}
+                    onWaitlistStatusChange={handleWaitlistStatus}
+                    onWaitlistDelete={handleWaitlistDelete}
+                  />
                 )}
               </ChartCard>
             </div>
@@ -294,31 +349,33 @@ export default function ProviderDashboard() {
                     className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-bold transition-colors border ${
                       leadStatus === f ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-outline-variant"
                     }`}>
-                    {f === "All" ? t(locale, "companies_all") : t(locale, LEAD_STATUS_KEYS[f])}
+                    {f === "All" ? t(locale, "companies_all") : f === "Waitlist" ? t(locale, "requests_filter_waitlist") : t(locale, LEAD_STATUS_KEYS[f])}
                   </button>
                 ))}
               </div>
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-[13px] font-bold text-outline">
-                  {leadTotal} {t(locale, leadTotal === 1 ? "prov_noun_lead" : "prov_noun_leads")}
+                  {displayedTotal} {t(locale, displayedTotal === 1 ? "prov_noun_lead" : "prov_noun_leads")}
                 </span>
                 {stats.new > 0 && <span className="bg-blue-100 text-blue-700 text-[12px] font-bold px-2.5 py-1 rounded-full">{stats.new} {t(locale, "prov_leads_new_badge")}</span>}
               </div>
-              {leadApiMode && leadSearch.error && (
-                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{leadSearch.error}</div>
+              {leadApiMode && (leadSearch.error || waitlistSearch.error) && (
+                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{leadSearch.error || waitlistSearch.error}</div>
               )}
               <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
-                {leadList.length === 0 ? (
+                {mergedRows.length === 0 ? (
                   <EmptyState
-                    msg={leadApiMode && leadSearch.loading ? t(locale, "admin_searching") : (lq || leadStatus !== "All") ? t(locale, "prov_leads_no_match") : t(locale, "prov_leads_empty")}
+                    msg={leadApiMode && (leadSearch.loading || waitlistSearch.loading) ? t(locale, "admin_searching") : (lq || leadStatus !== "All") ? t(locale, "prov_leads_no_match") : t(locale, "prov_leads_empty")}
                     icon={(lq || leadStatus !== "All") ? "search_off" : "inbox"}
                   />
                 ) : (
-                  <LeadRows leads={leadList} onStatusChange={handleLeadStatus} />
+                  <LeadRows rows={mergedRows} onLeadStatusChange={handleLeadStatus} onWaitlistStatusChange={handleWaitlistStatus} onWaitlistDelete={handleWaitlistDelete} />
                 )}
               </div>
               {leadApiMode && (
-                <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} noun={t(locale, "prov_noun_lead")} nounPlural={t(locale, "prov_noun_leads")} />
+                showWaitlist && !showLeads
+                  ? <Pagination page={waitlistSearch.page} pageCount={waitlistSearch.pageCount} total={waitlistSearch.total} pageSize={waitlistSearch.pageSize} onPage={waitlistSearch.setPage} noun={t(locale, "prov_noun_lead")} nounPlural={t(locale, "prov_noun_leads")} />
+                  : <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} noun={t(locale, "prov_noun_lead")} nounPlural={t(locale, "prov_noun_leads")} />
               )}
             </div>
           )}
@@ -551,32 +608,70 @@ export default function ProviderDashboard() {
 }
 
 // ─── Shared components ────────────────────────────────────────────────────────
-function LeadRows({ leads, onStatusChange }: { leads: Lead[]; onStatusChange: (id: string, s: LeadStatus) => void }) {
+function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusChange, onWaitlistDelete }: {
+  rows: LeadListRow[];
+  onLeadStatusChange: (id: string, s: LeadStatus) => void;
+  onWaitlistStatusChange: (entry: WaitlistEntry, s: WaitlistStatus) => void;
+  onWaitlistDelete: (entry: WaitlistEntry) => void;
+}) {
   const { locale } = useLocale();
   return (
     <div className="divide-y divide-outline-variant/10">
-      {leads.map((l) => (
-        <div key={l.id} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
+      {rows.map((row) => row.kind === "waitlist" ? (
+        <div key={`w-${row.data.id}`} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
           <div className="flex-grow min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
-              <span className="font-mono text-label-sm text-primary">{l.refNumber}</span>
-              <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${STATUS_COLORS[l.status]}`}>{t(locale, LEAD_STATUS_KEYS[l.status])}</span>
+              <span className="flex items-center gap-1 text-label-sm font-bold text-amber-700">
+                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
+                {t(locale, "common_kind_waitlist")}
+              </span>
+              <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[row.data.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[row.data.status])}</span>
             </div>
-            <p className="font-label-md text-label-md text-on-surface">{l.name} — {l.phone}</p>
-            <p className="text-label-sm font-label-sm text-outline">{l.service} · {l.district} · {l.budget}</p>
-            {l.description && (
-              <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{l.description}</p>
+            <p className="font-label-md text-label-md text-on-surface">{row.data.name} — {row.data.phone}</p>
+            <p className="text-label-sm font-label-sm text-outline">{row.data.service ?? ""}</p>
+            {row.data.note && (
+              <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{row.data.note}</p>
+            )}
+          </div>
+          <div className="flex flex-col items-end gap-2 flex-shrink-0">
+            <div className="flex items-center gap-1.5">
+              <select
+                value={row.data.status}
+                onChange={(e) => onWaitlistStatusChange(row.data, e.target.value as WaitlistStatus)}
+                className="border border-outline-variant rounded-lg px-2.5 py-1 text-label-sm text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
+              >
+                {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
+              </select>
+              <button onClick={() => onWaitlistDelete(row.data)} title={t(locale, "prov_wl_remove")}
+                className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors">
+                <span className="material-symbols-outlined text-[18px]">delete</span>
+              </button>
+            </div>
+            <span className="text-label-sm font-label-sm text-outline">{formatDate(row.data.createdAt, locale)}</span>
+          </div>
+        </div>
+      ) : (
+        <div key={`l-${row.data.id}`} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
+          <div className="flex-grow min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <span className="font-mono text-label-sm text-primary">{row.data.refNumber}</span>
+              <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${STATUS_COLORS[row.data.status]}`}>{t(locale, LEAD_STATUS_KEYS[row.data.status])}</span>
+            </div>
+            <p className="font-label-md text-label-md text-on-surface">{row.data.name} — {row.data.phone}</p>
+            <p className="text-label-sm font-label-sm text-outline">{row.data.service} · {row.data.district} · {row.data.budget}</p>
+            {row.data.description && (
+              <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{row.data.description}</p>
             )}
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
             <select
-              value={l.status}
-              onChange={(e) => onStatusChange(l.id, e.target.value as LeadStatus)}
+              value={row.data.status}
+              onChange={(e) => onLeadStatusChange(row.data.id, e.target.value as LeadStatus)}
               className="border border-outline-variant rounded-lg px-2.5 py-1 text-label-sm text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
             >
               {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
             </select>
-            <span className="text-label-sm font-label-sm text-outline">{formatDate(l.createdAt, locale)}</span>
+            <span className="text-label-sm font-label-sm text-outline">{formatDate(row.data.createdAt, locale)}</span>
           </div>
         </div>
       ))}

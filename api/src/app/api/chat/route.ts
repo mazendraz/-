@@ -56,12 +56,5 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
     body,
   });
 
-  // Notifying the provider is deliberately debounced: three quick messages are
-  // one thought, not three alerts.
-  if (chat.shouldNotify(conversation.id)) {
-    // Wired to notifications.service when provider push/telegram for chat is
-    // switched on; the debounce gate belongs here either way.
-  }
-
   return ok(message, 201, { "Cache-Control": "no-store" });
 }));

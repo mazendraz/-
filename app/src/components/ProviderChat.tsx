@@ -6,8 +6,8 @@ import {
 import { isApiConfigured } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
-import { intlLocale } from "../lib/format";
 import ChatThread from "./ChatThread";
+import ConversationListItem from "./ConversationListItem";
 
 /**
  * The provider's Messages tab: thread list on the left, conversation on the
@@ -87,32 +87,19 @@ export default function ProviderChat() {
           ) : (
             <div className="divide-y divide-outline-variant/15 max-h-[30rem] overflow-y-auto">
               {items.map((c) => (
-                <button
+                <ConversationListItem
                   key={c.id}
+                  primary={c.customerName ?? c.refNumber ?? ""}
+                  refNumber={c.refNumber ?? ""}
+                  lastMessagePreview={c.lastMessagePreview ?? null}
+                  lastMessageSender={c.lastMessageSender ?? null}
+                  viewer="provider"
+                  lastMessageAt={c.lastMessageAt}
+                  unread={c.providerUnread}
+                  closed={c.closed}
+                  active={activeId === c.id}
                   onClick={() => setActiveId(c.id)}
-                  className={`w-full text-start px-4 py-3 transition-colors ${
-                    activeId === c.id ? "bg-primary/8" : "hover:bg-surface-container/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-[13.5px] text-on-surface truncate">
-                      {c.customerName ?? c.refNumber}
-                    </span>
-                    {c.providerUnread > 0 && (
-                      <span className="bg-error text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0">
-                        {c.providerUnread}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-outline font-mono truncate">{c.refNumber}</p>
-                  {c.lastMessageAt && (
-                    <p className="text-[11px] text-outline">
-                      {new Date(c.lastMessageAt).toLocaleString(intlLocale(locale), {
-                        month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                      })}
-                    </p>
-                  )}
-                </button>
+                />
               ))}
             </div>
           )}

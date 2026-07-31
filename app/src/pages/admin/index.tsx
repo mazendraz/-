@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   useLeads, updateLeadStatus, deleteLead,
   type Lead, type LeadStatus, LEAD_STATUSES, LEAD_STATUS_KEYS,
@@ -48,7 +48,15 @@ export default function AdminDashboard() {
   const unreadFeedback = useUnreadFeedbackCount();
   const pendingChanges = usePendingChangeCount();
   const unreadChats = useUnreadChatCount();
-  const [tab, setTab] = useState<AdminTab>("overview");
+  // `?tab=chat` deep-links a chat push notification straight to the
+  // Conversations tab — read once on load; after that `tab` is state the
+  // sidebar owns, so a stale link in the address bar never fights a manual
+  // tab switch.
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<AdminTab>(() => {
+    const requested = params.get("tab");
+    return NAV.some((n) => n.id === requested) ? (requested as AdminTab) : "overview";
+  });
   const [drawerOpen, setDrawerOpen] = useState(false);
   // When set, the Team tab auto-opens a new-user editor with this company linked.
   const [teamPrefillCompany, setTeamPrefillCompany] = useState<string | null>(null);

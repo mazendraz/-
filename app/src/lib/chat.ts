@@ -28,6 +28,10 @@ export interface Conversation {
   companyName?: string;
   customerName?: string;
   lastMessageAt: number | null;
+  /** Present on LIST payloads only (admin/provider/customer) — undefined on
+   *  the single-thread GET, which has the real messages array instead. */
+  lastMessagePreview?: string | null;
+  lastMessageSender?: MessageSender | null;
   customerUnread: number;
   providerUnread: number;
   closed: boolean;

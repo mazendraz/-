@@ -4,8 +4,10 @@ import {
   setMessageHidden, setConversationClosed, type Conversation,
 } from "../../lib/chat";
 import { isApiConfigured } from "../../lib/api";
+import { useCompanies } from "../../lib/catalog";
 import SearchInput from "../../components/SearchInput";
 import ChatThread from "../../components/ChatThread";
+import ConversationListItem from "../../components/ConversationListItem";
 import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
@@ -21,6 +23,11 @@ import { t, type StringKey } from "../../lib/i18n";
 export function ChatTab() {
   const { locale } = useLocale();
   const [query, setQuery] = useState("");
+  // "" = every company. The server already supports this filter (it existed
+  // for the unread-count badge); the only gap was that nothing in the UI let an
+  // admin narrow the list to one company themselves.
+  const [companyId, setCompanyId] = useState("");
+  const companies = useCompanies();
   const [items, setItems] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,13 +41,13 @@ export function ChatTab() {
   const load = useCallback(() => {
     if (!isApiConfigured()) { setLoading(false); return; }
     setLoading(true);
-    listAdminConversations({ q: query.trim() || undefined })
+    listAdminConversations({ q: query.trim() || undefined, companyId: companyId || undefined })
       .then((p) => { setItems(p.data); setError(null); })
       .catch((e) => setError(
         e instanceof Error ? { text: e.message } : { key: "admin_chat_load_error" },
       ))
       .finally(() => setLoading(false));
-  }, [query]);
+  }, [query, companyId]);
 
   useEffect(() => {
     const id = setTimeout(load, query ? 300 : 0); // debounce typing
@@ -86,9 +93,26 @@ export function ChatTab() {
     );
   }
 
+  const hasFilter = query.trim().length > 0 || companyId.length > 0;
+
   return (
     <div className="space-y-4">
-      <SearchInput value={query} onChange={setQuery} placeholder={t(locale, "admin_chat_search")} />
+      <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex-1">
+          <SearchInput value={query} onChange={setQuery} placeholder={t(locale, "admin_chat_search")} />
+        </div>
+        <select
+          value={companyId}
+          onChange={(e) => setCompanyId(e.target.value)}
+          className="field-input !w-auto !py-2 sm:!min-w-[12rem]"
+          aria-label={t(locale, "admin_chat_filter_company")}
+        >
+          <option value="">{t(locale, "admin_chat_filter_all_companies")}</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
 
       {errorText && (
         <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{errorText}</div>
@@ -101,28 +125,27 @@ export function ChatTab() {
               <div className="w-6 h-6 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
             </div>
           ) : items.length === 0 ? (
-            <EmptyState msg={t(locale, "admin_chat_none")} icon="forum" />
+            <EmptyState msg={t(locale, hasFilter ? "admin_chat_none_filtered" : "admin_chat_none")} icon="forum" />
           ) : (
             <div className="divide-y divide-outline-variant/15 max-h-[32rem] overflow-y-auto">
               {items.map((c) => (
-                <button
+                <ConversationListItem
                   key={c.id}
+                  primary={c.customerName ?? c.refNumber ?? ""}
+                  secondary={c.companyName}
+                  refNumber={c.refNumber ?? ""}
+                  lastMessagePreview={c.lastMessagePreview ?? null}
+                  lastMessageSender={c.lastMessageSender ?? null}
+                  viewer="admin"
+                  lastMessageAt={c.lastMessageAt}
+                  // A customer waiting on a reply is the one signal an admin
+                  // browsing every company's chat actually wants highlighted —
+                  // admins have no unread counter of their own (see markRead).
+                  unread={c.providerUnread}
+                  closed={c.closed}
+                  active={active?.id === c.id}
                   onClick={() => setActive(c)}
-                  className={`w-full text-left px-4 py-3 transition-colors ${
-                    active?.id === c.id ? "bg-primary/8" : "hover:bg-surface-container/50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-[13.5px] text-on-surface truncate">{c.companyName}</span>
-                    {c.closed && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-surface-container text-outline flex-shrink-0">
-                        {t(locale, "admin_chat_closed")}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[12px] text-outline truncate">{c.customerName}</p>
-                  <p className="text-[11px] text-outline font-mono truncate">{c.refNumber}</p>
-                </button>
+                />
               ))}
             </div>
           )}

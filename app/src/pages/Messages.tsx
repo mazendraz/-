@@ -6,11 +6,11 @@ import {
 } from "../lib/chat";
 import { useMyLeads, useMyLeadClaims, type Lead } from "../lib/requests";
 import ChatThread from "../components/ChatThread";
+import ConversationListItem from "../components/ConversationListItem";
 import PersonalTabs from "../components/PersonalTabs";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
-import { intlLocale } from "../lib/format";
 
 /**
  * The customer's conversations, all in one place.
@@ -144,7 +144,7 @@ export default function Messages() {
               <div className="w-6 h-6 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
             </div>
           ) : (
-            <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} locale={locale} />
+            <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} />
           )}
         </div>
 
@@ -252,7 +252,7 @@ export default function Messages() {
 
       <div className="grid grid-cols-1 md:grid-cols-[18rem_1fr] gap-4">
         <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
-          <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} locale={locale} />
+          <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} />
         </div>
         <div className="hidden md:flex bg-surface-container-lowest rounded-2xl shadow-bloom p-4 items-center justify-center h-[26rem]">
           <p className="text-[13px] text-outline">{t(locale, "messages_pick")}</p>
@@ -263,57 +263,29 @@ export default function Messages() {
 }
 
 /** The thread list, shared by the "a conversation is open" and "browsing" layouts. */
-function ThreadList({ threads, activeRef, onOpen, unreadOf, locale }: {
+function ThreadList({ threads, activeRef, onOpen, unreadOf }: {
   threads: ThreadSummary[];
   activeRef: string | null;
   onOpen: (ref: string) => void;
   unreadOf: (th: ThreadSummary) => number;
-  locale: "en" | "ar";
 }) {
   return (
     <div className="divide-y divide-outline-variant/15 max-h-[32rem] overflow-y-auto">
-      {threads.map((th) => {
-        const unread = unreadOf(th);
-        const isActive = th.refNumber === activeRef;
-        return (
-          <button
-            key={th.refNumber}
-            onClick={() => onOpen(th.refNumber)}
-            className={`w-full text-start px-4 py-3 transition-colors touch-press ${
-              isActive ? "bg-primary/8" : "hover:bg-surface-container/50"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className={`text-[13.5px] truncate ${unread > 0 ? "font-black text-on-surface" : "font-bold text-on-surface"}`}>
-                {th.companyName}
-              </span>
-              {unread > 0 && (
-                <span className="bg-primary text-on-primary text-[10px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center flex-shrink-0">
-                  {unread}
-                </span>
-              )}
-            </div>
-            {th.lastMessagePreview ? (
-              <p className={`text-[12px] truncate mt-0.5 ${unread > 0 ? "text-on-surface-variant font-medium" : "text-outline"}`}>
-                {th.lastMessageSender === "CUSTOMER" && `${t(locale, "messages_you_prefix")} `}
-                {th.lastMessagePreview}
-              </p>
-            ) : (
-              <p className="text-[12px] text-outline mt-0.5 italic">{t(locale, "messages_no_messages_yet")}</p>
-            )}
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[11px] text-outline font-mono truncate">{th.refNumber}</span>
-              {th.lastMessageAt && (
-                <span className="text-[11px] text-outline ms-auto flex-shrink-0">
-                  {new Date(th.lastMessageAt).toLocaleString(intlLocale(locale), {
-                    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-                  })}
-                </span>
-              )}
-            </div>
-          </button>
-        );
-      })}
+      {threads.map((th) => (
+        <ConversationListItem
+          key={th.refNumber}
+          primary={th.companyName}
+          refNumber={th.refNumber}
+          lastMessagePreview={th.lastMessagePreview}
+          lastMessageSender={th.lastMessageSender}
+          viewer="customer"
+          lastMessageAt={th.lastMessageAt}
+          unread={unreadOf(th)}
+          closed={th.closed}
+          active={th.refNumber === activeRef}
+          onClick={() => onOpen(th.refNumber)}
+        />
+      ))}
     </div>
   );
 }

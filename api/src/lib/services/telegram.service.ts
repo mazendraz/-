@@ -131,6 +131,55 @@ export async function notifyProviderTelegram(
   }
 }
 
+/**
+ * Build the Telegram message body for a new chat message (HTML parse mode).
+ * Same builder for both the provider and the admin recipient — the admin's
+ * copy just needs the company name to know which conversation it was, which
+ * is already part of the text.
+ */
+export function buildChatTelegramMessage(params: {
+  refNumber: string;
+  companyName: string;
+  customerName: string;
+  senderLabel: string;
+  body: string;
+}): string {
+  const e = escapeHtml;
+  return (
+    `💬 <b>رسالة جديدة من ${e(params.senderLabel)}</b>\n\n` +
+    `📄 الطلب: <b>${e(params.refNumber)}</b> — ${e(params.companyName)}\n` +
+    `👤 العميل: ${e(params.customerName)}\n\n` +
+    `${e(params.body)}`
+  );
+}
+
+/** Notify the owner/admin chat of a new chat message. Never throws. */
+export async function notifyAdminChatTelegram(text: string): Promise<boolean> {
+  try {
+    if (!isTelegramConfigured()) return false;
+    const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+    if (!chatId) return false;
+    return await sendViaTelegram(chatId, text);
+  } catch (err) {
+    console.error("[telegram] admin chat send failed:", err);
+    return false;
+  }
+}
+
+/** Notify a provider's linked chat of a new chat message. Never throws. */
+export async function notifyProviderChatTelegram(
+  chatId: string | null | undefined,
+  text: string,
+): Promise<boolean> {
+  try {
+    if (!isTelegramConfigured() || !chatId) return false;
+    return await sendViaTelegram(chatId, text);
+  } catch (err) {
+    console.error("[telegram] provider chat send failed:", err);
+    return false;
+  }
+}
+
 // ── Provider self-linking via the bot (webhook) ──────────────────────────────────
 // Bots can't message a user first, so the provider must always make the first move.
 // There are two ways in, and the first is strongly preferred:

@@ -9,6 +9,7 @@ import { hashPassword, signToken } from "@/lib/auth";
 import { GET as customerGET, POST as customerPOST } from "@/app/api/chat/route";
 import { POST as summariesPOST } from "@/app/api/chat/summaries/route";
 import { GET as providerListGET } from "@/app/api/provider/chat/route";
+import { GET as adminListGET } from "@/app/api/admin/chat/route";
 import { GET as providerGET, POST as providerPOST } from "@/app/api/provider/chat/[conversationId]/route";
 import { GET as adminGET, POST as adminPOST, PATCH as adminPATCH } from "@/app/api/admin/chat/[conversationId]/route";
 import { PATCH as hidePATCH } from "@/app/api/admin/chat/[conversationId]/messages/[messageId]/route";
@@ -388,6 +389,15 @@ describe("provider access", () => {
     const rows = await res.json();
     expect(rows.every((c: { companyId: string }) => c.companyId === companyId)).toBe(true);
   });
+
+  // WhatsApp-style dashboards: the list has to show what was actually said, not
+  // just a name and a reference number — that requires the newest message.
+  it("carries a preview of the newest message, not just conversation metadata", async () => {
+    const rows = await (await providerListGET(req({ token: providerToken }), undefined as never)).json();
+    const row = rows.find((c: { id: string }) => c.id === conversationId);
+    expect(row.lastMessagePreview).toBe("We can start Sunday.");
+    expect(row.lastMessageSender).toBe("PROVIDER");
+  });
 });
 
 describe("unread counters", () => {
@@ -433,6 +443,36 @@ describe("admin moderation", () => {
     );
     expect(res.status).toBe(201);
     expect((await res.json()).sender).toBe("ADMIN");
+  });
+
+  // The admin list — the same one the "which company / which customer" filter
+  // and search live on — carries the newest message, is scoped by company, and
+  // is searchable by the customer's name. All three matter for the same reason:
+  // an admin overseeing every company's chat needs to narrow down to one company
+  // or one customer without opening threads one at a time.
+  it("lists with a message preview, filterable by company, searchable by customer name", async () => {
+    const byCompany = await (await adminListGET(
+      req({ url: `/api/admin/chat?companyId=${companyId}`, token: adminToken }), undefined as never,
+    )).json();
+    const row = byCompany.data.find((c: { id: string }) => c.id === conversationId);
+    expect(row).toBeDefined();
+    expect(row.lastMessagePreview).toBe("Al Assema here — following up.");
+    expect(row.lastMessageSender).toBe("ADMIN");
+    // A company with no conversations at all must return none, not everyone's.
+    const otherCompanyRows = await (await adminListGET(
+      req({ url: `/api/admin/chat?companyId=${otherCompanyId}`, token: adminToken }), undefined as never,
+    )).json();
+    expect(otherCompanyRows.data).toEqual([]);
+
+    const bySearch = await (await adminListGET(
+      req({ url: "/api/admin/chat?q=Customer%20One", token: adminToken }), undefined as never,
+    )).json();
+    expect(bySearch.data.some((c: { id: string }) => c.id === conversationId)).toBe(true);
+
+    const noMatch = await (await adminListGET(
+      req({ url: "/api/admin/chat?q=NoSuchCustomerAtAll", token: adminToken }), undefined as never,
+    )).json();
+    expect(noMatch.data).toEqual([]);
   });
 
   it("hides a message from the customer and the provider but NOT from admins", async () => {
