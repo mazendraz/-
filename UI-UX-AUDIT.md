@@ -136,7 +136,7 @@ Snapshot taken at the end of the remediation work (Phases 0-6), before the closi
 
 **Totals:** 140 closed, 39 partial, 86 open (of 265 distinct IDs/cross-references tracked here).
 
-Commit reference: the closing commit for this remediation is the one produced by `npm run ship -- "chore: close UI/UX audit — final verification report"`. Check `git log --oneline -1 -- UI-UX-AUDIT.md` for its hash — this document cannot self-reference a hash that did not exist until it was committed.
+Commit reference: the closing commit for this remediation is **`23e1311`** — "chore: close UI/UX audit — final verification report".
 
 
 **§3 نظام التصميم (DS)**
