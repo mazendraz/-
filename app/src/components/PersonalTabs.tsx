@@ -24,20 +24,24 @@ export default function PersonalTabs({ active }: { active: PersonalTab }) {
   ];
 
   return (
-    <div className="inline-flex bg-surface-container rounded-2xl p-1 mb-7">
+    // CMP-10: this switches between routes, not panels of one page — a real
+    // `<nav>` with `aria-current="page"` is the correct pattern here, not the
+    // ARIA tabs pattern (which is for `role="tablist"`/`"tabpanel"` pairs).
+    <nav aria-label={t(locale, "personal_nav_label")} className="flex max-w-full overflow-x-auto scrollbar-hide bg-surface-container rounded-2xl p-1 mb-7">
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         return (
           <Link
             key={tab.key}
             to={tab.to}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold transition-colors
+            aria-current={isActive ? "page" : undefined}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-label font-bold whitespace-nowrap transition-colors
               ${isActive ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}
           >
-            <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}>{tab.icon}</span>
+            <span className="material-symbols-outlined text-body" style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }} aria-hidden="true" translate="no">{tab.icon}</span>
             {t(locale, tab.labelKey)}
             {tab.count > 0 && (
-              <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-black flex items-center justify-center
+              <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-caption font-black flex items-center justify-center
                 ${isActive ? "bg-primary text-on-primary" : "bg-surface-container-high text-outline"}`}>
                 {tab.count}
               </span>
@@ -45,6 +49,6 @@ export default function PersonalTabs({ active }: { active: PersonalTab }) {
           </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }

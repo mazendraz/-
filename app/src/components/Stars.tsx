@@ -1,4 +1,6 @@
-export default function Stars({ n, size = "text-[16px]", className = "" }: {
+import Icon from "./Icon";
+
+export default function Stars({ n, size = "text-body", className = "" }: {
   n: number;
   size?: string;
   className?: string;
@@ -6,13 +8,12 @@ export default function Stars({ n, size = "text-[16px]", className = "" }: {
   return (
     <span className={`flex items-center gap-0.5 ${className}`}>
       {[1, 2, 3, 4, 5].map((i) => (
-        <span
+        <Icon
           key={i}
-          className={`material-symbols-outlined ${size} text-secondary`}
+          name="star"
+          className={`${size} text-secondary`}
           style={{ fontVariationSettings: i <= n ? "'FILL' 1" : "'FILL' 0" }}
-        >
-          star
-        </span>
+        />
       ))}
     </span>
   );

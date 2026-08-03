@@ -1,13 +1,15 @@
 // Telegram notifications on new leads (via the Bot API — no SDK, free). Sends an
-// instant chat message to the owner/admin chat, and — when a provider has linked
-// their Telegram — to that provider too. Designed to FAIL OPEN like the email /
-// push paths (see notifications.service / push.service): a missing bot token, a
-// missing chat id, or a send error never throws — lead creation must never break
-// or block because of notifications.
+// instant chat message to every subscribed admin, and — when a provider has
+// linked their Telegram — to that provider too. Designed to FAIL OPEN like the
+// email / push paths (see notifications.service / push.service): a missing bot
+// token, a missing chat id, or a send error never throws — lead creation must
+// never break or block because of notifications.
 //
-// Setup: create a bot with @BotFather to get TELEGRAM_BOT_TOKEN, then have each
-// recipient open the bot and press Start; their numeric chat id goes in
-// TELEGRAM_ADMIN_CHAT_ID (owner) or Company.telegramChatId (provider).
+// Setup: create a bot with @BotFather to get TELEGRAM_BOT_TOKEN + TELEGRAM_BOT_USERNAME.
+// Admins self-link from the dashboard's "Connect Telegram" button (User.telegramChatId,
+// createAdminLinkUrl/linkAdminByToken below) — the same deep-link mechanism as a
+// provider's Company.telegramChatId. TELEGRAM_ADMIN_CHAT_ID is a legacy static
+// fallback chat id from before self-linking existed; still honored if set.
 import type { ApiLead } from "@/lib/apiTypes";
 import { prisma } from "@/lib/prisma";
 import { phoneTail } from "@/lib/utils/phone";
@@ -84,8 +86,31 @@ async function sendViaTelegram(
 }
 
 /**
- * Notify the owner/admin of a new lead over Telegram, to TELEGRAM_ADMIN_CHAT_ID.
- * Never throws. Returns true if dispatched, false if skipped.
+ * Every chat id currently subscribed to admin Telegram alerts: the legacy static
+ * TELEGRAM_ADMIN_CHAT_ID env var (if still set — kept for backward compat, one
+ * admin can leave it as their catch-all without ever linking) PLUS every ADMIN
+ * user who has self-linked their own Telegram from the dashboard (see
+ * createAdminLinkUrl). Deduplicated so an admin who's also the env var's chat
+ * never gets the same message twice.
+ */
+async function adminChatIds(): Promise<string[]> {
+  const ids = new Set<string>();
+  const envChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+  if (envChatId) ids.add(envChatId);
+
+  const linked = await prisma.user.findMany({
+    where: { role: "ADMIN", isActive: true, telegramChatId: { not: null } },
+    select: { telegramChatId: true },
+  });
+  for (const u of linked) if (u.telegramChatId) ids.add(u.telegramChatId);
+
+  return [...ids];
+}
+
+/**
+ * Notify every subscribed admin of a new lead over Telegram (see adminChatIds).
+ * Never throws; a bad chat id for one admin never blocks the others. Returns true
+ * if at least one message was dispatched.
  */
 export async function notifyAdminTelegram(
   lead: ApiLead,
@@ -98,14 +123,21 @@ export async function notifyAdminTelegram(
       );
       return false;
     }
-    const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
-    if (!chatId) {
+    const chatIds = await adminChatIds();
+    if (chatIds.length === 0) {
       console.info(
-        `[telegram] TELEGRAM_ADMIN_CHAT_ID not set — skipping admin Telegram for lead ${lead.refNumber}`,
+        `[telegram] no admin Telegram chat linked — skipping admin Telegram for lead ${lead.refNumber}`,
       );
       return false;
     }
-    return await sendViaTelegram(chatId, buildLeadTelegramMessage(lead, companyName, true));
+    const text = buildLeadTelegramMessage(lead, companyName, true);
+    const results = await Promise.allSettled(chatIds.map((id) => sendViaTelegram(id, text)));
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        console.error(`[telegram] admin send failed for lead ${lead.refNumber} (chat ${chatIds[i]}):`, r.reason);
+      }
+    });
+    return results.some((r) => r.status === "fulfilled" && r.value);
   } catch (err) {
     console.error(`[telegram] admin send failed for lead ${lead.refNumber}:`, err);
     return false;
@@ -153,13 +185,14 @@ export function buildChatTelegramMessage(params: {
   );
 }
 
-/** Notify the owner/admin chat of a new chat message. Never throws. */
+/** Notify every subscribed admin chat of a new chat message. Never throws. */
 export async function notifyAdminChatTelegram(text: string): Promise<boolean> {
   try {
     if (!isTelegramConfigured()) return false;
-    const chatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
-    if (!chatId) return false;
-    return await sendViaTelegram(chatId, text);
+    const chatIds = await adminChatIds();
+    if (chatIds.length === 0) return false;
+    const results = await Promise.allSettled(chatIds.map((id) => sendViaTelegram(id, text)));
+    return results.some((r) => r.status === "fulfilled" && r.value);
   } catch (err) {
     console.error("[telegram] admin chat send failed:", err);
     return false;
@@ -285,6 +318,77 @@ export async function unlinkProvider(companyId: string): Promise<void> {
   });
 }
 
+// ── Admin self-linking via the bot (webhook) ─────────────────────────────────
+// Exactly the deep-link half of the provider mechanism above, mirrored onto
+// User instead of Company — an admin has no phone number on file to fall back
+// to, so there is no phone-share path here.
+
+/**
+ * Mint a single-use deep link for admin `userId` and return the t.me URL.
+ * Replaces any previous outstanding token for that user. Returns null when
+ * linking isn't configured.
+ */
+export async function createAdminLinkUrl(userId: string): Promise<string | null> {
+  const username = telegramBotUsername();
+  if (!isTelegramConfigured() || !username) return null;
+
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const token = Buffer.from(bytes).toString("base64url"); // 32 chars
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      telegramLinkToken: token,
+      telegramLinkExpires: new Date(Date.now() + LINK_TOKEN_TTL_MS),
+    },
+  });
+
+  return `https://t.me/${username}?start=${token}`;
+}
+
+/**
+ * Redeem a deep-link token: bind `chatId` to the admin user that owns it and burn
+ * the token so it can't be replayed. Returns the admin's name, or null when the
+ * token is unknown, already used, or expired.
+ */
+export async function linkAdminByToken(
+  token: string,
+  chatId: number | string,
+): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { telegramLinkToken: token },
+    select: { id: true, name: true, telegramLinkExpires: true },
+  });
+  if (!user) return null;
+
+  if (!user.telegramLinkExpires || user.telegramLinkExpires.getTime() < Date.now()) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { telegramLinkToken: null, telegramLinkExpires: null },
+    });
+    return null;
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      telegramChatId: String(chatId),
+      telegramLinkToken: null,
+      telegramLinkExpires: null,
+    },
+  });
+  return user.name;
+}
+
+/** Disconnect an admin's Telegram, stopping alerts on that channel for them. */
+export async function unlinkAdmin(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { telegramChatId: null, telegramLinkToken: null, telegramLinkExpires: null },
+  });
+}
+
 /**
  * Link the Company whose phone (or whatsapp) matches `phone` to `chatId`. Matching
  * is by the last 10 significant digits (phoneTail), so local/CC/E.164 forms all
@@ -329,17 +433,19 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     if (!chatId) return;
 
     // "/start <token>" — the dashboard deep link. Preferred path: the token alone
-    // identifies the company, so we never touch the phone number.
+    // identifies the company (provider) or the user (admin), so we never touch the
+    // phone number. Tokens are unique per table, so trying company then admin is
+    // unambiguous — at most one of the two lookups can ever match.
     const startPayload = msg.text?.match(/^\/start\s+(\S+)$/)?.[1];
     if (startPayload) {
-      const name = await linkProviderByToken(startPayload, chatId);
-      await sendViaTelegram(
-        chatId,
-        name
-          ? `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(name)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`
-          : `⚠️ الرابط ده منتهي أو مستخدم قبل كده. ادخل على لوحة التحكم واضغط «ربط تليجرام» من تاني عشان تجيب رابط جديد.`,
-        { reply_markup: { remove_keyboard: true } },
-      );
+      const companyName = await linkProviderByToken(startPayload, chatId);
+      const adminName = companyName ? null : await linkAdminByToken(startPayload, chatId);
+      const confirmation = companyName
+        ? `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(companyName)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`
+        : adminName
+          ? `✅ اتربطت يا <b>${escapeHtml(adminName)}</b>! هتوصلك هنا كل تنبيهات الإدارة فوراً.`
+          : `⚠️ الرابط ده منتهي أو مستخدم قبل كده. ادخل على لوحة التحكم واضغط «ربط تليجرام» من تاني عشان تجيب رابط جديد.`;
+      await sendViaTelegram(chatId, confirmation, { reply_markup: { remove_keyboard: true } });
       return;
     }
 

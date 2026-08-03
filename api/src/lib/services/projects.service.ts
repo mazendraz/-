@@ -50,7 +50,9 @@ const MAX_FEATURED = 6;
 
 /**
  * Public: curated projects for the homepage showcase — featured + APPROVED
- * projects of ACTIVE companies only, flattened with company name + category.
+ * projects of ACTIVE companies only, flattened with company name + PRIMARY
+ * category (a company may belong to several; the showcase card only has room
+ * for one, so it shows the same one every other single-value display spot does).
  */
 export async function listFeatured(): Promise<ApiFeaturedProject[]> {
   const rows = await prisma.project.findMany({
@@ -60,14 +62,23 @@ export async function listFeatured(): Promise<ApiFeaturedProject[]> {
     select: {
       title: true,
       img: true,
-      company: { select: { name: true, category: { select: { label: true } } } },
+      company: {
+        select: {
+          name: true,
+          categories: {
+            where: { isPrimary: true },
+            select: { category: { select: { label: true } } },
+            take: 1,
+          },
+        },
+      },
     },
   });
   return rows.map((r) => ({
     title: r.title,
     img: r.img,
     company: r.company.name,
-    category: r.company.category.label,
+    category: r.company.categories[0]?.category.label ?? "",
   }));
 }
 

@@ -1,9 +1,18 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: "class",
+  // DS-02: was "class" with zero `dark:` variants anywhere and no dark
+  // palette — dead config that signals a theme exists when it doesn't. See
+  // index.html's `color-scheme`/`theme-color` for the other half of this fix.
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      // Tailwind's default opacity scale only has stops at 0,5,10,15…100 — a
+      // bare modifier outside that scale (e.g. bg-primary/6) generates NO CSS
+      // rule at all, silently. These are the non-scale values actually used
+      // across the app (see UI-UX-AUDIT.md DS-01); extending the scale here
+      // keeps every call site unchanged instead of switching them to the
+      // bracket syntax (bg-primary/[0.06]).
+      opacity: { 6: "0.06", 8: "0.08", 12: "0.12", 14: "0.14", 18: "0.18", 68: "0.68", 72: "0.72", 96: "0.96", 97: "0.97" },
       colors: {
         "on-primary-fixed": "#001e2e",
         "on-tertiary-fixed": "#2b1700",
@@ -52,13 +61,25 @@ export default {
         secondary: "#785a02",
         "on-surface": "#181c1f",
         "primary-fixed": "#c7e7ff",
+        // Semantic status colours (DS-07) — named for what they MEAN
+        // (a company being busy, a submission succeeding), not for the
+        // stock Tailwind swatch they used to be reached through directly
+        // (bg-amber-500, text-green-600, ...). `info` isn't a new colour:
+        // the existing `primary` already served that role everywhere
+        // (e.g. the RequestForm "no account needed" Notice), so there's
+        // nothing to rename there — only warning/success needed real names.
+        warning: "#f59e0b",
+        "warning-container": "#fffbeb",
+        "on-warning-container": "#92400e",
+        success: "#16a34a",
+        "success-container": "#f0fdf4",
+        "on-success-container": "#166534",
       },
-      borderRadius: {
-        DEFAULT: "0.25rem",
-        lg: "0.5rem",
-        xl: "0.75rem",
-        full: "9999px",
-      },
+      // No borderRadius override here on purpose (DS-04): the previous
+      // extension redefined DEFAULT/lg/xl/full to Tailwind's own stock
+      // values (a no-op). The real scale in use is Tailwind's own
+      // lg(8px)/xl(12px)/2xl(16px)/full — see index.css for the rare
+      // arbitrary radii that used to bypass it.
       spacing: {
         "stack-xl": "64px",
         "container-max": "1280px",
@@ -73,35 +94,63 @@ export default {
       maxWidth: {
         "container-max": "1280px",
       },
-      boxShadow: {
-        "card-hover": "0 20px 50px -10px rgba(0, 85, 120, 0.12)",
-        bloom:
-          "0 20px 40px -10px rgba(0, 0, 0, 0.04), 0 10px 20px -5px rgba(0, 0, 0, 0.02)",
-      },
+      // No boxShadow extension here (DS-05): `card-hover` had zero call
+      // sites, and `bloom` was always shadowed by the hand-written
+      // `.shadow-bloom` rule in index.css (same class name, later in the
+      // compiled stylesheet always wins) — the config entry never actually
+      // took effect. The real elevation scale lives in index.css:
+      // .shadow-bloom/-hover and .shadow-soft/-hover.
+      // Brand typography (RTL-10): direction-aware stacks, not two separate
+      // "Arabic" and "Latin" font sets. Latin glyphs resolve from the first
+      // family in each stack; Arabic has no glyphs there, so it falls through
+      // to the Arabic-capable family — Alexandria for display/headings
+      // (deliberately, matching Cairo's weight/x-height reasonably well for a
+      // heading face), Cairo for body text (matches index.css's
+      // `[dir="rtl"] body` rule). Previously both stacks ended at
+      // "sans-serif" with no Arabic-capable fallback at all, so every Arabic
+      // heading silently rendered in the OS's generic UI font.
+      // The seven aliases that used to live here (headline-lg-mobile,
+      // label-sm, body-lg, label-md, headline-lg, display-xl-mobile,
+      // display-xl, headline-md, body-md) were all identical to one of these
+      // two families (TYPO-03) — deleted; the fontSize scale below carries
+      // weight now, so nothing else needs them.
       fontFamily: {
-        "headline-lg-mobile": ["Plus Jakarta Sans", "sans-serif"],
-        "label-sm": ["Plus Jakarta Sans", "sans-serif"],
-        "body-lg": ["Inter", "sans-serif"],
-        "label-md": ["Plus Jakarta Sans", "sans-serif"],
-        "headline-lg": ["Plus Jakarta Sans", "sans-serif"],
-        "display-xl-mobile": ["Plus Jakarta Sans", "sans-serif"],
-        "display-xl": ["Plus Jakarta Sans", "sans-serif"],
-        "headline-md": ["Plus Jakarta Sans", "sans-serif"],
-        "body-md": ["Inter", "sans-serif"],
-        // Brand typography — display = Plus Jakarta Sans (headings), sans = Inter (body)
-        display: ["Plus Jakarta Sans", "sans-serif"],
-        sans: ["Inter", "sans-serif"],
+        display: ["Plus Jakarta Sans", "Alexandria", "sans-serif"],
+        sans: ["Inter", "Cairo", "sans-serif"],
       },
+      // Type scale (TYPO-01/DS-03): 7 steps, frozen against the actual
+      // distribution of the 1,113 raw text-[NNpx] values this replaces (see
+      // UI-UX-AUDIT.md TYPO-01). Each step bundles its line-height so
+      // "text-body" alone gives correct leading — no separate leading-[…]
+      // needed. Deliberately does NOT bundle fontWeight: nearly every call
+      // site already carries its own font-bold/font-semibold/etc., and
+      // baking a weight into the token too would silently refight that
+      // (exactly the TYPO-02 bug this phase exists to remove), depending on
+      // which utility Tailwind happens to emit later in the stylesheet.
+      // A handful of genuine hero/display numbers (34-64px, ~55 sites,
+      // mostly animated KPI counters) are deliberately left as arbitrary
+      // values rather than compressed onto this scale — snapping e.g. a
+      // 64px counter down to a 40px token would be a visible regression for
+      // a one-off display number, not a fix for a missing system.
       fontSize: {
-        "headline-lg-mobile": ["28px", { lineHeight: "36px", letterSpacing: "-0.01em", fontWeight: "600" }],
-        "label-sm": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "500" }],
-        "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
-        "label-md": ["14px", { lineHeight: "20px", letterSpacing: "0.02em", fontWeight: "600" }],
-        "headline-lg": ["36px", { lineHeight: "44px", letterSpacing: "-0.01em", fontWeight: "600" }],
-        "display-xl-mobile": ["40px", { lineHeight: "48px", letterSpacing: "-0.02em", fontWeight: "700" }],
-        "display-xl": ["60px", { lineHeight: "72px", letterSpacing: "-0.02em", fontWeight: "700" }],
-        "headline-md": ["24px", { lineHeight: "32px", fontWeight: "600" }],
-        "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+        caption: ["12px", { lineHeight: "16px" }],
+        label: ["13px", { lineHeight: "18px" }],
+        body: ["15px", { lineHeight: "22px" }],
+        subhead: ["18px", { lineHeight: "26px" }],
+        title: ["22px", { lineHeight: "30px" }],
+        headline: ["28px", { lineHeight: "36px", letterSpacing: "-0.01em" }],
+        display: ["40px", { lineHeight: "1.1", letterSpacing: "-0.02em" }],
+      },
+      // Motion duration scale (ANIM-08): call sites had accreted 150/200/250/
+      // 300/500/700ms with no logic to which got which — two visually
+      // identical hover-zoom images could land on 300ms and 700ms depending
+      // on which page copied which. Three tokens instead: fast (icon/color
+      // micro-interactions), base (the vast majority — hover/press states),
+      // slow (deliberate emphasis — image zoom, progress fills, reveals).
+      transitionDuration: {
+        fast: "120ms",
+        base: "200ms",
+        slow: "350ms",
       },
     },
   },

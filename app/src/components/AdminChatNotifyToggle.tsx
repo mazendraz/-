@@ -42,7 +42,7 @@ export default function AdminChatNotifyToggle() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-primary">
+        <span className="material-symbols-outlined text-primary" aria-hidden="true" translate="no">
           {enabled ? "forum" : "chat_bubble"}
         </span>
         <div className="flex-1">
@@ -57,7 +57,7 @@ export default function AdminChatNotifyToggle() {
           type="button"
           onClick={() => void toggle()}
           disabled={busy}
-          className={`px-4 py-2 rounded-full font-label-md text-label-md transition disabled:opacity-50 ${
+          className={`px-4 py-2 rounded-full text-label transition disabled:opacity-50 ${
             enabled
               ? "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
               : "bg-primary text-on-primary hover:opacity-90"

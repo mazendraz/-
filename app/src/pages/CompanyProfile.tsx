@@ -1,66 +1,50 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
 import OfferingCards from "../components/OfferingCards";
-import RequestBar from "../components/RequestBar";
+import PricingCTA, { PRICING_SECTION_ID } from "../components/PricingCTA";
+import RequestBar, { RequestBarContent, deriveBasketSummary } from "../components/RequestBar";
+import SectionNav from "../components/SectionNav";
+import CompanyGallery from "../components/CompanyGallery";
+import CompanyProjects from "../components/CompanyProjects";
 import { useCompanyDetail, useCatalogStatus } from "../lib/catalog";
+import { useCart } from "../lib/cart";
 import LazyImage from "../components/LazyImage";
 import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { addFeedback, type FeedbackType } from "../lib/feedback";
 import { isBusy, formatReopenDate, joinWaitlist, rememberMyWaitlistEntry, availabilityLabel, availableAgainAt } from "../lib/availability";
-import { useDialogA11y } from "../hooks/useDialogA11y";
+import Modal from "../components/Modal";
 import { useLocale } from "../context/LocaleContext";
-import { t, type StringKey, type Locale } from "../lib/i18n";
+import { t, type Locale } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
-
-const TABS: { key: "Overview" | "Projects" | "Gallery"; labelKey: StringKey }[] = [
-  { key: "Overview", labelKey: "profile_tab_overview" },
-  { key: "Projects", labelKey: "profile_tab_projects" },
-  { key: "Gallery", labelKey: "profile_tab_gallery" },
-];
-type Tab = (typeof TABS)[number]["key"];
+import Icon from "../components/Icon";
 
 export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
   const { locale } = useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
   const { company, loading: detailLoading } = useCompanyDetail(slug ?? "");
   const status = useCatalogStatus();
+  const { items: basketItems } = useCart(slug ?? "");
   usePageMeta(
-    company?.metaTitle || (company ? `${company.name} | Al Assema` : "Company | Al Assema"),
+    company?.metaTitle || `${company ? company.name : t(locale, "meta_company_fallback_title")} | ${t(locale, "brand_name")}`,
     company?.metaDescription || company?.tagline
   );
-  const [tab, setTab] = useState<Tab>("Overview");
-  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const lightboxCloseRef = useRef<HTMLButtonElement>(null);
-  const swipeX = useRef<number | null>(null);
 
   const headerRef = useReveal(0.06);
-  const bodyRef = useReveal(0.06);
+  const aboutRef = useReveal(0.06);
+  const galleryRef = useReveal(0.06);
+  const projectsRef = useReveal(0.06);
+  const reviewsRef = useReveal(0.06);
+  const contactRef = useReveal(0.06);
 
-  // Keyboard nav for lightbox
-  const lightboxOpen = lightboxIdx !== null;
-  const galleryLength = company?.gallery.length ?? 0;
-  useEffect(() => {
-    if (lightboxOpen) lightboxCloseRef.current?.focus();
-  }, [lightboxOpen]);
-  useEffect(() => {
-    if (!lightboxOpen) return;
-    const total = galleryLength;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); setLightboxIdx(null); }
-      if (e.key === "ArrowLeft") setLightboxIdx((i) => (i !== null && i > 0 ? i - 1 : i));
-      if (e.key === "ArrowRight") setLightboxIdx((i) => (i !== null && i < total - 1 ? i + 1 : i));
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [lightboxOpen, galleryLength]);
   useEffect(() => {
     if (!company) return;
     const script = document.createElement("script");
@@ -76,6 +60,16 @@ export default function CompanyProfile() {
       image: company.gallery,
       priceRange: "$$",
       areaServed: "New Administrative Capital, Egypt",
+      // CP-10: address/telephone/openingHours are deliberately omitted — the
+      // public company card never exposes them (leads go through the request
+      // form, not direct contact), so there's no real value to put here.
+      ...(company.reviewCount > 0 && {
+        aggregateRating: {
+          "@type": "AggregateRating",
+          ratingValue: company.rating,
+          reviewCount: company.reviewCount,
+        },
+      }),
     });
     document.head.appendChild(script);
     return () => { document.getElementById("ld-company")?.remove(); };
@@ -96,16 +90,16 @@ export default function CompanyProfile() {
     if (status === "error") {
       return (
         <div className="min-h-screen flex items-center justify-center pt-20 px-5">
-          <CatalogError message="We couldn't load this company. Please try again." />
+          <CatalogError message={t(locale, "catalog_error_body_company")} />
         </div>
       );
     }
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 pt-20">
-        <span className="material-symbols-outlined text-outline text-[64px]">business_center</span>
-        <p className="font-headline-md text-headline-md text-on-surface">{t(locale, "profile_not_found")}</p>
-        <Link to="/companies" className="text-primary font-label-md text-label-md hover:underline inline-flex items-center gap-1">
-          <span className="material-symbols-outlined text-[16px] rtl-flip">arrow_back</span> {t(locale, "profile_back_to_companies")}
+        <Icon name="business_center" className="text-outline text-[64px]" />
+        <p className="font-display text-title text-on-surface">{t(locale, "profile_not_found")}</p>
+        <Link to="/companies" className="text-primary font-display text-label hover:underline inline-flex items-center gap-1">
+          <Icon name="arrow_back" className="text-body rtl-flip" /> {t(locale, "profile_back_to_companies")}
         </Link>
       </div>
     );
@@ -118,43 +112,60 @@ export default function CompanyProfile() {
   // open-ended, which the copy below handles with its date-less wording.
   const backAt = availableAgainAt(company);
   const requestHref = `/request?company=${company.slug}&companyName=${encodeURIComponent(company.name)}`;
+  // The discount is applied SERVER-side when the request is priced, so the
+  // basket has to show it too — otherwise the running total reads higher than
+  // what gets recorded, and the reason to add another item is invisible at
+  // the moment the customer is deciding.
+  const basketSummary = deriveBasketSummary(basketItems, company.offerings ?? [], company.bundleRules ?? []);
+
+  const navItems = [
+    { id: "about", label: t(locale, "profile_tab_overview") },
+    { id: "gallery", label: t(locale, "profile_tab_gallery") },
+    { id: "projects", label: t(locale, "profile_tab_projects") },
+  ];
 
   return (
     <div className="bg-surface min-h-screen pb-36 md:pb-0">
-      {/* Mobile sticky CTA bar — sits directly above the bottom tab bar */}
+      {/* Mobile sticky bar — sits directly above the bottom tab bar. Contextual:
+          shows the basket total + "Continue" once something's been added,
+          otherwise the usual Request/Waitlist CTA — CP-03 merges what used to
+          be two stacked bars (this one plus RequestBar) into one, and PERF-04
+          drops the blur (this already reads as solid at 96% opacity, so the
+          blur was pure repaint cost with no visible difference). */}
       <div
-        className="md:hidden fixed left-0 right-0 z-30 px-4 pt-2.5 pb-2.5 bg-white/96 backdrop-blur-xl border-t border-outline-variant/25 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.08)] flex items-center gap-2.5"
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+        className="md:hidden fixed left-0 right-0 z-30 px-4 pt-2.5 pb-2.5 bg-white border-t border-outline-variant/25 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.08)] flex items-center gap-2.5"
+        style={{ bottom: "calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px))" }}
       >
         <SaveButton slug={company.slug} className="!w-12 !h-12 flex-shrink-0 border border-outline-variant/30" />
         {busy ? (
           <button
             onClick={() => setWaitlistOpen(true)}
             className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-white
-                       py-3.5 rounded-xl font-bold text-[15px] shadow-bloom touch-press btn-press"
+                       py-3.5 rounded-xl font-bold text-body shadow-bloom touch-press btn-press"
           >
-            <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+            <Icon name="hourglass_top" className="text-title" />
             {t(locale, "waitlist_join_cta")}
           </button>
+        ) : basketSummary ? (
+          <RequestBarContent summary={basketSummary} requestHref={requestHref} />
         ) : (
-          <Link
-            to={requestHref}
+          <PricingCTA
+            pricingMode={company.categoryPricingMode}
+            requestHref={requestHref}
             className="flex-1 flex items-center justify-center gap-2 bg-primary text-on-primary
-                       py-3.5 rounded-xl font-bold text-[15px] shadow-bloom touch-press btn-press"
+                       py-3.5 rounded-xl font-bold text-body shadow-bloom touch-press btn-press"
+            catalogIcon="send"
           >
-            <span className="material-symbols-outlined text-[20px]">send</span>
+            <Icon name="send" className="text-title" />
             {t(locale, "common_request_service")}
-          </Link>
+          </PricingCTA>
         )}
       </div>
 
-      {/* Basket summary — only renders once something has been added. */}
-      {/* The discount is applied SERVER-side when the request is priced, so the
-          basket has to show it too — otherwise the running total reads higher
-          than what gets recorded, and the reason to add another item is
-          invisible at the moment the customer is deciding. */}
+      {/* Desktop-only floating basket summary — mobile gets the same content
+          merged into the sticky bar above instead (see basketSummary). */}
       <RequestBar
-        companySlug={company.slug}
+        items={basketItems}
         offerings={company.offerings ?? []}
         bundleRules={company.bundleRules ?? []}
         requestHref={requestHref}
@@ -162,12 +173,21 @@ export default function CompanyProfile() {
 
       {/* Hero cover */}
       <div className="relative w-full h-64 md:h-96 overflow-hidden">
-        <LazyImage src={company.cover} alt={company.name} eager wrapperClassName="absolute inset-0" className="w-full h-full object-cover" />
+        <LazyImage src={company.cover} alt={company.name} eager wrapperClassName="absolute inset-0" className="w-full h-full object-cover" width={1280} height={384} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-        {/* Back breadcrumb */}
-        <div className="absolute top-20 left-margin-mobile md:left-margin-desktop rtl:left-auto rtl:right-margin-mobile rtl:md:right-margin-desktop">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-white/80 hover:text-white transition-colors bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full text-label-sm font-label-sm">
-            <span className="material-symbols-outlined text-[16px] rtl-flip">arrow_back</span> {t(locale, "profile_back")}
+        {/* Back breadcrumb. CP-05: was a fixed top-20 (80px) that didn't track
+            the nav's own height (64px mobile / 76px desktop) — clears the
+            actual nav via the shared --nav-h token instead. */}
+        <div className="absolute left-margin-mobile md:left-margin-desktop rtl:left-auto rtl:right-margin-mobile rtl:md:right-margin-desktop" style={{ top: "calc(var(--nav-h) + 12px)" }}>
+          {/* CP-06: navigate(-1) on a fresh tab / external link leaves the
+              site entirely — location.key is React Router's own signal for
+              "no in-app history to go back to" (set to "default" on the
+              initial entry). */}
+          <button
+            onClick={() => (location.key === "default" ? navigate("/companies") : navigate(-1))}
+            className="flex items-center gap-2 text-white/80 hover:text-white transition-colors bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full text-caption font-display"
+          >
+            <Icon name="arrow_back" className="text-body rtl-flip" /> {t(locale, "profile_back")}
           </button>
         </div>
       </div>
@@ -179,41 +199,41 @@ export default function CompanyProfile() {
             <div className="flex flex-col sm:flex-row sm:items-end gap-4">
               {/* Logo */}
               <div className="w-20 h-20 rounded-2xl overflow-hidden border-4 border-white shadow-xl flex-shrink-0 bg-white">
-                <LazyImage src={company.logo} alt={`${company.name} logo`} className="w-full h-full object-cover" />
+                <LazyImage src={company.logo} alt={`${company.name} logo`} className="w-full h-full object-cover" width={80} height={80} />
               </div>
 
               <div className="flex-grow">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-headline-lg-mobile md:text-headline-lg font-headline-lg text-on-surface">{company.name}</h1>
+                  <h1 className="text-headline md:text-display font-display text-on-surface">{company.name}</h1>
                   {company.verified && (
-                    <span className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-label-sm font-label-sm">
-                      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span> {t(locale, "common_verified")}
+                    <span className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-caption font-display">
+                      <Icon name="verified" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} /> {t(locale, "common_verified")}
                     </span>
                   )}
                   {/* Availability, stated quietly. An upcoming period is shown as
                       information — it must not discourage a request today. */}
                   <AvailabilityBadge company={company} locale={locale} />
                 </div>
-                <p className="text-label-md font-label-md text-outline mb-2">{company.categoryLabel}</p>
+                <p className="text-label font-display text-outline mb-2">{company.categoryLabel}</p>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <Stars n={Math.round(company.rating)} size="text-[16px]" />
-                  <span className="font-label-md text-label-md text-on-surface">{company.rating}</span>
-                  <span className="text-outline text-label-sm">({company.reviewCount} {t(locale, "common_reviews")})</span>
+                  <Stars n={Math.round(company.rating)} size="text-body" />
+                  <span className="font-display text-label text-on-surface">{company.rating}</span>
+                  <span className="text-outline text-caption">({company.reviewCount} {t(locale, "common_reviews")})</span>
                   <span className="text-outline">·</span>
-                  <span className="text-outline text-label-sm">{company.completedProjects} {t(locale, "profile_completed_projects")}</span>
+                  <span className="text-outline text-caption">{company.completedProjects} {t(locale, "profile_completed_projects")}</span>
                 </div>
                 {/* Trust pills */}
                 <div className="flex items-center gap-2 flex-wrap mt-3">
-                  <span className="flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-[12px] font-bold">
-                    <span className="material-symbols-outlined text-[14px]">bolt</span>
+                  <span className="flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-caption font-bold">
+                    <Icon name="bolt" className="text-label" />
                     {t(locale, "profile_responds")} {company.responseTime}
                   </span>
-                  <span className="flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-2.5 py-1 rounded-full text-[12px] font-bold">
-                    <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                  <span className="flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-2.5 py-1 rounded-full text-caption font-bold">
+                    <Icon name="workspace_premium" className="text-label" />
                     {company.yearsExperience} {t(locale, "profile_years_experience")}
                   </span>
-                  <span className="flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-2.5 py-1 rounded-full text-[12px] font-bold">
-                    <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                  <span className="flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-2.5 py-1 rounded-full text-caption font-bold">
+                    <Icon name="verified_user" className="text-label" />
                     {t(locale, "profile_verified_since")} {company.verifiedSince}
                   </span>
                 </div>
@@ -226,20 +246,22 @@ export default function CompanyProfile() {
                   <button
                     onClick={() => setWaitlistOpen(true)}
                     className="flex items-center justify-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl
-                               font-bold text-[14px] hover:bg-amber-600 transition-colors shadow-bloom touch-press btn-press"
+                               font-bold text-label hover:bg-amber-600 transition-colors shadow-bloom touch-press btn-press"
                   >
-                    <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+                    <Icon name="hourglass_top" className="text-title" />
                     {t(locale, "waitlist_join_cta")}
                   </button>
                 ) : (
-                  <Link
-                    to={requestHref}
+                  <PricingCTA
+                    pricingMode={company.categoryPricingMode}
+                    requestHref={requestHref}
                     className="flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-xl
-                               font-bold text-[14px] hover:bg-primary-container transition-colors shadow-bloom touch-press btn-press"
+                               font-bold text-label hover:bg-primary-container transition-colors shadow-bloom touch-press btn-press"
+                    catalogIcon="send"
                   >
-                    <span className="material-symbols-outlined text-[20px]">send</span>
+                    <Icon name="send" className="text-title" />
                     {t(locale, "common_request_service")}
-                  </Link>
+                  </PricingCTA>
                 )}
               </div>
             </div>
@@ -247,234 +269,197 @@ export default function CompanyProfile() {
             {/* Busy banner */}
             {busy && (
               <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-                <span className="material-symbols-outlined text-amber-600 text-[22px] flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>event_busy</span>
+                <Icon name="event_busy" className="text-amber-600 text-title flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }} />
                 <div className="min-w-0">
-                  <p className="font-bold text-[14px] text-amber-900">
+                  <p className="font-bold text-label text-amber-900">
                     {backAt
                       ? `${t(locale, "busy_banner_booked_until")} ${formatReopenDate(backAt, locale)}`
                       : t(locale, "busy_banner_fully_booked")}
                   </p>
                   {company.busyNote
-                    ? <p className="text-[13px] text-amber-800 mt-0.5">{company.busyNote}</p>
-                    : <p className="text-[13px] text-amber-800 mt-0.5">{t(locale, "waitlist_modal_sub")}</p>}
+                    ? <p className="text-label text-amber-800 mt-0.5">{company.busyNote}</p>
+                    : <p className="text-label text-amber-800 mt-0.5">{t(locale, "waitlist_modal_sub")}</p>}
                 </div>
               </div>
             )}
           </div>
-
-          {/* Tabs */}
-          <div className="flex gap-1 overflow-x-auto scrollbar-hide -mx-2 px-2">
-            {TABS.map((tb) => (
-              <button
-                key={tb.key}
-                onClick={() => setTab(tb.key)}
-                className={`px-4 py-2.5 text-label-md font-label-md whitespace-nowrap rounded-t-lg border-b-2 transition-colors ${
-                  tab === tb.key
-                    ? "text-primary border-primary"
-                    : "text-outline border-transparent hover:text-on-surface hover:border-outline-variant"
-                }`}
-              >
-                {t(locale, tb.labelKey)}
-              </button>
-            ))}
-          </div>
         </div>
+
+        {/* Section nav — smooth-scrolls to each section below instead of
+            switching what's mounted; stays sticky the whole way down. */}
+        <SectionNav items={navItems} />
       </div>
 
-      {/* Tab content */}
-      <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-stack-xl">
-        <div ref={bodyRef} className="fade-up">
-
-          {/* ── Overview ── */}
-          {tab === "Overview" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
-              <div className="lg:col-span-2 space-y-8">
-                {/* About */}
-                <section>
-                  <h2 className="font-headline-md text-headline-md text-on-surface mb-4">{t(locale, "profile_about")} {company.name}</h2>
-                  <p className="text-body-lg font-body-lg text-on-surface-variant leading-relaxed">{company.about}</p>
-                </section>
-
-                {/* Services & products — priced cards, falling back to the
-                    legacy `services` chips for companies with no offerings yet. */}
-                <OfferingCards
-                  offerings={company.offerings ?? []}
-                  services={company.services}
-                  companySlug={company.slug}
-                />
-
-                {/* Recent projects preview */}
-                <section>
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="font-headline-md text-headline-md text-on-surface">{t(locale, "profile_recent_projects")}</h2>
-                    <button onClick={() => setTab("Projects")} className="text-primary text-label-md font-label-md hover:underline flex items-center gap-1">
-                      {t(locale, "common_view_all")} <span className="material-symbols-outlined text-[16px] rtl-flip">arrow_forward</span>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {company.projects.slice(0, 2).map((p) => (
-                      <div key={p.title} className="bg-surface-container-lowest rounded-xl overflow-hidden shadow-bloom">
-                        <div className="h-44 overflow-hidden">
-                          <LazyImage src={p.img} alt={p.title} wrapperClassName="h-full" className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                        </div>
-                        <div className="p-4">
-                          <p className="font-label-md text-label-md text-on-surface mb-1">{p.title}</p>
-                          <p className="text-label-sm font-label-sm text-outline">{p.year}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+      {/* ── One continuous scroll: About → Services → Gallery → Projects →
+          Reviews → Contact. Each section reveals itself independently as it
+          scrolls into view (useReveal + .fade-up), instead of one big
+          all-at-once reveal. ── */}
+      <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-stack-xl space-y-16">
+        {/* About */}
+        <section id="about" ref={aboutRef} className="fade-up scroll-mt-20 md:scroll-mt-24">
+          <h2 className="font-display text-title text-on-surface mb-4">{t(locale, "profile_about")} {company.name}</h2>
+          <p className="text-subhead text-on-surface-variant leading-relaxed mb-6">{company.about}</p>
+          {company.badges.length > 0 && (
+            <div>
+              <h3 className="font-bold text-caption text-outline mb-3 ltr:uppercase ltr:tracking-wider">{t(locale, "profile_credentials")}</h3>
+              <div className="flex flex-wrap gap-2">
+                {company.badges.map((b) => (
+                  <span key={b} className="flex items-center gap-1 bg-primary/8 text-primary px-2.5 py-1.5 rounded-lg text-caption font-bold">
+                    <Icon name="verified" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} />
+                    {b}
+                  </span>
+                ))}
               </div>
+            </div>
+          )}
+        </section>
 
-              {/* Sidebar */}
-              <aside className="space-y-5">
-                {/* Credentials */}
-                <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
-                  <h3 className="font-bold text-[12px] text-outline mb-3 uppercase tracking-wider">{t(locale, "profile_credentials")}</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {company.badges.map((b) => (
-                      <span key={b} className="flex items-center gap-1 bg-primary/8 text-primary px-2.5 py-1.5 rounded-lg text-[12px] font-bold">
-                        <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                        {b}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+        {/* Services — id/scroll-mt: PricingCTA scrolls here for a
+            FIXED_CATALOG company instead of skipping to an empty form. */}
+        <section id={PRICING_SECTION_ID} className="scroll-mt-20 md:scroll-mt-24 rounded-2xl">
+          <OfferingCards
+            offerings={company.offerings ?? []}
+            services={company.services}
+            companySlug={company.slug}
+          />
+          {/* The escape hatch for a request that isn't one of the priced
+              cards above — a light-weight text link, not a button, so it
+              never competes visually with the cards themselves. */}
+          {company.categoryPricingMode === "FIXED_CATALOG" && (
+            <Link
+              to={requestHref}
+              className="inline-flex items-center gap-1 mt-4 text-primary text-label font-bold hover:underline"
+            >
+              {t(locale, "profile_custom_request")}
+              <Icon name="arrow_forward" className="text-body rtl-flip" />
+            </Link>
+          )}
+        </section>
 
-                {/* Stats */}
-                <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
-                  <h3 className="font-bold text-[12px] text-outline mb-4 uppercase tracking-wider">{t(locale, "profile_quick_stats")}</h3>
-                  {[
-                    { icon: "star", label: t(locale, "profile_stat_rating"), val: `${company.rating} / 5.0` },
-                    { icon: "reviews", label: t(locale, "profile_stat_reviews"), val: `${company.reviewCount}` },
-                    { icon: "construction", label: t(locale, "profile_stat_completed"), val: `${company.completedProjects}`, note: t(locale, "profile_self_reported") },
-                    { icon: "workspace_premium", label: t(locale, "profile_stat_experience"), val: `${company.yearsExperience} ${t(locale, "profile_years")}` },
-                    { icon: "bolt", label: t(locale, "profile_stat_response"), val: company.responseTime },
-                    { icon: "location_on", label: t(locale, "profile_stat_location"), val: company.location },
-                  ].map((s) => (
-                    <div key={s.label} className="flex items-center gap-3 py-2.5 border-b border-outline-variant/20 last:border-0">
-                      <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>{s.icon}</span>
-                      <div>
-                        <p className="text-[12px] text-outline flex items-center gap-1">
-                          {s.label}
-                          {s.note && (
-                            <span className="material-symbols-outlined text-outline/60 text-[13px] cursor-help" title={s.note}>info</span>
-                          )}
+        {/* Gallery — auto-visible, no tab click required. */}
+        <section id="gallery" ref={galleryRef} className="fade-up scroll-mt-20 md:scroll-mt-24">
+          <CompanyGallery images={company.gallery} alt={company.name} />
+        </section>
+
+        {/* Projects — sidebar+detail on desktop, accordion on mobile. */}
+        <section id="projects" ref={projectsRef} className="fade-up scroll-mt-20 md:scroll-mt-24">
+          <CompanyProjects
+            projects={company.projects}
+            services={company.services}
+            location={company.location}
+            busy={busy}
+            requestHref={requestHref}
+            pricingMode={company.categoryPricingMode}
+            companyName={company.name}
+            onWaitlistOpen={() => setWaitlistOpen(true)}
+          />
+        </section>
+
+        {/* Reviews — the SECTION wrapper always renders (so its useReveal ref
+            attaches on first mount, matching Gallery/Projects above); only the
+            content self-gates on empty. `company.reviews` starts as [] on the
+            cached list card and is only populated once the full by-slug detail
+            fetch lands — if the section itself were conditional on that
+            length, it wouldn't exist in the DOM yet when useReveal's one-time
+            IntersectionObserver effect runs, and would stay invisible forever
+            once the data arrived on a later render. */}
+        <section id="reviews" ref={reviewsRef} className="fade-up scroll-mt-20 md:scroll-mt-24 empty:hidden">
+          {company.reviews.length > 0 && (
+            <>
+              <h2 className="font-display text-title text-on-surface mb-6">{t(locale, "profile_stat_reviews")}</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {company.reviews.map((r, i) => (
+                  <div key={i} className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
+                    <Stars n={r.rating} size="text-label" />
+                    <p className="text-label text-on-surface-variant leading-relaxed mt-3 mb-4">&ldquo;{r.text}&rdquo;</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-label flex-shrink-0">
+                        {r.avatar}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-caption text-on-surface flex items-center gap-1">
+                          {r.author}
+                          {r.verified && <Icon name="verified" className="text-primary text-label" style={{ fontVariationSettings: "'FILL' 1" }} />}
                         </p>
-                        <p className="text-[14px] font-bold text-on-surface">{s.val}</p>
+                        <p className="text-caption text-outline">{r.district}{r.date ? ` · ${r.date}` : ""}</p>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* Contact Information — closing section. Only fields already public
+            elsewhere on the profile (location, response time, live
+            availability) plus the existing Request/Waitlist CTA and the
+            report-a-problem link — phone/whatsapp/email stay off the public
+            profile, matching how the rest of the platform funnels contact
+            through the lead-request form. */}
+        <section id="contact" ref={contactRef} className="fade-up scroll-mt-20 md:scroll-mt-24">
+          <h2 className="font-display text-title text-on-surface mb-6">{t(locale, "profile_contact_title")}</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
+              <div className="flex items-center gap-3">
+                <Icon name="location_on" className="text-primary text-title" fill />
+                <div>
+                  <p className="text-caption text-outline">{t(locale, "profile_stat_location")}</p>
+                  <p className="text-label font-bold text-on-surface">{company.location}</p>
                 </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Icon name="bolt" className="text-primary text-title" fill />
+                <div>
+                  <p className="text-caption text-outline">{t(locale, "profile_stat_response")}</p>
+                  <p className="text-label font-bold text-on-surface">{company.responseTime}</p>
+                </div>
+              </div>
+              <div className="pt-1">
+                <AvailabilityBadge company={company} locale={locale} />
+              </div>
+              <button
+                onClick={() => setFeedbackOpen(true)}
+                className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-outline-variant/30 text-outline hover:text-on-surface hover:border-outline-variant/60 hover:bg-surface-container transition-colors text-label font-bold"
+              >
+                <Icon name="report_problem" className="text-subhead" />
+                {t(locale, "profile_report")}
+              </button>
+            </div>
 
-                {/* CTA card */}
-                {busy ? (
-                  <div className="bg-amber-500 rounded-2xl p-5 shadow-bloom text-white">
-                    <span className="material-symbols-outlined text-[32px] mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
-                    <h3 className="font-headline-md text-headline-md mb-2">
-                      {backAt
-                        ? `${t(locale, "busy_available_again")} ${formatReopenDate(backAt, locale)}`
-                        : t(locale, "busy_banner_fully_booked")}
-                    </h3>
-                    <p className="text-body-md font-body-md opacity-90 mb-4">{t(locale, "waitlist_modal_sub")}</p>
-                    <button
-                      onClick={() => setWaitlistOpen(true)}
-                      className="block w-full text-center bg-white text-amber-700 font-label-md text-label-md py-3 rounded-xl hover:bg-amber-50 transition-colors font-bold"
-                    >
-                      {t(locale, "waitlist_join_cta")}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="bg-primary rounded-2xl p-5 shadow-bloom text-on-primary">
-                    <span className="material-symbols-outlined text-[32px] mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }}>handshake</span>
-                    <h3 className="font-headline-md text-headline-md mb-2">{t(locale, "profile_ready_title")}</h3>
-                    <p className="text-body-md font-body-md opacity-90 mb-4">{t(locale, "profile_ready_sub")}</p>
-                    <Link
-                      to={requestHref}
-                      className="block w-full text-center bg-white text-primary font-label-md text-label-md py-3 rounded-xl hover:bg-surface-container-low transition-colors font-bold"
-                    >
-                      {t(locale, "profile_request_company")}
-                    </Link>
-                  </div>
-                )}
-
-                {/* Report a problem */}
+            {/* CTA card */}
+            {busy ? (
+              <div className="bg-amber-500 rounded-2xl p-6 shadow-bloom text-white">
+                <Icon name="hourglass_top" className="text-headline mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }} />
+                <h3 className="text-title mb-2">
+                  {backAt
+                    ? `${t(locale, "busy_available_again")} ${formatReopenDate(backAt, locale)}`
+                    : t(locale, "busy_banner_fully_booked")}
+                </h3>
+                <p className="text-body opacity-90 mb-4">{t(locale, "waitlist_modal_sub")}</p>
                 <button
-                  onClick={() => setFeedbackOpen(true)}
-                  className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-outline-variant/30 text-outline hover:text-on-surface hover:border-outline-variant/60 hover:bg-surface-container transition-colors text-[13px] font-bold"
+                  onClick={() => setWaitlistOpen(true)}
+                  className="block w-full text-center bg-white text-amber-700 text-label py-3 rounded-xl hover:bg-amber-50 transition-colors font-bold"
                 >
-                  <span className="material-symbols-outlined text-[18px]">report_problem</span>
-                  {t(locale, "profile_report")}
+                  {t(locale, "waitlist_join_cta")}
                 </button>
-              </aside>
-            </div>
-          )}
-
-          {/* ── Projects ── */}
-          {tab === "Projects" && (
-            <div>
-              <h2 className="font-headline-md text-headline-md text-on-surface mb-6">
-                {t(locale, "profile_projects_count")} ({company.projects.length})
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
-                {company.projects.map((p) => (
-                  <div key={p.title} className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-bloom shadow-bloom-hover transition-all-spring">
-                    <div className="relative h-56 overflow-hidden">
-                      <img src={p.img} alt={p.title} className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                      <div className="absolute top-3 right-3 rtl:right-auto rtl:left-3 bg-black/60 text-white text-label-sm font-label-sm px-2 py-1 rounded-full">{p.year}</div>
-                    </div>
-                    <div className="p-5">
-                      <h3 className="font-headline-md text-headline-md text-on-surface mb-2">{p.title}</h3>
-                      <p className="text-body-md font-body-md text-on-surface-variant leading-relaxed text-sm">{p.description}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
-              <div className="mt-10 bg-surface-container-lowest rounded-2xl p-8 text-center shadow-bloom">
-                <p className="text-body-lg font-body-lg text-outline mb-4">{t(locale, "profile_like_what")} {company.name}.</p>
-                {busy ? (
-                  <button
-                    onClick={() => setWaitlistOpen(true)}
-                    className="inline-flex items-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl font-label-md text-label-md hover:bg-amber-600 transition-colors shadow-bloom"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
-                    {t(locale, "waitlist_join_cta")}
-                  </button>
-                ) : (
-                  <Link
-                    to={requestHref}
-                    className="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-xl font-label-md text-label-md hover:bg-primary-container transition-colors shadow-bloom"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">send</span>
-                    {t(locale, "common_request_service")}
-                  </Link>
-                )}
+            ) : (
+              <div className="bg-primary rounded-2xl p-6 shadow-bloom text-on-primary">
+                <Icon name="handshake" className="text-headline mb-2 block" style={{ fontVariationSettings: "'FILL' 1" }} />
+                <h3 className="font-display text-title mb-2">{t(locale, "profile_ready_title")}</h3>
+                <p className="text-body opacity-90 mb-4">{t(locale, "profile_ready_sub")}</p>
+                <PricingCTA
+                  pricingMode={company.categoryPricingMode}
+                  requestHref={requestHref}
+                  className="block w-full text-center bg-white text-primary font-display text-label py-3 rounded-xl hover:bg-surface-container-low transition-colors font-bold"
+                >
+                  {t(locale, "profile_request_company")}
+                </PricingCTA>
               </div>
-            </div>
-          )}
-
-          {/* ── Gallery ── */}
-          {tab === "Gallery" && (
-            <div>
-              <h2 className="font-headline-md text-headline-md text-on-surface mb-6">{t(locale, "profile_photo_gallery")}</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {company.gallery.map((img, i) => (
-                  <div
-                    key={i}
-                    className="relative overflow-hidden rounded-xl aspect-square cursor-pointer shadow-bloom shadow-bloom-hover transition-all-spring"
-                    onClick={() => setLightboxIdx(i)}
-                  >
-                    <img src={img} alt={`${company.name} gallery ${i + 1}`} className="w-full h-full object-cover hover:scale-105 transition-transform duration-700" />
-                    <div className="absolute inset-0 bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center">
-                      <span className="material-symbols-outlined text-white opacity-0 group-hover:opacity-100 text-[32px]">zoom_in</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </section>
       </div>
 
       {/* Feedback modal */}
@@ -497,73 +482,6 @@ export default function CompanyProfile() {
           locale={locale}
         />
       )}
-
-      {/* Lightbox */}
-      {lightboxIdx !== null && (
-        <div
-          role="dialog"
-          aria-modal
-          aria-label={`${company.name} gallery, photo ${lightboxIdx + 1} of ${company.gallery.length}`}
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setLightboxIdx(null)}
-          onTouchStart={(e) => { swipeX.current = e.touches[0].clientX; }}
-          onTouchEnd={(e) => {
-            if (swipeX.current === null) return;
-            const delta = e.changedTouches[0].clientX - swipeX.current;
-            swipeX.current = null;
-            if (Math.abs(delta) < 50) return;
-            if (delta > 0 && lightboxIdx > 0) setLightboxIdx(lightboxIdx - 1);
-            if (delta < 0 && lightboxIdx < company.gallery.length - 1) setLightboxIdx(lightboxIdx + 1);
-          }}
-        >
-          {/* Close */}
-          <button
-            ref={lightboxCloseRef}
-            onClick={() => setLightboxIdx(null)}
-            aria-label={t(locale, "profile_close_gallery")}
-            className="absolute top-4 right-4 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-
-          {/* Prev */}
-          {lightboxIdx > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
-              aria-label={t(locale, "profile_prev_photo")}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors"
-            >
-              <span className="material-symbols-outlined rtl-flip">arrow_back</span>
-            </button>
-          )}
-
-          <img
-            src={company.gallery[lightboxIdx]}
-            alt={`${company.name} — photo ${lightboxIdx + 1}`}
-            className="max-w-full max-h-[90vh] rounded-xl object-contain shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-            draggable={false}
-          />
-
-          {/* Next */}
-          {lightboxIdx < company.gallery.length - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
-              aria-label={t(locale, "profile_next_photo")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors"
-            >
-              <span className="material-symbols-outlined rtl-flip">arrow_forward</span>
-            </button>
-          )}
-
-          {/* Counter */}
-          {company.gallery.length > 1 && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-[13px] font-bold bg-black/40 px-3 py-1 rounded-full pointer-events-none">
-              {lightboxIdx + 1} / {company.gallery.length}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -585,7 +503,6 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
   const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaReset, setCaptchaReset] = useState(0);
-  const { containerRef, trapTab } = useDialogA11y(true, onClose);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -616,35 +533,14 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/45 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        ref={containerRef}
-        onKeyDown={trapTab}
-        role="dialog"
-        aria-modal
-        aria-label={t(locale, "feedback_title")}
-        className="bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20">
-          <h2 className="font-bold text-[17px] text-on-surface">{t(locale, "feedback_title")}</h2>
-          <button onClick={onClose} aria-label={t(locale, "common_close")} className="p-1.5 rounded-lg hover:bg-surface-container transition-colors">
-            <span className="material-symbols-outlined text-outline">close</span>
-          </button>
-        </div>
-
+    <Modal onClose={onClose} title={t(locale, "feedback_title")}>
         <div className="p-5">
           {submitted ? (
             <div className="text-center py-6">
-              <span className="material-symbols-outlined text-primary text-[48px] mb-3 block"
-                style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-              <p className="font-bold text-[17px] text-on-surface mb-1">{t(locale, "feedback_received")}</p>
-              <p className="text-[14px] text-outline mb-5">{t(locale, "feedback_received_sub")}</p>
-              <button onClick={onClose} className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-[14px]">{t(locale, "common_close")}</button>
+              <Icon name="check_circle" className="text-primary text-[48px] mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }} />
+              <p className="font-bold text-subhead text-on-surface mb-1">{t(locale, "feedback_received")}</p>
+              <p className="text-label text-outline mb-5">{t(locale, "feedback_received_sub")}</p>
+              <button onClick={onClose} className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-label">{t(locale, "common_close")}</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -656,10 +552,10 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                     <button
                       key={ft} type="button"
                       onClick={() => setType(ft)}
-                      className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-[12px] font-bold transition-colors
+                      className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-caption font-bold transition-colors
                         ${type === ft ? "border-primary bg-primary/8 text-primary" : "border-outline-variant/30 text-outline hover:border-outline-variant/60"}`}
                     >
-                      <span className="material-symbols-outlined text-[20px]">{icons[ft]}</span>
+                      <span className="material-symbols-outlined text-title" aria-hidden="true" translate="no">{icons[ft]}</span>
                       {typeLabels[ft]}
                     </button>
                   );
@@ -667,26 +563,26 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
               </div>
 
               {/* Regarding */}
-              <div className="flex items-center gap-2 bg-surface-container rounded-xl px-3 py-2.5 text-[13px] text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px] text-outline">business</span>
+              <div className="flex items-center gap-2 bg-surface-container rounded-xl px-3 py-2.5 text-label text-on-surface-variant">
+                <Icon name="business" className="text-body text-outline" />
                 {t(locale, "feedback_regarding")} <span className="font-bold text-on-surface ms-1">{companyName}</span>
               </div>
 
               {/* Name + Phone */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "feedback_your_name")}</label>
-                  <input className="field-input !py-2 text-[13px]" placeholder={t(locale, "feedback_optional")} value={name} onChange={(e) => setName(e.target.value)} />
+                  <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "feedback_your_name")}</label>
+                  <input className="field-input !py-2 text-label" placeholder={t(locale, "feedback_optional")} value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "feedback_phone")}</label>
-                  <input className="field-input !py-2 text-[13px]" placeholder={t(locale, "feedback_optional")} value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
+                  <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "feedback_phone")}</label>
+                  <input className="field-input !py-2 text-label" placeholder={t(locale, "feedback_optional")} value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
                 </div>
               </div>
 
               {/* Message */}
               <div>
-                <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "feedback_message")} <span className="text-error">*</span></label>
+                <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "feedback_message")} <span className="text-error">*</span></label>
                 <textarea
                   className={`field-input resize-none ${error ? "error" : ""}`}
                   rows={4}
@@ -694,7 +590,7 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                   value={message}
                   onChange={(e) => { setMessage(e.target.value); if (error) setError(""); }}
                 />
-                {error && <p className="text-[12px] text-error font-bold mt-1">{error}</p>}
+                {error && <p className="text-caption text-error font-bold mt-1">{error}</p>}
               </div>
 
               {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
@@ -703,7 +599,7 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] transition-colors touch-press
+                className={`w-full bg-primary text-on-primary py-3 rounded-xl font-bold text-label transition-colors touch-press
                   ${isSubmitting ? "opacity-80 cursor-not-allowed" : "hover:bg-primary-container btn-press"}`}
               >
                 {t(locale, "feedback_send")}
@@ -730,8 +626,7 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
             </form>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -756,7 +651,6 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
   const [honeypot, setHoneypot] = useState("");
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaReset, setCaptchaReset] = useState(0);
-  const { containerRef, trapTab } = useDialogA11y(true, onClose);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -785,80 +679,65 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-on-background/45 backdrop-blur-sm"
-      onClick={onClose}
+    <Modal
+      onClose={onClose}
+      title={
+        <>
+          <Icon name="hourglass_top" className="text-amber-500 text-title" style={{ fontVariationSettings: "'FILL' 1" }} />
+          {t(locale, "waitlist_modal_title")}
+        </>
+      }
     >
-      <div
-        ref={containerRef}
-        onKeyDown={trapTab}
-        role="dialog"
-        aria-modal
-        aria-label={t(locale, "waitlist_modal_title")}
-        className="bg-surface-container-lowest w-full max-w-md rounded-2xl shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/20">
-          <h2 className="font-bold text-[17px] text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-amber-500 text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
-            {t(locale, "waitlist_modal_title")}
-          </h2>
-          <button onClick={onClose} aria-label={t(locale, "common_close")} className="p-1.5 rounded-lg hover:bg-surface-container transition-colors">
-            <span className="material-symbols-outlined text-outline">close</span>
-          </button>
-        </div>
-
         <div className="p-5">
           {submitted ? (
             <div className="text-center py-6">
-              <span className="material-symbols-outlined text-green-600 text-[48px] mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-              <p className="font-bold text-[17px] text-on-surface mb-1">{t(locale, "waitlist_success")}</p>
-              <p className="text-[14px] text-outline mb-5">{t(locale, "waitlist_success_sub")}</p>
-              <button onClick={onClose} className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-[14px]">{t(locale, "common_close")}</button>
+              <Icon name="check_circle" className="text-green-600 text-[48px] mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }} />
+              <p className="font-bold text-subhead text-on-surface mb-1">{t(locale, "waitlist_success")}</p>
+              <p className="text-label text-outline mb-5">{t(locale, "waitlist_success_sub")}</p>
+              <button onClick={onClose} className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-label">{t(locale, "common_close")}</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Regarding */}
-              <div className="flex items-center gap-2 bg-surface-container rounded-xl px-3 py-2.5 text-[13px] text-on-surface-variant">
-                <span className="material-symbols-outlined text-[16px] text-outline">business</span>
+              <div className="flex items-center gap-2 bg-surface-container rounded-xl px-3 py-2.5 text-label text-on-surface-variant">
+                <Icon name="business" className="text-body text-outline" />
                 {t(locale, "feedback_regarding")} <span className="font-bold text-on-surface ms-1">{companyName}</span>
               </div>
 
-              <p className="text-[13px] text-outline leading-relaxed">{t(locale, "waitlist_modal_sub")}</p>
+              <p className="text-label text-outline leading-relaxed">{t(locale, "waitlist_modal_sub")}</p>
 
               {/* Name + Phone */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_your_name")} <span className="text-error">*</span></label>
-                  <input className="field-input !py-2 text-[13px]" value={name} onChange={(e) => { setName(e.target.value); if (error) setError(""); }} />
+                  <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_your_name")} <span className="text-error">*</span></label>
+                  <input className="field-input !py-2 text-label" value={name} onChange={(e) => { setName(e.target.value); if (error) setError(""); }} />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_phone")} <span className="text-error">*</span></label>
-                  <input className="field-input !py-2 text-[13px]" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); if (error) setError(""); }} />
+                  <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_phone")} <span className="text-error">*</span></label>
+                  <input className="field-input !py-2 text-label" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); if (error) setError(""); }} />
                 </div>
               </div>
 
               {/* Service */}
               <div>
-                <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_service")}</label>
+                <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_service")}</label>
                 {services.length > 0 ? (
-                  <select className="field-input !py-2 text-[13px]" value={service} onChange={(e) => setService(e.target.value)}>
+                  <select className="field-input !py-2 text-label" value={service} onChange={(e) => setService(e.target.value)}>
                     <option value="">—</option>
                     {services.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 ) : (
-                  <input className="field-input !py-2 text-[13px]" value={service} onChange={(e) => setService(e.target.value)} />
+                  <input className="field-input !py-2 text-label" value={service} onChange={(e) => setService(e.target.value)} />
                 )}
               </div>
 
               {/* Note */}
               <div>
-                <label className="block text-[12px] font-bold text-on-surface mb-1">{t(locale, "waitlist_note")}</label>
+                <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_note")}</label>
                 <textarea className="field-input resize-none" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
               </div>
 
-              {error && <p className="text-[12px] text-error font-bold">{error}</p>}
+              {error && <p className="text-caption text-error font-bold">{error}</p>}
 
               {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
               <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
@@ -866,7 +745,7 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={`w-full bg-amber-500 text-white py-3 rounded-xl font-bold text-[14px] transition-colors touch-press
+                className={`w-full bg-amber-500 text-white py-3 rounded-xl font-bold text-label transition-colors touch-press
                   ${isSubmitting ? "opacity-80 cursor-not-allowed" : "hover:bg-amber-600 btn-press"}`}
               >
                 {t(locale, "waitlist_send")}
@@ -890,8 +769,7 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
             </form>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -917,10 +795,10 @@ function AvailabilityBadge({ company, locale }: {
 
   return (
     <span
-      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-label-sm ${style}`}
+      className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-caption ${style}`}
       title={company.busyReason ?? undefined}
     >
-      <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "FILL 1" }}>{icon}</span>
+      <span className="material-symbols-outlined text-label" style={{ fontVariationSettings: "FILL 1" }} aria-hidden="true" translate="no">{icon}</span>
       {text}
     </span>
   );

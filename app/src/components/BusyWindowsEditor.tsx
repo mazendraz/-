@@ -7,6 +7,7 @@ import {
 import { isApiConfigured } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
+import Icon from "./Icon";
 
 /**
  * Scheduled unavailability, under the manual busy switch.
@@ -98,24 +99,24 @@ export default function BusyWindowsEditor({ companyId }: {
     <div className="mt-5 pt-5 border-t border-outline-variant/20">
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
-          <p className="font-bold text-[15px] text-on-surface">
+          <p className="font-bold text-body text-on-surface">
             {t(locale, "prov_bw_title")}
           </p>
-          <p className="text-[13px] text-outline mt-0.5">
+          <p className="text-label text-outline mt-0.5">
             {t(locale, "prov_bw_desc")}
           </p>
         </div>
         <button
           onClick={() => setAdding((v) => !v)}
-          className="flex items-center gap-1.5 bg-surface-container px-3 py-2 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 bg-surface-container px-3 py-2 rounded-xl font-bold text-label text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0"
         >
-          <span className="material-symbols-outlined text-[17px]">{adding ? "close" : "add"}</span>
+          <span className="material-symbols-outlined text-subhead" aria-hidden="true" translate="no">{adding ? "close" : "add"}</span>
           {t(locale, adding ? "prov_bw_cancel" : "prov_bw_add")}
         </button>
       </div>
 
       {error && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold mb-3">
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold mb-3">
           {error}
         </div>
       )}
@@ -124,7 +125,7 @@ export default function BusyWindowsEditor({ companyId }: {
         <div className="bg-surface-container rounded-xl p-4 mb-3 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="block">
-              <span className="block text-[12px] font-bold text-outline mb-1.5">
+              <span className="block text-caption font-bold text-outline mb-1.5">
                 {t(locale, "prov_bw_from")}
               </span>
               <input
@@ -134,7 +135,7 @@ export default function BusyWindowsEditor({ companyId }: {
               />
             </label>
             <label className="block">
-              <span className="block text-[12px] font-bold text-outline mb-1.5">
+              <span className="block text-caption font-bold text-outline mb-1.5">
                 {t(locale, "prov_bw_to")}
               </span>
               <input
@@ -149,9 +150,9 @@ export default function BusyWindowsEditor({ companyId }: {
             <input
               type="checkbox" checked={form.openEnded}
               onChange={(e) => setForm({ ...form, openEnded: e.target.checked })}
-              className="w-4 h-4 accent-[color:var(--color-primary,#8a6a4f)]"
+              className="w-4 h-4 accent-primary"
             />
-            <span className="text-[13px] text-on-surface">
+            <span className="text-label text-on-surface">
               {t(locale, "prov_bw_open_ended")}
             </span>
           </label>
@@ -159,13 +160,13 @@ export default function BusyWindowsEditor({ companyId }: {
             // Worth saying up front: the server closes the previous open period
             // rather than rejecting this one, and a silent replacement is
             // confusing if you didn't expect it.
-            <p className="text-[12px] text-outline">
+            <p className="text-caption text-outline">
               {t(locale, "prov_bw_open_ended_note")}
             </p>
           )}
 
           <label className="block">
-            <span className="block text-[12px] font-bold text-outline mb-1.5">
+            <span className="block text-caption font-bold text-outline mb-1.5">
               {t(locale, "prov_bw_note_label")}
             </span>
             <input
@@ -177,9 +178,9 @@ export default function BusyWindowsEditor({ companyId }: {
 
           <button
             onClick={() => void add()} disabled={busy}
-            className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
           >
-            <span className="material-symbols-outlined text-[17px]">event_busy</span>
+            <Icon name="event_busy" className="text-subhead" />
             {t(locale, busy ? "prov_bw_saving" : "prov_bw_save")}
           </button>
         </div>
@@ -190,7 +191,7 @@ export default function BusyWindowsEditor({ companyId }: {
           <div className="w-6 h-6 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
         </div>
       ) : items.length === 0 ? (
-        <p className="text-[13px] text-outline py-2">
+        <p className="text-label text-outline py-2">
           {t(locale, "prov_bw_empty")}
         </p>
       ) : (
@@ -202,30 +203,30 @@ export default function BusyWindowsEditor({ companyId }: {
               <div
                 key={w.id}
                 className={`flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 border ${
-                  running ? "bg-amber-50 border-amber-200" : "bg-surface-container-lowest border-outline-variant/20"
+                  running ? "bg-warning-container border-warning" : "bg-surface-container-lowest border-outline-variant/20"
                 }`}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-bold text-on-surface">
+                    <span className="text-label font-bold text-on-surface">
                       {formatWindowRange(w, locale)}
                     </span>
                     {running && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                      <span className="text-caption font-bold px-2 py-0.5 rounded-full bg-warning-container text-on-warning-container">
                         {t(locale, "prov_bw_running")}
                       </span>
                     )}
                     {w.createdByAdmin && (
                       <span
-                        className="flex items-center gap-0.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-container text-outline"
+                        className="flex items-center gap-0.5 text-caption font-bold px-2 py-0.5 rounded-full bg-surface-container text-outline"
                         title={t(locale, "prov_bw_admin_title")}
                       >
-                        <span className="material-symbols-outlined text-[12px]">lock</span>
+                        <Icon name="lock" className="text-caption" />
                         {t(locale, "prov_bw_admin_badge")}
                       </span>
                     )}
                   </div>
-                  {w.note && <p className="text-[12px] text-outline mt-0.5">{w.note}</p>}
+                  {w.note && <p className="text-caption text-outline mt-0.5">{w.note}</p>}
                 </div>
 
                 <button
@@ -237,7 +238,7 @@ export default function BusyWindowsEditor({ companyId }: {
                   className="text-outline hover:text-error transition-colors disabled:opacity-30 flex-shrink-0"
                   aria-label={t(locale, "prov_bw_remove")}
                 >
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                  <Icon name="delete" className="text-subhead" />
                 </button>
               </div>
             );

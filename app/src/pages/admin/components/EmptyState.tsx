@@ -1,8 +1,6 @@
-export function EmptyState({ msg, icon }: { msg: string; icon: string }) {
-  return (
-    <div className="text-center py-14 px-6">
-      <span className="material-symbols-outlined text-outline text-[48px] mb-3 block">{icon}</span>
-      <p className="text-[15px] text-outline max-w-sm mx-auto">{msg}</p>
-    </div>
-  );
-}
+// Re-exports the shared `<EmptyState>` (CMP-05) under its old admin-local name
+// so the ~20 existing `import { EmptyState } from "./components/EmptyState"`
+// call sites across the admin tabs don't all need touching. The real
+// component now lives in `src/components/EmptyState.tsx` — used by public
+// pages, admin, and the provider dashboard alike.
+export { default as EmptyState } from "../../../components/EmptyState";

@@ -8,7 +8,9 @@ import { CompanyStatus, WaitlistStatus } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/utils/errors";
 import { serializeWaitlistEntry } from "@/lib/utils/serialize";
 import { phoneTail } from "@/lib/utils/phone";
+import * as leadsService from "@/lib/services/leads.service";
 import type {
+  ApiLead,
   ApiPage,
   ApiWaitlistEntry,
   ApiWaitlistPayload,
@@ -162,6 +164,54 @@ async function ownedEntry(companyId: string, entryId: string): Promise<string> {
   return entry.id;
 }
 
+/**
+ * Provider/admin: "accept" a waitlisted request. Fully converts the entry into a
+ * normal Lead via leadsService.createLeadRecord — the SAME creation path used by a
+ * direct customer submission — so the result enters the real CRM pipeline (status
+ * NEW, a refNumber, a chat thread, notifications, dashboard stats, everything).
+ * The entry never collected district/budget (a waitlist join only asks for
+ * name/phone/service/note), so those two required Lead fields get a placeholder;
+ * everything the entry DID collect is carried over verbatim.
+ *
+ * Idempotent: a waitlist entry can only ever be converted once. If it already has
+ * a convertedLeadId (e.g. a retried request, or CONVERTED being re-selected in the
+ * status dropdown), the existing Lead is returned instead of creating another one
+ * — this is what "no duplicate records" requires.
+ */
+export async function convertToLead(companyId: string, entryId: string): Promise<ApiLead> {
+  const entry = await prisma.waitlistEntry.findFirst({ where: { id: entryId, companyId } });
+  if (!entry) throw new NotFoundError("Waitlist entry");
+
+  if (entry.convertedLeadId) {
+    const existing = await leadsService.getById(entry.convertedLeadId);
+    if (existing) return existing;
+  }
+
+  const company = await prisma.company.findUniqueOrThrow({
+    where: { id: companyId },
+    select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
+  });
+
+  const lead = await leadsService.createLeadRecord({
+    company,
+    service: entry.service?.trim() || "Not specified",
+    customerName: entry.name,
+    phone: entry.phone,
+    district: "Not specified",
+    budget: "Not specified",
+    description: entry.note?.trim()
+      ? entry.note.trim()
+      : `Accepted from the waiting list${entry.service ? ` (waiting for: ${entry.service})` : ""}.`,
+  });
+
+  await prisma.waitlistEntry.update({
+    where: { id: entryId },
+    data: { status: WaitlistStatus.CONVERTED, convertedLeadId: lead.id },
+  });
+
+  return lead;
+}
+
 /** Provider/admin: move an entry through the waitlist lifecycle. */
 export async function setStatus(
   companyId: string,
@@ -169,9 +219,19 @@ export async function setStatus(
   status: ApiWaitlistStatus,
 ): Promise<ApiWaitlistEntry> {
   await ownedEntry(companyId, entryId);
-  const row = await prisma.waitlistEntry.update({
+
+  if (status === "CONVERTED") {
+    // Special-cased: converting is more than a status flip, see convertToLead.
+    await convertToLead(companyId, entryId);
+  } else {
+    await prisma.waitlistEntry.update({
+      where: { id: entryId },
+      data: { status: status as WaitlistStatus },
+    });
+  }
+
+  const row = await prisma.waitlistEntry.findUniqueOrThrow({
     where: { id: entryId },
-    data: { status: status as WaitlistStatus },
     include: waitlistInclude,
   });
   return serializeWaitlistEntry(row);

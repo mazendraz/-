@@ -10,6 +10,7 @@ import { listMyChangeRequests, type ChangeRequest } from "../lib/changeRequests"
 import { isApiConfigured } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
+import Icon from "./Icon";
 
 /**
  * The provider's "Services & Pricing" screen.
@@ -74,8 +75,8 @@ export default function OfferingsEditor() {
   if (!isApiConfigured()) {
     return (
       <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
-        <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">info</span>
-        <p className="text-body-md text-on-surface-variant text-sm">
+        <Icon name="info" className="text-primary text-title flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-on-surface-variant">
           {t(locale, "prov_off_needs_api")}
         </p>
       </div>
@@ -93,33 +94,33 @@ export default function OfferingsEditor() {
   return (
     <div className="space-y-4 max-w-3xl">
       {(error || actionError) && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">
           {error || actionError}
         </div>
       )}
       {flash && (
-        <div className="bg-primary/10 border border-primary/25 text-primary rounded-xl px-4 py-2.5 text-[13px] font-bold">{flash}</div>
+        <div className="bg-primary/10 border border-primary/25 text-primary rounded-xl px-4 py-2.5 text-label font-bold">{flash}</div>
       )}
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="font-headline-md text-headline-md text-on-surface">{t(locale, "prov_off_title")}</h3>
-          <p className="text-[13px] text-outline mt-0.5">
+          <h3 className=" text-title text-on-surface">{t(locale, "prov_off_title")}</h3>
+          <p className="text-label text-outline mt-0.5">
             {t(locale, "prov_off_desc")}
           </p>
         </div>
         <button
           onClick={() => setEditing("new")}
-          className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors flex-shrink-0"
         >
-          <span className="material-symbols-outlined text-[18px]">add</span> {t(locale, "prov_off_add")}
+          <Icon name="add" className="text-subhead" /> {t(locale, "prov_off_add")}
         </button>
       </div>
 
       {items.length === 0 ? (
         <div className="bg-surface-container-lowest rounded-2xl shadow-bloom text-center py-14 px-6">
-          <span className="material-symbols-outlined text-outline text-[48px] mb-3 block">sell</span>
-          <p className="text-[15px] text-outline max-w-sm mx-auto">
+          <Icon name="sell" className="text-outline text-[48px] mb-3 block" />
+          <p className="text-body text-outline max-w-sm mx-auto">
             {t(locale, "prov_off_empty")}
           </p>
         </div>
@@ -135,22 +136,22 @@ export default function OfferingsEditor() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-[15px] text-on-surface truncate">{o.name}</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                      <p className="font-bold text-body text-on-surface truncate">{o.name}</p>
+                      <span className={`text-caption font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
                         {t(locale, badge.key)}
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-container text-outline">
+                      <span className="text-caption font-bold px-2 py-0.5 rounded-full bg-surface-container text-outline">
                         {t(locale, o.kind === "SERVICE" ? "prov_off_kind_service" : "prov_off_kind_product")}
                       </span>
                     </div>
-                    <p className="text-[14px] font-bold text-primary mt-1">{formatPrice(o, locale)}</p>
+                    <p className="text-label font-bold text-primary mt-1">{formatPrice(o, locale)}</p>
                     {o.description && (
-                      <p className="text-[13px] text-outline mt-0.5 line-clamp-2">{o.description}</p>
+                      <p className="text-label text-outline mt-0.5 line-clamp-2">{o.description}</p>
                     )}
                     {o.tiers.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 mt-2">
                         {o.tiers.map((t) => (
-                          <span key={t.id} className="text-[11px] bg-surface-container px-2 py-1 rounded-lg text-on-surface-variant">
+                          <span key={t.id} className="text-caption bg-surface-container px-2 py-1 rounded-lg text-on-surface-variant">
                             {t.label}
                             {formatQtyRange(t, locale) && ` · ${formatQtyRange(t, locale)}`}
                             {t.priceMin != null && ` · ${formatPrice({ pricingModel: "FIXED", priceMin: t.priceMin, priceMax: t.priceMax, unit: null }, locale)}`}
@@ -159,8 +160,8 @@ export default function OfferingsEditor() {
                       </div>
                     )}
                     {stale && (
-                      <p className="text-[12px] text-amber-700 mt-1.5 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px]">schedule</span>
+                      <p className="text-caption text-amber-700 mt-1.5 flex items-center gap-1">
+                        <Icon name="schedule" className="text-label" />
                         {t(locale, "prov_off_stale_before")} {priceAgeDays(o.priceUpdatedAt)} {t(locale, "prov_off_stale_after")}
                       </p>
                     )}
@@ -171,18 +172,18 @@ export default function OfferingsEditor() {
                       onClick={() => setEditing(o)}
                       disabled={locked || busyId === o.id}
                       title={locked ? t(locale, "prov_off_edit_locked") : undefined}
-                      className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40"
                     >
-                      <span className="material-symbols-outlined text-[14px]">edit</span> {t(locale, "prov_off_edit")}
+                      <Icon name="edit" className="text-label" /> {t(locale, "prov_off_edit")}
                     </button>
 
                     {!o.isPublished && state !== "pending-publish" && (
                       <button
                         onClick={() => run(o.id, () => requestPublish(o.id), t(locale, "prov_off_flash_publish"))}
                         disabled={busyId === o.id}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-caption font-bold text-primary hover:bg-primary/5 transition-colors disabled:opacity-40"
                       >
-                        <span className="material-symbols-outlined text-[14px]">publish</span> {t(locale, "prov_off_publish")}
+                        <Icon name="publish" className="text-label" /> {t(locale, "prov_off_publish")}
                       </button>
                     )}
 
@@ -191,9 +192,9 @@ export default function OfferingsEditor() {
                         onClick={() => run(o.id, () => setOfferingVisibility(o.id, { isActive: !o.isActive }), t(locale, o.isActive ? "prov_off_flash_hidden" : "prov_off_flash_visible"))}
                         disabled={busyId === o.id}
                         title={t(locale, "prov_off_visibility_hint")}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-primary transition-colors disabled:opacity-40"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-caption font-bold text-outline hover:text-primary transition-colors disabled:opacity-40"
                       >
-                        <span className="material-symbols-outlined text-[14px]">{o.isActive ? "visibility_off" : "visibility"}</span>
+                        <span className="material-symbols-outlined text-label" aria-hidden="true" translate="no">{o.isActive ? "visibility_off" : "visibility"}</span>
                         {t(locale, o.isActive ? "prov_off_hide" : "prov_off_show")}
                       </button>
                     )}
@@ -204,20 +205,20 @@ export default function OfferingsEditor() {
                         return res;
                       }, t(locale, o.isPublished ? "prov_off_flash_delete_review" : "prov_off_flash_deleted"))}
                       disabled={locked || busyId === o.id}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-error transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-caption font-bold text-outline hover:text-error transition-colors disabled:opacity-40"
                     >
-                      <span className="material-symbols-outlined text-[14px]">delete</span> {t(locale, "prov_off_delete")}
+                      <Icon name="delete" className="text-label" /> {t(locale, "prov_off_delete")}
                     </button>
                   </div>
                 </div>
 
                 {locked && (
-                  <p className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                  <p className="text-caption text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
                     {t(locale, "prov_off_locked_note")}
                   </p>
                 )}
                 {o.isPublished && (
-                  <p className="text-[12px] text-outline mt-2">
+                  <p className="text-caption text-outline mt-2">
                     {t(locale, "prov_off_live_note")}
                   </p>
                 )}
@@ -337,47 +338,47 @@ function OfferingModal({ offering, onClose, onSaved }: {
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm">
       <div className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/15 sticky top-0 bg-surface-container-lowest z-10">
-          <h3 className="font-bold text-[16px] text-on-surface">
+          <h3 className="font-bold text-body text-on-surface">
             {t(locale, offering ? "prov_off_modal_edit" : "prov_off_modal_new")}
           </h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-container" aria-label={t(locale, "common_close")}>
-            <span className="material-symbols-outlined text-outline">close</span>
+            <Icon name="close" className="text-outline" />
           </button>
         </div>
 
         <div className="p-5 space-y-4">
           {error && (
-            <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{error}</div>
+            <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">{error}</div>
           )}
 
           {offering?.isPublished && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
-              <p className="text-[13px] text-amber-900 font-bold">
+              <p className="text-label text-amber-900 font-bold">
                 {t(locale, "prov_off_live_warning")}
               </p>
             </div>
           )}
 
           <div>
-            <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_name")} *</label>
+            <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_name")} *</label>
             <input className="field-input" value={form.name} onChange={(e) => set("name", e.target.value)} />
           </div>
 
           <div>
-            <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_description")}</label>
+            <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_description")}</label>
             <textarea className="field-input" rows={3} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_type")}</label>
+              <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_type")}</label>
               <select className="field-input" value={form.kind} onChange={(e) => set("kind", e.target.value as "SERVICE" | "PRODUCT")}>
                 <option value="SERVICE">{t(locale, "prov_off_kind_service")}</option>
                 <option value="PRODUCT">{t(locale, "prov_off_kind_product")}</option>
               </select>
             </div>
             <div>
-              <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_pricing")}</label>
+              <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_pricing")}</label>
               <select className="field-input" value={model} onChange={(e) => set("pricingModel", e.target.value as PricingModel)}>
                 {MODELS.map((m) => (
                   <option key={m} value={m}>{PRICING_MODEL_LABELS[m][locale]}</option>
@@ -387,13 +388,13 @@ function OfferingModal({ offering, onClose, onSaved }: {
           </div>
 
           {quoteOnly ? (
-            <p className="text-[13px] text-outline bg-surface-container rounded-xl px-3 py-2.5">
+            <p className="text-label text-outline bg-surface-container rounded-xl px-3 py-2.5">
               {t(locale, "prov_off_quote_note_before")} “{formatPrice({ pricingModel: "ON_INSPECTION", priceMin: null, priceMax: null, unit: null }, locale)}”. {t(locale, "prov_off_quote_note_after")}
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] font-bold text-outline mb-1.5">
+                <label className="block text-caption font-bold text-outline mb-1.5">
                   {t(locale, model === "RANGE" ? "prov_off_price_min" : "prov_off_price")} * {t(locale, "prov_off_currency")}
                 </label>
                 <input
@@ -404,7 +405,7 @@ function OfferingModal({ offering, onClose, onSaved }: {
               </div>
               {model === "RANGE" && (
                 <div>
-                  <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_price_max")} * {t(locale, "prov_off_currency")}</label>
+                  <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_price_max")} * {t(locale, "prov_off_currency")}</label>
                   <input
                     className="field-input" type="number" min={0}
                     value={form.priceMax ?? ""}
@@ -414,7 +415,7 @@ function OfferingModal({ offering, onClose, onSaved }: {
               )}
               {model === "PER_UNIT" && (
                 <div>
-                  <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_unit")} *</label>
+                  <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_unit")} *</label>
                   <select
                     className="field-input" value={form.unit ?? ""}
                     onChange={(e) => set("unit", (e.target.value || null) as PriceUnit | null)}
@@ -430,7 +431,7 @@ function OfferingModal({ offering, onClose, onSaved }: {
           )}
 
           <div>
-            <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_off_note_label")}</label>
+            <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_note_label")}</label>
             <input
               className="field-input" value={form.note ?? ""}
               onChange={(e) => set("note", e.target.value)}
@@ -441,19 +442,19 @@ function OfferingModal({ offering, onClose, onSaved }: {
           {/* Tiers only make sense on a saved row — they hang off its id. */}
           {offering && !quoteOnly && (
             <div className="border-t border-outline-variant/15 pt-4">
-              <p className="text-[12px] font-bold text-outline mb-2">{t(locale, "prov_off_tiers")}</p>
+              <p className="text-caption font-bold text-outline mb-2">{t(locale, "prov_off_tiers")}</p>
               {tiers.length > 0 && (
                 <div className="space-y-1.5 mb-3">
                   {tiers.map((tier) => (
                     <div key={tier.id} className="flex items-center justify-between gap-2 bg-surface-container rounded-lg px-3 py-2">
-                      <span className="text-[13px] text-on-surface truncate">
+                      <span className="text-label text-on-surface truncate">
                         {tier.label}
                         {formatQtyRange(tier, locale) && ` · ${formatQtyRange(tier, locale)}`}
                       </span>
                       {/* A band the customer cannot be quoted from yet must say so
                           on the row, not only in a flash message that scrolls away. */}
                       {!tier.isPublished && (
-                        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                        <span className="text-caption font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full flex-shrink-0">
                           {t(locale, "prov_off_tier_pending")}
                         </span>
                       )}
@@ -462,34 +463,34 @@ function OfferingModal({ offering, onClose, onSaved }: {
                         className="text-outline hover:text-error transition-colors flex-shrink-0 ms-auto"
                         aria-label={t(locale, "prov_off_tier_remove")}
                       >
-                        <span className="material-symbols-outlined text-[16px]">close</span>
+                        <Icon name="close" className="text-body" />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
               <div className="grid grid-cols-4 gap-2">
-                <input className="field-input col-span-2 !py-2 text-[13px]" placeholder={t(locale, "prov_off_tier_label")} value={newTier.label}
+                <input className="field-input col-span-2 !py-2 text-label" placeholder={t(locale, "prov_off_tier_label")} value={newTier.label}
                   onChange={(e) => setNewTier({ ...newTier, label: e.target.value })} />
-                <input className="field-input !py-2 text-[13px]" placeholder={t(locale, "prov_off_tier_from")} type="number" value={newTier.qtyMin}
+                <input className="field-input !py-2 text-label" placeholder={t(locale, "prov_off_tier_from")} type="number" value={newTier.qtyMin}
                   onChange={(e) => setNewTier({ ...newTier, qtyMin: e.target.value })} />
-                <input className="field-input !py-2 text-[13px]" placeholder={t(locale, "prov_off_tier_to")} type="number" value={newTier.qtyMax}
+                <input className="field-input !py-2 text-label" placeholder={t(locale, "prov_off_tier_to")} type="number" value={newTier.qtyMax}
                   onChange={(e) => setNewTier({ ...newTier, qtyMax: e.target.value })} />
               </div>
               <div className="flex gap-2 mt-2">
-                <input className="field-input !py-2 text-[13px]" placeholder={t(locale, "prov_off_tier_price")} type="number" value={newTier.priceMin}
+                <input className="field-input !py-2 text-label" placeholder={t(locale, "prov_off_tier_price")} type="number" value={newTier.priceMin}
                   onChange={(e) => setNewTier({ ...newTier, priceMin: e.target.value })} />
                 <button
                   onClick={() => void onAddTier()} disabled={busy || !newTier.label.trim()}
-                  className="bg-surface-container px-4 rounded-xl text-[13px] font-bold text-on-surface hover:bg-surface-container-high disabled:opacity-40 flex-shrink-0"
+                  className="bg-surface-container px-4 rounded-xl text-label font-bold text-on-surface hover:bg-surface-container-high disabled:opacity-40 flex-shrink-0"
                 >
                   {t(locale, "prov_off_tier_add")}
                 </button>
               </div>
               {tierFlash && (
-                <p className="text-[11px] font-bold text-primary mt-1.5">{tierFlash}</p>
+                <p className="text-caption font-bold text-primary mt-1.5">{tierFlash}</p>
               )}
-              <p className="text-[11px] text-outline mt-1.5">
+              <p className="text-caption text-outline mt-1.5">
                 {t(locale, "prov_off_tier_hint")}
               </p>
             </div>
@@ -498,12 +499,12 @@ function OfferingModal({ offering, onClose, onSaved }: {
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={() => void save()} disabled={busy || !form.name.trim()}
-              className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors disabled:opacity-50"
+              className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
             >
-              <span className="material-symbols-outlined text-[18px]">save</span>
+              <Icon name="save" className="text-subhead" />
               {busy ? t(locale, "prov_off_saving") : t(locale, offering?.isPublished ? "prov_off_send_review" : "prov_off_save")}
             </button>
-            <button onClick={onClose} className="text-[13px] font-bold text-outline hover:text-on-surface transition-colors">
+            <button onClick={onClose} className="text-label font-bold text-outline hover:text-on-surface transition-colors">
               {t(locale, "prov_off_cancel")}
             </button>
           </div>

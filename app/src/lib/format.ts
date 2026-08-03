@@ -16,18 +16,22 @@ import type { Locale } from "./i18n";
 /**
  * BCP-47 tag for a site locale, for DATES.
  *
- * ⚠ Plain "ar-EG" → Arabic-Indic digits (٢٩ يوليو ٢٠٢٦). That is exactly what
- * every date call did before this refactor, and this pass is a text move with no
- * behaviour change, so it is preserved verbatim.
- *
- * Note it disagrees with pricing.ts, which formats MONEY with
- * "ar-EG-u-nu-latn" (Latin digits: 12,000 ج). So Arabic screens currently show
- * Latin digits for money and Arabic-Indic digits for dates. That inconsistency
- * predates this change and is left alone deliberately — picking one is a product
- * decision, not a refactor. It is on the findings list for Mazen.
+ * I18N-04: plain "ar-EG" renders Arabic-Indic digits (٢٩ يوليو ٢٠٢٦), which
+ * used to disagree with pricing.ts's money formatting ("ar-EG-u-nu-latn" →
+ * Latin digits, "12,000 ج"). Mazen picked one rule for the whole product:
+ * Latin digits everywhere, Arabic or not — matches how Egyptian
+ * e-commerce/services apps commonly render numerals even inside Arabic text.
+ * The `-u-nu-latn` Unicode extension forces that numbering system.
  */
 export function intlLocale(locale: Locale): string {
-  return locale === "ar" ? "ar-EG" : "en-US";
+  return locale === "ar" ? "ar-EG-u-nu-latn" : "en-US";
+}
+
+/** General-purpose number formatting (counts, ratings, percentages) — the
+ * same Latin-digit rule as dates and money, so a count next to a date next to
+ * a price never disagrees on numeral style. */
+export function formatNumber(locale: Locale, n: number, options?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(intlLocale(locale), options).format(n);
 }
 
 /** Short date: "29 Jul 2026" / "٢٩ يوليو ٢٠٢٦" (Latin digits). */

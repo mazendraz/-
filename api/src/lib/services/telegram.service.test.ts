@@ -1,10 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { phoneTail } from "@/lib/utils/phone";
 import type { ApiLead } from "@/lib/apiTypes";
 
 const findMany = vi.fn();
 const findUnique = vi.fn();
 const update = vi.fn();
+const userFindMany = vi.fn();
+const userFindUnique = vi.fn();
+const userUpdate = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     company: {
@@ -12,12 +15,22 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: (...a: unknown[]) => findUnique(...a),
       update: (...a: unknown[]) => update(...a),
     },
+    user: {
+      findMany: (...a: unknown[]) => userFindMany(...a),
+      findUnique: (...a: unknown[]) => userFindUnique(...a),
+      update: (...a: unknown[]) => userUpdate(...a),
+    },
   },
 }));
 
-const { buildLeadTelegramMessage, handleTelegramUpdate, linkProviderByToken } = await import(
-  "@/lib/services/telegram.service"
-);
+const {
+  buildLeadTelegramMessage,
+  handleTelegramUpdate,
+  linkProviderByToken,
+  linkAdminByToken,
+  notifyAdminTelegram,
+  notifyAdminChatTelegram,
+} = await import("@/lib/services/telegram.service");
 
 const lead: ApiLead = {
   id: "lead-1",
@@ -164,5 +177,135 @@ describe("linkProviderByToken", () => {
     await handleTelegramUpdate({ message: { chat: { id: 777 }, text: "/start" } });
     expect(findUnique).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe("linkAdminByToken", () => {
+  beforeEach(() => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    userFindUnique.mockReset();
+    userUpdate.mockReset();
+  });
+
+  it("binds the chat and burns the token when the token is valid", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "u1",
+      name: "Mazen",
+      telegramLinkExpires: new Date(Date.now() + 60_000),
+    });
+    await expect(linkAdminByToken("tok", 777)).resolves.toBe("Mazen");
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { telegramChatId: "777", telegramLinkToken: null, telegramLinkExpires: null },
+    });
+  });
+
+  it("refuses an expired token and does not bind a chat", async () => {
+    userFindUnique.mockResolvedValue({
+      id: "u1",
+      name: "Mazen",
+      telegramLinkExpires: new Date(Date.now() - 60_000),
+    });
+    await expect(linkAdminByToken("tok", 777)).resolves.toBeNull();
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { telegramLinkToken: null, telegramLinkExpires: null },
+    });
+  });
+
+  it("refuses an unknown token", async () => {
+    userFindUnique.mockResolvedValue(null);
+    await expect(linkAdminByToken("nope", 777)).resolves.toBeNull();
+    expect(userUpdate).not.toHaveBeenCalled();
+  });
+
+  it("a /start <token> deep link falls through to the admin table when no company owns the token", async () => {
+    findUnique.mockResolvedValue(null); // no company owns this token
+    userFindUnique.mockResolvedValue({
+      id: "u1",
+      name: "Mazen",
+      telegramLinkExpires: new Date(Date.now() + 60_000),
+    });
+    await handleTelegramUpdate({ message: { chat: { id: 777 }, text: "/start abc123" } });
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { telegramLinkToken: "abc123" },
+      select: { id: true, name: true, telegramLinkExpires: true },
+    });
+    expect(userUpdate).toHaveBeenCalledWith({
+      where: { id: "u1" },
+      data: { telegramChatId: "777", telegramLinkToken: null, telegramLinkExpires: null },
+    });
+  });
+
+  it("never touches the admin table when the token already resolved to a company", async () => {
+    findUnique.mockResolvedValue({
+      id: "c1",
+      name: "Aura Interiors",
+      telegramLinkExpires: new Date(Date.now() + 60_000),
+    });
+    await handleTelegramUpdate({ message: { chat: { id: 777 }, text: "/start abc123" } });
+    expect(userFindUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe("admin notification fan-out (adminChatIds)", () => {
+  const lead: ApiLead = {
+    id: "lead-1", refNumber: "AA-20260101-7F3K", companySlug: "aura-interiors",
+    companyName: "Aura Interiors", service: "Full Interior Design", name: "Mona Adel",
+    phone: "01012345678", district: "R7 District", budget: "EGP 150,000 – 500,000",
+    description: "Need a full fit-out", status: "New", reviewed: false, createdAt: Date.UTC(2026, 0, 1),
+  };
+
+  beforeEach(() => {
+    process.env.TELEGRAM_BOT_TOKEN = "test-bot-token";
+    userFindMany.mockReset();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+  });
+  afterEach(() => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_ADMIN_CHAT_ID;
+    vi.unstubAllGlobals();
+  });
+
+  it("sends to every linked admin's chat id, deduplicated against the legacy env var", async () => {
+    process.env.TELEGRAM_ADMIN_CHAT_ID = "111";
+    userFindMany.mockResolvedValue([{ telegramChatId: "111" }, { telegramChatId: "222" }]);
+
+    await expect(notifyAdminTelegram(lead, "Aura Interiors")).resolves.toBe(true);
+
+    expect(userFindMany).toHaveBeenCalledWith({
+      where: { role: "ADMIN", isActive: true, telegramChatId: { not: null } },
+      select: { telegramChatId: true },
+    });
+    const chatIdsSent = (fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+      (call: unknown[]) => JSON.parse((call[1] as RequestInit).body as string).chat_id,
+    );
+    expect(new Set(chatIdsSent)).toEqual(new Set(["111", "222"])); // "111" sent once, not twice
+    expect(chatIdsSent).toHaveLength(2);
+  });
+
+  it("works with only self-linked admins and no legacy env var set", async () => {
+    userFindMany.mockResolvedValue([{ telegramChatId: "333" }]);
+    await expect(notifyAdminChatTelegram("hi")).resolves.toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips sending when no admin is linked and no env var is set", async () => {
+    userFindMany.mockResolvedValue([]);
+    await expect(notifyAdminTelegram(lead, "Aura Interiors")).resolves.toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("one admin's failed send never blocks another admin's message", async () => {
+    process.env.TELEGRAM_ADMIN_CHAT_ID = "111";
+    userFindMany.mockResolvedValue([{ telegramChatId: "222" }]);
+    (fetch as ReturnType<typeof vi.fn>).mockImplementation(async (_url: string, init: RequestInit) => {
+      const chatId = JSON.parse(init.body as string).chat_id;
+      if (chatId === "111") return { ok: false, status: 500, text: async () => "boom" };
+      return { ok: true, text: async () => "" };
+    });
+
+    await expect(notifyAdminTelegram(lead, "Aura Interiors")).resolves.toBe(true); // the "222" send still went through
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

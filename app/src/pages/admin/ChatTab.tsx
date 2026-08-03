@@ -115,7 +115,7 @@ export function ChatTab() {
       </div>
 
       {errorText && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{errorText}</div>
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">{errorText}</div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[20rem_1fr] gap-4">
@@ -156,17 +156,17 @@ export function ChatTab() {
             <>
               <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-outline-variant/15">
                 <div className="min-w-0">
-                  <p className="font-bold text-[14px] text-on-surface truncate">{active.companyName}</p>
-                  <p className="text-[12px] text-outline truncate">
+                  <p className="font-bold text-label text-on-surface truncate">{active.companyName}</p>
+                  <p className="text-caption text-outline truncate">
                     {active.customerName} · <span className="font-mono">{active.refNumber}</span>
                   </p>
                 </div>
                 <button
                   onClick={() => void toggleClosed()}
                   disabled={busy}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-bold text-outline hover:text-error transition-colors disabled:opacity-50 flex-shrink-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-caption font-bold text-outline hover:text-error transition-colors disabled:opacity-50 flex-shrink-0"
                 >
-                  <span className="material-symbols-outlined text-[16px]">{active.closed ? "lock_open" : "lock"}</span>
+                  <span className="material-symbols-outlined text-body" aria-hidden="true" translate="no">{active.closed ? "lock_open" : "lock"}</span>
                   {t(locale, active.closed ? "admin_chat_reopen" : "admin_chat_close")}
                 </button>
               </div>
@@ -184,7 +184,7 @@ export function ChatTab() {
             </>
           ) : (
             <div className="flex items-center justify-center h-[26rem]">
-              <p className="text-[13px] text-outline">{t(locale, "admin_chat_pick")}</p>
+              <p className="text-label text-outline">{t(locale, "admin_chat_pick")}</p>
             </div>
           )}
         </div>

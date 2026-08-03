@@ -25,6 +25,39 @@ interface RowState {
 }
 
 /**
+ * The actual gate for Phase 9 (category pricing mode) — hiding the pricing tab
+ * in the provider dashboard is decoration, not security. Anyone who can reach
+ * this service (a route, a script, a future endpoint) must pass through here
+ * first, so a company with no FIXED_CATALOG category can never end up with a
+ * live Offering no matter which door someone comes in through.
+ *
+ * A company may belong to several categories (see CompanyCategory) — this is a
+ * PERMISSIVE UNION: eligible if ANY linked category is FIXED_CATALOG, not just
+ * the primary one. A company doing both "Interior Finishing" (FIXED_CATALOG)
+ * and "Landscaping" (QUOTE_ONLY) still gets a catalog.
+ *
+ * Checked at CREATE/EDIT/PUBLISH time only — never on delete, hide, or
+ * reordering. A category can be switched away from FIXED_CATALOG after
+ * companies already have live Offerings (see categories.service.ts), and those
+ * companies must still be able to withdraw or hide what they already have;
+ * they just can't add to or change it anymore (unless another linked category
+ * still keeps them eligible).
+ */
+async function assertCatalogEnabled(companyId: string): Promise<void> {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { categories: { select: { category: { select: { pricingMode: true } } } } },
+  });
+  if (!company) throw new NotFoundError("Company");
+  const eligible = company.categories.some((cc) => cc.category.pricingMode === "FIXED_CATALOG");
+  if (!eligible) {
+    throw new ValidationError(
+      "None of this company's categories use a fixed price catalog, so offerings can't be created or edited.",
+    );
+  }
+}
+
+/**
  * Decide how a write to this row must be performed — and refuse outright when a
  * publish request is pending against it.
  *
@@ -204,6 +237,7 @@ export interface OfferingInput {
 
 /** Always creates a DRAFT. Nothing reaches the public profile without approval. */
 export async function create(companyId: string, input: OfferingInput): Promise<ApiOffering> {
+  await assertCatalogEnabled(companyId);
   const created = await prisma.offering.create({
     data: {
       companyId,
@@ -242,6 +276,7 @@ export async function update(
   id: string,
   patch: Partial<OfferingInput>,
 ): Promise<UpdateResult> {
+  await assertCatalogEnabled(companyId);
   const row = await loadOwned(companyId, id);
   const path = await assertWritePath("OFFERING", row);
 
@@ -304,6 +339,7 @@ export async function requestPublish(
   companyId: string,
   id: string,
 ): Promise<{ changeRequestId: string }> {
+  await assertCatalogEnabled(companyId);
   const row = await loadOwned(companyId, id);
   if (row.isPublished) throw new ValidationError("This offering is already published.");
   // Also surfaces the 409 when a publish request is already pending.
@@ -409,6 +445,7 @@ export async function addTier(
   offeringId: string,
   input: TierInput,
 ): Promise<TierWriteResult> {
+  await assertCatalogEnabled(companyId);
   const row = await loadOwned(companyId, offeringId);
   const path = await assertWritePath("OFFERING", row);
 
@@ -522,6 +559,7 @@ export async function createBundleRule(
   companyId: string,
   input: { label?: string | null; minItems: number; discountPercent: number },
 ): Promise<ApiBundleRule> {
+  await assertCatalogEnabled(companyId);
   const created = await prisma.bundleRule.create({
     data: {
       companyId,
@@ -537,8 +575,17 @@ export async function createBundleRule(
 // ── Admin ────────────────────────────────────────────────────────────────────
 
 /**
- * Admin writes go straight through, published immediately. An admin approving
- * their own change request would be pure ceremony.
+ * Admin writes go straight through, published immediately — both a new
+ * offering AND an edit to an existing one (draft or already-live). An admin
+ * approving their own change request would be pure ceremony, and an admin
+ * editing a provider's pending draft here IS the approval — there is nothing
+ * left to review after the admin themselves just looked at and rewrote it.
+ *
+ * Any change request still pending against this offering is cancelled, not
+ * left to linger: approving it later would either 409 (the drift check in
+ * changeRequests.service catching that the row moved) or, worse, silently
+ * re-apply stale content over what the admin just set. Neither is useful once
+ * the admin has written the row directly.
  */
 export async function adminUpsert(
   actor: AuthUser,
@@ -546,6 +593,7 @@ export async function adminUpsert(
   id: string | null,
   input: OfferingInput,
 ): Promise<ApiOffering> {
+  await assertCatalogEnabled(companyId);
   const data = {
     name: input.name,
     description: input.description ?? null,
@@ -557,6 +605,7 @@ export async function adminUpsert(
     minQty: input.minQty ?? null,
     image: input.image ?? null,
     note: input.note ?? null,
+    isPublished: true,
     priceUpdatedAt: new Date(),
   };
 
@@ -575,10 +624,14 @@ export async function adminUpsert(
 
   const row = id
     ? await prisma.offering.update({ where: { id }, data, include: TIER_INCLUDE })
-    : await prisma.offering.create({
-        data: { ...data, companyId, isPublished: true },
-        include: TIER_INCLUDE,
-      });
+    : await prisma.offering.create({ data: { ...data, companyId }, include: TIER_INCLUDE });
+
+  if (id) {
+    await prisma.changeRequest.updateMany({
+      where: { entity: "OFFERING", entityId: id, status: "PENDING" },
+      data: { status: "CANCELLED", reviewNote: "Superseded by a direct admin edit." },
+    });
+  }
 
   await audit.record(actor, {
     action: id ? "offering.update" : "offering.create",
@@ -587,6 +640,29 @@ export async function adminUpsert(
     meta: { companyId },
   });
   return serializeOffering(row);
+}
+
+/**
+ * Admin: delete an offering outright, regardless of publish state — no review,
+ * same reasoning as adminUpsert. Any pending change request against it is
+ * cancelled first so the admin queue never points at a row that no longer
+ * exists (see the identical concern on the direct-delete branch of remove()).
+ */
+export async function adminRemove(actor: AuthUser, companyId: string, id: string): Promise<void> {
+  const existing = await prisma.offering.findUnique({ where: { id }, select: { companyId: true } });
+  if (!existing || existing.companyId !== companyId) throw new NotFoundError("Offering");
+
+  await prisma.$transaction(async (tx) => {
+    await changeRequests.cancelPendingForEntity(tx as never, "OFFERING", id);
+    await tx.offering.delete({ where: { id } });
+  });
+
+  await audit.record(actor, {
+    action: "offering.delete",
+    entity: "Offering",
+    entityId: id,
+    meta: { companyId },
+  });
 }
 
 // ── Category price reference (admin review aid) ──────────────────────────────
@@ -620,6 +696,11 @@ function median(values: number[]): number {
  * which puts "full apartment finishing" and "install one door" in the same
  * bucket. A median over that compares unrelated things and would flag perfectly
  * sane prices, and a warning that cries wolf gets ignored within a week.
+ *
+ * "Same company category" itself generalizes, now that a company may belong to
+ * several: a peer is any OTHER company sharing at least one category with this
+ * offering's company — the least-surprising analog of "same category" once
+ * there's more than one to compare against.
  */
 export async function priceReference(offering: {
   pricingModel: string;
@@ -633,9 +714,10 @@ export async function priceReference(offering: {
 
   const company = await prisma.company.findUnique({
     where: { id: offering.companyId },
-    select: { categoryId: true },
+    select: { categories: { select: { categoryId: true } } },
   });
-  if (!company) return { available: false, reason: "insufficient_data" };
+  if (!company || company.categories.length === 0) return { available: false, reason: "insufficient_data" };
+  const categoryIds = company.categories.map((cc) => cc.categoryId);
 
   const peers = await prisma.offering.findMany({
     where: {
@@ -644,7 +726,7 @@ export async function priceReference(offering: {
       pricingModel: "PER_UNIT",
       unit: offering.unit as never,
       priceMin: { not: null },
-      company: { categoryId: company.categoryId },
+      company: { categories: { some: { categoryId: { in: categoryIds } } } },
       ...(offering.id ? { id: { not: offering.id } } : {}),
     },
     select: { priceMin: true },

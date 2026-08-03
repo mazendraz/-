@@ -8,6 +8,7 @@ import {
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { formatDate } from "../lib/format";
+import Icon from "./Icon";
 
 const FILTERS: (WaitlistStatus | "All")[] = ["All", ...WAITLIST_STATUSES];
 
@@ -61,7 +62,7 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
   if (!apiMode) {
     return (
       <div className="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-bloom">
-        <p className="text-body-md font-body-md text-outline">{t(locale, "prov_wl_demo")}</p>
+        <p className="text-body text-outline">{t(locale, "prov_wl_demo")}</p>
       </div>
     );
   }
@@ -70,12 +71,12 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="font-bold text-[16px] text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-[20px]">hourglass_top</span>
+          <h3 className="font-bold text-body text-on-surface flex items-center gap-2">
+            <Icon name="hourglass_top" className="text-primary text-title" />
             {t(locale, "prov_wl_title")}
-            {waitingCount > 0 && <span className="bg-amber-100 text-amber-800 text-[12px] font-bold px-2 py-0.5 rounded-full">{waitingCount} {t(locale, "prov_wl_waiting_suffix")}</span>}
+            {waitingCount > 0 && <span className="bg-warning-container text-on-warning-container text-caption font-bold px-2 py-0.5 rounded-full">{waitingCount} {t(locale, "prov_wl_waiting_suffix")}</span>}
           </h3>
-          <p className="text-[12px] text-outline mt-0.5 max-w-md leading-relaxed">
+          <p className="text-caption text-outline mt-0.5 max-w-md leading-relaxed">
             {t(locale, "prov_wl_desc")}
           </p>
         </div>
@@ -85,7 +86,7 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
         {FILTERS.map((f) => (
           <button key={f} onClick={() => setFilter(f)}
-            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-bold transition-colors border ${
+            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-label font-bold transition-colors border ${
               filter === f ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-outline-variant"
             }`}>
             {f === "All" ? t(locale, "prov_wl_filter_all") : t(locale, WAITLIST_STATUS_KEYS[f])}
@@ -93,15 +94,15 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
         ))}
       </div>
 
-      {error && <p className="text-[13px] text-error font-bold bg-error/8 rounded-lg px-3 py-2">{error}</p>}
+      {error && <p className="text-label text-error font-bold bg-error/8 rounded-lg px-3 py-2">{error}</p>}
 
       <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
         {loading && entries.length === 0 ? (
-          <div className="p-10 text-center text-[14px] text-outline"><span className="spinner spinner-primary mx-auto mb-3 block" /> {t(locale, "prov_wl_loading")}</div>
+          <div className="p-10 text-center text-label text-outline"><span className="spinner spinner-primary mx-auto mb-3 block" /> {t(locale, "prov_wl_loading")}</div>
         ) : shown.length === 0 ? (
           <div className="text-center py-14 px-6">
-            <span className="material-symbols-outlined text-outline text-[48px] mb-3 block">event_available</span>
-            <p className="text-body-lg font-body-lg text-outline max-w-sm mx-auto">
+            <Icon name="event_available" className="text-outline text-[48px] mb-3 block" />
+            <p className="text-subhead text-outline max-w-sm mx-auto">
               {t(locale, entries.length === 0 ? "prov_wl_empty" : "prov_wl_no_match")}
             </p>
           </div>
@@ -111,12 +112,12 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
               <div key={e.id} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
                 <div className="flex-grow min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                    <span className="font-label-md text-label-md text-on-surface">{e.name}</span>
-                    <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[e.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[e.status])}</span>
+                    <span className=" text-label text-on-surface">{e.name}</span>
+                    <span className={`text-caption px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[e.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[e.status])}</span>
                   </div>
-                  <a href={`tel:${e.phone}`} className="text-[14px] font-bold text-primary hover:underline">{e.phone}</a>
-                  {e.service && <p className="text-label-sm font-label-sm text-outline">{t(locale, "prov_wl_waiting_for")} {e.service}</p>}
-                  {e.note && <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{e.note}</p>}
+                  <a href={`tel:${e.phone}`} className="text-label font-bold text-primary hover:underline">{e.phone}</a>
+                  {e.service && <p className="text-caption text-outline">{t(locale, "prov_wl_waiting_for")} {e.service}</p>}
+                  {e.note && <p className="text-sm text-on-surface-variant mt-1 line-clamp-2">{e.note}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <div className="flex items-center gap-2">
@@ -124,16 +125,16 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
                       value={e.status}
                       disabled={busyId === e.id}
                       onChange={(ev) => changeStatus(e.id, ev.target.value as WaitlistStatus)}
-                      className="border border-outline-variant rounded-lg px-2.5 py-1 text-label-sm text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-60"
+                      className="border border-outline-variant rounded-lg px-2.5 py-1 text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-60"
                     >
                       {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
                     </select>
                     <button onClick={() => remove(e.id)} disabled={busyId === e.id} title={t(locale, "prov_wl_remove")}
                       className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
-                      <span className="material-symbols-outlined text-[18px]">{busyId === e.id ? "progress_activity" : "delete"}</span>
+                      <span className="material-symbols-outlined text-subhead" aria-hidden="true" translate="no">{busyId === e.id ? "progress_activity" : "delete"}</span>
                     </button>
                   </div>
-                  <span className="text-label-sm font-label-sm text-outline">{formatDate(e.createdAt, locale)}</span>
+                  <span className="text-caption text-outline">{formatDate(e.createdAt, locale)}</span>
                 </div>
               </div>
             ))}

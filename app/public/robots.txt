@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /admin
+Disallow: /provider
+Allow: /
+
+Sitemap: https://alassema.com/sitemap.xml

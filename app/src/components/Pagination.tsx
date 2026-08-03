@@ -1,5 +1,6 @@
 import { useLocale } from "../context/LocaleContext";
-import { t } from "../lib/i18n";
+import { t, tCount, type PluralKey } from "../lib/i18n";
+import Icon from "./Icon";
 
 interface Props {
   page: number;
@@ -8,13 +9,12 @@ interface Props {
   pageSize: number;
   onPage: (page: number) => void;
   /**
-   * Singular and plural noun for the count label, ALREADY TRANSLATED by the
-   * caller — e.g. t(locale, "admin_noun_lead") / t(locale, "admin_noun_leads").
-   * Both are required: the old `noun + "s"` default only worked in English and
-   * put untranslated words on Arabic screens.
+   * I18N-02: was two already-translated strings (`noun`/`nounPlural`) picked
+   * by `total === 1 ? noun : nounPlural` — only ever right for English. One
+   * plural-set key instead, resolved via `tCount` against all six Arabic
+   * CLDR categories ("2 X" needs the dual, "11 X" the singular tamyiz form).
    */
-  noun: string;
-  nounPlural: string;
+  nounKey: PluralKey;
   className?: string;
 }
 
@@ -29,8 +29,7 @@ export default function Pagination({
   total,
   pageSize,
   onPage,
-  noun,
-  nounPlural,
+  nounKey,
   className = "",
 }: Props) {
   const { locale } = useLocale();
@@ -38,11 +37,11 @@ export default function Pagination({
 
   const from = (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
-  const plural = total === 1 ? noun : nounPlural;
+  const plural = tCount(locale, nounKey, total);
 
   return (
     <div className={`flex items-center justify-between gap-3 flex-wrap ${className}`}>
-      <p className="text-[13px] text-outline">
+      <p className="text-label text-outline">
         <span className="font-bold text-on-surface">{from}–{to}</span> {t(locale, "pagination_of")}{" "}
         <span className="font-bold text-on-surface">{total}</span> {plural}
       </p>
@@ -52,22 +51,22 @@ export default function Pagination({
             type="button"
             onClick={() => onPage(page - 1)}
             disabled={page <= 1}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[13px] font-bold text-on-surface bg-surface-container hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-label font-bold text-on-surface bg-surface-container hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             aria-label={t(locale, "pagination_prev")}
           >
-            <span className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_left</span>
+            <Icon name="chevron_left" className="text-subhead rtl:rotate-180" />
           </button>
-          <span className="text-[13px] text-outline px-1 tabular-nums">
+          <span className="text-label text-outline px-1 tabular-nums">
             {page} / {pageCount}
           </span>
           <button
             type="button"
             onClick={() => onPage(page + 1)}
             disabled={page >= pageCount}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[13px] font-bold text-on-surface bg-surface-container hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-label font-bold text-on-surface bg-surface-container hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             aria-label={t(locale, "pagination_next")}
           >
-            <span className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_right</span>
+            <Icon name="chevron_right" className="text-subhead rtl:rotate-180" />
           </button>
         </div>
       )}

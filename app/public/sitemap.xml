@@ -4,6 +4,8 @@
   <url><loc>https://alassema.com/services</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
   <url><loc>https://alassema.com/companies</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
   <url><loc>https://alassema.com/start</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://alassema.com/about</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://alassema.com/contact</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
 
   <url><loc>https://alassema.com/services/interior-finishing</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://alassema.com/services/smart-home</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>

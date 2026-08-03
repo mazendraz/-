@@ -2,6 +2,7 @@ import { useRef, useState, useId } from "react";
 import type { Point, Segment } from "../lib/analytics";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
+import { CHART_COLORS } from "../lib/chartColors";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ChartCard — consistent panel wrapper
@@ -15,8 +16,8 @@ export function ChartCard({
     <div className={`bg-surface-container-lowest rounded-2xl p-5 shadow-bloom ${className}`}>
       <div className="flex items-start justify-between mb-4 gap-3">
         <div>
-          <h3 className="font-display font-bold text-[15px] text-on-surface">{title}</h3>
-          {subtitle && <p className="text-[12px] text-outline mt-0.5">{subtitle}</p>}
+          <h3 className="font-display font-bold text-body text-on-surface">{title}</h3>
+          {subtitle && <p className="text-caption text-outline mt-0.5">{subtitle}</p>}
         </div>
         {action}
       </div>
@@ -29,7 +30,7 @@ export function ChartCard({
 //  KpiCard — stat with optional delta + sparkline
 // ══════════════════════════════════════════════════════════════════════════
 export function KpiCard({
-  icon, label, value, delta, spark, tint = "#005578",
+  icon, label, value, delta, spark, tint = CHART_COLORS.primary,
 }: {
   icon: string; label: string; value: string | number;
   delta?: number; spark?: number[]; tint?: string;
@@ -38,18 +39,18 @@ export function KpiCard({
     <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom flex flex-col">
       <div className="flex items-start justify-between mb-3">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${tint}14` }}>
-          <span className="material-symbols-outlined text-[22px]" style={{ color: tint, fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+          <span className="material-symbols-outlined text-title" style={{ color: tint, fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{icon}</span>
         </div>
         {typeof delta === "number" && (
-          <span className={`flex items-center gap-0.5 text-[12px] font-bold px-2 py-0.5 rounded-full
+          <span className={`flex items-center gap-0.5 text-caption font-bold px-2 py-0.5 rounded-full
             ${delta >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-            <span className="material-symbols-outlined text-[14px]">{delta >= 0 ? "trending_up" : "trending_down"}</span>
+            <span className="material-symbols-outlined text-label" aria-hidden="true" translate="no">{delta >= 0 ? "trending_up" : "trending_down"}</span>
             {Math.abs(delta)}%
           </span>
         )}
       </div>
-      <div className="font-display text-[28px] font-black text-on-surface leading-none tabular-nums mb-1">{value}</div>
-      <div className="text-[12px] text-outline font-bold uppercase tracking-wide">{label}</div>
+      <div className="font-display text-headline font-black text-on-surface leading-none tabular-nums mb-1">{value}</div>
+      <div className="text-caption text-outline font-bold ltr:uppercase ltr:tracking-wide">{label}</div>
       {spark && spark.length > 1 && (
         <div className="mt-3">
           <Sparkline data={spark} color={tint} />
@@ -62,7 +63,7 @@ export function KpiCard({
 // ══════════════════════════════════════════════════════════════════════════
 //  Sparkline
 // ══════════════════════════════════════════════════════════════════════════
-export function Sparkline({ data, color = "#005578", height = 32 }: { data: number[]; color?: string; height?: number }) {
+export function Sparkline({ data, color = CHART_COLORS.primary, height = 32 }: { data: number[]; color?: string; height?: number }) {
   const gradId = useId();
   const W = 120, H = height, pad = 2;
   const max = Math.max(1, ...data);
@@ -72,7 +73,10 @@ export function Sparkline({ data, color = "#005578", height = 32 }: { data: numb
   const line = data.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const area = `${line} L${x(n - 1).toFixed(1)},${H} L${x(0).toFixed(1)},${H} Z`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full chart-fade" style={{ height }} preserveAspectRatio="none">
+    // Decorative only — the KpiCard this lives in already states the value and
+    // trend direction as real text right next to it (A11Y-18 targets the three
+    // charts that are the SOLE source of their data: AreaLineChart, DonutChart).
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full chart-fade" style={{ height }} preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.25" />
@@ -89,10 +93,11 @@ export function Sparkline({ data, color = "#005578", height = 32 }: { data: numb
 //  AreaLineChart — with hover tooltip
 // ══════════════════════════════════════════════════════════════════════════
 export function AreaLineChart({
-  data, height = 220, color = "#005578", valueLabel = "",
+  data, height = 220, color = CHART_COLORS.primary, valueLabel = "",
 }: {
   data: Point[]; height?: number; color?: string; valueLabel?: string;
 }) {
+  const { locale } = useLocale();
   const wrapRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<number | null>(null);
   const gradId = useId();
@@ -117,10 +122,18 @@ export function AreaLineChart({
 
   // x-axis labels: first, middle, last
   const labelIdx = [0, Math.floor((n - 1) / 2), n - 1];
+  const seriesLabel = data.map((d) => `${d.label}: ${d.value}${valueLabel ? ` ${valueLabel}` : ""}`).join(", ");
 
   return (
     <div ref={wrapRef} className="relative" onMouseMove={onMove} onMouseLeave={() => setActive(null)}>
-      <svg viewBox={`0 0 ${VW} ${VH}`} className="w-full chart-fade" style={{ height }} preserveAspectRatio="none">
+      <svg
+        viewBox={`0 0 ${VW} ${VH}`}
+        className="w-full chart-fade"
+        style={{ height }}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={seriesLabel}
+      >
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.22" />
@@ -145,19 +158,32 @@ export function AreaLineChart({
       {/* x labels */}
       <div className="flex justify-between px-1 -mt-4">
         {labelIdx.map((i) => (
-          <span key={i} className="text-[10px] text-outline font-medium">{data[i]?.label}</span>
+          <span key={i} className="text-caption text-outline font-medium">{data[i]?.label}</span>
         ))}
       </div>
       {/* tooltip */}
       {active !== null && data[active] && (
         <div
-          className="absolute -translate-x-1/2 pointer-events-none bg-on-surface text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
+          className="absolute -translate-x-1/2 pointer-events-none bg-on-surface text-white text-caption font-bold px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap"
           style={{ left: `${(active / Math.max(1, n - 1)) * 100}%`, top: 0 }}
         >
-          <span className="block opacity-70 text-[10px]">{data[active].label}</span>
+          <span className="block opacity-70 text-caption">{data[active].label}</span>
           {data[active].value} {valueLabel}
         </div>
       )}
+      {/* Same series as the SVG, as a real table for screen readers (A11Y-18) —
+          visually hidden, not decorative: this is the chart's only text form. */}
+      <table className="sr-only">
+        <caption>{valueLabel || t(locale, "chart_col_value")}</caption>
+        <thead>
+          <tr><th>{t(locale, "chart_col_label")}</th><th>{t(locale, "chart_col_value")}</th></tr>
+        </thead>
+        <tbody>
+          {data.map((d, i) => (
+            <tr key={i}><td>{d.label}</td><td>{d.value}</td></tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -166,7 +192,7 @@ export function AreaLineChart({
 //  BarChart (vertical)
 // ══════════════════════════════════════════════════════════════════════════
 export function BarChart({
-  data, height = 200, color = "#005578",
+  data, height = 200, color = CHART_COLORS.primary,
 }: {
   data: Point[]; height?: number; color?: string;
 }) {
@@ -178,7 +204,7 @@ export function BarChart({
           const h = (d.value / max) * (height - 24);
           return (
             <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group">
-              <span className="text-[11px] font-bold text-on-surface mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{d.value}</span>
+              <span className="text-caption font-bold text-on-surface mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{d.value}</span>
               <div
                 className="w-full max-w-[44px] rounded-t-lg chart-bar"
                 style={{ height: Math.max(2, h), backgroundColor: color, animationDelay: `${i * 50}ms` }}
@@ -190,7 +216,7 @@ export function BarChart({
       </div>
       <div className="flex justify-between gap-2 mt-2">
         {data.map((d, i) => (
-          <span key={i} className="flex-1 text-center text-[10px] text-outline font-medium truncate">{d.label}</span>
+          <span key={i} className="flex-1 text-center text-caption text-outline font-medium truncate">{d.label}</span>
         ))}
       </div>
     </div>
@@ -200,16 +226,16 @@ export function BarChart({
 // ══════════════════════════════════════════════════════════════════════════
 //  Horizontal labelled bars (for "by company" etc.)
 // ══════════════════════════════════════════════════════════════════════════
-export function BarList({ data, color = "#005578", valueSuffix = "" }: { data: Point[]; color?: string; valueSuffix?: string }) {
+export function BarList({ data, color = CHART_COLORS.primary, valueSuffix = "" }: { data: Point[]; color?: string; valueSuffix?: string }) {
   const { locale } = useLocale();
   const max = Math.max(1, ...data.map((d) => d.value));
-  if (data.length === 0) return <p className="text-[13px] text-outline text-center py-6">{t(locale, "chart_no_data")}</p>;
+  if (data.length === 0) return <p className="text-label text-outline text-center py-6">{t(locale, "chart_no_data")}</p>;
   return (
     <div className="space-y-3">
       {data.map((d, i) => (
         <div key={i}>
-          <div className="flex justify-between text-[12px] mb-1">
-            <span className="font-bold text-on-surface truncate pr-2">{d.label}</span>
+          <div className="flex justify-between text-caption mb-1">
+            <span className="font-bold text-on-surface truncate pe-2">{d.label}</span>
             <span className="text-outline font-bold tabular-nums flex-shrink-0">{d.value}{valueSuffix}</span>
           </div>
           <div className="h-2.5 bg-surface-container rounded-full overflow-hidden">
@@ -238,16 +264,24 @@ export function DonutChart({
 
   if (total === 0) {
     return (
-      <div className="flex items-center justify-center text-[13px] text-outline" style={{ height: size }}>
+      <div className="flex items-center justify-center text-label text-outline" style={{ height: size }}>
         {t(locale, "chart_no_data")}
       </div>
     );
   }
 
+  // Ring segments are drawn in this same array order, starting from the top
+  // (the -rotate-90 on the <svg>) and proceeding clockwise — so a numbered
+  // legend lets a colorblind user match a slice to its row by position/order,
+  // not colour alone (A11Y-18 / WCAG 1.4.1).
+  const segmentSummary = data
+    .map((d, i) => `${i + 1}. ${d.label}: ${d.value} (${Math.round((d.value / total) * 100)}%)`)
+    .join(", ");
+
   return (
     <div className="flex items-center gap-5 flex-wrap justify-center">
       <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
+        <svg width={size} height={size} className="-rotate-90" role="img" aria-label={segmentSummary}>
           <circle cx={cx} cy={cx} r={r} fill="none" stroke="#000" strokeOpacity="0.05" strokeWidth={thickness} />
           {data.map((d, i) => {
             const frac = d.value / total;
@@ -271,22 +305,35 @@ export function DonutChart({
         </svg>
         {(centerValue !== undefined || centerLabel) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {centerValue !== undefined && <span className="text-[24px] font-black text-on-surface leading-none">{centerValue}</span>}
-            {centerLabel && <span className="text-[11px] text-outline font-bold uppercase tracking-wide mt-0.5">{centerLabel}</span>}
+            {centerValue !== undefined && <span className="text-title font-black text-on-surface leading-none">{centerValue}</span>}
+            {centerLabel && <span className="text-caption text-outline font-bold ltr:uppercase ltr:tracking-wide mt-0.5">{centerLabel}</span>}
           </div>
         )}
       </div>
       {/* Legend */}
-      <div className="space-y-2">
+      <div className="space-y-2" aria-hidden="true">
         {data.map((d, i) => (
           <div key={i} className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: d.color }} />
-            <span className="text-[13px] text-on-surface font-medium">{d.label}</span>
-            <span className="text-[13px] text-outline font-bold ml-auto tabular-nums">{d.value}</span>
-            <span className="text-[11px] text-outline w-9 text-right">{Math.round((d.value / total) * 100)}%</span>
+            <span className="w-3 h-3 rounded-sm flex-shrink-0 flex items-center justify-center text-caption font-black text-white/90" style={{ backgroundColor: d.color }}>{i + 1}</span>
+            <span className="text-label text-on-surface font-medium">{d.label}</span>
+            <span className="text-label text-outline font-bold ms-auto tabular-nums">{d.value}</span>
+            <span className="text-caption text-outline w-9 text-end">{Math.round((d.value / total) * 100)}%</span>
           </div>
         ))}
       </div>
+      {/* Real table for screen readers — the legend above is aria-hidden since
+          this covers the exact same data with the same 1-based ordering
+          referenced in the SVG's aria-label. */}
+      <table className="sr-only">
+        <thead>
+          <tr><th>{t(locale, "chart_col_label")}</th><th>{t(locale, "chart_col_value")}</th><th>{t(locale, "chart_col_percent")}</th></tr>
+        </thead>
+        <tbody>
+          {data.map((d, i) => (
+            <tr key={i}><td>{d.label}</td><td>{d.value}</td><td>{Math.round((d.value / total) * 100)}%</td></tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -305,11 +352,11 @@ export function FunnelChart({ stages }: { stages: Segment[] }) {
         const dropoff = prev > 0 ? Math.round((s.value / prev) * 100) : 100;
         return (
           <div key={i}>
-            <div className="flex items-center justify-between text-[12px] mb-1">
+            <div className="flex items-center justify-between text-caption mb-1">
               <span className="font-bold text-on-surface">{s.label}</span>
               <span className="text-outline">
                 <span className="font-black text-on-surface">{s.value}</span>
-                {i > 0 && <span className="ml-1.5 text-[11px]">({dropoff}% {t(locale, "chart_of_prev")})</span>}
+                {i > 0 && <span className="ms-1.5 text-caption">({dropoff}% {t(locale, "chart_of_prev")})</span>}
               </span>
             </div>
             <div className="h-7 bg-surface-container rounded-lg overflow-hidden">
@@ -317,7 +364,7 @@ export function FunnelChart({ stages }: { stages: Segment[] }) {
                 className="h-full rounded-lg chart-bar-h flex items-center justify-end px-2"
                 style={{ width: `${Math.max(6, pct)}%`, backgroundColor: s.color, animationDelay: `${i * 80}ms` }}
               >
-                <span className="text-white text-[11px] font-bold">{pct}%</span>
+                <span className="text-white text-caption font-bold">{pct}%</span>
               </div>
             </div>
           </div>

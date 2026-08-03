@@ -9,6 +9,7 @@ import { LField } from "./components/ModalShell";
 import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
+import Icon from "../../components/Icon";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  SITE STATUS — the maintenance switch
@@ -111,14 +112,14 @@ export function SiteStatusTab() {
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3 bg-surface-container-lowest rounded-2xl p-4 shadow-bloom">
-          <p className="text-[13px] font-bold text-outline">
+          <p className="text-label font-bold text-outline">
             {t(locale, "admin_ss_preview_note")}
           </p>
           <button
             onClick={() => setPreview(false)}
-            className="flex items-center gap-1.5 bg-surface-container px-4 py-2 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0"
+            className="flex items-center gap-1.5 bg-surface-container px-4 py-2 rounded-xl font-bold text-label text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0"
           >
-            <span className="material-symbols-outlined text-[18px]">close</span> {t(locale, "admin_ss_close_preview")}
+            <Icon name="close" className="text-subhead" /> {t(locale, "admin_ss_close_preview")}
           </button>
         </div>
         <div className="rounded-2xl overflow-hidden border border-outline-variant/20">
@@ -133,12 +134,12 @@ export function SiteStatusTab() {
   return (
     <div className="space-y-4 max-w-3xl">
       {error && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">
           {error}
         </div>
       )}
       {flash && (
-        <div className="bg-primary/10 border border-primary/25 text-primary rounded-xl px-4 py-2.5 text-[13px] font-bold">
+        <div className="bg-primary/10 border border-primary/25 text-primary rounded-xl px-4 py-2.5 text-label font-bold">
           {flash}
         </div>
       )}
@@ -147,8 +148,8 @@ export function SiteStatusTab() {
       <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="font-bold text-[15px] text-on-surface">{t(locale, "admin_ss_maintenance")}</p>
-            <p className="text-[13px] text-outline mt-0.5 leading-relaxed">
+            <p className="font-bold text-body text-on-surface">{t(locale, "admin_ss_maintenance")}</p>
+            <p className="text-label text-outline mt-0.5 leading-relaxed">
               {t(locale, "admin_ss_desc_a")} <span className="font-bold text-on-surface-variant">
                 {t(locale, "admin_ss_desc_b")}
               </span>{t(locale, "admin_ss_desc_c")}
@@ -165,7 +166,7 @@ export function SiteStatusTab() {
             }`}
           >
             <span
-              className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-all ${
+              className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow transition-[left] ${
                 form.enabled ? "left-7" : "left-1"
               }`}
             />
@@ -174,8 +175,8 @@ export function SiteStatusTab() {
 
         {form.enabled && (
           <div className="mt-4 flex items-center gap-2 bg-error/10 border border-error/25 rounded-xl px-4 py-2.5">
-            <span className="material-symbols-outlined text-error text-[18px]">warning</span>
-            <p className="text-[13px] font-bold text-error">
+            <Icon name="warning" className="text-error text-subhead" />
+            <p className="text-label font-bold text-error">
               {t(locale, "admin_ss_down_now")}
             </p>
           </div>
@@ -185,8 +186,8 @@ export function SiteStatusTab() {
       {/* ── Copy ── */}
       <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
         <div>
-          <p className="font-bold text-[15px] text-on-surface">{t(locale, "admin_ss_visitors_title")}</p>
-          <p className="text-[13px] text-outline mt-0.5">
+          <p className="font-bold text-body text-on-surface">{t(locale, "admin_ss_visitors_title")}</p>
+          <p className="text-label text-outline mt-0.5">
             {t(locale, "admin_ss_visitors_hint")}
           </p>
         </div>
@@ -232,7 +233,7 @@ export function SiteStatusTab() {
             {form.eta != null && (
               <button
                 onClick={() => set("eta", null)}
-                className="text-[13px] font-bold text-outline hover:text-error transition-colors"
+                className="text-label font-bold text-outline hover:text-error transition-colors"
               >
                 {t(locale, "admin_clear")}
               </button>
@@ -245,8 +246,8 @@ export function SiteStatusTab() {
             notice on screen while visitors are still being shown the old one. */}
         {copyDirty && (
           <div className="flex items-center gap-2 bg-secondary/10 border border-secondary/25 rounded-xl px-4 py-2.5">
-            <span className="material-symbols-outlined text-secondary text-[18px]">edit_note</span>
-            <p className="text-[13px] font-bold text-secondary">{t(locale, "admin_ss_unsaved_copy")}</p>
+            <Icon name="edit_note" className="text-secondary text-subhead" />
+            <p className="text-label font-bold text-secondary">{t(locale, "admin_ss_unsaved_copy")}</p>
           </div>
         )}
 
@@ -258,16 +259,16 @@ export function SiteStatusTab() {
               eta: form.eta,
             })}
             disabled={saving}
-            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors disabled:opacity-60 touch-press btn-press"
+            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-60 touch-press btn-press"
           >
-            <span className="material-symbols-outlined text-[18px]">save</span>
+            <Icon name="save" className="text-subhead" />
             {t(locale, saving ? "admin_saving" : "admin_ss_save_message")}
           </button>
           <button
             onClick={() => setPreview(true)}
-            className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-[14px] text-on-surface border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-label text-on-surface border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
           >
-            <span className="material-symbols-outlined text-[18px]">visibility</span>
+            <Icon name="visibility" className="text-subhead" />
             {t(locale, "admin_preview")}
           </button>
         </div>

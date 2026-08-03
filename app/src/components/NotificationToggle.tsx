@@ -49,7 +49,7 @@ export default function NotificationToggle() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-primary">
+        <span className="material-symbols-outlined text-primary" aria-hidden="true" translate="no">
           {subscribed ? "notifications_active" : "notifications"}
         </span>
         <div className="flex-1">
@@ -64,7 +64,7 @@ export default function NotificationToggle() {
           type="button"
           onClick={toggle}
           disabled={busy || denied}
-          className={`px-4 py-2 rounded-full font-label-md text-label-md transition disabled:opacity-50 ${
+          className={`px-4 py-2 rounded-full font-display text-label transition disabled:opacity-50 ${
             subscribed
               ? "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
               : "bg-primary text-on-primary hover:opacity-90"

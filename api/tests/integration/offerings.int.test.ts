@@ -13,9 +13,13 @@ import { POST as publishPOST } from "@/app/api/provider/offerings/[id]/publish/r
 import { PATCH as visibilityPATCH } from "@/app/api/provider/offerings/[id]/visibility/route";
 import { POST as tierPOST } from "@/app/api/provider/offerings/[id]/tiers/route";
 import { DELETE as tierDELETE } from "@/app/api/provider/offerings/[id]/tiers/[tierId]/route";
+import { POST as bundleRulePOST } from "@/app/api/provider/bundle-rules/route";
 import { DELETE as crCancelDELETE } from "@/app/api/provider/change-requests/[id]/route";
 import { PATCH as adminReviewPATCH } from "@/app/api/admin/change-requests/[id]/route";
 import { GET as publicCompanyGET } from "@/app/api/companies/[slug]/route";
+import { GET as adminOfferingsGET, POST as adminOfferingPOST } from "@/app/api/admin/companies/[id]/offerings/route";
+import { PATCH as adminOfferingPATCH, DELETE as adminOfferingDELETE } from "@/app/api/admin/companies/[id]/offerings/[offeringId]/route";
+import { PATCH as adminVisibilityPATCH } from "@/app/api/admin/companies/[id]/offerings/[offeringId]/visibility/route";
 
 const tag = `off-${Date.now()}`;
 
@@ -38,14 +42,17 @@ let providerToken = "";
 let adminToken = "";
 
 beforeAll(async () => {
+  // FIXED_CATALOG: this whole file is about the Offering write paths — the
+  // Phase 9 category gate is covered on its own further down, against a
+  // separate QUOTE_ONLY category so it never interferes with these.
   const category = await prisma.category.create({
-    data: { slug: `${tag}-cat`, label: "Cat", description: "d", icon: "home" },
+    data: { slug: `${tag}-cat`, label: "Cat", description: "d", icon: "home", pricingMode: "FIXED_CATALOG" },
   });
   categoryId = category.id;
   slug = `${tag}-co`;
   const company = await prisma.company.create({
     data: {
-      categoryId, slug, name: "Off Co", tagline: "t", about: "a",
+      categories: { create: [{ categoryId, isPrimary: true }] }, slug, name: "Off Co", tagline: "t", about: "a",
       logo: "/l.jpg", cover: "/c.jpg", services: [], gallery: [], badges: [],
       phone: "0100000000", location: "NC", yearsExperience: 1,
       responseTime: "1h", verifiedSince: "2024",
@@ -452,6 +459,288 @@ describe("ownership", () => {
       undefined as never,
     );
     const list = await res.json();
+    expect(list.every((o: { companyId: string }) => o.companyId === companyId)).toBe(true);
+  });
+});
+
+// Phase 9 — a category not opted into FIXED_CATALOG must never end up with a
+// live Offering, no matter which endpoint someone comes in through. A hidden
+// tab in the provider dashboard is not a security boundary; this is.
+describe("category pricing mode gate", () => {
+  let gateCategoryId = "";
+  let gateCompanyId = "";
+  let gateProviderToken = "";
+
+  beforeAll(async () => {
+    // QUOTE_ONLY is the schema default — omitted here on purpose, so this
+    // test also catches a regression in that default.
+    const category = await prisma.category.create({
+      data: { slug: `${tag}-gate-cat`, label: "Gate Cat", description: "d", icon: "home" },
+    });
+    gateCategoryId = category.id;
+    const company = await prisma.company.create({
+      data: {
+        categories: { create: [{ categoryId: gateCategoryId, isPrimary: true }] }, slug: `${tag}-gate-co`, name: "Gate Co", tagline: "t", about: "a",
+        logo: "/l.jpg", cover: "/c.jpg", services: [], gallery: [], badges: [],
+        phone: "0100000001", location: "NC", yearsExperience: 1,
+        responseTime: "1h", verifiedSince: "2024",
+      },
+    });
+    gateCompanyId = company.id;
+    const provider = await prisma.user.create({
+      data: {
+        email: `${tag}-gate-p@test.local`, passwordHash: await hashPassword("pw12345678"),
+        role: "PROVIDER", isActive: true, name: "Gate P", companyId: gateCompanyId,
+      },
+    });
+    gateProviderToken = await signToken({ sub: provider.id, role: "PROVIDER", companyId: gateCompanyId });
+  });
+
+  afterAll(async () => {
+    await prisma.changeRequest.deleteMany({ where: { companyId: gateCompanyId } });
+    await prisma.offering.deleteMany({ where: { companyId: gateCompanyId } });
+    await prisma.user.deleteMany({ where: { companyId: gateCompanyId } });
+    await prisma.company.deleteMany({ where: { id: gateCompanyId } });
+    await prisma.category.deleteMany({ where: { id: gateCategoryId } });
+  });
+
+  it("refuses to create an Offering for a QUOTE_ONLY category", async () => {
+    const res = await offeringPOST(
+      req("/api/provider/offerings", { method: "POST", token: gateProviderToken, body: validRange }),
+      undefined as never,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("refuses to create a BundleRule for a QUOTE_ONLY category", async () => {
+    const res = await bundleRulePOST(
+      req("/api/provider/bundle-rules", {
+        method: "POST", token: gateProviderToken, body: { minItems: 2, discountPercent: 10 },
+      }),
+      undefined as never,
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("allows everything once the category switches to FIXED_CATALOG", async () => {
+    await prisma.category.update({ where: { id: gateCategoryId }, data: { pricingMode: "FIXED_CATALOG" } });
+
+    const created = await offeringPOST(
+      req("/api/provider/offerings", { method: "POST", token: gateProviderToken, body: validRange }),
+      undefined as never,
+    );
+    expect(created.status).toBe(201);
+    const draft = await created.json();
+
+    const tiered = await tierPOST(
+      req(`/api/provider/offerings/${draft.id}/tiers`, {
+        method: "POST", token: gateProviderToken,
+        body: { label: "1-2", qtyMin: 1, qtyMax: 2, priceMin: 4000 },
+      }),
+      ctx({ id: draft.id }),
+    );
+    expect(tiered.status).toBe(201);
+
+    const published = await publishPOST(
+      req(`/api/provider/offerings/${draft.id}/publish`, { method: "POST", token: gateProviderToken }),
+      ctx({ id: draft.id }),
+    );
+    expect(published.status).toBe(201);
+  });
+
+  // The whole point of this gate being enum-based, not a delete: switching a
+  // category away from FIXED_CATALOG must not touch what a company already
+  // built. It only stops NEW create/edit/publish — hide and delete stay open,
+  // since a provider must still be able to withdraw a wrong price.
+  it("blocks new create/edit/publish after switching back, but not hide or delete", async () => {
+    // Made WHILE still FIXED_CATALOG, exactly like a real leftover would be:
+    // one published offering (to prove edit/tier get blocked and hide still
+    // works) and one draft (to prove delete still works).
+    const publishedRes = await offeringPOST(
+      req("/api/provider/offerings", { method: "POST", token: gateProviderToken, body: validRange }),
+      undefined as never,
+    );
+    const published = await publishedRes.json();
+    await prisma.offering.update({ where: { id: published.id }, data: { isPublished: true } });
+
+    const draftRes = await offeringPOST(
+      req("/api/provider/offerings", { method: "POST", token: gateProviderToken, body: validRange }),
+      undefined as never,
+    );
+    const draft = await draftRes.json();
+
+    await prisma.category.update({ where: { id: gateCategoryId }, data: { pricingMode: "QUOTE_ONLY" } });
+
+    const blockedCreate = await offeringPOST(
+      req("/api/provider/offerings", { method: "POST", token: gateProviderToken, body: validRange }),
+      undefined as never,
+    );
+    expect(blockedCreate.status).toBe(400);
+
+    const blockedEdit = await offeringPATCH(
+      req(`/api/provider/offerings/${published.id}`, {
+        method: "PATCH", token: gateProviderToken, body: { name: "Should not save" },
+      }),
+      ctx({ id: published.id }),
+    );
+    expect(blockedEdit.status).toBe(400);
+
+    const blockedTier = await tierPOST(
+      req(`/api/provider/offerings/${published.id}/tiers`, {
+        method: "POST", token: gateProviderToken,
+        body: { label: "3-4", qtyMin: 3, qtyMax: 4, priceMin: 6000 },
+      }),
+      ctx({ id: published.id }),
+    );
+    expect(blockedTier.status).toBe(400);
+
+    // Still allowed: hiding the published offering...
+    const hide = await visibilityPATCH(
+      req(`/api/provider/offerings/${published.id}/visibility`, {
+        method: "PATCH", token: gateProviderToken, body: { isActive: false },
+      }),
+      ctx({ id: published.id }),
+    );
+    expect(hide.status).toBe(200);
+
+    // ...and deleting the leftover draft.
+    const del = await offeringDELETE(
+      req(`/api/provider/offerings/${draft.id}`, { method: "DELETE", token: gateProviderToken }),
+      ctx({ id: draft.id }),
+    );
+    expect(del.status).toBe(200);
+  });
+});
+
+// Admin can manage a company's offerings directly — create/edit/delete/hide —
+// with zero review ceremony (admin IS the reviewer), but still behind the same
+// category pricing-mode gate a provider would hit.
+describe("admin management", () => {
+  it("creates an offering for a company, published immediately, no review", async () => {
+    const res = await adminOfferingPOST(
+      req(`/api/admin/companies/${companyId}/offerings`, {
+        method: "POST", token: adminToken, body: { ...validRange, name: "Admin-made" },
+      }),
+      ctx({ id: companyId }),
+    );
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.isPublished).toBe(true);
+
+    const profile = await (await publicCompanyGET(req(`/api/companies/${slug}`), ctx({ slug }))).json();
+    expect(profile.offerings.map((o: { name: string }) => o.name)).toContain("Admin-made");
+  });
+
+  it("respects the category pricing-mode gate, same as the provider path", async () => {
+    const quoteCat = await prisma.category.create({
+      data: { slug: `${tag}-admin-quote-cat`, label: "Admin Quote Cat", description: "d", icon: "home" },
+    });
+    const quoteCo = await prisma.company.create({
+      data: {
+        categories: { create: [{ categoryId: quoteCat.id, isPrimary: true }] }, slug: `${tag}-admin-quote-co`, name: "Admin Quote Co", tagline: "t", about: "a",
+        logo: "/l.jpg", cover: "/c.jpg", services: [], gallery: [], badges: [],
+        phone: "0100000099", location: "NC", yearsExperience: 1, responseTime: "1h", verifiedSince: "2024",
+      },
+    });
+    const res = await adminOfferingPOST(
+      req(`/api/admin/companies/${quoteCo.id}/offerings`, {
+        method: "POST", token: adminToken, body: validRange,
+      }),
+      ctx({ id: quoteCo.id }),
+    );
+    expect(res.status).toBe(400);
+
+    await prisma.company.deleteMany({ where: { id: quoteCo.id } });
+    await prisma.category.deleteMany({ where: { id: quoteCat.id } });
+  });
+
+  // The point of the whole thing: an admin editing a provider's PENDING draft
+  // directly IS the review — no separate approval step needed afterward, and
+  // the stale request must not be left around to confuse the queue.
+  it("editing a pending-review draft publishes it directly and cancels the pending request", async () => {
+    const { body: draft } = await createOffering({ ...validRange, name: "Admin will finish this" });
+    const pub = await publishPOST(
+      req(`/api/provider/offerings/${draft.id}/publish`, { method: "POST", token: providerToken }),
+      ctx({ id: draft.id }),
+    );
+    const { changeRequestId } = await pub.json();
+    expect((await prisma.changeRequest.findUnique({ where: { id: changeRequestId } }))!.status).toBe("PENDING");
+
+    const edited = await adminOfferingPATCH(
+      req(`/api/admin/companies/${companyId}/offerings/${draft.id}`, {
+        method: "PATCH", token: adminToken, body: { name: "Admin finished this" },
+      }),
+      ctx({ id: companyId, offeringId: draft.id }),
+    );
+    expect(edited.status).toBe(200);
+    const editedBody = await edited.json();
+    expect(editedBody.isPublished).toBe(true);
+    expect(editedBody.name).toBe("Admin finished this");
+
+    expect((await prisma.changeRequest.findUnique({ where: { id: changeRequestId } }))!.status).toBe("CANCELLED");
+  });
+
+  it("toggles visibility the same as the provider's own endpoint", async () => {
+    const created = await adminOfferingPOST(
+      req(`/api/admin/companies/${companyId}/offerings`, { method: "POST", token: adminToken, body: validRange }),
+      ctx({ id: companyId }),
+    );
+    const body = await created.json();
+    const hidden = await adminVisibilityPATCH(
+      req(`/api/admin/companies/${companyId}/offerings/${body.id}/visibility`, {
+        method: "PATCH", token: adminToken, body: { isActive: false },
+      }),
+      ctx({ id: companyId, offeringId: body.id }),
+    );
+    expect(hidden.status).toBe(200);
+    expect((await hidden.json()).isActive).toBe(false);
+  });
+
+  it("deletes an offering outright, no review, and cancels any pending request", async () => {
+    const { body: draft } = await createOffering({ ...validRange, name: "Admin will delete this" });
+    const pub = await publishPOST(
+      req(`/api/provider/offerings/${draft.id}/publish`, { method: "POST", token: providerToken }),
+      ctx({ id: draft.id }),
+    );
+    const { changeRequestId } = await pub.json();
+
+    const del = await adminOfferingDELETE(
+      req(`/api/admin/companies/${companyId}/offerings/${draft.id}`, { method: "DELETE", token: adminToken }),
+      ctx({ id: companyId, offeringId: draft.id }),
+    );
+    expect(del.status).toBe(200);
+    expect(await prisma.offering.findUnique({ where: { id: draft.id } })).toBeNull();
+    expect((await prisma.changeRequest.findUnique({ where: { id: changeRequestId } }))!.status).toBe("CANCELLED");
+  });
+
+  it("404s on a companyId/offeringId mismatch rather than editing the wrong company's row", async () => {
+    const otherCo = await prisma.company.create({
+      data: {
+        categories: { create: [{ categoryId, isPrimary: true }] }, slug: `${tag}-mismatch-co`, name: "Mismatch Co", tagline: "t", about: "a",
+        logo: "/l.jpg", cover: "/c.jpg", services: [], gallery: [], badges: [],
+        phone: "0100000098", location: "NC", yearsExperience: 1, responseTime: "1h", verifiedSince: "2024",
+      },
+    });
+    const { body: mine } = await createOffering({ ...validRange, name: "Belongs to companyId" });
+
+    const res = await adminOfferingPATCH(
+      req(`/api/admin/companies/${otherCo.id}/offerings/${mine.id}`, {
+        method: "PATCH", token: adminToken, body: { name: "Should not apply" },
+      }),
+      ctx({ id: otherCo.id, offeringId: mine.id }),
+    );
+    expect(res.status).toBe(404);
+
+    const unchanged = await prisma.offering.findUnique({ where: { id: mine.id } });
+    expect(unchanged?.name).toBe("Belongs to companyId");
+
+    await prisma.company.deleteMany({ where: { id: otherCo.id } });
+  });
+
+  it("lists everything for the company, drafts and published alike", async () => {
+    const res = await adminOfferingsGET(req(`/api/admin/companies/${companyId}/offerings`, { token: adminToken }), ctx({ id: companyId }));
+    const list = await res.json();
+    expect(list.length).toBeGreaterThan(0);
     expect(list.every((o: { companyId: string }) => o.companyId === companyId)).toBe(true);
   });
 });

@@ -11,6 +11,8 @@ import PersonalTabs from "../components/PersonalTabs";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
+import Icon from "../components/Icon";
+import EmptyState from "../components/EmptyState";
 
 /**
  * The customer's conversations, all in one place.
@@ -26,7 +28,7 @@ import { t } from "../lib/i18n";
  */
 export default function Messages() {
   const { locale } = useLocale();
-  usePageMeta("Messages | Al Assema", "Your conversations with the companies you contacted.");
+  usePageMeta(`${t(locale, "messages_title")} | ${t(locale, "brand_name")}`, t(locale, "messages_sub"));
 
   // The full local Lead records (ref, token, phone, companyName/slug — everything
   // needed to open a specific thread) are already in this device's storage the
@@ -106,14 +108,14 @@ export default function Messages() {
   );
 
   const shell = (children: React.ReactNode) => (
-    <div className="bg-surface min-h-screen pt-20 md:pt-24 pb-16">
+    <div className="bg-surface min-h-screen pb-16">
       <div className="max-w-4xl mx-auto px-5">
         <PersonalTabs active="messages" />
         <div className="mb-5">
-          <h1 className="font-black text-[26px] md:text-headline-lg text-on-surface tracking-tight mb-1">
+          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-1">
             {t(locale, "messages_title")}
           </h1>
-          <p className="text-[14px] text-outline">{t(locale, "messages_sub")}</p>
+          <p className="text-label text-outline">{t(locale, "messages_sub")}</p>
         </div>
         {children}
       </div>
@@ -123,9 +125,8 @@ export default function Messages() {
   // ── Demo mode: there is no backend to hold a conversation ──
   if (!chatAvailable()) {
     return shell(
-      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center">
-        <span className="material-symbols-outlined text-outline text-[44px] mb-3 block">cloud_off</span>
-        <p className="text-[14px] text-outline max-w-sm mx-auto">{t(locale, "messages_needs_api")}</p>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+        <EmptyState icon="cloud_off" msg={t(locale, "messages_needs_api")} />
       </div>,
     );
   }
@@ -156,14 +157,14 @@ export default function Messages() {
               className="md:hidden p-1.5 -ms-1.5 rounded-lg hover:bg-surface-container transition-colors flex-shrink-0"
               aria-label={t(locale, "messages_back_to_list")}
             >
-              <span className="material-symbols-outlined text-outline rtl-flip">arrow_back</span>
+              <Icon name="arrow_back" className="text-outline rtl-flip" />
             </button>
             <div className="min-w-0 flex-1">
               <Link to={`/companies/${active.companySlug}`}
-                className="font-bold text-[14px] text-on-surface truncate hover:text-primary transition-colors block">
+                className="font-bold text-label text-on-surface truncate hover:text-primary transition-colors block">
                 {active.companyName}
               </Link>
-              <p className="text-[12px] text-outline truncate font-mono">{active.refNumber}</p>
+              <p className="text-caption text-outline truncate font-mono">{active.refNumber}</p>
             </div>
           </div>
           <ChatThread
@@ -185,15 +186,12 @@ export default function Messages() {
   //     their own request list is.
   if (deepLinkRef && !activeLead) {
     return shell(
-      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center">
-        <span className="material-symbols-outlined text-outline text-[44px] mb-3 block">search_off</span>
-        <p className="text-[14px] text-on-surface-variant mb-5 max-w-sm mx-auto">
-          {t(locale, "messages_ref_not_found")}
-        </p>
-        <Link to="/requests"
-          className="inline-block bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
-          {t(locale, "requests_tab")}
-        </Link>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+        <EmptyState
+          icon="search_off"
+          msg={t(locale, "messages_ref_not_found")}
+          actionHref={{ label: t(locale, "requests_tab"), to: "/requests" }}
+        />
       </div>,
     );
   }
@@ -210,13 +208,8 @@ export default function Messages() {
   // ── Error ──
   if (errorKey && threads.length === 0) {
     return shell(
-      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center">
-        <span className="material-symbols-outlined text-error text-[44px] mb-3 block">error</span>
-        <p className="text-[14px] text-on-surface-variant mb-5">{t(locale, errorKey)}</p>
-        <button onClick={reload}
-          className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
-          {t(locale, "common_retry")}
-        </button>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+        <EmptyState icon="error" tone="error" msg={t(locale, errorKey)} action={{ label: t(locale, "common_retry"), onClick: reload }} />
       </div>,
     );
   }
@@ -224,18 +217,13 @@ export default function Messages() {
   // ── Empty ──
   if (threads.length === 0) {
     return shell(
-      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center">
-        <div className="w-16 h-16 rounded-full bg-primary/8 flex items-center justify-center mx-auto mb-4">
-          <span className="material-symbols-outlined text-primary text-[34px]">forum</span>
-        </div>
-        <h2 className="font-bold text-[18px] text-on-surface mb-1.5">{t(locale, "messages_empty_title")}</h2>
-        <p className="text-[14px] text-outline mb-6 max-w-xs mx-auto leading-relaxed">
-          {t(locale, "messages_empty_sub")}
-        </p>
-        <Link to="/companies"
-          className="inline-block bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
-          {t(locale, "common_browse_companies")}
-        </Link>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+        <EmptyState
+          icon="forum"
+          title={t(locale, "messages_empty_title")}
+          msg={t(locale, "messages_empty_sub")}
+          actionHref={{ label: t(locale, "common_browse_companies"), to: "/companies" }}
+        />
       </div>,
     );
   }
@@ -245,7 +233,7 @@ export default function Messages() {
       {/* A refresh that fails while rows are already on screen is a banner, not
           a takeover — the conversations below are still readable. */}
       {errorKey && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold mb-3">
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold mb-3">
           {t(locale, errorKey)}
         </div>
       )}
@@ -255,7 +243,7 @@ export default function Messages() {
           <ThreadList threads={threads} activeRef={activeRef} onOpen={openThread} unreadOf={unreadOf} />
         </div>
         <div className="hidden md:flex bg-surface-container-lowest rounded-2xl shadow-bloom p-4 items-center justify-center h-[26rem]">
-          <p className="text-[13px] text-outline">{t(locale, "messages_pick")}</p>
+          <p className="text-label text-outline">{t(locale, "messages_pick")}</p>
         </div>
       </div>
     </>,

@@ -12,6 +12,7 @@ export const upsertCategorySchema = z.object({
   icon: z.string().trim().min(1).max(60),
   cover: imageRef.optional(),
   isActive: z.boolean().default(true),
+  pricingMode: z.enum(["QUOTE_ONLY", "FIXED_CATALOG"]).default("QUOTE_ONLY"),
   metaTitle: sanitizedOptionalText(120).optional(),
   metaDescription: sanitizedOptionalText(320).optional(),
 });

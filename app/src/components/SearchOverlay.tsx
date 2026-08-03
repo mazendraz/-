@@ -11,6 +11,7 @@ import {
 } from "../lib/search";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
+import Icon from "./Icon";
 
 interface Props {
   open: boolean;
@@ -114,14 +115,14 @@ export default function SearchOverlay({ open, onClose }: Props) {
 
           {/* Search input row */}
           <div className="flex items-center gap-3 px-4 sm:px-5 py-4 border-b border-outline-variant/20 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4">
-            <span className="material-symbols-outlined text-primary text-[24px]">search</span>
+            <Icon name="search" className="text-primary text-title" />
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={t(locale, "search_overlay_placeholder")}
-              className="flex-1 bg-transparent border-none outline-none text-[17px] text-on-surface placeholder:text-outline/70"
+              className="flex-1 bg-transparent border-none outline-none text-subhead text-on-surface placeholder:text-outline/70"
               style={{ fontSize: "16px" }}
               type="text"
               inputMode="search"
@@ -131,12 +132,12 @@ export default function SearchOverlay({ open, onClose }: Props) {
             {/* Clear-text "X" — only shown while there's text, clears the query. */}
             {query && (
               <button onClick={() => { setQuery(""); inputRef.current?.focus(); }} className="p-1 rounded-full text-outline hover:bg-surface-container hover:text-on-surface transition-colors flex-shrink-0" aria-label={t(locale, "common_clear")}>
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                <Icon name="close" className="text-title" />
               </button>
             )}
             {/* Persistent close button — always dismisses the overlay (needed on
                 mobile, where the backdrop isn't visible and there's no Esc key). */}
-            <button onClick={onClose} className="flex-shrink-0 text-[14px] font-bold text-outline hover:text-primary transition-colors px-1" aria-label={t(locale, "search_cancel")}>
+            <button onClick={onClose} className="flex-shrink-0 text-label font-bold text-outline hover:text-primary transition-colors px-1" aria-label={t(locale, "search_cancel")}>
               {t(locale, "search_cancel")}
             </button>
           </div>
@@ -157,18 +158,18 @@ export default function SearchOverlay({ open, onClose }: Props) {
                       {/* Icon / image */}
                       {r.type === "service" ? (
                         <span className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                          <span className="material-symbols-outlined text-primary text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>{r.icon}</span>
+                          <span className="material-symbols-outlined text-primary text-title" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{r.icon}</span>
                         </span>
                       ) : (
-                        <img src={r.image} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-outline-variant/20" loading="lazy" />
+                        <img src={r.image} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0 border border-outline-variant/20" loading="lazy" width={40} height={40} />
                       )}
                       {/* Text */}
                       <span className="flex-1 min-w-0">
-                        <span className="block font-bold text-[14px] text-on-surface truncate">{r.label}</span>
-                        <span className="block text-[12px] text-outline truncate">{r.sub}</span>
+                        <span className="block font-bold text-label text-on-surface truncate">{r.label}</span>
+                        <span className="block text-caption text-outline truncate">{r.sub}</span>
                       </span>
                       {/* Type chip */}
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline/70 bg-surface-container px-2 py-1 rounded-full flex-shrink-0">
+                      <span className="text-caption font-bold ltr:uppercase ltr:tracking-wider text-outline/70 bg-surface-container px-2 py-1 rounded-full flex-shrink-0">
                         {r.type === "service" ? t(locale, "chip_category") : r.type === "company" ? t(locale, "chip_company") : t(locale, "chip_service")}
                       </span>
                     </button>
@@ -181,16 +182,16 @@ export default function SearchOverlay({ open, onClose }: Props) {
             {query && results.length === 0 && (
               <div className="px-5 py-14 text-center">
                 <span className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto mb-4">
-                  <span className="material-symbols-outlined text-outline/60 text-[32px]">search_off</span>
+                  <Icon name="search_off" className="text-outline/60 text-headline" />
                 </span>
-                <p className="text-[15px] font-bold text-on-surface mb-1">{t(locale, "search_no_matches")} ‘{query}’</p>
-                <p className="text-[13px] text-outline mb-5">{t(locale, "search_try")}</p>
+                <p className="text-body font-bold text-on-surface mb-1">{t(locale, "search_no_matches")} ‘{query}’</p>
+                <p className="text-label text-outline mb-5">{t(locale, "search_try")}</p>
                 <button
                   onClick={() => runTextSearch(query)}
-                  className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] touch-press"
+                  className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label touch-press"
                 >
                   {t(locale, "search_browse_all")}
-                  <span className="material-symbols-outlined text-[16px] rtl-flip">arrow_forward</span>
+                  <Icon name="arrow_forward" className="text-body rtl-flip" />
                 </button>
               </div>
             )}
@@ -201,10 +202,10 @@ export default function SearchOverlay({ open, onClose }: Props) {
                 {recent.length > 0 && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[11px] font-black uppercase tracking-wider text-outline">{t(locale, "search_recent")}</p>
+                      <p className="text-caption font-black ltr:uppercase ltr:tracking-wider text-outline">{t(locale, "search_recent")}</p>
                       <button
                         onClick={() => { clearRecentSearches(); setRecent([]); }}
-                        className="text-[12px] font-bold text-outline hover:text-primary transition-colors"
+                        className="text-caption font-bold text-outline hover:text-primary transition-colors"
                       >
                         {t(locale, "common_clear")}
                       </button>
@@ -214,9 +215,9 @@ export default function SearchOverlay({ open, onClose }: Props) {
                         <button
                           key={term}
                           onClick={() => setQuery(term)}
-                          className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors px-3 py-2 rounded-full text-[13px] font-bold text-on-surface-variant"
+                          className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors px-3 py-2 rounded-full text-label font-bold text-on-surface-variant"
                         >
-                          <span className="material-symbols-outlined text-[15px] text-outline">history</span>
+                          <Icon name="history" className="text-body text-outline" />
                           {term}
                         </button>
                       ))}
@@ -225,15 +226,15 @@ export default function SearchOverlay({ open, onClose }: Props) {
                 )}
 
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-wider text-outline mb-2">{t(locale, "search_popular")}</p>
+                  <p className="text-caption font-black ltr:uppercase ltr:tracking-wider text-outline mb-2">{t(locale, "search_popular")}</p>
                   <div className="flex flex-wrap gap-2">
                     {popular.map((term) => (
                       <button
                         key={term}
                         onClick={() => setQuery(term)}
-                        className="flex items-center gap-1.5 bg-primary/8 hover:bg-primary/14 transition-colors px-3 py-2 rounded-full text-[13px] font-bold text-primary"
+                        className="flex items-center gap-1.5 bg-primary/8 hover:bg-primary/14 transition-colors px-3 py-2 rounded-full text-label font-bold text-primary"
                       >
-                        <span className="material-symbols-outlined text-[15px]">trending_up</span>
+                        <Icon name="trending_up" className="text-body" />
                         {term}
                       </button>
                     ))}
@@ -241,24 +242,24 @@ export default function SearchOverlay({ open, onClose }: Props) {
                 </div>
 
                 <div className="pt-2">
-                  <p className="text-[11px] font-black uppercase tracking-wider text-outline mb-2">{t(locale, "search_quick_links")}</p>
+                  <p className="text-caption font-black ltr:uppercase ltr:tracking-wider text-outline mb-2">{t(locale, "search_quick_links")}</p>
                   {/* Guided flow — full width, highlighted */}
                   <button onClick={() => go("/start")} className="w-full flex items-center gap-3 bg-primary/8 hover:bg-primary/14 transition-colors px-4 py-3 rounded-xl text-start mb-2">
-                    <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                    <Icon name="auto_awesome" className="text-primary text-title" style={{ fontVariationSettings: "'FILL' 1" }} />
                     <span className="flex-1">
-                      <span className="block text-[13px] font-bold text-on-surface">{t(locale, "search_not_sure")}</span>
-                      <span className="block text-[12px] text-outline">{t(locale, "search_not_sure_sub")}</span>
+                      <span className="block text-label font-bold text-on-surface">{t(locale, "search_not_sure")}</span>
+                      <span className="block text-caption text-outline">{t(locale, "search_not_sure_sub")}</span>
                     </span>
-                    <span className="material-symbols-outlined text-primary text-[18px] rtl-flip">arrow_forward</span>
+                    <Icon name="arrow_forward" className="text-primary text-subhead rtl-flip" />
                   </button>
                   <div className="grid grid-cols-2 gap-2">
                     <button onClick={() => go("/services")} className="flex items-center gap-2 bg-surface-container hover:bg-surface-container-high transition-colors px-3 py-3 rounded-xl text-start">
-                      <span className="material-symbols-outlined text-primary text-[20px]">grid_view</span>
-                      <span className="text-[13px] font-bold text-on-surface">{t(locale, "search_all_services")}</span>
+                      <Icon name="grid_view" className="text-primary text-title" />
+                      <span className="text-label font-bold text-on-surface">{t(locale, "search_all_services")}</span>
                     </button>
                     <button onClick={() => go("/companies")} className="flex items-center gap-2 bg-surface-container hover:bg-surface-container-high transition-colors px-3 py-3 rounded-xl text-start">
-                      <span className="material-symbols-outlined text-primary text-[20px]">verified</span>
-                      <span className="text-[13px] font-bold text-on-surface">{t(locale, "search_all_companies")}</span>
+                      <Icon name="verified" className="text-primary text-title" />
+                      <span className="text-label font-bold text-on-surface">{t(locale, "search_all_companies")}</span>
                     </button>
                   </div>
                 </div>

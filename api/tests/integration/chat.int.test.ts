@@ -50,7 +50,7 @@ beforeAll(async () => {
 
   const mkCompany = (slug: string) => prisma.company.create({
     data: {
-      categoryId, slug, name: `Co ${slug}`, tagline: "t", about: "a",
+      categories: { create: [{ categoryId, isPrimary: true }] }, slug, name: `Co ${slug}`, tagline: "t", about: "a",
       logo: "/l.jpg", cover: "/c.jpg", services: [], gallery: [], badges: [],
       phone: "0100000000", location: "NC", yearsExperience: 1,
       responseTime: "1h", verifiedSince: "2024",

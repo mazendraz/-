@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
-import { isUploadBucket, processImage } from "@/lib/services/upload.service";
+import { isUploadBucket, processImage, passthroughVideo } from "@/lib/services/upload.service";
 
 async function makePng(width: number, height: number): Promise<Buffer> {
   return sharp({
@@ -49,5 +49,22 @@ describe("isUploadBucket", () => {
     expect(isUploadBucket("logos")).toBe(true);
     expect(isUploadBucket("projects")).toBe(true);
     expect(isUploadBucket("avatars")).toBe(false);
+  });
+});
+
+describe("passthroughVideo", () => {
+  it("stores the buffer unmodified and maps mime type to extension", async () => {
+    const input = Buffer.from("not actually a video, just bytes to round-trip");
+
+    const mp4 = await passthroughVideo(input, "video/mp4");
+    expect(mp4.buffer).toBe(input);
+    expect(mp4.contentType).toBe("video/mp4");
+    expect(mp4.ext).toBe("mp4");
+
+    const webm = await passthroughVideo(input, "video/webm");
+    expect(webm.ext).toBe("webm");
+
+    const mov = await passthroughVideo(input, "video/quicktime");
+    expect(mov.ext).toBe("mov");
   });
 });

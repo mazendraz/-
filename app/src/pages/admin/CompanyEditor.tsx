@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  addCompany, updateCompany, deleteCompany, emptyCompany,
+  addCompany, updateCompany, deleteCompany, emptyCompany, MAX_CATEGORIES_PER_COMPANY,
   type Company, type CompanyDraft, type ServiceCategory, type Project,
 } from "../../lib/catalog";
 import { isApiConfigured } from "../../lib/api";
@@ -8,23 +8,31 @@ import { setCompanyAvailability, isBusy } from "../../lib/availability";
 import AvailabilityControl from "../../components/AvailabilityControl";
 import BusyWindowsEditor from "../../components/BusyWindowsEditor";
 import WaitlistManager from "../../components/WaitlistManager";
-import { ModalShell, LField } from "./components/ModalShell";
+import CategoryMultiSelect, { type CategorySelection } from "../../components/CategoryMultiSelect";
+import { AdminOfferingsPanel } from "./AdminOfferingsPanel";
+import { LField } from "./components/ModalShell";
+import Modal from "../../components/Modal";
+import Tabs, { TabPanel } from "../../components/Tabs";
 import { TagField, ImageUpload, GalleryUpload } from "./components/fields";
 import { ConfirmDelete } from "./components/confirm";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
+import Icon from "../../components/Icon";
 
 // Sub-tab id → label key. The ids are internal state, the labels are not.
 const EDITOR_TAB_KEYS: Record<EditorTab, StringKey> = {
   details: "admin_ce_tab_details",
   projects: "admin_ce_tab_projects",
   availability: "admin_ce_tab_availability",
+  offerings: "admin_ce_tab_offerings",
 };
 
 // ══════════════════════════════════════════════════════════════════════════
 //  COMPANY EDITOR
 // ══════════════════════════════════════════════════════════════════════════
-export type EditorTab = "details" | "projects" | "availability";
+export type EditorTab = "details" | "projects" | "availability" | "offerings";
 
 export function CompanyEditor({ company, categories, onClose }: {
   company: Company | null;
@@ -39,14 +47,37 @@ export function CompanyEditor({ company, categories, onClose }: {
   );
   const [saveError, setSaveError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const navBlocker = useUnsavedChangesGuard(dirty);
 
   function set<K extends keyof CompanyDraft>(key: K, val: CompanyDraft[K]) {
     setDraft((d) => ({ ...d, [key]: val }));
+    setDirty(true);
   }
 
-  function onCategoryChange(slug: string) {
-    const cat = categories.find((c) => c.slug === slug);
-    setDraft((d) => ({ ...d, category: slug, categoryLabel: cat?.label ?? "" }));
+  // `categories` (the full membership) is the source of truth; `category`/
+  // `categoryLabel` (the primary) are kept in sync alongside it so every other
+  // spot in the codebase that still reads those two singular fields for
+  // display stays correct without needing to know about the list.
+  function onCategoriesChange(next: CategorySelection[]) {
+    const primary = next.find((c) => c.isPrimary) ?? next[0];
+    setDraft((d) => ({
+      ...d,
+      categories: next,
+      category: primary?.slug ?? "",
+      categoryLabel: primary?.label ?? "",
+    }));
+    setDirty(true);
+  }
+
+  // UX-09: the × button and backdrop-click both route through `onClose` — a
+  // dirty draft gets a confirm instead of being discarded on a stray click.
+  // (`useUnsavedChangesGuard` above covers the OTHER two ways to lose it:
+  // closing the tab, and navigating away via the sidebar while this is open.)
+  function requestClose() {
+    if (dirty) setConfirmingClose(true);
+    else onClose();
   }
 
   // Validate the fields the live API requires before saving — otherwise the
@@ -55,7 +86,7 @@ export function CompanyEditor({ company, categories, onClose }: {
   function validate(): string | null {
     if (draft.name.trim().length < 2) return t(locale, "admin_ce_name_min");
     if (isApiConfigured()) {
-      if (!draft.category) return t(locale, "admin_ce_pick_category");
+      if (draft.categories.length === 0) return t(locale, "admin_ce_pick_category");
       if (!draft.logo) return t(locale, "admin_ce_need_logo");
       if (!draft.cover) return t(locale, "admin_ce_need_cover");
       if (draft.phone.trim().length < 8) return t(locale, "admin_ce_need_phone");
@@ -86,29 +117,51 @@ export function CompanyEditor({ company, categories, onClose }: {
   }
 
   return (
-    <ModalShell title={isNew ? t(locale, "admin_add_company") : `${t(locale, "admin_edit")} — ${company!.name}`} onClose={onClose} wide>
-      {/* Sub-tabs. Availability is per-company and uses its own endpoint, so it only
-          shows once the company exists (needs an id). */}
-      <div className="flex gap-1 border-b border-outline-variant/20 px-1 -mt-2 mb-5">
-        {(["details", "projects", ...(isNew ? [] : ["availability" as const])] as EditorTab[]).map((id) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`px-4 py-2.5 text-[13px] font-bold capitalize border-b-2 transition-colors ${tab === id ? "text-primary border-primary" : "text-outline border-transparent hover:text-on-surface"}`}>
-            {t(locale, EDITOR_TAB_KEYS[id])}
-            {id === "projects" && draft.projects.length > 0 && <span className="ml-1 text-outline">({draft.projects.length})</span>}
-          </button>
-        ))}
-      </div>
+    <>
+    <Modal title={isNew ? t(locale, "admin_add_company") : `${t(locale, "admin_edit")} — ${company!.name}`} onClose={requestClose} wide>
+      <div className="p-5">
+      {/* Sub-tabs. Availability and Pricing are per-company and use their own
+          endpoints, so they only show once the company exists (needs an id) —
+          Pricing additionally only when the company's category has opted into
+          a fixed catalog (see Phase 9 — CategoryEditor). */}
+      <Tabs
+        idPrefix="ce"
+        activeId={tab}
+        onChange={setTab}
+        className="flex gap-1 border-b border-outline-variant/20 px-1 -mt-2 mb-5"
+        tabClassName={(active) => `px-4 py-2.5 text-label font-bold border-b-2 transition-colors ${active ? "text-primary border-primary" : "text-outline border-transparent hover:text-on-surface"}`}
+        items={([
+          "details", "projects",
+          ...(isNew ? [] : ["availability" as const]),
+          // Permissive union — ANY of the company's linked categories may
+          // enable the catalog, not just its primary (see offerings.service.ts
+          // assertCatalogEnabled).
+          ...(!isNew && company?.categories?.some((c) => c.pricingMode === "FIXED_CATALOG") ? ["offerings" as const] : []),
+        ] as EditorTab[]).map((id) => ({
+          id,
+          label: (
+            <>
+              {t(locale, EDITOR_TAB_KEYS[id])}
+              {id === "projects" && draft.projects.length > 0 && <span className="ms-1 text-outline">({draft.projects.length})</span>}
+            </>
+          ),
+        }))}
+      />
 
       {tab === "details" && (
-        <div className="space-y-4">
+        <TabPanel idPrefix="ce" id="details" className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <LField label={t(locale, "admin_ce_name")} required><input className="field-input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder={t(locale, "admin_ce_name_ph")} /></LField>
-            <LField label={t(locale, "admin_ce_category")}><select className="field-input" value={draft.category} onChange={(e) => onCategoryChange(e.target.value)}>
-              <option value="">{t(locale, "admin_ce_select_category")}</option>
-              {categories.map((c) => <option key={c.slug} value={c.slug}>{c.label}</option>)}
-            </select></LField>
+            <LField label={t(locale, "admin_ce_tagline")}><input className="field-input" value={draft.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder={t(locale, "admin_ce_tagline_ph")} /></LField>
           </div>
-          <LField label={t(locale, "admin_ce_tagline")}><input className="field-input" value={draft.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder={t(locale, "admin_ce_tagline_ph")} /></LField>
+          <LField label={t(locale, "admin_ce_categories")} required>
+            <CategoryMultiSelect
+              categories={categories}
+              selected={draft.categories}
+              onChange={onCategoriesChange}
+              max={MAX_CATEGORIES_PER_COMPANY}
+            />
+          </LField>
           <LField label={t(locale, "admin_ce_about")}><textarea className="field-input resize-none" rows={3} value={draft.about} onChange={(e) => set("about", e.target.value)} /></LField>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <ImageUpload label={t(locale, "admin_ce_logo")} value={draft.logo} onChange={(v) => set("logo", v)} shape="logo" maxDim={256} bucket="logos" />
@@ -124,8 +177,8 @@ export function CompanyEditor({ company, categories, onClose }: {
               emails are sent to this address; leave blank to disable email alerts
               for this company. */}
           <div className="bg-surface-container rounded-xl p-3.5 space-y-4">
-            <p className="text-[12px] font-bold text-outline flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px]">notifications</span>
+            <p className="text-caption font-bold text-outline flex items-center gap-1.5">
+              <Icon name="notifications" className="text-body" />
               {t(locale, "admin_ce_notif_title")}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -168,7 +221,7 @@ export function CompanyEditor({ company, categories, onClose }: {
           <label className="flex items-start gap-2.5 -mt-1 cursor-pointer">
             <input type="checkbox" className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" checked={draft.ratingOverridden === true}
               onChange={(e) => set("ratingOverridden", e.target.checked)} />
-            <span className="text-[12px] text-outline">
+            <span className="text-caption text-outline">
               {t(locale, draft.ratingOverridden ? "admin_ce_rating_manual" : "admin_ce_rating_auto")}
             </span>
           </label>
@@ -181,11 +234,11 @@ export function CompanyEditor({ company, categories, onClose }: {
           <label className="flex items-center gap-3 bg-primary/6 border border-primary/18 rounded-xl p-3.5 cursor-pointer">
             <input type="checkbox" className="w-5 h-5 accent-primary" checked={draft.verified === true} onChange={(e) => set("verified", e.target.checked)} />
             <div>
-              <p className="font-bold text-[14px] text-on-surface flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-primary text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+              <p className="font-bold text-label text-on-surface flex items-center gap-1.5">
+                <Icon name="verified" className="text-primary text-body" style={{ fontVariationSettings: "'FILL' 1" }} />
                 {t(locale, "admin_ce_verified")}
               </p>
-              <p className="text-[12px] text-outline">{t(locale, "admin_ce_verified_hint")}</p>
+              <p className="text-caption text-outline">{t(locale, "admin_ce_verified_hint")}</p>
             </div>
           </label>
 
@@ -193,15 +246,15 @@ export function CompanyEditor({ company, categories, onClose }: {
           <label className="flex items-center gap-3 bg-surface-container rounded-xl p-3.5 cursor-pointer">
             <input type="checkbox" className="w-5 h-5 accent-primary" checked={draft.featured !== false} onChange={(e) => set("featured", e.target.checked)} />
             <div>
-              <p className="font-bold text-[14px] text-on-surface">{t(locale, "admin_ce_featured")}</p>
-              <p className="text-[12px] text-outline">{t(locale, "admin_ce_featured_hint")}</p>
+              <p className="font-bold text-label text-on-surface">{t(locale, "admin_ce_featured")}</p>
+              <p className="text-caption text-outline">{t(locale, "admin_ce_featured_hint")}</p>
             </div>
           </label>
 
           {/* SEO overrides — optional; blank uses the name/tagline defaults. */}
           <div className="bg-surface-container rounded-xl p-3.5 space-y-4">
-            <p className="text-[12px] font-bold text-outline flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[16px]">travel_explore</span>
+            <p className="text-caption font-bold text-outline flex items-center gap-1.5">
+              <Icon name="travel_explore" className="text-body" />
               {t(locale, "admin_ce_seo_title")}
             </p>
             <LField label={t(locale, "admin_ce_meta_title")}>
@@ -211,17 +264,19 @@ export function CompanyEditor({ company, categories, onClose }: {
               <textarea className="field-input resize-none" rows={2} value={draft.metaDescription ?? ""} onChange={(e) => set("metaDescription", e.target.value)} placeholder={t(locale, "admin_cat_meta_desc_ph")} />
             </LField>
           </div>
-        </div>
+        </TabPanel>
       )}
 
       {tab === "projects" && (
-        <ProjectsEditor projects={draft.projects} onChange={(p) => set("projects", p)} />
+        <TabPanel idPrefix="ce" id="projects">
+          <ProjectsEditor projects={draft.projects} onChange={(p) => set("projects", p)} />
+        </TabPanel>
       )}
 
       {tab === "availability" && company && (
-        <div className="space-y-6">
+        <TabPanel idPrefix="ce" id="availability" className="space-y-6">
           <div>
-            <p className="text-[13px] text-outline mb-4 leading-relaxed">
+            <p className="text-label text-outline mb-4 leading-relaxed">
               {t(locale, "admin_ce_availability_hint")}
             </p>
             <AvailabilityControl
@@ -235,28 +290,54 @@ export function CompanyEditor({ company, categories, onClose }: {
           <div className="border-t border-outline-variant/20 pt-6">
             <WaitlistManager scope={{ kind: "admin", companyId: company.id }} />
           </div>
-        </div>
+        </TabPanel>
+      )}
+
+      {tab === "offerings" && company && (
+        <TabPanel idPrefix="ce" id="offerings">
+          <AdminOfferingsPanel companyId={company.id} />
+        </TabPanel>
       )}
 
       {/* Footer actions — sticky so Save is always reachable */}
       <div className="sticky bottom-0 -mx-5 px-5 py-3.5 mt-6 bg-surface-container-lowest/97 backdrop-blur-lg border-t border-outline-variant/20 flex flex-col gap-2">
         {saveError && (
-          <p className="text-[13px] text-error font-medium bg-error/8 rounded-lg px-3 py-2">{saveError}</p>
+          <p className="text-label text-error font-medium bg-error/8 rounded-lg px-3 py-2">{saveError}</p>
         )}
         <div className="flex items-center justify-between gap-3">
           {!isNew ? (
             <ConfirmDelete onConfirm={() => { deleteCompany(company!.id); onClose(); }} label={t(locale, "admin_noun_company")} big />
           ) : <span />}
-          <div className="flex gap-2.5 ml-auto">
-            <button onClick={onClose} disabled={saving} className="px-4 sm:px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-[14px] text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">{t(locale, "admin_confirm_cancel")}</button>
-            <button onClick={save} disabled={saving} className="px-5 sm:px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
-              {saving && <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>}
+          <div className="flex gap-2.5 ms-auto">
+            <button onClick={requestClose} disabled={saving} className="px-4 sm:px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-label text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">{t(locale, "admin_confirm_cancel")}</button>
+            <button onClick={save} disabled={saving} className="px-5 sm:px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+              {saving && <Icon name="progress_activity" className="text-subhead animate-spin" />}
               {t(locale, saving ? "admin_saving" : isNew ? "admin_create" : "admin_save_changes")}
             </button>
           </div>
         </div>
       </div>
-    </ModalShell>
+      </div>
+    </Modal>
+      {confirmingClose && (
+        <ConfirmDialog
+          title={t(locale, "unsaved_changes_title")}
+          message={t(locale, "unsaved_changes_body")}
+          confirmLabel={t(locale, "unsaved_changes_discard")}
+          onConfirm={() => { setConfirmingClose(false); onClose(); }}
+          onCancel={() => setConfirmingClose(false)}
+        />
+      )}
+      {navBlocker.state === "blocked" && (
+        <ConfirmDialog
+          title={t(locale, "unsaved_changes_title")}
+          message={t(locale, "unsaved_changes_body")}
+          confirmLabel={t(locale, "unsaved_changes_discard")}
+          onConfirm={() => navBlocker.proceed()}
+          onCancel={() => navBlocker.reset()}
+        />
+      )}
+    </>
   );
 }
 
@@ -276,34 +357,34 @@ export function ProjectsEditor({ projects, onChange }: { projects: Project[]; on
   return (
     <div className="space-y-4">
       <div className="bg-surface-container rounded-xl p-4 space-y-3">
-        <p className="text-[12px] font-black uppercase tracking-wide text-outline">{t(locale, "admin_pe_add")}</p>
+        <p className="text-caption font-black ltr:uppercase ltr:tracking-wide text-outline">{t(locale, "admin_pe_add")}</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <input className="field-input sm:col-span-2" placeholder={t(locale, "admin_pe_title_ph")} value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} />
           <input className="field-input" placeholder={t(locale, "admin_pe_year_ph")} value={d.year} onChange={(e) => setD({ ...d, year: e.target.value })} />
         </div>
         <ImageUpload label={t(locale, "admin_pe_image")} value={d.img} onChange={(v) => setD({ ...d, img: v })} shape="wide" maxDim={1200} bucket="projects" />
         <textarea className="field-input resize-none" rows={2} placeholder={t(locale, "admin_pe_desc_ph")} value={d.description} onChange={(e) => setD({ ...d, description: e.target.value })} />
-        <label className="flex items-center gap-2 text-[13px] font-bold text-on-surface cursor-pointer">
+        <label className="flex items-center gap-2 text-label font-bold text-on-surface cursor-pointer">
           <input type="checkbox" className="w-4 h-4 accent-secondary" checked={d.featured ?? false} onChange={(e) => setD({ ...d, featured: e.target.checked })} />
           {t(locale, "admin_pe_feature_label")}
         </label>
-        <button onClick={add} className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-[13px] hover:bg-primary-container transition-colors">{t(locale, "admin_pe_add")}</button>
+        <button onClick={add} className="bg-primary text-on-primary px-4 py-2 rounded-lg font-bold text-label hover:bg-primary-container transition-colors">{t(locale, "admin_pe_add")}</button>
       </div>
       {projects.length === 0 ? (
-        <p className="text-[13px] text-outline text-center py-6">{t(locale, "admin_pe_none")}</p>
+        <p className="text-label text-outline text-center py-6">{t(locale, "admin_pe_none")}</p>
       ) : projects.map((p, i) => (
         <div key={i} className="flex items-center gap-3 bg-surface-container-lowest border border-outline-variant/20 rounded-xl p-3">
-          {p.img && <img src={p.img} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" loading="lazy" />}
+          {p.img && <img src={p.img} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" loading="lazy" width={48} height={48} />}
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-[14px] text-on-surface truncate">{p.title}</p>
-            <p className="text-[12px] text-outline truncate">{p.year} · {p.description}</p>
+            <p className="font-bold text-label text-on-surface truncate">{p.title}</p>
+            <p className="text-caption text-outline truncate">{p.year} · {p.description}</p>
           </div>
           <button onClick={() => toggleFeatured(i)} title={t(locale, p.featured ? "admin_ce_featured" : "admin_pe_feature_title")}
             className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${p.featured ? "text-secondary" : "text-outline hover:text-secondary"}`}>
-            <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: p.featured ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+            <Icon name="star" className="text-subhead" style={{ fontVariationSettings: p.featured ? "'FILL' 1" : "'FILL' 0" }} />
           </button>
-          <button onClick={() => onChange(projects.filter((_, idx) => idx !== i))} className="p-1.5 rounded-lg hover:bg-error/10 text-outline hover:text-error transition-colors flex-shrink-0">
-            <span className="material-symbols-outlined text-[18px]">delete</span>
+          <button onClick={() => onChange(projects.filter((_, idx) => idx !== i))} aria-label={`${t(locale, "admin_delete")} ${p.title}`} className="w-11 h-11 -m-2.5 flex items-center justify-center rounded-lg hover:bg-error/10 text-outline hover:text-error transition-colors flex-shrink-0">
+            <Icon name="delete" className="text-subhead" />
           </button>
         </div>
       ))}

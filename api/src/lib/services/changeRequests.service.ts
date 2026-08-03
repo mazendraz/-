@@ -47,7 +47,7 @@ export const EDITABLE_FIELDS: Record<ChangeEntity, readonly string[]> = {
 } as const;
 
 // Notable omissions on COMPANY, all deliberate:
-//   slug, categoryId, status, featured, verified, rating, reviewCount,
+//   slug, categoryIds, status, featured, verified, rating, reviewCount,
 //   ratingOverridden, completedProjects, verifiedSince → admin-only trust signals
 //   busy / busyUntil / busyNote  → provider already controls these immediately via
 //                                  /api/provider/availability; queuing them behind

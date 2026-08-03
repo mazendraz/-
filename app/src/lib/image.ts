@@ -4,13 +4,23 @@ import { apiUpload, isApiConfigured } from "./api";
 export type UploadBucket = "logos" | "covers" | "gallery" | "projects";
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5MB — mirrors the backend limit
+// Gallery-only (see upload.service.ts's ALLOWED_VIDEO_MIME / MAX_VIDEO_UPLOAD_BYTES).
+// Bigger cap than images because a video is inherently heavier, and there is no
+// server-side processing step for it (no ffmpeg in this repo) — it is stored
+// exactly as uploaded.
+const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB — mirrors the backend limit
+const VIDEO_MIME = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
 /**
- * Upload an image and return a URL to persist in the catalog.
- *  • API mode: POST the file to /admin/upload — the server resizes to WebP and
- *    stores it in Supabase, returning a public URL. No base64 in localStorage.
- *  • Demo mode (no API): fall back to a downscaled, compressed data URL so the
- *    offline admin still works (kept small to respect the localStorage quota).
+ * Upload an image, or (gallery only) a video, and return a URL to persist in
+ * the catalog.
+ *  • API mode: POST the file to /admin/upload — images are resized to WebP
+ *    server-side; video is stored as uploaded. Returns a public URL, no
+ *    base64 in localStorage.
+ *  • Demo mode (no API): images fall back to a downscaled, compressed data URL
+ *    so the offline admin still works. Video has no such fallback — a 50MB
+ *    file as a base64 string would blow the localStorage quota — so it
+ *    requires a live server.
  */
 export async function uploadImage(
   file: File,
@@ -20,10 +30,16 @@ export async function uploadImage(
   // "/provider/upload" (admin/upload is admin-only and would 403 for providers).
   endpoint: "/admin/upload" | "/provider/upload" = "/admin/upload",
 ): Promise<string> {
-  if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
+  const isVideo = VIDEO_MIME.has(file.type);
+  if (!isVideo && !file.type.startsWith("image/")) {
+    throw new Error("Please choose an image (or, for the gallery, an MP4/WebM/MOV video) file.");
+  }
 
   if (isApiConfigured()) {
-    if (file.size > MAX_UPLOAD_BYTES) throw new Error("Image must be 5MB or smaller.");
+    const maxBytes = isVideo ? MAX_VIDEO_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
+    if (file.size > maxBytes) {
+      throw new Error(isVideo ? "Video must be 50MB or smaller." : "Image must be 5MB or smaller.");
+    }
     const form = new FormData();
     form.append("file", file);
     form.append("bucket", bucket);
@@ -31,7 +47,16 @@ export async function uploadImage(
     return url;
   }
 
+  if (isVideo) throw new Error("Video upload requires a live server (not available in demo mode).");
   return fileToDataURL(file, maxDim);
+}
+
+/** Extension-based check (query string ignored) — used to render gallery
+ *  items as <video> instead of <img>. Videos are stored as-is (no processing
+ *  step), so the upload's own extension is a reliable signal. */
+export function isVideoUrl(url: string): boolean {
+  const path = url.split(/[?#]/)[0];
+  return /\.(mp4|webm|mov)$/i.test(path);
 }
 
 /**

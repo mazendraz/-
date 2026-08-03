@@ -21,6 +21,9 @@
  *   • language comes from navigator.language, not LocaleContext
  *   • no fetch, no settings, no dynamic links, no hooks
  *   • styles are inline, not Tailwind classes (the stylesheet may not have loaded)
+ *   • colours are literal hex, not the warning/success/semantic tokens added
+ *     for DS-07 — this file is the one deliberate, documented exception to
+ *     "no hardcoded hex" the audit calls for elsewhere
  *
  * StatusScreen.tsx is the richer screen for `maintenance` and `offline`, where the
  * app is healthy and those dependencies are safe to use.
@@ -54,7 +57,7 @@ function pickLang(): "en" | "ar" {
 
 export default function CrashScreen({ error, showDetails }: {
   error?: unknown;
-  /** Stack traces are for admins / ?debug=1 only — never for the public. */
+  /** Stack traces are for admins only (ERR-03) — never for the public. */
   showDetails?: boolean;
 }) {
   const lang = pickLang();

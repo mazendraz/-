@@ -3,6 +3,7 @@ import { t } from "../lib/i18n";
 import { formatPrice, formatQtyRange, isQuoteOnly, isPriceStale, priceAgeDays } from "../lib/pricing";
 import { splitByKind, type Offering } from "../lib/offerings";
 import { addToCart, removeFromCart, useCart } from "../lib/cart";
+import Icon from "./Icon";
 
 /**
  * The public price list on a company profile.
@@ -24,14 +25,14 @@ export default function OfferingCards({ offerings, services, companySlug }: {
     if (services.length === 0) return null;
     return (
       <section>
-        <h2 className="font-headline-md text-headline-md text-on-surface mb-4">
+        <h2 className=" text-title text-on-surface mb-4">
           {t(locale, "profile_services_offered")}
         </h2>
         <div className="flex flex-wrap gap-3">
           {services.map((s) => (
             <div key={s} className="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 shadow-sm">
-              <span className="material-symbols-outlined text-primary text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-              <span className="text-label-md font-label-md text-on-surface">{s}</span>
+              <Icon name="check_circle" className="text-primary text-subhead" style={{ fontVariationSettings: "'FILL' 1" }} />
+              <span className="text-label text-on-surface">{s}</span>
             </div>
           ))}
         </div>
@@ -58,7 +59,7 @@ function OfferingGroup({ title, items, companySlug }: {
 }) {
   return (
     <section>
-      <h2 className="font-headline-md text-headline-md text-on-surface mb-4">{title}</h2>
+      <h2 className=" text-title text-on-surface mb-4">{title}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {items.map((o) => <OfferingCard key={o.id} offering={o} companySlug={companySlug} />)}
       </div>
@@ -76,27 +77,27 @@ function OfferingCard({ offering, companySlug }: { offering: Offering; companySl
   return (
     <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl overflow-hidden shadow-sm flex flex-col">
       {offering.image && (
-        <img src={offering.image} alt="" className="w-full h-32 object-cover" loading="lazy" />
+        <img src={offering.image} alt="" className="w-full h-32 object-cover" loading="lazy" width={320} height={128} />
       )}
       <div className="p-4 flex flex-col gap-2 flex-1">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-bold text-[15px] text-on-surface leading-snug">{offering.name}</h3>
+          <h3 className="font-bold text-body text-on-surface leading-snug">{offering.name}</h3>
           {quote && (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-secondary/15 text-secondary flex-shrink-0 whitespace-nowrap">
+            <span className="text-caption font-bold px-2 py-0.5 rounded-full bg-secondary/15 text-secondary flex-shrink-0 whitespace-nowrap">
               {t(locale, "offer_on_inspection")}
             </span>
           )}
         </div>
 
         {offering.description && (
-          <p className="text-[13px] text-on-surface-variant leading-relaxed">{offering.description}</p>
+          <p className="text-label text-on-surface-variant leading-relaxed">{offering.description}</p>
         )}
 
         {/* Quantity tiers, when the provider defined bands. */}
         {offering.tiers.length > 0 && (
           <div className="flex flex-col gap-1 mt-0.5">
             {offering.tiers.map((tier) => (
-              <div key={tier.id} className="flex items-center justify-between gap-2 text-[12px] bg-surface-container rounded-lg px-2.5 py-1.5">
+              <div key={tier.id} className="flex items-center justify-between gap-2 text-caption bg-surface-container rounded-lg px-2.5 py-1.5">
                 <span className="text-on-surface-variant truncate">
                   {tier.label}
                   {formatQtyRange(tier, locale) && ` · ${formatQtyRange(tier, locale)}`}
@@ -117,11 +118,11 @@ function OfferingCard({ offering, companySlug }: { offering: Offering; companySl
 
         <div className="mt-auto pt-2 flex items-end justify-between gap-2">
           <div>
-            <p className={`font-display font-black leading-none ${quote ? "text-[14px] text-secondary" : "text-[18px] text-primary"}`}>
+            <p className={`font-display font-black leading-none ${quote ? "text-label text-secondary" : "text-subhead text-primary"}`}>
               {formatPrice(offering, locale)}
             </p>
             {offering.minQty != null && (
-              <p className="text-[11px] text-outline mt-1">
+              <p className="text-caption text-outline mt-1">
                 {t(locale, "offer_minimum")} {offering.minQty}
               </p>
             )}
@@ -135,26 +136,26 @@ function OfferingCard({ offering, companySlug }: { offering: Offering; companySl
                   : addToCart(companySlug, { offeringId: offering.id, qty: offering.minQty ?? 1 })
               }
               aria-pressed={inCart}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-bold transition-colors flex-shrink-0 touch-press ${
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-caption font-bold transition-colors flex-shrink-0 touch-press ${
                 inCart
                   ? "bg-primary/10 text-primary"
                   : "bg-surface-container text-on-surface hover:bg-surface-container-high"
               }`}
             >
-              <span className="material-symbols-outlined text-[15px]">{inCart ? "check" : "add"}</span>
+              <span className="material-symbols-outlined text-body" aria-hidden="true" translate="no">{inCart ? "check" : "add"}</span>
               {t(locale, inCart ? "offer_added" : "offer_add")}
             </button>
           )}
         </div>
 
         {offering.note && (
-          <p className="text-[11px] text-outline italic">{offering.note}</p>
+          <p className="text-caption text-outline italic">{offering.note}</p>
         )}
 
         {/* Honest about age rather than implying a stale number is current. */}
         {stale && !quote && (
-          <p className="text-[11px] text-outline flex items-center gap-1">
-            <span className="material-symbols-outlined text-[13px]">schedule</span>
+          <p className="text-caption text-outline flex items-center gap-1">
+            <Icon name="schedule" className="text-label" />
             {t(locale, "offer_price_updated")} {priceAgeDays(offering.priceUpdatedAt)}{" "}
             {t(locale, "offer_days_ago")}
           </p>

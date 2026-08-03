@@ -26,6 +26,18 @@ const ALLOWED_MIME = new Set([
   "image/avif",
 ]);
 
+// Video: gallery only (see validate()). Bigger cap than images — a short clip
+// is inherently heavier than a photo — and no processing library exists in
+// this repo for video, so unlike images these are stored exactly as uploaded
+// (see passthroughVideo()). Keep deploy/Caddyfile's request_body max_size and
+// this cap in sync — Caddy rejects oversized bodies before they reach here.
+export const MAX_VIDEO_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
+const ALLOWED_VIDEO_MIME: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+};
+
 export interface UploadResult {
   url: string;
 }
@@ -66,6 +78,15 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
   }
 }
 
+/**
+ * Video has no processing step: nothing in this repo can transcode/resize it
+ * (no ffmpeg). Stored exactly as uploaded — see MAX_VIDEO_UPLOAD_BYTES for why
+ * that makes the size cap matter more here than for images.
+ */
+export async function passthroughVideo(input: Buffer, mimeType: string): Promise<ProcessedImage> {
+  return { buffer: input, contentType: mimeType, ext: ALLOWED_VIDEO_MIME[mimeType] };
+}
+
 function validate(file: File, bucket: string): asserts bucket is UploadBucket {
   if (!isUploadBucket(bucket)) {
     throw new ValidationError("Invalid upload bucket", {
@@ -75,6 +96,24 @@ function validate(file: File, bucket: string): asserts bucket is UploadBucket {
   if (file.size === 0) {
     throw new ValidationError("Empty file", { file: ["File is empty"] });
   }
+
+  if (file.type in ALLOWED_VIDEO_MIME) {
+    // Video is a gallery-only feature — a company's logo/cover/project photo
+    // has no reason to be a video, and keeping the restriction narrow limits
+    // where the bigger size cap below applies.
+    if (bucket !== "gallery") {
+      throw new ValidationError("Video is only supported in the gallery", {
+        file: ["Video uploads are only accepted for the gallery"],
+      });
+    }
+    if (file.size > MAX_VIDEO_UPLOAD_BYTES) {
+      throw new ValidationError("File too large", {
+        file: ["Video must be 50MB or smaller"],
+      });
+    }
+    return;
+  }
+
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new ValidationError("File too large", {
       file: ["Image must be 5MB or smaller"],
@@ -82,7 +121,7 @@ function validate(file: File, bucket: string): asserts bucket is UploadBucket {
   }
   if (!ALLOWED_MIME.has(file.type)) {
     throw new ValidationError("Unsupported file type", {
-      file: ["Must be a JPEG, PNG, WebP, or AVIF image"],
+      file: ["Must be a JPEG, PNG, WebP, AVIF image, or an MP4/WebM/MOV video"],
     });
   }
 }
@@ -141,14 +180,16 @@ async function uploadToStorage(
   return uploadToSupabase(bucket, image);
 }
 
-/** Admin: validate, process, and upload an image. Returns its public URL. */
+/** Admin: validate, process, and upload an image or (gallery-only) video. Returns its public URL. */
 export async function upload(
   file: File,
   bucket: string,
 ): Promise<UploadResult> {
   validate(file, bucket);
   const input = Buffer.from(await file.arrayBuffer());
-  const processed = await processImage(input);
+  const processed = file.type in ALLOWED_VIDEO_MIME
+    ? await passthroughVideo(input, file.type)
+    : await processImage(input);
   const url = await uploadToStorage(bucket, processed);
   return { url };
 }

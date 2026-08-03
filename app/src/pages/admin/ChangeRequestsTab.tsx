@@ -6,12 +6,14 @@ import {
 } from "../../lib/changeRequests";
 import { refreshCatalogFromApi } from "../../lib/catalog";
 import { isApiConfigured } from "../../lib/api";
-import { ModalShell } from "./components/ModalShell";
+import { ProjectApprovals } from "./ProjectApprovals";
+import Modal from "../../components/Modal";
 import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
-import { t, type StringKey } from "../../lib/i18n";
+import { t, tCount, type StringKey } from "../../lib/i18n";
 import { formatDateTime } from "../../lib/format";
 import { formatAmount, unitLabel } from "../../lib/pricing";
+import Icon from "../../components/Icon";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  CHANGE REQUESTS — provider edits awaiting review
@@ -40,66 +42,73 @@ export function ChangeRequestsTab() {
 
   if (!isApiConfigured()) {
     return (
-      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
-        <EmptyState msg={t(locale, "admin_cr_needs_api")} icon="cloud_off" />
+      <div className="space-y-6">
+        <ProjectApprovals />
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom border-t border-outline-variant/20">
+          <EmptyState msg={t(locale, "admin_cr_needs_api")} icon="cloud_off" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            onClick={() => setFilter(f.id)}
-            className={`px-4 py-2 rounded-xl text-[13px] font-bold transition-colors ${
-              filter === f.id
-                ? "bg-primary text-on-primary"
-                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
-            }`}
-          >
-            {t(locale, f.labelKey)}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-6">
+      <ProjectApprovals />
 
-      {error && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{error}</div>
-      )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-        </div>
-      ) : items.length === 0 ? (
-        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
-          <EmptyState
-            msg={t(locale, filter === "PENDING" ? "admin_cr_none_pending" : "admin_cr_none")}
-            icon="task_alt"
-          />
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {items.map((r) => (
-            <RequestRow key={r.id} request={r} onOpen={() => setOpenId(r.id)} />
+      <div className="space-y-4 border-t border-outline-variant/20 pt-6">
+        <div className="flex flex-wrap gap-2">
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              className={`px-4 py-2 rounded-xl text-label font-bold transition-colors ${
+                filter === f.id
+                  ? "bg-primary text-on-primary"
+                  : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+              }`}
+            >
+              {t(locale, f.labelKey)}
+            </button>
           ))}
         </div>
-      )}
 
-      {openId && (
-        <ReviewModal
-          id={openId}
-          onClose={() => setOpenId(null)}
-          onReviewed={() => {
-            setOpenId(null);
-            refresh();
-            // An approval changes public catalog data — pull it through so the
-            // rest of the dashboard isn't showing the pre-approval values.
-            void refreshCatalogFromApi();
-          }}
-        />
-      )}
+        {error && (
+          <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">{error}</div>
+        )}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+            <EmptyState
+              msg={t(locale, filter === "PENDING" ? "admin_cr_none_pending" : "admin_cr_none")}
+              icon="task_alt"
+            />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {items.map((r) => (
+              <RequestRow key={r.id} request={r} onOpen={() => setOpenId(r.id)} />
+            ))}
+          </div>
+        )}
+
+        {openId && (
+          <ReviewModal
+            id={openId}
+            onClose={() => setOpenId(null)}
+            onReviewed={() => {
+              setOpenId(null);
+              refresh();
+              // An approval changes public catalog data — pull it through so the
+              // rest of the dashboard isn't showing the pre-approval values.
+              void refreshCatalogFromApi();
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -117,24 +126,24 @@ function RequestRow({ request, onOpen }: { request: ChangeRequest; onOpen: () =>
   return (
     <button
       onClick={onOpen}
-      className="w-full text-left bg-surface-container-lowest rounded-2xl p-4 shadow-bloom hover:bg-surface-container/40 transition-colors"
+      className="w-full text-start bg-surface-container-lowest rounded-2xl p-4 shadow-bloom hover:bg-surface-container/40 transition-colors"
     >
       <div className="flex items-center justify-between gap-3 mb-1.5">
-        <p className="font-bold text-[15px] text-on-surface truncate">
+        <p className="font-bold text-body text-on-surface truncate">
           {request.companyName ?? request.companyId}
         </p>
-        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_STYLES[request.status]}`}>
+        <span className={`text-caption font-bold px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_STYLES[request.status]}`}>
           {t(locale, CR_STATUS_KEYS[request.status])}
         </span>
       </div>
-      <p className="text-[13px] text-outline">
-        {fields.length} {t(locale, fields.length > 1 ? "admin_cr_fields" : "admin_cr_field")}:{" "}
+      <p className="text-label text-outline">
+        {fields.length} {tCount(locale, "noun_field", fields.length)}:{" "}
         <span className="text-on-surface-variant">
           {fields.map((f) => (FIELD_LABEL_KEYS[f] ? t(locale, FIELD_LABEL_KEYS[f]) : f)).join(", ")}
         </span>
       </p>
-      {request.note && <p className="text-[12px] text-outline italic mt-1">“{request.note}”</p>}
-      <p className="text-[11px] text-outline mt-1.5">
+      {request.note && <p className="text-caption text-outline italic mt-1">“{request.note}”</p>}
+      <p className="text-caption text-outline mt-1.5">
         {formatDateTime(request.createdAt, locale)}
       </p>
     </button>
@@ -193,22 +202,23 @@ function ReviewModal({ id, onClose, onReviewed }: {
   const pending = request?.status === "PENDING";
 
   return (
-    <ModalShell title={t(locale, "admin_cr_modal_title")} onClose={onClose} wide>
+    <Modal title={t(locale, "admin_cr_modal_title")} onClose={onClose} wide>
+      <div className="p-5">
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
         </div>
       ) : !request ? (
-        <p className="text-[14px] text-error">{error || t(locale, "admin_cr_not_found")}</p>
+        <p className="text-label text-error">{error || t(locale, "admin_cr_not_found")}</p>
       ) : (
         <div className="space-y-4">
           {error && (
-            <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{error}</div>
+            <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">{error}</div>
           )}
 
           {request.entityMissing && (
             <div className="bg-error/10 border border-error/25 rounded-xl px-4 py-3">
-              <p className="text-[13px] font-bold text-error">
+              <p className="text-label font-bold text-error">
                 {t(locale, "admin_cr_entity_missing")}
               </p>
             </div>
@@ -216,18 +226,18 @@ function ReviewModal({ id, onClose, onReviewed }: {
 
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="font-bold text-[15px] text-on-surface">{request.companyName}</p>
-              <p className="text-[12px] text-outline">{formatDateTime(request.createdAt, locale)}</p>
+              <p className="font-bold text-body text-on-surface">{request.companyName}</p>
+              <p className="text-caption text-outline">{formatDateTime(request.createdAt, locale)}</p>
             </div>
-            <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${STATUS_STYLES[request.status]}`}>
+            <span className={`text-caption font-bold px-2.5 py-1 rounded-full ${STATUS_STYLES[request.status]}`}>
               {t(locale, CR_STATUS_KEYS[request.status])}
             </span>
           </div>
 
           {request.note && (
             <div className="bg-surface-container rounded-xl px-4 py-2.5">
-              <p className="text-[12px] font-bold text-outline mb-0.5">{t(locale, "admin_cr_provider_note")}</p>
-              <p className="text-[13px] text-on-surface">{request.note}</p>
+              <p className="text-caption font-bold text-outline mb-0.5">{t(locale, "admin_cr_provider_note")}</p>
+              <p className="text-label text-on-surface">{request.note}</p>
             </div>
           )}
 
@@ -257,7 +267,7 @@ function ReviewModal({ id, onClose, onReviewed }: {
           {/* gallery/badges are single fields holding arrays — the API applies a
               field whole, so this is an honest statement of the limit. */}
           {fields.some((f) => IMAGE_LIST_FIELDS.has(f)) && (
-            <p className="text-[12px] text-outline bg-surface-container rounded-xl px-3 py-2">
+            <p className="text-caption text-outline bg-surface-container rounded-xl px-3 py-2">
               {t(locale, "admin_cr_gallery_note")}
             </p>
           )}
@@ -265,7 +275,7 @@ function ReviewModal({ id, onClose, onReviewed }: {
           {pending && (
             <>
               <div>
-                <label className="block text-[12px] font-bold text-outline mb-1.5">
+                <label className="block text-caption font-bold text-outline mb-1.5">
                   {t(locale, "admin_cr_note_label")} {t(locale, "admin_cr_note_required")}
                 </label>
                 <input
@@ -279,9 +289,9 @@ function ReviewModal({ id, onClose, onReviewed }: {
                 <button
                   onClick={() => void act("approve")}
                   disabled={busy || selected.size === 0 || request.entityMissing}
-                  className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
                 >
-                  <span className="material-symbols-outlined text-[18px]">check</span>
+                  <Icon name="check" className="text-subhead" />
                   {selected.size === fields.length
                     ? t(locale, "admin_cr_approve_all")
                     : `${t(locale, "admin_approve")} ${selected.size} ${t(locale, "admin_cr_of")} ${fields.length}`}
@@ -290,9 +300,9 @@ function ReviewModal({ id, onClose, onReviewed }: {
                   onClick={() => void act("reject")}
                   disabled={busy || !reviewNote.trim()}
                   title={!reviewNote.trim() ? t(locale, "admin_cr_reject_hint") : undefined}
-                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-[14px] text-error border border-error/30 hover:bg-error/5 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-label text-error border border-error/30 hover:bg-error/5 transition-colors disabled:opacity-50"
                 >
-                  <span className="material-symbols-outlined text-[18px]">close</span>
+                  <Icon name="close" className="text-subhead" />
                   {t(locale, "admin_reject")}
                 </button>
               </div>
@@ -301,13 +311,14 @@ function ReviewModal({ id, onClose, onReviewed }: {
 
           {!pending && request.reviewNote && (
             <div className="bg-surface-container rounded-xl px-4 py-2.5">
-              <p className="text-[12px] font-bold text-outline mb-0.5">{t(locale, "admin_cr_review_note")}</p>
-              <p className="text-[13px] text-on-surface">{request.reviewNote}</p>
+              <p className="text-caption font-bold text-outline mb-0.5">{t(locale, "admin_cr_review_note")}</p>
+              <p className="text-label text-on-surface">{request.reviewNote}</p>
             </div>
           )}
         </div>
       )}
-    </ModalShell>
+      </div>
+    </Modal>
   );
 }
 
@@ -342,7 +353,7 @@ function PriceReferencePanel({ offeringId }: { offeringId: string }) {
 
   if (!reference.available) {
     return (
-      <p className="text-[12px] text-outline bg-surface-container rounded-xl px-3 py-2">
+      <p className="text-caption text-outline bg-surface-container rounded-xl px-3 py-2">
         {reference.reason === "not_per_unit"
           ? t(locale, "admin_cr_price_not_per_unit")
           : `${t(locale, "admin_cr_price_not_enough")}${
@@ -357,16 +368,16 @@ function PriceReferencePanel({ offeringId }: { offeringId: string }) {
   return (
     <div className={`rounded-xl px-4 py-3 border ${outlier ? "bg-amber-50 border-amber-300" : "bg-surface-container border-outline-variant/20"}`}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-[12px] font-bold text-outline">
+        <p className="text-caption font-bold text-outline">
           {t(locale, "admin_cr_price_ref")} · {t(locale, "admin_cr_price_per")} {unitLabel(reference.unit ?? null, locale)} · {reference.sampleSize} {t(locale, "admin_cr_price_offerings")}
         </p>
         {outlier && (
-          <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+          <span className="text-caption font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
             {t(locale, "admin_cr_price_outlier")}
           </span>
         )}
       </div>
-      <div className="flex items-center gap-4 text-[13px]">
+      <div className="flex items-center gap-4 text-label">
         <span className="text-on-surface-variant">{t(locale, "admin_cr_price_low")} <span className="font-bold text-on-surface">{reference.min !== undefined ? formatAmount(reference.min, locale) : ""}</span></span>
         <span className="text-on-surface-variant">{t(locale, "admin_cr_price_median")} <span className="font-bold text-on-surface">{reference.median !== undefined ? formatAmount(reference.median, locale) : ""}</span></span>
         <span className="text-on-surface-variant">{t(locale, "admin_cr_price_high")} <span className="font-bold text-on-surface">{reference.max !== undefined ? formatAmount(reference.max, locale) : ""}</span></span>
@@ -390,16 +401,16 @@ function FieldDiff({ field, before, after, conflicted, selectable, selected, onT
           {selectable && (
             <input
               type="checkbox" checked={selected} onChange={onToggle}
-              className="w-4 h-4 accent-[color:var(--color-primary,#8a6a4f)] flex-shrink-0"
+              className="w-4 h-4 accent-primary flex-shrink-0"
               aria-label={`${t(locale, "admin_cr_include")} ${FIELD_LABEL_KEYS[field] ? t(locale, FIELD_LABEL_KEYS[field]) : field}`}
             />
           )}
-          <span className="font-bold text-[13px] text-on-surface truncate">
+          <span className="font-bold text-label text-on-surface truncate">
             {FIELD_LABEL_KEYS[field] ? t(locale, FIELD_LABEL_KEYS[field]) : field}
           </span>
         </label>
         {conflicted && (
-          <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full flex-shrink-0">
+          <span className="text-caption font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full flex-shrink-0">
             {t(locale, "admin_cr_conflicted")}
           </span>
         )}
@@ -418,19 +429,19 @@ function ValueBox({ label, value, isImage, isImageList, muted }: {
 }) {
   return (
     <div className={`rounded-lg p-2.5 ${muted ? "bg-surface-container" : "bg-primary/5"}`}>
-      <p className="text-[11px] font-bold text-outline mb-1">{label}</p>
+      <p className="text-caption font-bold text-outline mb-1">{label}</p>
       {isImage && typeof value === "string" && value ? (
-        <img src={value} alt="" className="w-full h-20 object-cover rounded-md border border-outline-variant/20" loading="lazy" />
+        <img src={value} alt="" className="w-full h-20 object-cover rounded-lg border border-outline-variant/20" loading="lazy" width={320} height={80} />
       ) : isImageList && Array.isArray(value) ? (
         value.length ? (
           <div className="flex flex-wrap gap-1.5">
             {(value as string[]).slice(0, 8).map((src, i) => (
-              <img key={i} src={src} alt="" className="w-12 h-12 object-cover rounded-md border border-outline-variant/20" loading="lazy" />
+              <img key={i} src={src} alt="" className="w-12 h-12 object-cover rounded-lg border border-outline-variant/20" loading="lazy" width={48} height={48} />
             ))}
           </div>
-        ) : <p className="text-[13px] text-outline">—</p>
+        ) : <p className="text-label text-outline">—</p>
       ) : (
-        <p className="text-[13px] text-on-surface break-words whitespace-pre-wrap">{displayValue(value)}</p>
+        <p className="text-label text-on-surface break-words whitespace-pre-wrap">{displayValue(value)}</p>
       )}
     </div>
   );

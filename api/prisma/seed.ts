@@ -111,7 +111,7 @@ async function main() {
 
     await prisma.company.create({
       data: {
-        categoryId,
+        categories: { create: [{ categoryId, isPrimary: true }] },
         slug: c.slug,
         name: c.name,
         tagline: c.tagline,
@@ -167,6 +167,16 @@ async function main() {
       where: { email: "provider@aura.test" },
       data: { companyId: aura.id },
     });
+    // Demo the many-to-many capability from day one in local/demo data: Aura
+    // also does landscaping, in addition to its primary interior-finishing
+    // category — exactly the "Company A does both X and Y" scenario this
+    // feature exists for.
+    const landscapeId = categoryIdBySlug.get("landscape");
+    if (landscapeId) {
+      await prisma.companyCategory.create({
+        data: { companyId: aura.id, categoryId: landscapeId, isPrimary: false },
+      });
+    }
   }
 
   console.log(

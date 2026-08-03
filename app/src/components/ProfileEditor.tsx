@@ -5,8 +5,11 @@ import {
   type ChangeRequest, type ProviderProfile,
 } from "../lib/changeRequests";
 import { isApiConfigured } from "../lib/api";
+import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { useLocale } from "../context/LocaleContext";
-import { t } from "../lib/i18n";
+import { t, tCount } from "../lib/i18n";
+import Icon from "./Icon";
 
 /**
  * The provider's editable profile.
@@ -84,6 +87,13 @@ export default function ProfileEditor() {
     [form, baseline],
   );
 
+  // UX-09: covers losing a draft by closing the tab or navigating fully away
+  // from /provider (Back-to-site link, browser Back). Doesn't cover switching
+  // to a different provider-dashboard TAB while this one has unsaved edits —
+  // those tabs are local state, not routes (see NAV-06 — only admin moved to
+  // real routes), so no navigation actually happens for `useBlocker` to catch.
+  const navBlocker = useUnsavedChangesGuard(dirty.length > 0);
+
   const pending = profile?.pending ?? null;
   const lastReviewed = profile?.changeRequests.find(
     (r) => r.status === "APPROVED" || r.status === "REJECTED",
@@ -132,8 +142,8 @@ export default function ProfileEditor() {
   if (!isApiConfigured()) {
     return (
       <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
-        <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">info</span>
-        <p className="text-body-md text-on-surface-variant text-sm">
+        <Icon name="info" className="text-primary text-title flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-on-surface-variant">
           {t(locale, "prov_profile_needs_api")}
         </p>
       </div>
@@ -149,12 +159,13 @@ export default function ProfileEditor() {
   }
 
   return (
+    <>
     <div className="max-w-2xl space-y-5">
       {error && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{error}</div>
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">{error}</div>
       )}
       {flash && (
-        <div className="bg-primary/10 border border-primary/25 text-primary rounded-xl px-4 py-2.5 text-[13px] font-bold">{flash}</div>
+        <div className="bg-primary/10 border border-primary/25 text-primary rounded-xl px-4 py-2.5 text-label font-bold">{flash}</div>
       )}
 
       {pending && <PendingBanner request={pending} onWithdraw={() => withdraw(pending.id)} busy={saving} />}
@@ -162,8 +173,8 @@ export default function ProfileEditor() {
 
       <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom space-y-4">
         <div>
-          <h3 className="font-headline-md text-headline-md text-on-surface">{t(locale, "prov_profile_title")}</h3>
-          <p className="text-[13px] text-outline mt-0.5">
+          <h3 className=" text-title text-on-surface">{t(locale, "prov_profile_title")}</h3>
+          <p className="text-label text-outline mt-0.5">
             {t(locale, "prov_profile_desc")}
           </p>
         </div>
@@ -172,10 +183,10 @@ export default function ProfileEditor() {
           const changed = dirty.includes(key);
           return (
             <div key={key}>
-              <label className="flex items-center gap-2 text-[12px] font-bold text-outline mb-1.5">
+              <label className="flex items-center gap-2 text-caption font-bold text-outline mb-1.5">
                 {FIELD_LABEL_KEYS[key] ? t(locale, FIELD_LABEL_KEYS[key]) : key}
                 {changed && (
-                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
+                  <span className="text-caption font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
                     {t(locale, "prov_profile_changed_badge")}
                   </span>
                 )}
@@ -202,7 +213,7 @@ export default function ProfileEditor() {
                 />
               )}
               {changed && (
-                <p className="text-[12px] text-outline mt-1">
+                <p className="text-caption text-outline mt-1">
                   {t(locale, "prov_profile_currently_public")} <span className="font-bold text-on-surface-variant">{displayValue(baseline[key])}</span>
                 </p>
               )}
@@ -211,7 +222,7 @@ export default function ProfileEditor() {
         })}
 
         <div>
-          <label className="block text-[12px] font-bold text-outline mb-1.5">{t(locale, "prov_profile_note_label")}</label>
+          <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_profile_note_label")}</label>
           <input
             className="field-input" value={note} onChange={(e) => setNote(e.target.value)}
             placeholder={t(locale, "prov_profile_note_ph")}
@@ -222,19 +233,19 @@ export default function ProfileEditor() {
           <button
             onClick={() => void save()}
             disabled={saving || dirty.length === 0}
-            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors disabled:opacity-50 touch-press btn-press"
+            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50 touch-press btn-press"
           >
-            <span className="material-symbols-outlined text-[18px]">send</span>
+            <Icon name="send" className="text-subhead" />
             {saving
               ? t(locale, "prov_profile_sending")
               : dirty.length
-                ? `${t(locale, "prov_profile_send")} ${dirty.length} ${t(locale, dirty.length > 1 ? "prov_profile_change_many" : "prov_profile_change_one")} ${t(locale, "prov_profile_send_suffix")}`
+                ? `${t(locale, "prov_profile_send")} ${dirty.length} ${tCount(locale, "noun_profile_change", dirty.length)} ${t(locale, "prov_profile_send_suffix")}`
                 : t(locale, "prov_profile_no_changes")}
           </button>
           {dirty.length > 0 && (
             <button
               onClick={() => setForm(baseline)}
-              className="text-[13px] font-bold text-outline hover:text-error transition-colors"
+              className="text-label font-bold text-outline hover:text-error transition-colors"
             >
               {t(locale, "prov_profile_discard")}
             </button>
@@ -244,14 +255,24 @@ export default function ProfileEditor() {
         {pending && dirty.length > 0 && (
           // The backend MERGES into the pending request rather than replacing it.
           // Saying so up front prevents "where did my earlier edit go?".
-          <p className="text-[12px] text-outline bg-surface-container rounded-xl px-3 py-2">
+          <p className="text-caption text-outline bg-surface-container rounded-xl px-3 py-2">
             {t(locale, "prov_profile_merge_before")} {Object.keys(pending.changes).length}{" "}
-            {t(locale, Object.keys(pending.changes).length > 1 ? "prov_profile_change_many" : "prov_profile_change_one")}{" "}
+            {tCount(locale, "noun_profile_change", Object.keys(pending.changes).length)}{" "}
             {t(locale, "prov_profile_merge_after")}
           </p>
         )}
       </div>
     </div>
+    {navBlocker.state === "blocked" && (
+      <ConfirmDialog
+        title={t(locale, "unsaved_changes_title")}
+        message={t(locale, "unsaved_changes_body")}
+        confirmLabel={t(locale, "unsaved_changes_discard")}
+        onConfirm={() => navBlocker.proceed()}
+        onCancel={() => navBlocker.reset()}
+      />
+    )}
+    </>
   );
 }
 
@@ -264,13 +285,13 @@ function PendingBanner({ request, onWithdraw, busy }: {
     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-bold text-[14px] text-amber-900 flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[18px]">hourglass_top</span>
+          <p className="font-bold text-label text-amber-900 flex items-center gap-1.5">
+            <Icon name="hourglass_top" className="text-subhead" />
             {t(locale, "prov_profile_under_review")}
           </p>
-          <p className="text-[13px] text-amber-800 mt-1">
+          <p className="text-label text-amber-800 mt-1">
             {fields.length}{" "}
-            {t(locale, fields.length > 1 ? "prov_profile_change_many" : "prov_profile_change_one")}{" "}
+            {tCount(locale, "noun_profile_change", fields.length)}{" "}
             {t(locale, "prov_profile_waiting_admin")}{" "}
             <span className="font-bold">
               {fields.map((f) => (FIELD_LABEL_KEYS[f] ? t(locale, FIELD_LABEL_KEYS[f]) : f)).join("، ")}
@@ -279,7 +300,7 @@ function PendingBanner({ request, onWithdraw, busy }: {
         </div>
         <button
           onClick={onWithdraw} disabled={busy}
-          className="text-[13px] font-bold text-amber-900 hover:text-error transition-colors disabled:opacity-50 flex-shrink-0"
+          className="text-label font-bold text-amber-900 hover:text-error transition-colors disabled:opacity-50 flex-shrink-0"
         >
           {t(locale, "prov_profile_withdraw")}
         </button>
@@ -293,12 +314,12 @@ function ReviewedBanner({ request }: { request: ChangeRequest }) {
   const approved = request.status === "APPROVED";
   return (
     <div className={`rounded-xl p-4 border ${approved ? "bg-primary/5 border-primary/20" : "bg-error/5 border-error/20"}`}>
-      <p className={`font-bold text-[14px] flex items-center gap-1.5 ${approved ? "text-primary" : "text-error"}`}>
-        <span className="material-symbols-outlined text-[18px]">{approved ? "check_circle" : "cancel"}</span>
+      <p className={`font-bold text-label flex items-center gap-1.5 ${approved ? "text-primary" : "text-error"}`}>
+        <span className="material-symbols-outlined text-subhead" aria-hidden="true" translate="no">{approved ? "check_circle" : "cancel"}</span>
         {t(locale, approved ? "prov_profile_approved" : "prov_profile_rejected")}
       </p>
       {request.reviewNote && (
-        <p className="text-[13px] text-on-surface-variant mt-1">
+        <p className="text-label text-on-surface-variant mt-1">
           <span className="font-bold">{t(locale, "prov_profile_reason")}</span> {request.reviewNote}
         </p>
       )}

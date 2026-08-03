@@ -15,9 +15,9 @@ export default function ErrorPage() {
 }
 
 /**
- * Stack traces are for whoever can act on them — an admin, or a developer who
- * asked for them with ?debug=1. Showing a raw stack to a customer leaks internal
- * structure and tells them nothing useful.
+ * Stack traces are for whoever can act on them — an admin. Showing a raw
+ * stack to a customer leaks internal structure and tells them nothing useful.
+ * ERR-03: `?debug=1` used to bypass this for anyone who guessed the param.
  *
  * Wrapped in try/catch on purpose: this runs on the error path, where
  * localStorage may be unavailable (private mode, disabled cookies). It must never
@@ -25,7 +25,6 @@ export default function ErrorPage() {
  */
 function shouldShowDetails(): boolean {
   try {
-    if (new URLSearchParams(window.location.search).get("debug") === "1") return true;
     return getCurrentUser()?.role === "ADMIN";
   } catch {
     return false;

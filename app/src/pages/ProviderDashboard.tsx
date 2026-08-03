@@ -7,6 +7,7 @@ import { uploadImage } from "../lib/image";
 import type { Project } from "../lib/data";
 import Pagination from "../components/Pagination";
 import { useServerSearch } from "../hooks/useServerSearch";
+import { useMutation } from "../hooks/useMutation";
 import { useCompanies, useCompanyDetail, useMyCompany, type Company, type Review } from "../lib/catalog";
 import { logout, isAuthenticated } from "../lib/auth";
 import {
@@ -19,6 +20,8 @@ import {
 } from "../components/Charts";
 import SearchInput from "../components/SearchInput";
 import Logo from "../components/Logo";
+import DashboardShell from "../components/DashboardShell";
+import SidebarNav from "../components/SidebarNav";
 import NotificationToggle from "../components/NotificationToggle";
 import ProfileEditor from "../components/ProfileEditor";
 import OfferingsEditor from "../components/OfferingsEditor";
@@ -34,8 +37,11 @@ import {
   type WaitlistEntry, type WaitlistStatus,
 } from "../lib/availability";
 import { useLocale } from "../context/LocaleContext";
-import { t, type StringKey } from "../lib/i18n";
+import { t, tCount, type StringKey } from "../lib/i18n";
 import { formatDate } from "../lib/format";
+import Icon from "../components/Icon";
+import EmptyState from "../components/EmptyState";
+import { CHART_COLORS } from "../lib/chartColors";
 
 type ProviderTab = "overview" | "leads" | "messages" | "projects" | "pricing" | "reviews" | "analytics" | "availability" | "profile" | "settings";
 
@@ -87,7 +93,6 @@ export default function ProviderDashboard() {
     const requested = params.get("tab");
     return TAB_CONFIG.some((c) => c.id === requested) ? (requested as ProviderTab) : "overview";
   });
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   // List search / filter state
   const [leadQuery, setLeadQuery] = useState("");
@@ -99,6 +104,25 @@ export default function ProviderDashboard() {
   const effectiveSlug = company?.slug ?? "";
   const COMPANIES = apiMode ? (company ? [company] : []) : allCompanies;
   const leads = useLeadsForCompany(effectiveSlug);
+
+  // Phase 9 — the Pricing tab only exists for a company whose category has
+  // opted into a fixed catalog. Filtering TAB_CONFIG (rather than hiding the
+  // rendered content only) keeps the sidebar nav, the top-bar title lookup and
+  // the deep-link guard below reading from one source of truth.
+  const pricingAllowed = company?.categoryPricingMode === "FIXED_CATALOG";
+  const tabs = TAB_CONFIG.filter((tb) => tb.id !== "pricing" || pricingAllowed);
+  // Rare but real: an admin can flip a category off while this provider
+  // already has the Pricing tab open — snap back to overview rather than
+  // leaving them on a pane that just vanished from the sidebar. Must run
+  // before the early returns below, same as the other hooks here. A deep link
+  // that never had access to begin with is a different case, handled where
+  // "pricing" is rendered further down (an EmptyState, not a silent redirect —
+  // arriving via a real link deserves an explanation, not a bounce).
+  const wasPricingAllowed = useRef(pricingAllowed);
+  useEffect(() => {
+    if (wasPricingAllowed.current && !pricingAllowed && tab === "pricing") setTab("overview");
+    wasPricingAllowed.current = pricingAllowed;
+  }, [pricingAllowed, tab]);
 
   // Leads: server-driven search/pagination over the provider's COMPLETE lead set
   // when the API is configured (the endpoint is auto-scoped to their own company);
@@ -127,15 +151,33 @@ export default function ProviderDashboard() {
     {},
     { pageSize: 20, enabled: leadApiMode && showWaitlist },
   );
-  const handleLeadStatus = (id: string, status: LeadStatus) => {
-    void updateLeadStatus(id, status).then(() => { if (leadApiMode) leadSearch.refresh(); });
-  };
-  const handleWaitlistStatus = (entry: WaitlistEntry, status: WaitlistStatus) => {
-    void setWaitlistStatus({ kind: "provider" }, entry.id, status).then(() => waitlistSearch.refresh());
-  };
-  const handleWaitlistDelete = (entry: WaitlistEntry) => {
-    void deleteWaitlistEntry({ kind: "provider" }, entry.id).then(() => waitlistSearch.refresh());
-  };
+  // UX-06: fire-and-forget before — a failed PATCH was swallowed with no
+  // pending state, no error, no rollback.
+  const leadStatusMutation = useMutation<{ id: string; status: LeadStatus }>({
+    mutate: ({ id, status }) => updateLeadStatus(id, status),
+    onSuccess: () => { if (leadApiMode) leadSearch.refresh(); },
+    errorMessage: t(locale, "admin_mutation_failed"),
+  });
+  const waitlistStatusMutation = useMutation<{ entry: WaitlistEntry; status: WaitlistStatus }>({
+    mutate: ({ entry, status }) => setWaitlistStatus({ kind: "provider" }, entry.id, status),
+    // Accepting (status -> CONVERTED) creates a real Lead behind this entry (see
+    // waitlist.service.ts convertToLead) — refresh the lead list too, so the row
+    // that was tagged "waitlist" reappears immediately as a normal lead instead of
+    // only showing up after the next full reload.
+    onSuccess: ({ status }) => {
+      waitlistSearch.refresh();
+      if (status === "CONVERTED" && leadApiMode) leadSearch.refresh();
+    },
+    errorMessage: t(locale, "admin_mutation_failed"),
+  });
+  const waitlistDeleteMutation = useMutation<WaitlistEntry>({
+    mutate: (entry) => deleteWaitlistEntry({ kind: "provider" }, entry.id),
+    onSuccess: () => waitlistSearch.refresh(),
+    errorMessage: t(locale, "admin_delete_failed"),
+  });
+  const handleLeadStatus = (id: string, status: LeadStatus) => { void leadStatusMutation.run({ id, status }); };
+  const handleWaitlistStatus = (entry: WaitlistEntry, status: WaitlistStatus) => { void waitlistStatusMutation.run({ entry, status }); };
+  const handleWaitlistDelete = (entry: WaitlistEntry) => { void waitlistDeleteMutation.run(entry); };
 
   // Reviews: server-driven search/pagination over the COMPLETE review history
   // (the company-detail payload only carries the 50 newest). Demo mode falls back
@@ -187,9 +229,11 @@ export default function ProviderDashboard() {
   if (!company) {
     return (
       <div className="min-h-screen flex items-center justify-center flex-col gap-4 pt-20">
-        <span className="material-symbols-outlined text-outline text-[64px]">business_center</span>
-        <p className="font-headline-md text-headline-md text-on-surface">{t(locale, "prov_no_company")}</p>
-        <Link to="/" className="text-primary font-label-md text-label-md hover:underline">← {t(locale, "prov_back_to_site")}</Link>
+        <Icon name="business_center" className="text-outline text-[64px]" />
+        <p className=" text-title text-on-surface">{t(locale, "prov_no_company")}</p>
+        <Link to="/" className="text-primary text-label hover:underline flex items-center gap-1">
+          <Icon name="arrow_back" className="text-label rtl-flip" /> {t(locale, "prov_back_to_site")}
+        </Link>
       </div>
     );
   }
@@ -214,7 +258,13 @@ export default function ProviderDashboard() {
   const waitlistTotal = leadApiMode ? waitlistSearch.total : 0;
 
   const leadRows: LeadListRow[] = leadList.map((data) => ({ kind: "lead", data }) as const);
-  const waitlistRows: LeadListRow[] = waitlistList.map((data) => ({ kind: "waitlist", data }) as const);
+  // Converted entries already have their own row in leadRows (the Lead they became
+  // — see convertToLead) — keep them out of the merged pipeline view so the same
+  // customer doesn't appear twice. Still visible, including Converted, from
+  // WaitlistManager's own status filter (Availability tab).
+  const waitlistRows: LeadListRow[] = waitlistList
+    .filter((e) => e.status !== "CONVERTED")
+    .map((data) => ({ kind: "waitlist", data }) as const);
   const mergedRows: LeadListRow[] = showLeads && showWaitlist
     ? [...leadRows, ...waitlistRows].sort((a, b) => b.data.createdAt - a.data.createdAt)
     : showWaitlist ? waitlistRows : leadRows;
@@ -231,66 +281,38 @@ export default function ProviderDashboard() {
 
   const LEAD_FILTERS: (LeadStatus | "All" | "Waitlist")[] = ["All", "New", "Contacted", "In Progress", "Completed", "Cancelled", "Waitlist"];
 
+  const topbarTitle = (() => { const cfg = TAB_CONFIG.find((c) => c.id === tab); return cfg ? t(locale, cfg.labelKey) : ""; })();
+  const topbarActions = isAuthenticated() && (
+    <button onClick={() => logout()} title={t(locale, "prov_sign_out")} className="flex items-center gap-1.5 bg-surface-container text-on-surface px-3 py-2 rounded-xl font-bold text-label hover:bg-surface-container-high transition-colors touch-press btn-press flex-shrink-0">
+      <Icon name="logout" className="text-subhead" /><span className="hidden sm:inline">{t(locale, "prov_sign_out")}</span>
+    </button>
+  );
+
   return (
-    <div className="min-h-screen bg-surface-container flex">
-      {/* Sidebar (desktop) */}
-      <aside className="w-64 bg-surface-container-lowest border-r border-outline-variant/15 flex flex-col min-h-screen hidden md:flex sticky top-0 h-screen">
+    <DashboardShell
+      title={topbarTitle}
+      topbarActions={topbarActions}
+      renderSidebar={(closeDrawer) => (
         <ProviderSidebarBody
           company={company} companies={COMPANIES} selectedSlug={selectedSlug} setSelectedSlug={setSelectedSlug}
-          tab={tab} onSelect={setTab} newCount={stats.new}
+          tab={tab} onSelect={(id) => { setTab(id); closeDrawer?.(); }} newCount={stats.new} onClose={closeDrawer} tabs={tabs}
         />
-      </aside>
-
-      {/* Mobile drawer */}
-      {drawerOpen && (
-        <div className="md:hidden fixed inset-0 z-[70]" role="dialog" aria-modal>
-          <div className="absolute inset-0 bg-on-background/45 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
-          <div className="drawer-left absolute top-0 left-0 h-full w-72 max-w-[84vw] bg-surface-container-lowest shadow-2xl flex flex-col">
-            <ProviderSidebarBody
-              company={company} companies={COMPANIES} selectedSlug={selectedSlug} setSelectedSlug={setSelectedSlug}
-              tab={tab} onSelect={(id) => { setTab(id); setDrawerOpen(false); }} newCount={stats.new} onClose={() => setDrawerOpen(false)}
-            />
-          </div>
-        </div>
       )}
-
-      {/* Content */}
-      <main className="flex-1 overflow-auto min-w-0">
-        {/* Top bar */}
-        <div className="bg-surface-container-lowest/95 backdrop-blur-lg border-b border-outline-variant/15 px-4 md:px-6 py-3 md:py-4 sticky top-0 z-20 flex items-center gap-2 min-w-0">
-          {/* Hamburger */}
-          <button onClick={() => setDrawerOpen(true)} className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-surface-container transition-colors touch-press flex-shrink-0" aria-label={t(locale, "nav_open_menu")}>
-            <span className="material-symbols-outlined text-on-surface text-[26px]">menu</span>
-          </button>
-          <Link to="/" className="md:hidden flex-shrink-0">
-            <Logo className="h-9 w-9 object-contain rounded-lg" />
-          </Link>
-          <h1 className="font-display font-bold text-[18px] md:text-[20px] text-on-surface truncate">
-            {(() => { const cfg = TAB_CONFIG.find((c) => c.id === tab); return cfg ? t(locale, cfg.labelKey) : ""; })()}
-          </h1>
-          {isAuthenticated() && (
-            <button onClick={() => logout()} title={t(locale, "prov_sign_out")} className="ml-auto flex items-center gap-1.5 bg-surface-container text-on-surface px-3 py-2 rounded-xl font-bold text-[13px] hover:bg-surface-container-high transition-colors touch-press btn-press flex-shrink-0">
-              <span className="material-symbols-outlined text-[18px]">logout</span><span className="hidden sm:inline">{t(locale, "prov_sign_out")}</span>
-            </button>
-          )}
-        </div>
-
-        <div className="p-6">
-
+    >
           {/* ── Overview ── */}
           {tab === "overview" && (
             <div className="space-y-5">
               {/* Availability banner */}
               <button onClick={() => setTab("availability")}
-                className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${
+                className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-start transition-colors ${
                   busyNow ? "border-amber-300 bg-amber-50 hover:bg-amber-100/70" : "border-green-300 bg-green-50 hover:bg-green-100/70"
                 }`}>
-                <span className={`material-symbols-outlined text-[26px] ${busyNow ? "text-amber-600" : "text-green-600"}`} style={{ fontVariationSettings: "'FILL' 1" }}>
+                <span className={`material-symbols-outlined text-headline ${busyNow ? "text-amber-600" : "text-green-600"}`} style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">
                   {busyNow ? "event_busy" : "event_available"}
                 </span>
                 <div className="min-w-0 flex-grow">
-                  <p className="font-bold text-[15px] text-on-surface">{t(locale, busyNow ? "prov_avail_busy_banner" : "prov_avail_free_banner")}</p>
-                  <p className="text-[12px] text-outline">
+                  <p className="font-bold text-body text-on-surface">{t(locale, busyNow ? "prov_avail_busy_banner" : "prov_avail_free_banner")}</p>
+                  <p className="text-caption text-outline">
                     {busyNow
                       ? (backAt
                           ? `${t(locale, "prov_avail_auto_reopen")} ${formatReopenDate(backAt, locale)} · ${t(locale, "prov_avail_waiting_list_note")}`
@@ -298,21 +320,21 @@ export default function ProviderDashboard() {
                       : t(locale, "prov_avail_normal")}
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-outline text-[20px] flex-shrink-0">chevron_right</span>
+                <Icon name="chevron_right" className="text-outline text-title flex-shrink-0" />
               </button>
 
               {/* KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <KpiCard icon="inbox" label={t(locale, "prov_kpi_total_leads")} value={stats.total} delta={delta} spark={daily.map((d) => d.value)} tint="#005578" />
-                <KpiCard icon="fiber_new" label={t(locale, "prov_kpi_new_leads")} value={stats.new} tint="#2563eb" />
-                <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={stats.total ? `${conversion}%` : "—"} tint="#16a34a" />
-                <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={company.rating} tint="#785a02" />
+                <KpiCard icon="inbox" label={t(locale, "prov_kpi_total_leads")} value={stats.total} delta={delta} spark={daily.map((d) => d.value)} tint={CHART_COLORS.primary} />
+                <KpiCard icon="fiber_new" label={t(locale, "prov_kpi_new_leads")} value={stats.new} tint={CHART_COLORS.blue} />
+                <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={stats.total ? `${conversion}%` : "—"} tint={CHART_COLORS.green} />
+                <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={company.rating} tint={CHART_COLORS.secondary} />
               </div>
 
               {/* Trend + status */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <ChartCard title={t(locale, "prov_chart_leads_over_time")} subtitle={t(locale, "prov_chart_last_14")} className="lg:col-span-2"
-                  action={<Link to={`/companies/${company.slug}`} target="_blank" className="text-[13px] font-bold text-primary hover:underline flex items-center gap-1">{t(locale, "prov_public_profile")} <span className="material-symbols-outlined text-[14px]">open_in_new</span></Link>}>
+                  action={<Link to={`/companies/${company.slug}`} target="_blank" className="text-label font-bold text-primary hover:underline flex items-center gap-1">{t(locale, "prov_public_profile")} <Icon name="open_in_new" className="text-label" /></Link>}>
                   <AreaLineChart data={daily} valueLabel={t(locale, "chart_leads")} />
                 </ChartCard>
                 <ChartCard title={t(locale, "prov_chart_by_status")} subtitle={t(locale, "prov_chart_pipeline")}>
@@ -321,7 +343,7 @@ export default function ProviderDashboard() {
               </div>
 
               {/* Recent leads */}
-              <ChartCard title={t(locale, "prov_chart_recent_leads")} action={<button onClick={() => setTab("leads")} className="text-[13px] font-bold text-primary hover:underline">{t(locale, "common_view_all")}</button>}>
+              <ChartCard title={t(locale, "prov_chart_recent_leads")} action={<button onClick={() => setTab("leads")} className="text-label font-bold text-primary hover:underline">{t(locale, "common_view_all")}</button>}>
                 {leads.length === 0 ? (
                   <EmptyState msg={t(locale, "prov_overview_empty")} icon="inbox" />
                 ) : (
@@ -346,7 +368,7 @@ export default function ProviderDashboard() {
               <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
                 {LEAD_FILTERS.map((f) => (
                   <button key={f} onClick={() => setLeadStatus(f)}
-                    className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-bold transition-colors border ${
+                    className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-label font-bold transition-colors border ${
                       leadStatus === f ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-outline-variant"
                     }`}>
                     {f === "All" ? t(locale, "companies_all") : f === "Waitlist" ? t(locale, "requests_filter_waitlist") : t(locale, LEAD_STATUS_KEYS[f])}
@@ -354,28 +376,34 @@ export default function ProviderDashboard() {
                 ))}
               </div>
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-[13px] font-bold text-outline">
-                  {displayedTotal} {t(locale, displayedTotal === 1 ? "prov_noun_lead" : "prov_noun_leads")}
+                <span className="text-label font-bold text-outline">
+                  {displayedTotal} {tCount(locale, "noun_lead", displayedTotal)}
                 </span>
-                {stats.new > 0 && <span className="bg-blue-100 text-blue-700 text-[12px] font-bold px-2.5 py-1 rounded-full">{stats.new} {t(locale, "prov_leads_new_badge")}</span>}
+                {stats.new > 0 && <span className="bg-blue-100 text-blue-700 text-caption font-bold px-2.5 py-1 rounded-full">{stats.new} {t(locale, "prov_leads_new_badge")}</span>}
               </div>
               {leadApiMode && (leadSearch.error || waitlistSearch.error) && (
-                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold">{leadSearch.error || waitlistSearch.error}</div>
+                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold">{leadSearch.error || waitlistSearch.error}</div>
               )}
               <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
                 {mergedRows.length === 0 ? (
-                  <EmptyState
-                    msg={leadApiMode && (leadSearch.loading || waitlistSearch.loading) ? t(locale, "admin_searching") : (lq || leadStatus !== "All") ? t(locale, "prov_leads_no_match") : t(locale, "prov_leads_empty")}
-                    icon={(lq || leadStatus !== "All") ? "search_off" : "inbox"}
-                  />
+                  leadApiMode && (leadSearch.loading || waitlistSearch.loading) ? (
+                    <Loading msg={t(locale, "admin_searching")} />
+                  ) : (
+                    <EmptyState
+                      msg={(lq || leadStatus !== "All") ? t(locale, "prov_leads_no_match") : t(locale, "prov_leads_empty")}
+                      icon={(lq || leadStatus !== "All") ? "search_off" : "inbox"}
+                    />
+                  )
                 ) : (
-                  <LeadRows rows={mergedRows} onLeadStatusChange={handleLeadStatus} onWaitlistStatusChange={handleWaitlistStatus} onWaitlistDelete={handleWaitlistDelete} />
+                  <div className={`transition-opacity ${leadApiMode && (leadSearch.loading || waitlistSearch.loading) ? "opacity-60 pointer-events-none" : ""}`} aria-busy={leadApiMode && (leadSearch.loading || waitlistSearch.loading)}>
+                    <LeadRows rows={mergedRows} onLeadStatusChange={handleLeadStatus} onWaitlistStatusChange={handleWaitlistStatus} onWaitlistDelete={handleWaitlistDelete} />
+                  </div>
                 )}
               </div>
               {leadApiMode && (
                 showWaitlist && !showLeads
-                  ? <Pagination page={waitlistSearch.page} pageCount={waitlistSearch.pageCount} total={waitlistSearch.total} pageSize={waitlistSearch.pageSize} onPage={waitlistSearch.setPage} noun={t(locale, "prov_noun_lead")} nounPlural={t(locale, "prov_noun_leads")} />
-                  : <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} noun={t(locale, "prov_noun_lead")} nounPlural={t(locale, "prov_noun_leads")} />
+                  ? <Pagination page={waitlistSearch.page} pageCount={waitlistSearch.pageCount} total={waitlistSearch.total} pageSize={waitlistSearch.pageSize} onPage={waitlistSearch.setPage} nounKey="noun_lead" />
+                  : <Pagination page={leadSearch.page} pageCount={leadSearch.pageCount} total={leadSearch.total} pageSize={leadSearch.pageSize} onPage={leadSearch.setPage} nounKey="noun_lead" />
               )}
             </div>
           )}
@@ -391,10 +419,10 @@ export default function ProviderDashboard() {
                 <div>
                   <div className="flex items-center gap-0.5 mb-0.5">
                     {[1,2,3,4,5].map((i) => (
-                      <span key={i} className="material-symbols-outlined text-secondary text-[16px]" style={{ fontVariationSettings: i <= Math.round(company.rating) ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                      <Icon name="star" className="text-secondary text-body" style={{ fontVariationSettings: i <= Math.round(company.rating) ? "'FILL' 1" : "'FILL' 0" }} key={i} />
                     ))}
                   </div>
-                  <p className="text-label-sm font-label-sm text-outline">{company.reviewCount} {t(locale, "prov_noun_reviews")}</p>
+                  <p className="text-caption text-outline">{company.reviewCount} {tCount(locale, "noun_review", company.reviewCount)}</p>
                 </div>
               </div>
 
@@ -403,53 +431,60 @@ export default function ProviderDashboard() {
                 <div className="space-y-3 mb-5">
                   <div className="max-w-md"><SearchInput value={reviewQuery} onChange={setReviewQuery} placeholder={t(locale, "prov_reviews_search_ph")} /></div>
                   <div className="flex gap-2 flex-wrap items-center">
-                    <button onClick={() => setReviewRating(0)} className={`px-3.5 py-1.5 rounded-full text-[13px] font-bold border transition-colors ${reviewRating === 0 ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30"}`}>{t(locale, "companies_all")}</button>
+                    <button onClick={() => setReviewRating(0)} className={`px-3.5 py-1.5 rounded-full text-label font-bold border transition-colors ${reviewRating === 0 ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30"}`}>{t(locale, "companies_all")}</button>
                     {[5, 4, 3, 2, 1].map((r) => (
-                      <button key={r} onClick={() => setReviewRating(r)} className={`flex items-center gap-0.5 px-3 py-1.5 rounded-full text-[13px] font-bold border transition-colors ${reviewRating === r ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30"}`}>
-                        {r}<span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                      <button key={r} onClick={() => setReviewRating(r)} className={`flex items-center gap-0.5 px-3 py-1.5 rounded-full text-label font-bold border transition-colors ${reviewRating === r ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30"}`}>
+                        {r}<Icon name="star" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} />
                       </button>
                     ))}
-                    <span className="text-[13px] font-bold text-outline ml-auto">{reviewTotal} {t(locale, reviewTotal === 1 ? "prov_noun_review" : "prov_noun_reviews")}</span>
+                    <span className="text-label font-bold text-outline ms-auto">{reviewTotal} {tCount(locale, "noun_review", reviewTotal)}</span>
                   </div>
                 </div>
               )}
 
               {leadApiMode && reviewSearch.error && (
-                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold mb-4">{reviewSearch.error}</div>
+                <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold mb-4">{reviewSearch.error}</div>
               )}
               {reviewList.length === 0 ? (
-                <div className="bg-surface-container-lowest rounded-2xl shadow-bloom"><EmptyState msg={leadApiMode && reviewSearch.loading ? t(locale, "admin_searching") : (rq || reviewRating) ? t(locale, "prov_reviews_no_match") : t(locale, "prov_reviews_empty")} icon="search_off" /></div>
+                <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+                  {leadApiMode && reviewSearch.loading
+                    ? <Loading msg={t(locale, "admin_searching")} />
+                    : <EmptyState msg={(rq || reviewRating) ? t(locale, "prov_reviews_no_match") : t(locale, "prov_reviews_empty")} icon="search_off" />}
+                </div>
               ) : (
               <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+              <div
+                className={`grid grid-cols-1 md:grid-cols-3 gap-gutter transition-opacity ${leadApiMode && reviewSearch.loading ? "opacity-60 pointer-events-none" : ""}`}
+                aria-busy={leadApiMode && reviewSearch.loading}
+              >
                 {reviewList.map((r, i) => (
                   <div key={`${r.author}-${i}`} className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom flex flex-col">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="flex items-center gap-0.5">
                         {[1,2,3,4,5].map((i) => (
-                          <span key={i} className="material-symbols-outlined text-secondary text-[14px]" style={{ fontVariationSettings: i <= r.rating ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                          <Icon name="star" className="text-secondary text-label" style={{ fontVariationSettings: i <= r.rating ? "'FILL' 1" : "'FILL' 0" }} key={i} />
                         ))}
                       </div>
                       {r.verified && (
-                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full" title={t(locale, "prov_review_verified_title")}>
-                          <span className="material-symbols-outlined text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+                        <span className="flex items-center gap-0.5 text-caption font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full" title={t(locale, "prov_review_verified_title")}>
+                          <Icon name="verified" className="text-caption" style={{ fontVariationSettings: "'FILL' 1" }} />
                           {t(locale, "common_verified")}
                         </span>
                       )}
                     </div>
-                    <p className="text-body-md font-body-md text-on-surface-variant leading-relaxed flex-grow mb-4">"{r.text}"</p>
+                    <p className="text-body text-on-surface-variant leading-relaxed flex-grow mb-4">"{r.text}"</p>
                     <div className="flex items-center gap-3 pt-3 border-t border-outline-variant/20">
                       <div className="w-9 h-9 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-sm">{r.avatar}</div>
                       <div>
-                        <p className="font-label-md text-label-md text-on-surface">{r.author}</p>
-                        <p className="text-label-sm font-label-sm text-outline">{r.district} · {r.date}</p>
+                        <p className="font-display text-label text-on-surface">{r.author}</p>
+                        <p className="text-caption font-display text-outline">{r.district} · {r.date}</p>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
               {leadApiMode && (
-                <Pagination className="mt-6" page={reviewSearch.page} pageCount={reviewSearch.pageCount} total={reviewSearch.total} pageSize={reviewSearch.pageSize} onPage={reviewSearch.setPage} noun={t(locale, "prov_noun_review")} nounPlural={t(locale, "prov_noun_reviews")} />
+                <Pagination className="mt-6" page={reviewSearch.page} pageCount={reviewSearch.pageCount} total={reviewSearch.total} pageSize={reviewSearch.pageSize} onPage={reviewSearch.setPage} nounKey="noun_review" />
               )}
               </>
               )}
@@ -462,18 +497,18 @@ export default function ProviderDashboard() {
             // an empty one does not mean there are no leads to analyse.
             stats.total === 0 ? (
               <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-12 text-center max-w-lg mx-auto">
-                <span className="material-symbols-outlined text-outline/50 text-[44px] mb-3 block">monitoring</span>
-                <h2 className="font-bold text-[17px] text-on-surface mb-1">{t(locale, "prov_analytics_empty_title")}</h2>
-                <p className="text-[14px] text-outline">{t(locale, "prov_analytics_empty_sub")}</p>
+                <Icon name="monitoring" className="text-outline/50 text-[44px] mb-3 block" />
+                <h2 className="font-bold text-subhead text-on-surface mb-1">{t(locale, "prov_analytics_empty_title")}</h2>
+                <p className="text-label text-outline">{t(locale, "prov_analytics_empty_sub")}</p>
               </div>
             ) : (
               <div className="space-y-5">
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={`${conversion}%`} tint="#16a34a" />
-                  <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={`${company.rating}★`} tint="#785a02" />
-                  <KpiCard icon="reviews" label={t(locale, "prov_kpi_reviews")} value={company.reviewCount} tint="#005578" />
-                  <KpiCard icon="construction" label={t(locale, "prov_kpi_projects")} value={company.completedProjects} tint="#0b6e99" />
+                  <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={`${conversion}%`} tint={CHART_COLORS.green} />
+                  <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={`${company.rating}★`} tint={CHART_COLORS.secondary} />
+                  <KpiCard icon="reviews" label={t(locale, "prov_kpi_reviews")} value={company.reviewCount} tint={CHART_COLORS.primary} />
+                  <KpiCard icon="construction" label={t(locale, "prov_kpi_projects")} value={company.completedProjects} tint={CHART_COLORS.primaryContainer} />
                 </div>
 
                 {/* Trend + status donut */}
@@ -503,8 +538,8 @@ export default function ProviderDashboard() {
           {tab === "availability" && (
             <div className="max-w-2xl space-y-6">
               <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom">
-                <h3 className="font-headline-md text-headline-md text-on-surface mb-1">{t(locale, "prov_avail_tab_title")}</h3>
-                <p className="text-body-md font-body-md text-outline mb-5 text-sm">
+                <h3 className=" text-title text-on-surface mb-1">{t(locale, "prov_avail_tab_title")}</h3>
+                <p className="text-outline mb-5 text-sm">
                   {t(locale, "prov_avail_tab_desc")}
                 </p>
                 <AvailabilityControl
@@ -529,30 +564,38 @@ export default function ProviderDashboard() {
           {tab === "messages" && <ProviderChat />}
 
           {/* ── Services & pricing ── */}
-          {tab === "pricing" && <OfferingsEditor />}
+          {tab === "pricing" && (
+            pricingAllowed
+              ? <OfferingsEditor />
+              // Reached only via a deep link (?tab=pricing) to a company whose
+              // category isn't FIXED_CATALOG — the sidebar never offers this
+              // tab in that case. An explanation, not a blank pane or a silent
+              // bounce: the provider followed a real link here.
+              : <EmptyState msg={t(locale, "prov_pricing_unavailable")} icon="sell" />
+          )}
 
           {/* ── Profile ── */}
           {tab === "profile" && (
             <div className="max-w-2xl space-y-6">
               <div className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-bloom">
                 <div className="relative h-36 overflow-hidden">
-                  <img src={company.cover} alt={company.name} className="w-full h-full object-cover" />
+                  <img src={company.cover} alt={company.name} className="w-full h-full object-cover" width={672} height={144} />
                 </div>
                 <div className="px-6 pb-6">
                   <div className="-mt-8 mb-4 w-16 h-16 rounded-2xl overflow-hidden border-4 border-white shadow-md bg-white">
-                    <img src={company.logo} alt={t(locale, "common_logo_alt")} className="w-full h-full object-cover" />
+                    <img src={company.logo} alt={t(locale, "common_logo_alt")} className="w-full h-full object-cover" width={64} height={64} />
                   </div>
-                  <h2 className="font-headline-md text-headline-md text-on-surface mb-1">{company.name}</h2>
-                  <p className="text-label-md font-label-md text-outline mb-3">{company.categoryLabel}</p>
-                  <p className="text-body-md font-body-md text-on-surface-variant leading-relaxed">{company.about}</p>
+                  <h2 className="font-display text-title text-on-surface mb-1">{company.name}</h2>
+                  <p className="text-label font-display text-outline mb-3">{company.categoryLabel}</p>
+                  <p className="text-body text-on-surface-variant leading-relaxed">{company.about}</p>
                 </div>
               </div>
 
               <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
-                <h3 className="font-headline-md text-headline-md text-on-surface mb-4">{t(locale, "prov_profile_services")}</h3>
+                <h3 className=" text-title text-on-surface mb-4">{t(locale, "prov_profile_services")}</h3>
                 <div className="flex flex-wrap gap-2">
                   {company.services.map((s) => (
-                    <span key={s} className="bg-surface-container px-3 py-1.5 rounded-full text-label-md font-label-md text-on-surface-variant border border-outline-variant/20">{s}</span>
+                    <span key={s} className="bg-surface-container px-3 py-1.5 rounded-full text-label font-display text-on-surface-variant border border-outline-variant/20">{s}</span>
                   ))}
                 </div>
               </div>
@@ -567,8 +610,8 @@ export default function ProviderDashboard() {
           {tab === "settings" && (
             <div className="max-w-2xl space-y-6">
               <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom">
-                <h3 className="font-headline-md text-headline-md text-on-surface mb-2">{t(locale, "prov_settings_notifications")}</h3>
-                <p className="text-body-md font-body-md text-outline mb-4 text-sm">{t(locale, "prov_settings_notifications_sub")}</p>
+                <h3 className=" text-title text-on-surface mb-2">{t(locale, "prov_settings_notifications")}</h3>
+                <p className="text-outline mb-4 text-sm">{t(locale, "prov_settings_notifications_sub")}</p>
                 <div className="py-3 border-b border-outline-variant/20">
                   <NotificationToggle />
                 </div>
@@ -582,28 +625,26 @@ export default function ProviderDashboard() {
                 ].map((s) => (
                   <div key={t(locale, s.labelKey)} className="flex items-center justify-between py-3 border-b border-outline-variant/20 last:border-0">
                     <div>
-                      <p className="font-label-md text-label-md text-on-surface">{t(locale, s.labelKey)}</p>
-                      <p className="text-label-sm font-label-sm text-outline">{t(locale, s.detailKey)}</p>
+                      <p className=" text-label text-on-surface">{t(locale, s.labelKey)}</p>
+                      <p className="text-caption text-outline">{t(locale, s.detailKey)}</p>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer ml-4">
-                      <input type="checkbox" defaultChecked className="sr-only peer" />
-                      <div className="w-10 h-6 bg-outline-variant peer-focus:ring-2 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-4 peer-checked:bg-primary after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all" />
+                    <label className="relative inline-flex items-center cursor-pointer ms-4">
+                      <input type="checkbox" role="switch" aria-label={t(locale, s.labelKey)} defaultChecked className="sr-only peer" />
+                      <div className="w-10 h-6 bg-outline-variant peer-focus:ring-2 peer-focus:ring-primary/30 rounded-full peer peer-checked:after:translate-x-4 rtl:peer-checked:after:-translate-x-4 peer-checked:bg-primary after:content-[''] after:absolute after:top-0.5 after:start-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform" />
                     </label>
                   </div>
                 ))}
               </div>
 
               <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom">
-                <h3 className="font-headline-md text-headline-md text-on-surface mb-4">{t(locale, "prov_settings_account")}</h3>
-                <p className="text-body-md font-body-md text-outline text-sm">
+                <h3 className=" text-title text-on-surface mb-4">{t(locale, "prov_settings_account")}</h3>
+                <p className="text-outline text-sm">
                   {t(locale, "prov_account_note")}
                 </p>
               </div>
             </div>
           )}
-        </div>
-      </main>
-    </div>
+    </DashboardShell>
   );
 }
 
@@ -621,16 +662,16 @@ function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusChange, onWaitlist
         <div key={`w-${row.data.id}`} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
           <div className="flex-grow min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
-              <span className="flex items-center gap-1 text-label-sm font-bold text-amber-700">
-                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
+              <span className="flex items-center gap-1 text-caption font-bold text-amber-700">
+                <Icon name="hourglass_top" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} />
                 {t(locale, "common_kind_waitlist")}
               </span>
-              <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[row.data.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[row.data.status])}</span>
+              <span className={`text-caption px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[row.data.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[row.data.status])}</span>
             </div>
-            <p className="font-label-md text-label-md text-on-surface">{row.data.name} — {row.data.phone}</p>
-            <p className="text-label-sm font-label-sm text-outline">{row.data.service ?? ""}</p>
+            <p className=" text-label text-on-surface">{row.data.name} — {row.data.phone}</p>
+            <p className="text-caption text-outline">{row.data.service ?? ""}</p>
             {row.data.note && (
-              <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{row.data.note}</p>
+              <p className="text-on-surface-variant text-sm mt-1 line-clamp-2">{row.data.note}</p>
             )}
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -638,40 +679,40 @@ function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusChange, onWaitlist
               <select
                 value={row.data.status}
                 onChange={(e) => onWaitlistStatusChange(row.data, e.target.value as WaitlistStatus)}
-                className="border border-outline-variant rounded-lg px-2.5 py-1 text-label-sm text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
+                className="border border-outline-variant rounded-lg px-2.5 py-1 text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
               >
                 {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
               </select>
               <button onClick={() => onWaitlistDelete(row.data)} title={t(locale, "prov_wl_remove")}
                 className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors">
-                <span className="material-symbols-outlined text-[18px]">delete</span>
+                <Icon name="delete" className="text-subhead" />
               </button>
             </div>
-            <span className="text-label-sm font-label-sm text-outline">{formatDate(row.data.createdAt, locale)}</span>
+            <span className="text-caption text-outline">{formatDate(row.data.createdAt, locale)}</span>
           </div>
         </div>
       ) : (
         <div key={`l-${row.data.id}`} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
           <div className="flex-grow min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
-              <span className="font-mono text-label-sm text-primary">{row.data.refNumber}</span>
-              <span className={`text-label-sm font-label-sm px-2 py-0.5 rounded-full ${STATUS_COLORS[row.data.status]}`}>{t(locale, LEAD_STATUS_KEYS[row.data.status])}</span>
+              <span className="font-mono text-caption text-primary">{row.data.refNumber}</span>
+              <span className={`text-caption px-2 py-0.5 rounded-full ${STATUS_COLORS[row.data.status]}`}>{t(locale, LEAD_STATUS_KEYS[row.data.status])}</span>
             </div>
-            <p className="font-label-md text-label-md text-on-surface">{row.data.name} — {row.data.phone}</p>
-            <p className="text-label-sm font-label-sm text-outline">{row.data.service} · {row.data.district} · {row.data.budget}</p>
+            <p className=" text-label text-on-surface">{row.data.name} — {row.data.phone}</p>
+            <p className="text-caption text-outline">{row.data.service} · {row.data.district} · {row.data.budget}</p>
             {row.data.description && (
-              <p className="text-body-md font-body-md text-on-surface-variant text-sm mt-1 line-clamp-2">{row.data.description}</p>
+              <p className="text-on-surface-variant text-sm mt-1 line-clamp-2">{row.data.description}</p>
             )}
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
             <select
               value={row.data.status}
               onChange={(e) => onLeadStatusChange(row.data.id, e.target.value as LeadStatus)}
-              className="border border-outline-variant rounded-lg px-2.5 py-1 text-label-sm text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
+              className="border border-outline-variant rounded-lg px-2.5 py-1 text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
             >
               {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
             </select>
-            <span className="text-label-sm font-label-sm text-outline">{formatDate(row.data.createdAt, locale)}</span>
+            <span className="text-caption text-outline">{formatDate(row.data.createdAt, locale)}</span>
           </div>
         </div>
       ))}
@@ -734,19 +775,19 @@ function ProviderProjectsTab({ company }: { company: Company }) {
             {company.projects.map((p) => (
               <div key={p.title} className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-bloom">
                 <div className="relative h-48 overflow-hidden">
-                  <img src={p.img} alt={p.title} className="w-full h-full object-cover" />
-                  <div className="absolute top-2 right-2 bg-black/60 text-white text-label-sm font-label-sm px-2 py-0.5 rounded-full">{p.year}</div>
+                  <img src={p.img} alt={p.title} className="w-full h-full object-cover" width={400} height={192} />
+                  <div className="absolute top-2 right-2 bg-black/60 text-white text-caption font-display px-2 py-0.5 rounded-full">{p.year}</div>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-headline-md text-headline-md text-on-surface mb-1">{p.title}</h3>
-                  <p className="text-body-md font-body-md text-on-surface-variant text-sm leading-relaxed">{p.description}</p>
+                  <h3 className="font-display text-title text-on-surface mb-1">{p.title}</h3>
+                  <p className="text-on-surface-variant text-sm leading-relaxed">{p.description}</p>
                 </div>
               </div>
             ))}
           </div>
         )}
         <div className="bg-surface-container-lowest rounded-2xl p-6 text-center shadow-bloom">
-          <p className="text-body-md font-body-md text-outline">{t(locale, "prov_proj_needs_api")}</p>
+          <p className="text-body text-outline">{t(locale, "prov_proj_needs_api")}</p>
         </div>
       </div>
     );
@@ -756,21 +797,21 @@ function ProviderProjectsTab({ company }: { company: Company }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="font-bold text-[16px] text-on-surface">{t(locale, "prov_proj_title")}</h2>
-          <p className="text-[12px] text-outline mt-0.5 max-w-md leading-relaxed">
+          <h2 className="font-bold text-body text-on-surface">{t(locale, "prov_proj_title")}</h2>
+          <p className="text-caption text-outline mt-0.5 max-w-md leading-relaxed">
             {t(locale, "prov_proj_desc")}
           </p>
         </div>
         <button onClick={() => setEditing({ project: null })}
-          className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press btn-press flex-shrink-0">
-          <span className="material-symbols-outlined text-[18px]">add_photo_alternate</span> {t(locale, "prov_proj_add")}
+          className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press flex-shrink-0">
+          <Icon name="add_photo_alternate" className="text-subhead" /> {t(locale, "prov_proj_add")}
         </button>
       </div>
 
-      {error && <p className="text-[13px] text-error font-bold bg-error/8 rounded-lg px-3 py-2">{error}</p>}
+      {error && <p className="text-label text-error font-bold bg-error/8 rounded-lg px-3 py-2">{error}</p>}
 
       {loading && projects.length === 0 ? (
-        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center text-[14px] text-outline">
+        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center text-label text-outline">
           <span className="spinner spinner-primary mx-auto mb-3 block" /> {t(locale, "prov_proj_loading")}
         </div>
       ) : projects.length === 0 ? (
@@ -782,23 +823,23 @@ function ProviderProjectsTab({ company }: { company: Company }) {
             return (
               <div key={p.id ?? p.title} className="bg-surface-container-lowest rounded-2xl overflow-hidden shadow-bloom flex flex-col">
                 <div className="relative h-44 overflow-hidden">
-                  <img src={p.img} alt={p.title} className="w-full h-full object-cover" />
-                  <div className="absolute top-2 right-2 bg-black/60 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">{p.year}</div>
-                  <span className={`absolute top-2 left-2 flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
-                    <span className="material-symbols-outlined text-[13px]">{badge.icon}</span>{t(locale, badge.labelKey)}
+                  <img src={p.img} alt={p.title} className="w-full h-full object-cover" width={400} height={176} />
+                  <div className="absolute top-2 right-2 bg-black/60 text-white text-caption font-bold px-2 py-0.5 rounded-full">{p.year}</div>
+                  <span className={`absolute top-2 left-2 flex items-center gap-1 text-caption font-bold px-2 py-0.5 rounded-full ${badge.cls}`}>
+                    <span className="material-symbols-outlined text-label" aria-hidden="true" translate="no">{badge.icon}</span>{t(locale, badge.labelKey)}
                   </span>
                 </div>
                 <div className="p-4 flex flex-col flex-grow">
-                  <h3 className="font-bold text-[15px] text-on-surface mb-1">{p.title}</h3>
-                  <p className="text-[13px] text-on-surface-variant leading-relaxed line-clamp-3 flex-grow">{p.description}</p>
+                  <h3 className="font-bold text-body text-on-surface mb-1">{p.title}</h3>
+                  <p className="text-label text-on-surface-variant leading-relaxed line-clamp-3 flex-grow">{p.description}</p>
                   <div className="flex gap-2 mt-3 pt-3 border-t border-outline-variant/15">
                     <button onClick={() => setEditing({ project: p })} disabled={busyId === p.id}
-                      className="flex-1 flex items-center justify-center gap-1 bg-surface-container py-2 rounded-lg text-[12px] font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-60">
-                      <span className="material-symbols-outlined text-[14px]">edit</span> {t(locale, "prov_proj_edit_btn")}
+                      className="flex-1 flex items-center justify-center gap-1 bg-surface-container py-2 rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-60">
+                      <Icon name="edit" className="text-label" /> {t(locale, "prov_proj_edit_btn")}
                     </button>
                     <button onClick={() => handleDelete(p)} disabled={busyId === p.id}
-                      className="flex items-center justify-center gap-1 border border-error/30 text-error rounded-lg font-bold hover:bg-error/5 transition-colors px-3 py-2 text-[12px] disabled:opacity-60">
-                      <span className="material-symbols-outlined text-[14px]">{busyId === p.id ? "progress_activity" : "delete"}</span>
+                      className="flex items-center justify-center gap-1 border border-error/30 text-error rounded-lg font-bold hover:bg-error/5 transition-colors px-3 py-2 text-caption disabled:opacity-60">
+                      <span className="material-symbols-outlined text-label" aria-hidden="true" translate="no">{busyId === p.id ? "progress_activity" : "delete"}</span>
                     </button>
                   </div>
                 </div>
@@ -864,51 +905,51 @@ function ProjectEditorModal({ project, onClose, onSaved }: {
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" onClick={onClose}>
       <div className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-outline-variant/20 sticky top-0 bg-surface-container-lowest z-10">
-          <h2 className="font-bold text-[18px] text-on-surface">{t(locale, isNew ? "prov_proj_add" : "prov_proj_edit")}</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><span className="material-symbols-outlined text-outline">close</span></button>
+          <h2 className="font-bold text-subhead text-on-surface">{t(locale, isNew ? "prov_proj_add" : "prov_proj_edit")}</h2>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><Icon name="close" className="text-outline" /></button>
         </div>
         <div className="p-5 space-y-4">
           {/* Image */}
           <div>
-            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_image")}</label>
+            <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_image")}</label>
             <div onClick={() => fileRef.current?.click()}
               className="relative h-44 w-full rounded-xl border-2 border-dashed border-outline-variant/40 hover:border-primary/50 hover:bg-surface-container/40 flex flex-col items-center justify-center text-center overflow-hidden cursor-pointer transition-colors">
               {uploading ? <span className="spinner spinner-primary" />
-                : img ? <img src={img} alt="" className="w-full h-full object-cover" />
-                : (<><span className="material-symbols-outlined text-outline/60 text-[28px]">cloud_upload</span>
-                    <p className="text-[12px] font-bold text-outline mt-1">{t(locale, "prov_upload_drop")} <span className="text-primary">{t(locale, "prov_upload_browse")}</span></p></>)}
+                : img ? <img src={img} alt="" className="w-full h-full object-cover" width={450} height={176} />
+                : (<><Icon name="cloud_upload" className="text-outline/60 text-headline" />
+                    <p className="text-caption font-bold text-outline mt-1">{t(locale, "prov_upload_drop")} <span className="text-primary">{t(locale, "prov_upload_browse")}</span></p></>)}
             </div>
             <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
-              <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_field_title")}</label>
+              <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_field_title")}</label>
               <input className="field-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t(locale, "prov_proj_title_ph")} />
             </div>
             <div>
-              <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_year")}</label>
+              <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_year")}</label>
               <input className="field-input" value={year} onChange={(e) => setYear(e.target.value)} placeholder={t(locale, "prov_proj_year_ph")} />
             </div>
           </div>
           <div>
-            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_description")}</label>
+            <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "prov_proj_description")}</label>
             <textarea className="field-input resize-y" rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t(locale, "prov_proj_description_ph")} />
           </div>
 
-          <div className="flex items-start gap-2 bg-amber-50 text-amber-800 rounded-xl px-3 py-2.5 text-[12px] font-medium">
-            <span className="material-symbols-outlined text-[18px] flex-shrink-0">info</span>
+          <div className="flex items-start gap-2 bg-amber-50 text-amber-800 rounded-xl px-3 py-2.5 text-caption font-medium">
+            <Icon name="info" className="text-subhead flex-shrink-0" />
             <span>{wasApproved
               ? t(locale, "prov_proj_note_edit")
               : t(locale, "prov_proj_note_new")}</span>
           </div>
 
-          {error && <p className="text-[13px] text-error font-bold">{error}</p>}
+          {error && <p className="text-label text-error font-bold">{error}</p>}
         </div>
         <div className="flex justify-end gap-3 p-5 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-lowest">
-          <button onClick={onClose} disabled={saving} className="px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-[14px] text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">{t(locale, "prov_proj_cancel")}</button>
+          <button onClick={onClose} disabled={saving} className="px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-label text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">{t(locale, "prov_proj_cancel")}</button>
           <button onClick={save} disabled={saving || uploading}
-            className="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
-            {saving && <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>}
+            className="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+            {saving && <Icon name="progress_activity" className="text-subhead animate-spin" />}
             {saving ? t(locale, "prov_proj_submitting") : t(locale, isNew ? "prov_proj_submit" : "prov_proj_save")}
           </button>
         </div>
@@ -917,21 +958,25 @@ function ProjectEditorModal({ project, onClose, onSaved }: {
   );
 }
 
-function EmptyState({ msg, icon }: { msg: string; icon: string }) {
+/** In-flight state — visually distinct from EmptyState (CMP-02): a spinner,
+ * never the "no results" icon, so a still-loading list can't be read as
+ * "nothing found" while data is on the way. */
+function Loading({ msg }: { msg: string }) {
   return (
     <div className="text-center py-14 px-6">
-      <span className="material-symbols-outlined text-outline text-[48px] mb-3 block">{icon}</span>
-      <p className="text-body-lg font-body-lg text-outline max-w-sm mx-auto">{msg}</p>
+      <span className="spinner spinner-primary mx-auto mb-3 block" />
+      <p className="text-subhead text-outline max-w-sm mx-auto">{msg}</p>
     </div>
   );
 }
 
 // ── Sidebar / drawer body (shared by desktop rail and mobile drawer) ──
 function ProviderSidebarBody({
-  company, companies, selectedSlug, setSelectedSlug, tab, onSelect, newCount, onClose,
+  company, companies, selectedSlug, setSelectedSlug, tab, onSelect, newCount, onClose, tabs,
 }: {
   company: Company; companies: Company[]; selectedSlug: string; setSelectedSlug: (s: string) => void;
   tab: ProviderTab; onSelect: (id: ProviderTab) => void; newCount: number; onClose?: () => void;
+  tabs: typeof TAB_CONFIG;
 }) {
   const { locale } = useLocale();
   return (
@@ -939,18 +984,18 @@ function ProviderSidebarBody({
       {/* Brand */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-outline-variant/15">
         <Link to="/" className="flex items-center gap-3 min-w-0 flex-1 hover:opacity-80 transition-opacity">
-          <Logo className="h-11 w-11 object-contain rounded-xl flex-shrink-0" />
+          <Logo className="h-11 w-11 object-contain rounded-xl flex-shrink-0" width={44} height={44} />
           <div className="min-w-0">
-            <p className="font-display font-black text-[17px] text-on-surface leading-none truncate">Al Assema</p>
-            <p className="text-[11px] font-bold text-secondary tracking-wide mt-1.5 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>storefront</span>
+            <p className="font-display font-black text-subhead text-on-surface leading-none truncate">{t(locale, "brand_name")}</p>
+            <p className="text-caption font-bold text-secondary ltr:tracking-wide mt-1.5 flex items-center gap-1">
+              <Icon name="storefront" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} />
               {t(locale, "prov_portal_label")}
             </p>
           </div>
         </Link>
         {onClose && (
           <button onClick={onClose} className="md:hidden p-1.5 rounded-lg hover:bg-surface-container transition-colors flex-shrink-0" aria-label={t(locale, "nav_close_menu")}>
-            <span className="material-symbols-outlined text-outline">close</span>
+            <Icon name="close" className="text-outline" />
           </button>
         )}
       </div>
@@ -959,44 +1004,35 @@ function ProviderSidebarBody({
       <div className="px-4 py-4 border-b border-outline-variant/15">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden border border-outline-variant/20 bg-white flex-shrink-0">
-            <img src={company.logo} alt={company.name} className="w-full h-full object-cover" />
+            <img src={company.logo} alt={company.name} className="w-full h-full object-cover" width={40} height={40} />
           </div>
           <div className="min-w-0">
-            <p className="font-display font-bold text-[14px] text-on-surface truncate">{company.name}</p>
-            <p className="text-[11px] text-outline truncate">{company.categoryLabel}</p>
+            <p className="font-display font-bold text-label text-on-surface truncate">{company.name}</p>
+            <p className="text-caption text-outline truncate">{company.categoryLabel}</p>
           </div>
         </div>
         {companies.length > 1 && (
           <select value={selectedSlug} onChange={(e) => setSelectedSlug(e.target.value)}
-            className="w-full border border-outline-variant rounded-lg px-2.5 py-2 text-[13px] text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none">
+            className="w-full border border-outline-variant rounded-lg px-2.5 py-2 text-label text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none">
             {companies.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
           </select>
         )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-grow px-3 py-4 space-y-1 overflow-y-auto">
-        {TAB_CONFIG.map((item) => {
-          const active = tab === item.id;
-          return (
-            <button key={item.id} onClick={() => onSelect(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-xl text-[14px] font-bold transition-all relative touch-press ${
-                active ? "bg-primary/10 text-primary" : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-              }`}>
-              {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-full" />}
-              <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: active ? "'FILL' 1" : "'FILL' 0" }}>{item.icon}</span>
-              {t(locale, item.labelKey)}
-              {item.id === "leads" && newCount > 0 && (
-                <span className="ml-auto bg-primary text-on-primary text-[11px] font-bold px-1.5 py-0.5 rounded-full">{newCount}</span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      <SidebarNav
+        items={tabs.map((item) => ({
+          id: item.id,
+          icon: item.icon,
+          label: t(locale, item.labelKey),
+          badge: item.id === "leads" ? newCount : undefined,
+        }))}
+        activeId={tab}
+        onSelect={onSelect}
+      />
 
       <div className="p-4 border-t border-outline-variant/15 space-y-1">
-        <Link to="/" className="flex items-center gap-2 px-2 py-2 text-[13px] font-bold text-outline hover:text-on-surface transition-colors">
-          <span className="material-symbols-outlined text-[18px]">arrow_back</span> {t(locale, "prov_back_to_site_link")}
+        <Link to="/" className="flex items-center gap-2 px-2 py-2 text-label font-bold text-outline hover:text-on-surface transition-colors">
+          <Icon name="arrow_back" className="text-subhead rtl-flip" /> {t(locale, "prov_back_to_site_link")}
         </Link>
       </div>
     </>

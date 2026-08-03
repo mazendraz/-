@@ -56,8 +56,18 @@ export interface ApiCompany {
   about: string;
   logo: string;
   cover: string;
+  // A company may belong to MULTIPLE categories. `category`/`categoryLabel`/
+  // `categoryPricingMode` are always the company's PRIMARY category — the one
+  // every single-value display spot (card badge, profile page, search result
+  // label) shows.
   category: string;
   categoryLabel: string;
+  // Phase 9 — computed server-side from the company's PRIMARY category, so no
+  // second call is needed to know whether this company may run a priced catalog.
+  categoryPricingMode: ApiCategoryPricingMode;
+  // Full category membership (admin/provider editors). Exactly one entry has
+  // isPrimary: true.
+  categories: { slug: string; label: string; pricingMode: ApiCategoryPricingMode; isPrimary: boolean }[];
   services: string[];
   rating: number;
   reviewCount: number;
@@ -127,6 +137,8 @@ export interface ApiWaitlistEntry {
   note: string | null;
   status: ApiWaitlistStatus;
   createdAt: number; // epoch ms
+  // Set once accepted (status CONVERTED) — the id of the Lead this entry became.
+  convertedLeadId: string | null;
 }
 
 /** POST /companies/:slug/waitlist — public join body. */
@@ -144,6 +156,16 @@ export interface ApiWaitlistStatusPatch {
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
+/**
+ * Phase 9 — whether companies in this category may run a priced Offering
+ * catalog. QUOTE_ONLY (the default for every category that predates this) means
+ * no catalog: chips + a direct request, exactly like before. FIXED_CATALOG lets
+ * companies publish priced Offerings. Real enforcement is server-side
+ * (api: offerings.service.ts assertCatalogEnabled) — this is just what the
+ * value means, not what stops a write.
+ */
+export type ApiCategoryPricingMode = "QUOTE_ONLY" | "FIXED_CATALOG";
+
 export interface ApiCategory {
   slug: string;
   label: string;
@@ -151,6 +173,14 @@ export interface ApiCategory {
   icon: string;
   cover: string;
   count: number;
+  pricingMode: ApiCategoryPricingMode;
+  /**
+   * Admin only — how many of this category's companies have at least one
+   * PUBLISHED Offering right now. Used by the admin CategoryEditor's
+   * confirm-warning when switching FIXED_CATALOG → QUOTE_ONLY. Absent on the
+   * public /categories payload.
+   */
+  publishedOfferingCompanyCount?: number;
 }
 
 // ── Leads (service requests) ──────────────────────────────────────────────────

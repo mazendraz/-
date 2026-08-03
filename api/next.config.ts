@@ -19,6 +19,17 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  experimental: {
+    // src/proxy.ts runs on every /api/* request (matcher: "/api/:path*"), so
+    // Next buffers the request body to let both proxy and the route handler
+    // read it — capped at 10MB by default. A gallery video upload can be up
+    // to 50MB (see upload.service.ts's MAX_VIDEO_UPLOAD_BYTES); past the
+    // default cap the body silently truncates mid-multipart-stream, which
+    // request.formData() then fails to parse (a generic 500, not a clean
+    // validation error). Keep this above MAX_VIDEO_UPLOAD_BYTES, in step with
+    // deploy/Caddyfile's request_body max_size.
+    proxyClientMaxBodySize: "55mb",
+  },
 };
 
 export default nextConfig;

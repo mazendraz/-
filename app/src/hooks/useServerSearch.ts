@@ -18,6 +18,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiGet, ApiError, isAbort, isApiConfigured } from "../lib/api";
+import { useLocale } from "../context/LocaleContext";
+import { t } from "../lib/i18n";
 
 export interface ApiPage<T> {
   data: T[];
@@ -76,6 +78,7 @@ export function useServerSearch<T>(
     pageSize = 20,
     enabled = isApiConfigured(),
   } = options;
+  const { locale } = useLocale();
 
   // Serialize params so the effect only re-runs on actual value changes, not on a
   // new object identity each render.
@@ -119,7 +122,7 @@ export function useServerSearch<T>(
       } catch (err) {
         // An abort is this hook superseding itself; there is nothing to report.
         if (!ctl.signal.aborted && !isAbort(err)) {
-          setError(err instanceof ApiError ? err.message : "Search failed. Please try again.");
+          setError(err instanceof ApiError ? err.message : t(locale, "search_error_generic"));
           setResult({ data: [], total: 0 });
         }
       } finally {
@@ -129,7 +132,7 @@ export function useServerSearch<T>(
 
     return () => clearTimeout(handle);
     // paramsKey stands in for params; tick forces a manual refresh.
-  }, [path, search, page, pageSize, paramsKey, enabled, debounceMs, tick]);
+  }, [path, search, page, pageSize, paramsKey, enabled, debounceMs, tick, locale]);
 
   // Abort any in-flight request on unmount.
   useEffect(() => () => abortRef.current?.abort(), []);

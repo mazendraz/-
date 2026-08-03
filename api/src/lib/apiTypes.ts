@@ -71,8 +71,23 @@ export interface ApiCompany {
   about: string;
   logo: string;
   cover: string;
+  // A company may belong to MULTIPLE categories (see the CompanyCategory
+  // junction). `category`/`categoryLabel`/`categoryPricingMode` are always the
+  // company's PRIMARY category — the one every single-value display spot (card
+  // badge, featured-project card, profile page, search result label) shows.
   category: string;
   categoryLabel: string;
+  // Phase 9 — computed server-side from the company's PRIMARY category (see
+  // companies.service.ts / serializeCompany) so the frontend never needs a
+  // second call just to know whether this company may run a priced catalog.
+  // NOTE: the actual Offerings gate (offerings.service assertCatalogEnabled) is a
+  // permissive union over ALL of the company's categories, not just this one —
+  // use `categories.some(c => c.pricingMode === "FIXED_CATALOG")` if you need
+  // that exact check on the client.
+  categoryPricingMode: ApiCategoryPricingMode;
+  // Full category membership (admin/provider editors, or anything that needs
+  // more than the primary). Exactly one entry has isPrimary: true.
+  categories: { slug: string; label: string; pricingMode: ApiCategoryPricingMode; isPrimary: boolean }[];
   services: string[];
   rating: number;
   reviewCount: number;
@@ -155,6 +170,9 @@ export interface ApiWaitlistEntry {
   note: string | null;
   status: ApiWaitlistStatus;
   createdAt: number; // epoch ms
+  // Set once accepted (status CONVERTED) — the id of the Lead this entry became.
+  // See waitlist.service.ts convertToLead. Null until then.
+  convertedLeadId: string | null;
 }
 
 /** POST /companies/:slug/waitlist — public join body. */
@@ -172,6 +190,16 @@ export interface ApiWaitlistStatusPatch {
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
+/**
+ * Phase 9 — whether companies in this category may run a priced Offering
+ * catalog. QUOTE_ONLY (the default for every category that predates this) means
+ * no catalog: chips + a direct request, exactly like before this existed.
+ * FIXED_CATALOG lets companies publish priced Offerings. See
+ * offerings.service.ts (assertCatalogEnabled) for the actual enforcement —
+ * this value alone is not what stops a write, it's just what the value means.
+ */
+export type ApiCategoryPricingMode = "QUOTE_ONLY" | "FIXED_CATALOG";
+
 export interface ApiCategory {
   slug: string;
   label: string;
@@ -179,6 +207,7 @@ export interface ApiCategory {
   icon: string;
   cover: string;
   count: number;
+  pricingMode: ApiCategoryPricingMode;
   // Optional per-page SEO overrides; null/absent → frontend uses defaults.
   metaTitle?: string | null;
   metaDescription?: string | null;
@@ -186,12 +215,21 @@ export interface ApiCategory {
 
 /**
  * Admin view of a category. Adds `id` (needed to address PUT/DELETE
- * /admin/categories/[id] and to set a company's categoryId) and `isActive`.
+ * /admin/categories/[id] and to link a company to it via categoryIds) and
+ * `isActive`.
  * The public ApiCategory deliberately omits both.
  */
 export interface ApiAdminCategory extends ApiCategory {
   id: string;
   isActive: boolean;
+  /**
+   * How many of this category's companies have at least one PUBLISHED
+   * Offering right now. The CategoryEditor confirm-warning when switching
+   * FIXED_CATALOG → QUOTE_ONLY needs this number; computed once for the whole
+   * admin list (categories.service.ts listAll) so opening the editor never
+   * costs an extra round trip.
+   */
+  publishedOfferingCompanyCount: number;
 }
 
 // ── Leads (service requests) ──────────────────────────────────────────────────

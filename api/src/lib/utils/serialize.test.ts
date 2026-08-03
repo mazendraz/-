@@ -91,6 +91,7 @@ describe("serializeCategory", () => {
       icon: "chair",
       cover: null,
       isActive: true,
+      pricingMode: "QUOTE_ONLY" as const,
       metaTitle: null,
       metaDescription: null,
       createdAt: new Date(),
@@ -103,6 +104,7 @@ describe("serializeCategory", () => {
       icon: "chair",
       cover: "",
       count: 12,
+      pricingMode: "QUOTE_ONLY",
       metaTitle: null,
       metaDescription: null,
     });
@@ -114,7 +116,6 @@ describe("serializeCompany", () => {
     const now = new Date();
     const company: CompanyWithRelations = {
       id: "co-1",
-      categoryId: "cat-1",
       slug: "aura-interiors",
       name: "Aura Interiors",
       tagline: "Calm, considered interiors",
@@ -139,7 +140,9 @@ describe("serializeCompany", () => {
       whatsapp: null,
       createdAt: now,
       updatedAt: now,
-      category: { slug: "interior-design", label: "Interior Design" },
+      categories: [
+        { isPrimary: true, category: { slug: "interior-design", label: "Interior Design", pricingMode: "QUOTE_ONLY" } },
+      ],
       // Required on the row type (Feature F): the serializer derives effective
       // availability from these, and an optional field would let a query that
       // forgot to load them silently report a busy company as available.
@@ -198,5 +201,54 @@ describe("serializeCompany", () => {
     // internal fields (email/whatsapp/status) must not leak into the payload
     expect(out).not.toHaveProperty("email");
     expect(out).not.toHaveProperty("status");
+  });
+
+  it("a company in multiple categories: singular fields reflect the PRIMARY one, categories[] carries all of them", () => {
+    const now = new Date();
+    const company = {
+      id: "co-2",
+      slug: "aura-interiors",
+      name: "Aura Interiors",
+      tagline: "t",
+      about: "a",
+      logo: "logo.png",
+      cover: "cover.jpg",
+      services: [],
+      gallery: [],
+      badges: [],
+      phone: "0223456789",
+      location: "New Cairo",
+      yearsExperience: 8,
+      responseTime: "within 2 hours",
+      verifiedSince: "2021",
+      completedProjects: 87,
+      rating: 4.8,
+      reviewCount: 2,
+      featured: true,
+      verified: true,
+      status: "ACTIVE",
+      email: null,
+      whatsapp: null,
+      createdAt: now,
+      updatedAt: now,
+      // Non-primary listed FIRST on purpose — companyScalars() must find the
+      // isPrimary row explicitly rather than trusting array order.
+      categories: [
+        { isPrimary: false, category: { slug: "landscape", label: "Landscape & Outdoor", pricingMode: "QUOTE_ONLY" } },
+        { isPrimary: true, category: { slug: "interior-design", label: "Interior Design", pricingMode: "FIXED_CATALOG" } },
+      ],
+      busyWindows: [],
+      projects: [],
+      reviews: [],
+    } as unknown as CompanyWithRelations;
+
+    const out = serializeCompany(company);
+    expect(out.category).toBe("interior-design");
+    expect(out.categoryLabel).toBe("Interior Design");
+    expect(out.categoryPricingMode).toBe("FIXED_CATALOG");
+    expect(out.categories).toEqual([
+      { slug: "landscape", label: "Landscape & Outdoor", pricingMode: "QUOTE_ONLY", isPrimary: false },
+      { slug: "interior-design", label: "Interior Design", pricingMode: "FIXED_CATALOG", isPrimary: true },
+    ]);
   });
 });

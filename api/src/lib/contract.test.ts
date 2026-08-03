@@ -14,7 +14,6 @@ import {
 
 const company = {
   id: "co-1",
-  categoryId: "cat-1",
   slug: "aura-interiors",
   name: "Aura Interiors",
   tagline: "Calm, considered interiors",
@@ -39,7 +38,9 @@ const company = {
   whatsapp: "201000000000",
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  category: { slug: "interior-design", label: "Interior Design" },
+  categories: [
+    { isPrimary: true, category: { slug: "interior-design", label: "Interior Design", pricingMode: "QUOTE_ONLY" } },
+  ],
   // Required on the row type (Feature F): the serializer derives effective
   // availability from these, and an optional field would let a query that
   // forgot to load them silently report a busy company as available.

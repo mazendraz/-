@@ -41,6 +41,15 @@ const leadInclude = {
   items: { orderBy: { id: "asc" } },
 } as const;
 
+// Company fields a lead's notification fan-out needs (see createLeadRecord).
+interface LeadCompanyRef {
+  id: string;
+  name: string;
+  email: string | null;
+  whatsapp: string | null;
+  telegramChatId: string | null;
+}
+
 function clampPaging(query: { page?: number; pageSize?: number }): {
   page: number;
   pageSize: number;
@@ -70,43 +79,27 @@ async function listWhere(
   return { data: rows.map(serializeLead), meta: { total, page, pageSize } };
 }
 
+export interface CreateLeadRecordInput {
+  company: LeadCompanyRef;
+  service: string;
+  customerName: string;
+  phone: string;
+  district: string;
+  budget: string;
+  description: string;
+  resolved?: Awaited<ReturnType<typeof resolveItems>> | null;
+}
+
 /**
- * Public: create a lead. Resolves the company by slug (must be ACTIVE), generates
- * a unique refNumber, sets status NEW, and returns the full RAW ApiLead.
+ * Core lead creation: generates a unique refNumber + tracking token, sets status
+ * NEW, opens the chat thread, and fans out notifications. This is the ONE place a
+ * `Lead` row is ever created — every entry point (the public submit below, and
+ * waitlistService.convertToLead accepting a waitlisted request) funnels through
+ * here so both produce an identical CRM entity with the same downstream behavior
+ * (pipeline stages, notifications, dashboard stats, chat, etc).
  */
-export async function create(payload: CreateLeadInput): Promise<ApiLead> {
-  const company = await prisma.company.findFirst({
-    where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
-    select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
-  });
-  // 404 for both missing and non-ACTIVE — don't reveal suspended companies.
-  if (!company) throw new NotFoundError("Company");
-
-  // Resolve the selected items against the live catalogue FIRST: prices are read
-  // server-side and snapshotted onto the lead, so a later price change never
-  // rewrites what this customer was quoted.
-  const resolved = payload.items?.length
-    ? await resolveItems(company.id, payload.items)
-    : null;
-  // With items, Lead.service becomes their comma-joined names — the older lists,
-  // emails and CSV export keep working without knowing about items at all.
-  const serviceText = resolved ? resolved.serviceSummary : payload.service;
-
-  // Reject a near-identical re-submit (double-click / retry / basic bot loop).
-  const recentDuplicate = await prisma.lead.findFirst({
-    where: {
-      companyId: company.id,
-      phone: payload.phone,
-      service: serviceText,
-      createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
-    },
-    select: { id: true },
-  });
-  if (recentDuplicate) {
-    throw new ConflictError(
-      "We already received an identical request a moment ago. We'll be in touch shortly.",
-    );
-  }
+export async function createLeadRecord(input: CreateLeadRecordInput): Promise<ApiLead> {
+  const { company, service, customerName, phone, district, budget, description, resolved } = input;
 
   // refNumber is unique; on the (extremely rare) collision, retry with a new one.
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -116,12 +109,12 @@ export async function create(payload: CreateLeadInput): Promise<ApiLead> {
           companyId: company.id,
           refNumber: generateRefNumber(),
           trackingToken: generateTrackingToken(),
-          service: serviceText,
-          customerName: payload.name,
-          phone: payload.phone,
-          district: payload.district,
-          budget: payload.budget,
-          description: payload.description,
+          service,
+          customerName,
+          phone,
+          district,
+          budget,
+          description,
           status: LeadStatus.NEW,
           // A thread from the start, so the customer can message as soon as the
           // request lands. Leads that predate this are handled lazily by
@@ -211,6 +204,57 @@ export async function create(payload: CreateLeadInput): Promise<ApiLead> {
   }
   // Unreachable: the loop either returns or throws.
   throw new Error("Failed to generate a unique lead reference");
+}
+
+/**
+ * Public: create a lead. Resolves the company by slug (must be ACTIVE), rejects a
+ * near-identical re-submit, then hands off to createLeadRecord for the actual
+ * write. Returns the full RAW ApiLead.
+ */
+export async function create(payload: CreateLeadInput): Promise<ApiLead> {
+  const company = await prisma.company.findFirst({
+    where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
+    select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
+  });
+  // 404 for both missing and non-ACTIVE — don't reveal suspended companies.
+  if (!company) throw new NotFoundError("Company");
+
+  // Resolve the selected items against the live catalogue FIRST: prices are read
+  // server-side and snapshotted onto the lead, so a later price change never
+  // rewrites what this customer was quoted.
+  const resolved = payload.items?.length
+    ? await resolveItems(company.id, payload.items)
+    : null;
+  // With items, Lead.service becomes their comma-joined names — the older lists,
+  // emails and CSV export keep working without knowing about items at all.
+  const serviceText = resolved ? resolved.serviceSummary : payload.service;
+
+  // Reject a near-identical re-submit (double-click / retry / basic bot loop).
+  const recentDuplicate = await prisma.lead.findFirst({
+    where: {
+      companyId: company.id,
+      phone: payload.phone,
+      service: serviceText,
+      createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) },
+    },
+    select: { id: true },
+  });
+  if (recentDuplicate) {
+    throw new ConflictError(
+      "We already received an identical request a moment ago. We'll be in touch shortly.",
+    );
+  }
+
+  return createLeadRecord({
+    company,
+    service: serviceText,
+    customerName: payload.name,
+    phone: payload.phone,
+    district: payload.district,
+    budget: payload.budget,
+    description: payload.description,
+    resolved,
+  });
 }
 
 export interface LeadListQuery {
@@ -304,6 +348,12 @@ export async function trackByRefAndSecret(
     throw new NotFoundError("Lead");
   }
   return serializeLead(lead);
+}
+
+/** A single lead by id, or null. (For internal cross-service lookups.) */
+export async function getById(id: string): Promise<ApiLead | null> {
+  const lead = await prisma.lead.findUnique({ where: { id }, include: leadInclude });
+  return lead ? serializeLead(lead) : null;
 }
 
 /** Returns a lead's owning companyId, or throws 404. (For ownership checks.) */

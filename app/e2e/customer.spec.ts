@@ -14,8 +14,9 @@ test.describe("customer journey", () => {
     await expect(page).toHaveURL(/\/companies\/aura-interiors/);
 
     // The profile renders the company's details (services / reviews from the API).
+    // level: 1 disambiguates from the "About Aura Interiors" <h2> further down.
     await expect(
-      page.getByRole("heading", { name: /Aura Interiors/i }),
+      page.getByRole("heading", { name: /Aura Interiors/i, level: 1 }),
     ).toBeVisible();
   });
 });

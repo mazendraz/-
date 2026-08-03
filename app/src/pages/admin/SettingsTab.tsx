@@ -10,11 +10,13 @@ import {
 import { isApiConfigured } from "../../lib/api";
 import NotificationToggle from "../../components/NotificationToggle";
 import AdminChatNotifyToggle from "../../components/AdminChatNotifyToggle";
+import TelegramConnect from "../../components/TelegramConnect";
 import { LField } from "./components/ModalShell";
 import { TagField, ImageUpload } from "./components/fields";
 import { ConfirmAction } from "./components/confirm";
 import { useLocale } from "../../context/LocaleContext";
-import { t, type StringKey } from "../../lib/i18n";
+import { t, tCount, type StringKey } from "../../lib/i18n";
+import Icon from "../../components/Icon";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  SETTINGS
@@ -50,7 +52,7 @@ export function SettingsTab({ leadCount }: { leadCount: number }) {
 
   return (
     <div className="max-w-2xl space-y-5">
-      {msg && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-[13px] font-bold">{msg}</div>}
+      {msg && <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl px-4 py-3 text-label font-bold">{msg}</div>}
 
       <SettingCard icon="notifications_active" title={t(locale, "admin_set_push_title")} desc={t(locale, "admin_set_push_desc")}>
         <NotificationToggle />
@@ -60,18 +62,25 @@ export function SettingsTab({ leadCount }: { leadCount: number }) {
         <AdminChatNotifyToggle />
       </SettingCard>
 
+      {/* Self-service Telegram link for THIS admin account — renders nothing when
+          the server has no bot configured (see TelegramConnect), so no wrapping
+          SettingCard/title here that would be left with an empty body. */}
+      <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom empty:hidden">
+        <TelegramConnect scope="admin" />
+      </div>
+
       {demoMode ? (
         <>
           {/* Demo data */}
           <SettingCard icon="science" title={t(locale, "admin_set_demo_title")} desc={t(locale, "admin_set_demo_desc")}>
-            <button onClick={() => flash(`${t(locale, "admin_set_demo_added_a")} ${loadDemoLeads()} ${t(locale, "admin_set_demo_added_b")}`)} className="bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press">{t(locale, "admin_set_demo_load")}</button>
-            <ConfirmAction label={`${t(locale, "admin_set_clear_all")} ${leadCount} ${t(locale, "admin_noun_leads")}`} onConfirm={() => { clearAllLeads(); flash(t(locale, "admin_set_leads_cleared")); }} danger />
+            <button onClick={() => flash(`${t(locale, "admin_set_demo_added_a")} ${loadDemoLeads()} ${t(locale, "admin_set_demo_added_b")}`)} className="bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press">{t(locale, "admin_set_demo_load")}</button>
+            <ConfirmAction label={`${t(locale, "admin_set_clear_all")} ${leadCount} ${tCount(locale, "noun_lead", leadCount)}`} onConfirm={() => { clearAllLeads(); flash(t(locale, "admin_set_leads_cleared")); }} danger />
           </SettingCard>
 
           {/* Catalog backup */}
           <SettingCard icon="backup" title={t(locale, "admin_set_backup_title")} desc={t(locale, "admin_set_backup_desc")}>
-            <button onClick={doExport} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors">{t(locale, "admin_set_export_json")}</button>
-            <button onClick={() => fileRef.current?.click()} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-[13px] text-on-surface hover:bg-surface-container-high transition-colors">{t(locale, "admin_set_import_json")}</button>
+            <button onClick={doExport} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-label text-on-surface hover:bg-surface-container-high transition-colors">{t(locale, "admin_set_export_json")}</button>
+            <button onClick={() => fileRef.current?.click()} className="bg-surface-container px-4 py-2.5 rounded-xl font-bold text-label text-on-surface hover:bg-surface-container-high transition-colors">{t(locale, "admin_set_import_json")}</button>
             <input ref={fileRef} type="file" accept="application/json" hidden onChange={doImport} />
           </SettingCard>
 
@@ -180,7 +189,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
           const on = active === tab.id;
           return (
             <button key={tab.id} onClick={() => setActive(tab.id)}
-              className={`relative px-3 sm:px-4 py-3 text-[13px] font-bold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              className={`relative px-3 sm:px-4 py-3 text-label font-bold whitespace-nowrap border-b-2 -mb-px transition-colors ${
                 on ? "border-primary text-primary" : "border-transparent text-outline hover:text-on-surface"
               }`}>
               {t(locale, tab.labelKey)}
@@ -195,15 +204,15 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
         {active === "branding" && <BrandingSettings form={platform} setP={setP} />}
         {active === "email" && <EmailSettings email={email} setE={setE} />}
         {active === "legal" && <LegalSettings legal={legal} setL={setL} />}
-        {error && <p className="text-[13px] text-error font-bold">{error}</p>}
+        {error && <p className="text-label text-error font-bold">{error}</p>}
       </div>
 
       {/* Sticky save bar — always reachable, bottom-right of the container. */}
       <div className="sticky bottom-0 flex items-center justify-end gap-3 px-5 py-3 rounded-b-2xl bg-surface-container-lowest/95 backdrop-blur border-t border-outline-variant/20">
-        {anyDirty && <span className="me-auto text-[12px] font-bold text-secondary">{t(locale, "admin_set_unsaved")}</span>}
+        {anyDirty && <span className="me-auto text-caption font-bold text-secondary">{t(locale, "admin_set_unsaved")}</span>}
         <button onClick={saveAll} disabled={saving || !anyDirty}
-          className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-[13px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-          {saving && <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>}
+          className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+          {saving && <Icon name="progress_activity" className="text-subhead animate-spin" />}
           {t(locale, saving ? "admin_saving" : "admin_save_changes")}
         </button>
       </div>
@@ -214,8 +223,8 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
 export function SettingsHeading({ title, desc }: { title: string; desc: React.ReactNode }) {
   return (
     <div>
-      <h3 className="font-bold text-[15px] text-on-surface">{title}</h3>
-      <p className="text-[13px] text-outline leading-relaxed mt-0.5">{desc}</p>
+      <h3 className="font-bold text-body text-on-surface">{title}</h3>
+      <p className="text-label text-outline leading-relaxed mt-0.5">{desc}</p>
     </div>
   );
 }
@@ -256,7 +265,7 @@ export function GeneralSettings({ form, setP }: { form: PlatformSettings; setP: 
 
       {/* Homepage hero copy, per locale — blank uses the built-in translations. */}
       <div className="pt-2 border-t border-outline-variant/15 space-y-4">
-        <p className="text-[12px] font-bold text-outline">{t(locale, "admin_set_hero")}</p>
+        <p className="text-caption font-bold text-outline">{t(locale, "admin_set_hero")}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <TextField label={t(locale, "admin_set_hero_title_en")} value={form.hero_title_en} onChange={(v) => setP("hero_title_en", v)} />
           <TextField label={t(locale, "admin_set_hero_title_ar")} value={form.hero_title_ar} onChange={(v) => setP("hero_title_ar", v)} />
@@ -285,7 +294,7 @@ export function BrandingSettings({ form, setP }: { form: PlatformSettings; setP:
             onChange={(e) => setP("logo_scale", e.target.value === "100" ? "" : e.target.value)}
             className="flex-1 accent-primary" />
           <button type="button" onClick={() => setP("logo_scale", "")}
-            className="text-[12px] font-bold text-outline hover:text-on-surface transition-colors shrink-0">{t(locale, "admin_reset")}</button>
+            className="text-caption font-bold text-outline hover:text-on-surface transition-colors shrink-0">{t(locale, "admin_reset")}</button>
         </div>
       </LField>
     </div>
@@ -351,29 +360,29 @@ export function EmailSettings({ email, setE }: { email: EmailTemplates | null; s
     });
   }
 
-  if (!email) return <p className="text-[13px] text-outline">{t(locale, "admin_loading")}</p>;
+  if (!email) return <p className="text-label text-outline">{t(locale, "admin_loading")}</p>;
   return (
     <div className="space-y-4">
       <SettingsHeading title={t(locale, "admin_set_email_title")} desc={t(locale, "admin_set_email_desc")} />
 
       {/* Tokens toolbar */}
       <div className="bg-surface-container/50 rounded-xl p-3 border border-outline-variant/15">
-        <p className="text-[12px] font-bold text-outline mb-2">{t(locale, "admin_set_insert_token")}</p>
+        <p className="text-caption font-bold text-outline mb-2">{t(locale, "admin_set_insert_token")}</p>
         <div className="flex flex-wrap gap-1.5">
           {EMAIL_TOKENS.map((tok) => (
             <button key={tok} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => insertToken(tok)}
-              className="font-mono text-[12px] bg-primary/8 text-primary px-2.5 py-1 rounded-full font-bold hover:bg-primary/15 transition-colors touch-press">
+              className="font-mono text-caption bg-primary/8 text-primary px-2.5 py-1 rounded-full font-bold hover:bg-primary/15 transition-colors touch-press">
               {tok}
             </button>
           ))}
         </div>
       </div>
 
-      <p className="text-[12px] font-bold text-outline pt-2 border-t border-outline-variant/15">{t(locale, "admin_set_provider_email")}</p>
+      <p className="text-caption font-bold text-outline pt-2 border-t border-outline-variant/15">{t(locale, "admin_set_provider_email")}</p>
       <LField label={t(locale, "admin_set_subject")}><input className="field-input" value={email.providerSubject} onFocus={track("providerSubject")} onChange={(e) => setE("providerSubject", e.target.value)} placeholder={t(locale, "admin_set_provider_subject_ph")} /></LField>
       <LField label={t(locale, "admin_set_body")}><HighlightTextarea value={email.providerBody} onChange={(v) => setE("providerBody", v)} onFocus={track("providerBody")} rows={5} placeholder={t(locale, "admin_set_blank_default")} /></LField>
 
-      <p className="text-[12px] font-bold text-outline pt-2 border-t border-outline-variant/15">{t(locale, "admin_set_admin_email")}</p>
+      <p className="text-caption font-bold text-outline pt-2 border-t border-outline-variant/15">{t(locale, "admin_set_admin_email")}</p>
       <LField label={t(locale, "admin_set_subject")}><input className="field-input" value={email.adminSubject} onFocus={track("adminSubject")} onChange={(e) => setE("adminSubject", e.target.value)} placeholder={t(locale, "admin_set_admin_subject_ph")} /></LField>
       <LField label={t(locale, "admin_set_body")}><HighlightTextarea value={email.adminBody} onChange={(v) => setE("adminBody", v)} onFocus={track("adminBody")} rows={4} placeholder={t(locale, "admin_set_blank_default_admin")} /></LField>
     </div>
@@ -422,24 +431,24 @@ export function LegalSettings({ legal, setL }: { legal: LegalPages | null; setL:
       ] as const).map((b) => (
         <button key={b.icon} type="button" title={b.title} onMouseDown={(e) => e.preventDefault()} onClick={b.fn}
           className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors">
-          <span className="material-symbols-outlined text-[18px]">{b.icon}</span>
+          <span className="material-symbols-outlined text-subhead" aria-hidden="true" translate="no">{b.icon}</span>
         </button>
       ))}
-      <span className="text-[11px] text-outline ms-1.5">{t(locale, "admin_set_markdown")}</span>
+      <span className="text-caption text-outline ms-1.5">{t(locale, "admin_set_markdown")}</span>
     </div>
   );
 
-  if (!legal) return <p className="text-[13px] text-outline">{t(locale, "admin_loading")}</p>;
+  if (!legal) return <p className="text-label text-outline">{t(locale, "admin_loading")}</p>;
   return (
     <div className="space-y-4">
       <SettingsHeading title={t(locale, "admin_set_legal_title")} desc={<>{t(locale, "admin_set_legal_desc_a")} <code>/terms</code> {t(locale, "admin_set_legal_desc_and")} <code>/privacy</code> {t(locale, "admin_set_legal_desc_b")}</>} />
       <LField label={t(locale, "admin_set_terms")}>
         {toolbar}
-        <textarea className="field-input resize-y font-mono text-[14px]" rows={8} value={legal.terms} onFocus={track("terms")} onChange={(e) => setL("terms", e.target.value)} placeholder={t(locale, "admin_set_md_ph")} />
+        <textarea className="field-input resize-y font-mono text-label" rows={8} value={legal.terms} onFocus={track("terms")} onChange={(e) => setL("terms", e.target.value)} placeholder={t(locale, "admin_set_md_ph")} />
       </LField>
       <LField label={t(locale, "admin_set_privacy")}>
         {toolbar}
-        <textarea className="field-input resize-y font-mono text-[14px]" rows={8} value={legal.privacy} onFocus={track("privacy")} onChange={(e) => setL("privacy", e.target.value)} placeholder={t(locale, "admin_set_md_ph")} />
+        <textarea className="field-input resize-y font-mono text-label" rows={8} value={legal.privacy} onFocus={track("privacy")} onChange={(e) => setL("privacy", e.target.value)} placeholder={t(locale, "admin_set_md_ph")} />
       </LField>
     </div>
   );
@@ -450,11 +459,11 @@ export function SettingCard({ icon, title, desc, children }: { icon: string; tit
     <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
       <div className="flex items-start gap-3 mb-4">
         <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <span className="material-symbols-outlined text-primary text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+          <span className="material-symbols-outlined text-primary text-title" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{icon}</span>
         </div>
         <div>
-          <h3 className="font-bold text-[15px] text-on-surface">{title}</h3>
-          <p className="text-[13px] text-outline leading-relaxed mt-0.5">{desc}</p>
+          <h3 className="font-bold text-body text-on-surface">{title}</h3>
+          <p className="text-label text-outline leading-relaxed mt-0.5">{desc}</p>
         </div>
       </div>
       <div className="flex flex-wrap gap-2.5">{children}</div>

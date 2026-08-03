@@ -20,6 +20,14 @@ export function useCountUp(target: number, duration = 1600) {
           started.current = true;
           obs.unobserve(el);
 
+          // ANIM-04: this is a JS rAF loop, not a CSS animation/transition — the
+          // `prefers-reduced-motion` block in index.css has no way to reach it.
+          // Jump straight to the final value instead of counting up.
+          if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+            setCount(target);
+            return;
+          }
+
           const startTime = performance.now();
           const tick = (now: number) => {
             const elapsed = now - startTime;

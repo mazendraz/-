@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { fetchLegalPages } from "../lib/settings";
 import { isApiConfigured } from "../lib/api";
 import Markdown from "../components/Markdown";
+import Icon from "../components/Icon";
 
 // Terms / Privacy. Content is admin-managed (Settings, Markdown) and fetched on
 // demand. Rendered via a safe React-element Markdown renderer (no raw HTML) — and
@@ -13,7 +14,7 @@ import Markdown from "../components/Markdown";
 export default function LegalPage({ kind }: { kind: "terms" | "privacy" }) {
   const { locale } = useLocale();
   const title = t(locale, kind === "terms" ? "footer_terms" : "footer_privacy");
-  usePageMeta(`${title} | Al Assema`);
+  usePageMeta(`${title} | ${t(locale, "brand_name")}`);
 
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(isApiConfigured());
@@ -29,21 +30,21 @@ export default function LegalPage({ kind }: { kind: "terms" | "privacy" }) {
   }, [kind]);
 
   return (
-    <div className="bg-surface min-h-screen pt-24 pb-16 px-5">
+    <div className="bg-surface min-h-screen pb-16 px-5">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-1.5 text-[13px] font-bold text-outline mb-6 flex-wrap">
+        <div className="flex items-center gap-1.5 text-label font-bold text-outline mb-6 flex-wrap">
           <Link to="/" className="hover:text-primary transition-colors">{t(locale, "nav_home")}</Link>
-          <span className="material-symbols-outlined text-[14px] rtl-flip">chevron_right</span>
+          <Icon name="chevron_right" className="text-label rtl-flip" />
           <span className="text-on-surface">{title}</span>
         </div>
-        <h1 className="font-black text-[28px] md:text-headline-lg text-on-surface mb-6 tracking-tight">{title}</h1>
+        <h1 className="font-black text-headline md:text-display text-on-surface mb-6 tracking-tight">{title}</h1>
 
         {loading ? (
           <div className="w-8 h-8 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
         ) : content && content.trim() ? (
-          <Markdown source={content} className="text-[15px] leading-relaxed text-on-surface-variant" />
+          <Markdown source={content} className="text-body leading-relaxed text-on-surface-variant" />
         ) : (
-          <p className="text-[15px] text-outline">{t(locale, "legal_unpublished")}</p>
+          <p className="text-body text-outline">{t(locale, "legal_unpublished")}</p>
         )}
       </div>
     </div>

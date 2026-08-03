@@ -17,7 +17,10 @@ export const GET = providerOnly(async (_request: NextRequest, _ctx, user) => {
   const company = await prisma.company.findUnique({
     where: { id: user.companyId },
     include: {
-      category: true,
+      categories: {
+        select: { isPrimary: true, category: { select: { slug: true, label: true, pricingMode: true } } },
+        orderBy: { isPrimary: "desc" },
+      },
       projects: true,
       reviews: true,
       // Running or upcoming only — the serializer derives effective availability

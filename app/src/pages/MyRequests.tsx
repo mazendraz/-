@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Modal from "../components/Modal";
 import { formatPrice } from "../lib/pricing";
 import { chatAvailable } from "../lib/chat";
 import { Link } from "react-router-dom";
@@ -12,6 +13,8 @@ import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey, type Locale } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
+import Icon from "../components/Icon";
+import EmptyState from "../components/EmptyState";
 
 const STATUS_STYLE: Record<LeadStatus, { bg: string; text: string; icon: string; labelKey: StringKey }> = {
   New: { bg: "bg-blue-100", text: "text-blue-700", icon: "schedule", labelKey: "requests_status_received" },
@@ -47,8 +50,8 @@ export default function MyRequests() {
     ...myLeads.map((data) => ({ kind: "lead", data }) as const),
     ...myWaitlist.map((data) => ({ kind: "waitlist", data }) as const),
   ].sort((a, b) => b.data.createdAt - a.data.createdAt);
-  usePageMeta("My Requests | Al Assema", "Track your service requests and see their current status.");
   const { locale } = useLocale();
+  usePageMeta(`${t(locale, "meta_myrequests_title")} | ${t(locale, "brand_name")}`, t(locale, "meta_myrequests_desc"));
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<RequestFilter>("All");
   const [reviewing, setReviewing] = useState<Lead | null>(null);
@@ -66,14 +69,14 @@ export default function MyRequests() {
   });
 
   return (
-    <div className="bg-surface min-h-screen pt-20 md:pt-24 pb-16">
+    <div className="bg-surface min-h-screen pb-16">
       <div className="max-w-2xl mx-auto px-5">
 
         {/* Header */}
         <PersonalTabs active="requests" />
         <div className="mb-5">
-          <h1 className="font-black text-[26px] md:text-headline-lg text-on-surface tracking-tight mb-1">{t(locale, "requests_title")}</h1>
-          <p className="text-[14px] text-outline">
+          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-1">{t(locale, "requests_title")}</h1>
+          <p className="text-label text-outline">
             {t(locale, "requests_sub")}
           </p>
         </div>
@@ -85,7 +88,7 @@ export default function MyRequests() {
             <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
               {FILTERS.map((f) => (
                 <button key={f.key} onClick={() => setStatusFilter(f.key)}
-                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-[13px] font-bold transition-colors border ${
+                  className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-label font-bold transition-colors border ${
                     statusFilter === f.key ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-outline-variant"
                   }`}>
                   {t(locale, f.labelKey)}
@@ -96,28 +99,26 @@ export default function MyRequests() {
         )}
 
         {all.length === 0 ? (
-          /* Empty state */
-          <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-10 text-center">
-            <div className="w-16 h-16 rounded-full bg-primary/8 flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-primary text-[34px]">receipt_long</span>
-            </div>
-            <h2 className="font-bold text-[18px] text-on-surface mb-1.5">{t(locale, "requests_empty_title")}</h2>
-            <p className="text-[14px] text-outline mb-6 max-w-xs mx-auto leading-relaxed">
-              {t(locale, "requests_empty_sub")}
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link to="/services" className="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
+            {/* Two CTAs here (browse services / view companies) — EmptyState's
+                `action`/`actionHref` only cover the single-button case, so the
+                shared component supplies the icon/title/body and this one keeps
+                its own footer rather than forcing a second-action prop onto
+                every other call site for one page. */}
+            <EmptyState icon="receipt_long" title={t(locale, "requests_empty_title")} msg={t(locale, "requests_empty_sub")} className="pb-0" />
+            <div className="flex flex-col sm:flex-row gap-3 justify-center pb-10 px-10">
+              <Link to="/services" className="bg-primary text-on-primary px-6 py-3 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press">
                 {t(locale, "nav_browse_services")}
               </Link>
-              <Link to="/companies" className="bg-surface-container text-on-surface px-6 py-3 rounded-xl font-bold text-[14px] hover:bg-surface-container-high transition-colors touch-press">
+              <Link to="/companies" className="bg-surface-container text-on-surface px-6 py-3 rounded-xl font-bold text-label hover:bg-surface-container-high transition-colors touch-press">
                 {t(locale, "common_view_companies")}
               </Link>
             </div>
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-12">
-            <span className="material-symbols-outlined text-outline/50 text-[40px] mb-2 block">search_off</span>
-            <p className="text-[14px] text-outline">{t(locale, "requests_none_match")}</p>
+            <Icon name="search_off" className="text-outline/50 text-[40px] mb-2 block" />
+            <p className="text-label text-outline">{t(locale, "requests_none_match")}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -127,8 +128,8 @@ export default function MyRequests() {
 
             {/* Info note */}
             <div className="flex items-start gap-3 bg-primary/6 border border-primary/18 rounded-xl p-4">
-              <span className="material-symbols-outlined text-primary text-[18px] flex-shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
-              <p className="text-[13px] text-on-surface-variant leading-relaxed">
+              <Icon name="info" className="text-primary text-subhead flex-shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }} />
+              <p className="text-label text-on-surface-variant leading-relaxed">
                 {t(locale, "requests_note")}
               </p>
             </div>
@@ -152,18 +153,18 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
       {/* Top row */}
       <div className="flex items-center gap-3 p-4 border-b border-outline-variant/15">
         {company ? (
-          <img src={company.logo} alt="" className="w-11 h-11 rounded-xl object-cover border border-outline-variant/20 flex-shrink-0" loading="lazy" />
+          <img src={company.logo} alt="" className="w-11 h-11 rounded-xl object-cover border border-outline-variant/20 flex-shrink-0" loading="lazy" width={44} height={44} />
         ) : (
           <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span className="material-symbols-outlined text-primary text-[20px]">business</span>
+            <Icon name="business" className="text-primary text-title" />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-[15px] text-on-surface truncate">{lead.companyName}</p>
-          <p className="text-[12px] text-outline truncate">{lead.service}</p>
+          <p className="font-bold text-body text-on-surface truncate">{lead.companyName}</p>
+          <p className="text-caption text-outline truncate">{lead.service}</p>
         </div>
-        <span className={`flex items-center gap-1 ${st.bg} ${st.text} px-2.5 py-1 rounded-full text-[11px] font-bold flex-shrink-0`}>
-          <span className="material-symbols-outlined text-[13px]">{st.icon}</span>
+        <span className={`flex items-center gap-1 ${st.bg} ${st.text} px-2.5 py-1 rounded-full text-caption font-bold flex-shrink-0`}>
+          <span className="material-symbols-outlined text-label" aria-hidden="true" translate="no">{st.icon}</span>
           {t(locale, st.labelKey)}
         </span>
       </div>
@@ -175,7 +176,7 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
         <div className="px-4 pt-3">
           <div className="rounded-xl bg-surface-container p-3 space-y-1.5">
             {lead.items!.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-2 text-[13px]">
+              <div key={item.id} className="flex items-center justify-between gap-2 text-label">
                 <span className="text-on-surface-variant truncate">
                   {item.nameSnapshot}
                   {item.tierLabel ? ` · ${item.tierLabel}` : ""}
@@ -194,10 +195,10 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
             ))}
 
             <div className="border-t border-outline-variant/20 pt-1.5 mt-1.5 flex items-center justify-between gap-2">
-              <span className="text-[12px] font-bold text-outline">
+              <span className="text-caption font-bold text-outline">
                 {locale === "ar" ? "الإجمالي التقديري" : "Estimated total"}
               </span>
-              <span className="font-display font-black text-[15px] text-on-surface">
+              <span className="font-display font-black text-body text-primary">
                 {lead.estimatedMin == null
                   ? (locale === "ar" ? "يتحدد بعد المعاينة" : "Quoted after inspection")
                   : formatPrice(
@@ -209,14 +210,14 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
             </div>
 
             {(lead.discountPercent ?? 0) > 0 && (
-              <p className="text-[11px] text-primary font-bold">
+              <p className="text-caption text-primary font-bold">
                 {locale === "ar"
                   ? `خصم الباقة ${lead.discountPercent}٪ (على البنود المسعّرة)`
                   : `Bundle discount ${lead.discountPercent}% (on priced items)`}
               </p>
             )}
             {lead.hasOnInspection && (
-              <p className="text-[11px] text-outline">
+              <p className="text-caption text-outline">
                 {locale === "ar" ? "+ بنود تتحدد بعد المعاينة" : "+ items quoted on site"}
               </p>
             )}
@@ -240,9 +241,9 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
         <div className="px-4 pb-1">
           <Link
             to={`/messages?ref=${encodeURIComponent(lead.refNumber)}`}
-            className="w-full flex items-center justify-center gap-2 bg-surface-container text-on-surface py-2.5 rounded-xl font-bold text-[13px] hover:bg-surface-container-high transition-colors touch-press"
+            className="w-full flex items-center justify-center gap-2 bg-surface-container text-on-surface py-2.5 rounded-xl font-bold text-label hover:bg-surface-container-high transition-colors touch-press"
           >
-            <span className="material-symbols-outlined text-[18px]">chat</span>
+            <Icon name="chat" className="text-subhead" />
             {t(locale, "messages_open_conversation")}
           </Link>
         </div>
@@ -254,16 +255,16 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
           {/* Verified-review prompt for completed requests */}
           {lead.status === "Completed" && (
             lead.reviewed ? (
-              <div className="w-full flex items-center justify-center gap-1.5 bg-green-50 text-green-700 py-2.5 rounded-xl text-[13px] font-bold">
-                <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
+              <div className="w-full flex items-center justify-center gap-1.5 bg-green-50 text-green-700 py-2.5 rounded-xl text-label font-bold">
+                <Icon name="verified" className="text-body" style={{ fontVariationSettings: "'FILL' 1" }} />
                 {t(locale, "requests_reviewed")}
               </div>
             ) : (
               <button
                 onClick={() => onReview(lead)}
-                className="w-full flex items-center justify-center gap-1.5 bg-primary text-on-primary hover:bg-primary-container transition-colors py-2.5 rounded-xl text-[13px] font-bold touch-press btn-press"
+                className="w-full flex items-center justify-center gap-1.5 bg-primary text-on-primary hover:bg-primary-container transition-colors py-2.5 rounded-xl text-label font-bold touch-press btn-press"
               >
-                <span className="material-symbols-outlined text-[16px]">rate_review</span>
+                <Icon name="rate_review" className="text-body" />
                 {t(locale, "requests_review_cta")}
               </button>
             )
@@ -271,10 +272,10 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
           {company && (
             <Link
               to={`/companies/${company.slug}`}
-              className="w-full flex items-center justify-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors py-2.5 rounded-xl text-[13px] font-bold text-on-surface touch-press"
+              className="w-full flex items-center justify-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors py-2.5 rounded-xl text-label font-bold text-on-surface touch-press"
             >
               {t(locale, "requests_view")} {company.name}
-              <span className="material-symbols-outlined text-[15px] rtl-flip">arrow_forward</span>
+              <Icon name="arrow_forward" className="text-body rtl-flip" />
             </Link>
           )}
         </div>
@@ -294,20 +295,20 @@ function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: 
     <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden card-lift">
       <div className="flex items-center gap-3 p-4 border-b border-outline-variant/15">
         {company ? (
-          <img src={company.logo} alt="" className="w-11 h-11 rounded-xl object-cover border border-outline-variant/20 flex-shrink-0" loading="lazy" />
+          <img src={company.logo} alt="" className="w-11 h-11 rounded-xl object-cover border border-outline-variant/20 flex-shrink-0" loading="lazy" width={44} height={44} />
         ) : (
           <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span className="material-symbols-outlined text-primary text-[20px]">business</span>
+            <Icon name="business" className="text-primary text-title" />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-[15px] text-on-surface truncate">{entry.companyName}</p>
-          <p className="text-[12px] text-amber-700 font-bold truncate flex items-center gap-1">
-            <span className="material-symbols-outlined text-[13px]" style={{ fontVariationSettings: "'FILL' 1" }}>hourglass_top</span>
+          <p className="font-bold text-body text-on-surface truncate">{entry.companyName}</p>
+          <p className="text-caption text-amber-700 font-bold truncate flex items-center gap-1">
+            <Icon name="hourglass_top" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} />
             {t(locale, "common_kind_waitlist")}
           </p>
         </div>
-        <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold flex-shrink-0 ${WAITLIST_STATUS_COLORS[entry.status]}`}>
+        <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-caption font-bold flex-shrink-0 ${WAITLIST_STATUS_COLORS[entry.status]}`}>
           {t(locale, WAITLIST_STATUS_KEYS[entry.status])}
         </span>
       </div>
@@ -318,7 +319,7 @@ function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: 
       </div>
       {entry.note && (
         <div className="px-4 pb-4">
-          <p className="text-[13px] text-on-surface-variant bg-surface-container rounded-xl p-3 leading-relaxed">{entry.note}</p>
+          <p className="text-label text-on-surface-variant bg-surface-container rounded-xl p-3 leading-relaxed">{entry.note}</p>
         </div>
       )}
 
@@ -326,10 +327,10 @@ function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: 
         <div className="px-4 pb-4">
           <Link
             to={`/companies/${company.slug}`}
-            className="w-full flex items-center justify-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors py-2.5 rounded-xl text-[13px] font-bold text-on-surface touch-press"
+            className="w-full flex items-center justify-center gap-1.5 bg-surface-container hover:bg-surface-container-high transition-colors py-2.5 rounded-xl text-label font-bold text-on-surface touch-press"
           >
             {t(locale, "requests_view")} {company.name}
-            <span className="material-symbols-outlined text-[15px] rtl-flip">arrow_forward</span>
+            <Icon name="arrow_forward" className="text-body rtl-flip" />
           </Link>
         </div>
       )}
@@ -368,45 +369,43 @@ function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" role="dialog" aria-modal>
-      <div className="bg-surface-container-lowest w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl p-6">
+    <Modal onClose={onClose} ariaLabel={t(locale, "lead_review_title")} panelClassName="p-6">
         {done ? (
           <div className="text-center py-6">
             <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-green-600 text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>check_circle</span>
+              <Icon name="check_circle" className="text-green-600 text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }} />
             </div>
-            <p className="font-bold text-[17px] text-on-surface">{t(locale, "lead_review_thanks")}</p>
+            <p className="font-bold text-subhead text-on-surface">{t(locale, "lead_review_thanks")}</p>
           </div>
         ) : (
           <>
             <div className="flex items-start justify-between gap-3 mb-1">
-              <h2 className="font-bold text-[18px] text-on-surface">{t(locale, "lead_review_title")}</h2>
-              <button onClick={onClose} className="p-1.5 -mr-1.5 rounded-lg hover:bg-surface-container transition-colors">
-                <span className="material-symbols-outlined text-outline">close</span>
+              <h2 className="font-bold text-subhead text-on-surface">{t(locale, "lead_review_title")}</h2>
+              <button onClick={onClose} aria-label={t(locale, "common_close")} className="w-11 h-11 -m-2.5 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors">
+                <Icon name="close" className="text-outline" />
               </button>
             </div>
-            <p className="text-[13px] text-outline mb-1">{lead.companyName}</p>
-            <p className="text-[13px] text-on-surface-variant mb-5">{t(locale, "lead_review_sub")}</p>
+            <p className="text-label text-outline mb-1">{lead.companyName}</p>
+            <p className="text-label text-on-surface-variant mb-5">{t(locale, "lead_review_sub")}</p>
 
-            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "lead_review_rating")}</label>
+            <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "lead_review_rating")}</label>
             <div className="flex items-center gap-1 mb-5" onMouseLeave={() => setHover(0)}>
               {[1, 2, 3, 4, 5].map((i) => (
                 <button key={i} type="button" onClick={() => setRating(i)} onMouseEnter={() => setHover(i)}
                   className="p-0.5 touch-press" aria-label={`${i} star${i > 1 ? "s" : ""}`}>
-                  <span className="material-symbols-outlined text-secondary text-[32px]"
-                    style={{ fontVariationSettings: i <= (hover || rating) ? "'FILL' 1" : "'FILL' 0" }}>star</span>
+                  <Icon name="star" className="text-secondary text-headline" style={{ fontVariationSettings: i <= (hover || rating) ? "'FILL' 1" : "'FILL' 0" }} />
                 </button>
               ))}
             </div>
 
-            <label className="block text-[13px] font-bold text-on-surface mb-1.5">{t(locale, "lead_review_text_label")}</label>
+            <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "lead_review_text_label")}</label>
             <textarea
               className="field-input resize-none w-full" rows={4} maxLength={2000}
               value={text} onChange={(e) => setText(e.target.value)}
               placeholder={t(locale, "lead_review_text_ph")}
             />
 
-            {error && <p className="text-[13px] text-error font-medium bg-error/8 rounded-lg px-3 py-2 mt-3">{error}</p>}
+            {error && <p className="text-label text-error font-medium bg-error/8 rounded-lg px-3 py-2 mt-3">{error}</p>}
 
             <div className="mt-4">
               <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
@@ -414,24 +413,23 @@ function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar
 
             <button
               onClick={submit} disabled={busy || rating < 1 || !text.trim()}
-              className="w-full mt-5 bg-primary text-on-primary py-3 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full mt-5 bg-primary text-on-primary py-3 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy ? t(locale, "lead_review_submitting") : t(locale, "lead_review_submit")}
             </button>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 
 function Detail({ icon, label, val, mono }: { icon: string; label: string; val: string; mono?: boolean }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className="material-symbols-outlined text-outline text-[16px] flex-shrink-0">{icon}</span>
+      <span className="material-symbols-outlined text-outline text-body flex-shrink-0" aria-hidden="true" translate="no">{icon}</span>
       <div className="min-w-0">
-        <p className="text-[10px] text-outline uppercase tracking-wider font-bold leading-none mb-0.5">{label}</p>
-        <p className={`text-[13px] text-on-surface font-bold truncate ${mono ? "font-mono" : ""}`}>{val}</p>
+        <p className="text-caption text-outline ltr:uppercase ltr:tracking-wider font-bold leading-none mb-0.5">{label}</p>
+        <p className={`text-label text-on-surface font-bold truncate ${mono ? "font-mono" : ""}`}>{val}</p>
       </div>
     </div>
   );

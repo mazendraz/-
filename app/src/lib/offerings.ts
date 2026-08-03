@@ -108,6 +108,40 @@ export function createBundleRule(input: {
   return apiPost<BundleRule>("/provider/bundle-rules", input);
 }
 
+// ── Admin ────────────────────────────────────────────────────────────────────
+// Straight through, published immediately — no draft/review dance (the admin
+// IS the reviewer). Same category pricing-mode gate as the provider path
+// applies server-side (offerings.service.ts assertCatalogEnabled); this panel
+// is only ever shown for a company whose category already allows it.
+
+export function listCompanyOfferings(companyId: string): Promise<Offering[]> {
+  return apiGet<Offering[]>(`/admin/companies/${companyId}/offerings`);
+}
+
+export function adminCreateOffering(companyId: string, input: OfferingInput): Promise<Offering> {
+  return apiPost<Offering>(`/admin/companies/${companyId}/offerings`, input);
+}
+
+export function adminUpdateOffering(
+  companyId: string,
+  id: string,
+  patch: Partial<OfferingInput>,
+): Promise<Offering> {
+  return apiPatch<Offering>(`/admin/companies/${companyId}/offerings/${id}`, patch);
+}
+
+export function adminDeleteOffering(companyId: string, id: string): Promise<void> {
+  return apiDelete(`/admin/companies/${companyId}/offerings/${id}`);
+}
+
+export function adminSetOfferingVisibility(
+  companyId: string,
+  id: string,
+  patch: { isActive?: boolean; sortOrder?: number },
+): Promise<Offering> {
+  return apiPatch<Offering>(`/admin/companies/${companyId}/offerings/${id}/visibility`, patch);
+}
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 export function useOfferings() {

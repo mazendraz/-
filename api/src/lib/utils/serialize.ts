@@ -140,8 +140,16 @@ export function leadStatusFromLabel(label: ApiLeadStatus): LeadStatus {
 
 // ── Relation-augmented row types ──────────────────────────────────────────────
 
+// One CompanyCategory junction row as loaded for serialization — the category
+// it points to, plus whether this is the company's one primary link (see
+// schema.prisma CompanyCategory for the one-primary-per-company invariant).
+export type CompanyCategoryLink = {
+  isPrimary: boolean;
+  category: Pick<Category, "slug" | "label" | "pricingMode">;
+};
+
 export type CompanyWithRelations = Company & {
-  category: Pick<Category, "slug" | "label">;
+  categories: CompanyCategoryLink[];
   projects: Project[];
   reviews: Review[];
   // Required for the same reason as on CompanyCardRow — see the note there.
@@ -224,23 +232,34 @@ export function serializeCategory(c: Category, count: number): ApiCategory {
     icon: c.icon,
     cover: c.cover ?? "",
     count,
+    pricingMode: c.pricingMode,
     metaTitle: c.metaTitle ?? null,
     metaDescription: c.metaDescription ?? null,
   };
 }
 
-/** Admin view — adds id + isActive to the public category shape. */
+/**
+ * Admin view — adds id + isActive to the public category shape, plus how many
+ * of its companies currently have a published Offering (see
+ * ApiAdminCategory.publishedOfferingCompanyCount for why).
+ */
 export function serializeCategoryAdmin(
   c: Category,
   count: number,
+  publishedOfferingCompanyCount: number,
 ): ApiAdminCategory {
-  return { id: c.id, isActive: c.isActive, ...serializeCategory(c, count) };
+  return {
+    id: c.id,
+    isActive: c.isActive,
+    publishedOfferingCompanyCount,
+    ...serializeCategory(c, count),
+  };
 }
 
-// Company row with only the category relation (no projects/reviews) — the shape
-// the list/card serializer needs.
+// Company row with only the categories relation (no projects/reviews) — the
+// shape the list/card serializer needs.
 export type CompanyCardRow = Company & {
-  category: Pick<Category, "slug" | "label">;
+  categories: CompanyCategoryLink[];
   // REQUIRED, not optional. Same reason isEffectivelyBusy takes a mandatory
   // parameter: an optional field with a `?? []` fallback would let a query that
   // forgot to load the windows compile fine and quietly report a busy company as
@@ -250,9 +269,17 @@ export type CompanyCardRow = Company & {
   busyWindows: BusyWindow[];
 };
 
-// Scalar + category fields shared by the card and full serializers.
+// Scalar + category fields shared by the card and full serializers. A company
+// may belong to several categories (see CompanyCategory) — `category`/
+// `categoryLabel`/`categoryPricingMode` are the PRIMARY one (what every single-
+// value display spot shows), and `categories` carries the full membership for
+// editors and anything that needs it.
 function companyScalars(c: CompanyCardRow) {
   const windows = c.busyWindows;
+  // The DB guarantees exactly one isPrimary=true row per company (partial unique
+  // index); the `?? c.categories[0]` fallback only guards a malformed test
+  // fixture that forgot to mark one, never a real row.
+  const primary = c.categories.find((cc) => cc.isPrimary) ?? c.categories[0];
   return {
     id: c.id,
     slug: c.slug,
@@ -261,8 +288,15 @@ function companyScalars(c: CompanyCardRow) {
     about: c.about,
     logo: c.logo,
     cover: c.cover,
-    category: c.category.slug,
-    categoryLabel: c.category.label,
+    category: primary.category.slug,
+    categoryLabel: primary.category.label,
+    categoryPricingMode: primary.category.pricingMode,
+    categories: c.categories.map((cc) => ({
+      slug: cc.category.slug,
+      label: cc.category.label,
+      pricingMode: cc.category.pricingMode,
+      isPrimary: cc.isPrimary,
+    })),
     services: c.services,
     rating: c.rating,
     reviewCount: c.reviewCount,
@@ -345,6 +379,7 @@ export function serializeWaitlistEntry(e: WaitlistEntryWithCompany): ApiWaitlist
     note: e.note ?? null,
     status: e.status,
     createdAt: toEpochMs(e.createdAt),
+    convertedLeadId: e.convertedLeadId ?? null,
   };
 }
 

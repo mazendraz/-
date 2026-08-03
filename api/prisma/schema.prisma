@@ -63,22 +63,38 @@ enum WaitlistStatus {
   CANCELLED
 }
 
+// Phase 9 — whether a category's companies may run a priced Offering catalog.
+// An enum, not a boolean: a future third mode (e.g. "provider's choice") adds a
+// value without touching the shape of existing data, where a boolean would need
+// a fresh migration if that need ever came up.
+//   QUOTE_ONLY    — default for every existing category. No catalog; the
+//                   customer requests and the price is agreed directly.
+//   FIXED_CATALOG — companies in the category may publish priced Offerings.
+enum CategoryPricingMode {
+  QUOTE_ONLY
+  FIXED_CATALOG
+}
+
 model Category {
-  id              String   @id @default(uuid())
-  slug            String   @unique
+  id              String              @id @default(uuid())
+  slug            String              @unique
   label           String // the frontend calls it label, not name
-  description     String   @db.Text
+  description     String              @db.Text
   icon            String // Material Symbols icon name
   cover           String? // ApiCategory.cover — category cover image
-  isActive        Boolean  @default(true)
+  isActive        Boolean             @default(true)
+  // Default QUOTE_ONLY on every existing row — zero behavior change on deploy.
+  // The real enforcement lives in offerings.service.ts (assertCatalogEnabled),
+  // not just in what the admin UI shows — see that file for why.
+  pricingMode     CategoryPricingMode @default(QUOTE_ONLY)
   // Optional per-page SEO overrides (admin-set). Null → frontend falls back to
   // the label/description-derived defaults.
   metaTitle       String?
   metaDescription String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
-  companies Company[]
+  companies CompanyCategory[]
 
   // count in the frontend = number of ACTIVE companies, computed live (not stored).
 
@@ -86,9 +102,36 @@ model Category {
   @@index([isActive])
 }
 
+// A company may belong to multiple categories/services (e.g. a company that does
+// both Interior Finishing and Landscaping) — this is the many-to-many junction.
+// Every company has EXACTLY ONE isPrimary=true row at all times, enforced by a
+// partial unique index (company_category_one_primary, hand-written SQL — Prisma's
+// schema language can't express a WHERE clause on an index; same technique as
+// change_request_one_pending below). The primary category is what every existing
+// single-value display spot (company card badge, featured-project card, profile
+// page, search result label) shows — see serialize.ts companyScalars. Category
+// PAGE listings and the Offerings pricing-catalog gate, by contrast, consider
+// every linked category, not just the primary (see companies.service.ts buildWhere
+// and offerings.service.ts assertCatalogEnabled).
+model CompanyCategory {
+  id         String   @id @default(uuid())
+  companyId  String
+  categoryId String
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, categoryId])
+  // Serves category → companies (public listing, live counts).
+  @@index([categoryId])
+  // Serves company → categories (editors, catalog gate, primary lookup).
+  @@index([companyId])
+}
+
 model Company {
   id                  String        @id @default(uuid())
-  categoryId          String
   slug                String        @unique
   name                String
   tagline             String // short one-liner
@@ -143,7 +186,7 @@ model Company {
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
-  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  categories     CompanyCategory[]
   projects       Project[]
   reviews        Review[]
   leads          Lead[]
@@ -157,7 +200,6 @@ model Company {
   conversations  Conversation[]
 
   @@index([slug])
-  @@index([categoryId])
   @@index([status])
   @@index([featured])
 }
@@ -174,8 +216,16 @@ model WaitlistEntry {
   note      String?        @db.Text
   status    WaitlistStatus @default(WAITING)
   createdAt DateTime       @default(now()) // returned as epoch ms in the API
+  // Set exactly once, when an accept (status -> CONVERTED) creates the real Lead
+  // this entry became — see waitlist.service.ts convertToLead. @unique makes the
+  // conversion idempotent (a second accept reuses this instead of creating another
+  // Lead) and lets the API/UI drop this entry from the CRM pipeline view once it
+  // has a Lead of its own to appear as instead. SetNull (not Cascade) so deleting
+  // the resulting Lead doesn't also delete this history row.
+  convertedLeadId String? @unique
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  convertedLead Lead?   @relation(fields: [convertedLeadId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
   // Serves the provider/admin waitlist list: WHERE companyId=? [AND status=?]
@@ -276,6 +326,9 @@ model Lead {
   review       Review?
   items        LeadItem[]
   conversation Conversation?
+  // Back-relation for WaitlistEntry.convertedLeadId — the waitlist entry this lead
+  // was accepted from, if any. Absent for a lead created the normal way.
+  waitlistEntry WaitlistEntry?
 
   @@index([companyId])
   @@index([status])
@@ -295,6 +348,13 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // Self-service Telegram link, same mechanism as Company's (see telegram.service
+  // createAdminLinkUrl/linkAdminByToken). Lets any ADMIN user connect their own
+  // Telegram from the dashboard instead of the whole platform sharing one chat id
+  // hardcoded in TELEGRAM_ADMIN_CHAT_ID. PROVIDER rows never populate these.
+  telegramChatId      String?
+  telegramLinkToken   String?   @unique
+  telegramLinkExpires DateTime?
 
   company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   pushSubscriptions PushSubscription[]

@@ -6,18 +6,20 @@ import {
   createTelegramLink,
   disconnectTelegram,
   type TelegramStatus,
+  type TelegramScope,
 } from "../lib/telegram";
 
 /**
- * "Connect Telegram" control for the provider dashboard. Mirrors NotificationToggle:
- * self-contained, reads its state on mount, renders nothing when the server has no
- * Telegram configured.
+ * "Connect Telegram" control, shared by the provider dashboard (links the
+ * company) and the admin settings page (links that admin's own account) — pass
+ * `scope` to pick which. Mirrors NotificationToggle: self-contained, reads its
+ * state on mount, renders nothing when the server has no Telegram configured.
  *
  * Connecting happens in the Telegram app, not here — so after opening the deep link
- * we poll for the linked state rather than leaving the provider staring at a button
+ * we poll for the linked state rather than leaving the caller staring at a button
  * that never changes.
  */
-export default function TelegramConnect() {
+export default function TelegramConnect({ scope = "provider" }: { scope?: TelegramScope }) {
   const { locale } = useLocale();
   const [status, setStatus] = useState<TelegramStatus | "loading">("loading");
   const [busy, setBusy] = useState(false);
@@ -35,20 +37,20 @@ export default function TelegramConnect() {
 
   useEffect(() => {
     let alive = true;
-    getTelegramStatus()
+    getTelegramStatus(scope)
       .then((s) => alive && setStatus(s))
       .catch(() => alive && setStatus({ configured: false, linked: false }));
     return () => {
       alive = false;
       stopPolling();
     };
-  }, [stopPolling]);
+  }, [scope, stopPolling]);
 
   async function connect() {
     setBusy(true);
     setError(null);
     try {
-      const url = await createTelegramLink();
+      const url = await createTelegramLink(scope);
       if (!url) {
         setError("Telegram isn't configured on the server yet.");
         return;
@@ -66,7 +68,7 @@ export default function TelegramConnect() {
           return;
         }
         try {
-          const next = await getTelegramStatus();
+          const next = await getTelegramStatus(scope);
           if (next.linked) {
             setStatus(next);
             stopPolling();
@@ -87,7 +89,7 @@ export default function TelegramConnect() {
     setError(null);
     stopPolling();
     try {
-      setStatus(await disconnectTelegram());
+      setStatus(await disconnectTelegram(scope));
     } catch {
       setError(t(locale, "prov_tg_err_disconnect"));
     } finally {
@@ -103,7 +105,7 @@ export default function TelegramConnect() {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3">
-        <span className="material-symbols-outlined text-primary">
+        <span className="material-symbols-outlined text-primary" aria-hidden="true" translate="no">
           {linked ? "chat" : "send"}
         </span>
         <div className="flex-1">
@@ -118,7 +120,7 @@ export default function TelegramConnect() {
           type="button"
           onClick={linked ? disconnect : connect}
           disabled={busy}
-          className={`px-4 py-2 rounded-full font-label-md text-label-md transition disabled:opacity-50 ${
+          className={`px-4 py-2 rounded-full text-label transition disabled:opacity-50 ${
             linked
               ? "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
               : "bg-primary text-on-primary hover:opacity-90"

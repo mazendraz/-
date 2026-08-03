@@ -5,6 +5,7 @@ import {
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { intlLocale } from "../lib/format";
+import Icon from "./Icon";
 
 /**
  * The conversation view, shared by all three surfaces.
@@ -180,7 +181,7 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
   return (
     <div className={`flex flex-col ${className ?? "h-[26rem]"}`}>
       {error && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-3 py-2 text-[12px] font-bold mb-2">
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-3 py-2 text-caption font-bold mb-2">
           {error}
         </div>
       )}
@@ -196,7 +197,7 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
             <div className="w-6 h-6 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
           </div>
         ) : messages.length === 0 ? (
-          <p className="text-[13px] text-outline text-center py-8">
+          <p className="text-label text-outline text-center py-8">
             {t(locale, "chat_empty")}
           </p>
         ) : (
@@ -215,14 +216,14 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
                   } ${m.hidden ? "opacity-50 line-through" : ""}`}
                 >
                   {(admin || viewer === "admin") && (
-                    <p className={`text-[10px] font-bold mb-0.5 ${mine && !admin ? "opacity-80" : "text-outline"}`}>
+                    <p className={`text-caption font-bold mb-0.5 ${mine && !admin ? "opacity-80" : "text-outline"}`}>
                       {senderLabel(m)}
                       {m.hidden ? ` · ${t(locale, "chat_hidden")}` : ""}
                     </p>
                   )}
                   <p className="text-[13.5px] leading-relaxed whitespace-pre-wrap break-words">{m.body}</p>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className={`text-[10px] ${mine && !admin ? "opacity-70" : "text-outline"}`}>
+                    <span className={`text-caption ${mine && !admin ? "opacity-70" : "text-outline"}`}>
                       {new Date(m.createdAt).toLocaleString(intlLocale(locale), {
                         month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
                       })}
@@ -237,7 +238,7 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
                               setError(t(locale, "chat_err_moderate"));
                             });
                         }}
-                        className="text-[10px] font-bold text-outline hover:text-error transition-colors"
+                        className="text-caption font-bold text-outline hover:text-error transition-colors"
                       >
                         {t(locale, m.hidden ? "chat_unhide" : "chat_hide")}
                       </button>
@@ -251,7 +252,7 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
       </div>
 
       {closed ? (
-        <p className="text-[12px] text-outline bg-surface-container rounded-xl px-3 py-2.5 mt-2 text-center">
+        <p className="text-caption text-outline bg-surface-container rounded-xl px-3 py-2.5 mt-2 text-center">
           {t(locale, "chat_closed")}
         </p>
       ) : (
@@ -273,7 +274,7 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
             className="flex items-center justify-center bg-primary text-on-primary w-11 h-11 rounded-xl hover:bg-primary-container transition-colors disabled:opacity-40 flex-shrink-0"
             aria-label={t(locale, "chat_send")}
           >
-            <span className="material-symbols-outlined text-[20px] rtl-flip">send</span>
+            <Icon name="send" className="text-title rtl-flip" />
           </button>
         </form>
       )}

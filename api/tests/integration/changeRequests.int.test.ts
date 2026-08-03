@@ -44,7 +44,7 @@ beforeAll(async () => {
 
   const company = await prisma.company.create({
     data: {
-      categoryId, slug, name: "Original Name", tagline: "Original tagline",
+      categories: { create: [{ categoryId, isPrimary: true }] }, slug, name: "Original Name", tagline: "Original tagline",
       about: "Original about", logo: "/img/l.jpg", cover: "/img/c.jpg",
       services: ["S1"], gallery: ["/img/g1.jpg"], badges: ["Licensed"],
       phone: "0100000000", location: "New Capital", yearsExperience: 5,

@@ -13,6 +13,10 @@ import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type { Company, ServiceCategory, Project, Review };
 
+// Mirrors api/src/lib/validation/companies.ts MAX_CATEGORIES_PER_COMPANY — the
+// "no max unless configured" config point. Keep both in sync if it changes.
+export const MAX_CATEGORIES_PER_COMPANY = 5;
+
 // ── Storage keys ────────────────────────────────────────────────────────────
 const COMPANIES_KEY = "al-assema-companies";
 const CATEGORIES_KEY = "al-assema-categories";
@@ -148,10 +152,18 @@ function categoryIdForSlug(slug: string): string | null {
   return cat?.id ?? null;
 }
 
+// Same lookup for a whole selection — drops any slug that no longer resolves
+// to a known category (same defensive posture as the single-slug lookup).
+function categoryIdsForSlugs(slugs: string[]): string[] {
+  return slugs.map(categoryIdForSlug).filter((id): id is string => id !== null);
+}
+
 // Map a CompanyDraft/Company to the admin upsert payload (projects replace-all).
 function companyPayload(c: CompanyDraft): Record<string, unknown> {
+  const primary = c.categories.find((cc) => cc.isPrimary) ?? c.categories[0];
   return {
-    categoryId: categoryIdForSlug(c.category),
+    categoryIds: categoryIdsForSlugs(c.categories.map((cc) => cc.slug)),
+    primaryCategoryId: primary ? categoryIdForSlug(primary.slug) : undefined,
     name: c.name,
     tagline: c.tagline,
     about: c.about,
@@ -222,7 +234,7 @@ export function getCompany(slug: string): Company | undefined {
 }
 
 export function getCompaniesInCategory(categorySlug: string): Company[] {
-  return getCompanies().filter((c) => c.category === categorySlug);
+  return getCompanies().filter((c) => c.categories.some((cc) => cc.slug === categorySlug));
 }
 
 // ── Companies: write ────────────────────────────────────────────────────────
@@ -237,6 +249,7 @@ const EMPTY_COMPANY: CompanyDraft = {
   cover: "",
   category: "",
   categoryLabel: "",
+  categories: [],
   services: [],
   rating: 5,
   reviewCount: 0,
@@ -387,7 +400,7 @@ export function getCategoriesWithCounts(): ServiceCategory[] {
   const companies = getCompanies();
   return categories.map((cat) => ({
     ...cat,
-    count: companies.filter((c) => c.category === cat.slug).length,
+    count: companies.filter((c) => c.categories.some((cc) => cc.slug === cat.slug)).length,
   }));
 }
 
@@ -402,6 +415,7 @@ export function addCategory(cat: Omit<ServiceCategory, "count">): ServiceCategor
       description: cat.description,
       icon: cat.icon,
       cover: cat.cover || undefined,
+      pricingMode: cat.pricingMode,
       metaTitle: cat.metaTitle?.trim() || undefined,
       metaDescription: cat.metaDescription?.trim() || undefined,
     })
@@ -421,6 +435,7 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
         description: patch.description,
         icon: patch.icon,
         cover: patch.cover || undefined,
+        pricingMode: patch.pricingMode,
         metaTitle: patch.metaTitle?.trim() || undefined,
         metaDescription: patch.metaDescription?.trim() || undefined,
       })
@@ -430,17 +445,43 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
   }
 }
 
-export async function deleteCategory(slug: string, cascade = false): Promise<void> {
+/**
+ * Deleting a category NEVER deletes a company — a company can belong to
+ * several categories, so this only removes that one link. Mirrors
+ * categories.service.ts remove(): if any company would be left with zero
+ * categories, the delete is refused (thrown before anything is written, same
+ * as the API's 409) rather than silently orphaning it.
+ */
+export async function deleteCategory(slug: string): Promise<void> {
+  const orphaned = getCompanies().filter(
+    (c) => c.categories.length === 1 && c.categories[0].slug === slug,
+  );
+  if (orphaned.length > 0) {
+    throw new Error(
+      `Cannot delete category: ${orphaned.length} compan${orphaned.length === 1 ? "y" : "ies"} ` +
+        `would be left with no category (${orphaned.map((c) => c.name).join(", ")}). Reassign them first.`,
+    );
+  }
+
   const id = isAdminSession() ? categoryIdForSlug(slug) : null;
   writeCategories(getCategories().filter((c) => c.slug !== slug)); // optimistic
-  // When cascading, also drop the category's companies locally so the UI doesn't
-  // flash stale rows before the server re-sync lands.
-  if (cascade) writeCompanies(getCompanies().filter((c) => c.category !== slug));
+  // Every affected company just loses this one link; promote another category
+  // to primary if this was it (the orphan check above guarantees one remains).
+  writeCompanies(
+    getCompanies().map((c) => {
+      if (!c.categories.some((cc) => cc.slug === slug)) return c;
+      const wasPrimary = c.categories.find((cc) => cc.slug === slug)?.isPrimary ?? false;
+      const rest = c.categories.filter((cc) => cc.slug !== slug);
+      if (wasPrimary && rest.length > 0) rest[0] = { ...rest[0], isPrimary: true };
+      const primary = rest.find((cc) => cc.isPrimary) ?? rest[0];
+      return { ...c, categories: rest, category: primary?.slug ?? "", categoryLabel: primary?.label ?? "" };
+    }),
+  );
   if (id) {
-    // Without cascade the API returns 409 if the category still has companies;
-    // the error propagates to the caller and the re-sync restores the rows.
+    // The API applies the same orphan check server-side; a rejection here
+    // propagates to the caller and the re-sync restores the optimistic rows.
     try {
-      await apiDelete(`/admin/categories/${id}${cascade ? "?cascade=true" : ""}`);
+      await apiDelete(`/admin/categories/${id}`);
     } finally {
       refreshCatalogFromApi();
     }

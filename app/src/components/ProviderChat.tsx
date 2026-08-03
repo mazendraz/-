@@ -8,6 +8,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import ChatThread from "./ChatThread";
 import ConversationListItem from "./ConversationListItem";
+import Icon from "./Icon";
 
 /**
  * The provider's Messages tab: thread list on the left, conversation on the
@@ -52,8 +53,8 @@ export default function ProviderChat() {
   if (!isApiConfigured()) {
     return (
       <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-start gap-3">
-        <span className="material-symbols-outlined text-primary text-[20px] flex-shrink-0 mt-0.5">info</span>
-        <p className="text-body-md text-on-surface-variant text-sm">
+        <Icon name="info" className="text-primary text-title flex-shrink-0 mt-0.5" />
+        <p className="text-sm text-on-surface-variant">
           {t(locale, "prov_chat_needs_api")}
         </p>
       </div>
@@ -71,7 +72,7 @@ export default function ProviderChat() {
   return (
     <div className="max-w-5xl">
       {errorText && (
-        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-[13px] font-bold mb-3">{errorText}</div>
+        <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold mb-3">{errorText}</div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-[18rem_1fr] gap-4">
@@ -79,8 +80,8 @@ export default function ProviderChat() {
         <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
           {items.length === 0 ? (
             <div className="text-center py-12 px-5">
-              <span className="material-symbols-outlined text-outline text-[40px] mb-2 block">forum</span>
-              <p className="text-[13px] text-outline">
+              <Icon name="forum" className="text-outline text-[40px] mb-2 block" />
+              <p className="text-label text-outline">
                 {t(locale, "prov_chat_empty")}
               </p>
             </div>
@@ -117,7 +118,7 @@ export default function ProviderChat() {
             />
           ) : (
             <div className="flex items-center justify-center h-[28rem]">
-              <p className="text-[13px] text-outline">
+              <p className="text-label text-outline">
                 {t(locale, "prov_chat_pick")}
               </p>
             </div>

@@ -11,9 +11,12 @@ import {
   KpiCard, ChartCard, AreaLineChart, DonutChart, FunnelChart, BarList,
 } from "../../components/Charts";
 import { useLocale } from "../../context/LocaleContext";
-import { t } from "../../lib/i18n";
+import { t, tCount } from "../../lib/i18n";
 import { formatDate } from "../../lib/format";
 import { LEAD_STATUS_KEYS } from "../../lib/requests";
+import Icon from "../../components/Icon";
+import EmptyState from "../../components/EmptyState";
+import { CHART_COLORS } from "../../lib/chartColors";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ADMIN OVERVIEW — analytics command center
@@ -79,22 +82,16 @@ export function AdminOverview({
 
   if (total === 0) {
     return (
-      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-12 text-center max-w-lg mx-auto mt-6">
-        <div className="w-16 h-16 rounded-full bg-primary/8 flex items-center justify-center mx-auto mb-4">
-          <span className="material-symbols-outlined text-primary text-[34px]">monitoring</span>
-        </div>
-        <h2 className="font-bold text-[18px] text-on-surface mb-1.5">{t(locale, "admin_ov_empty_title")}</h2>
-        <p className="text-[14px] text-outline mb-6 leading-relaxed">
-          {t(locale, "admin_ov_empty_body")}
-        </p>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-bloom max-w-lg mx-auto mt-6">
         {/* The demo loader only exists in demo mode — Settings hides it entirely
             once the API is configured. Offering it on a live install sent the
             admin to a screen with no such button. */}
-        {!apiMode && (
-          <button onClick={onGoSettings} className="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press">
-            <span className="material-symbols-outlined text-[18px]">science</span> {t(locale, "admin_ov_load_demo")}
-          </button>
-        )}
+        <EmptyState
+          icon="monitoring"
+          title={t(locale, "admin_ov_empty_title")}
+          msg={t(locale, "admin_ov_empty_body")}
+          action={apiMode ? undefined : { label: t(locale, "admin_ov_load_demo"), onClick: onGoSettings }}
+        />
       </div>
     );
   }
@@ -103,10 +100,10 @@ export function AdminOverview({
     <div className="space-y-5">
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon="inbox" label={t(locale, "admin_ov_kpi_total")} value={total} delta={delta} spark={spark} tint="#005578" />
-        <KpiCard icon="fiber_new" label={t(locale, "admin_ov_kpi_new")} value={newCount} tint="#2563eb" />
-        <KpiCard icon="trending_up" label={t(locale, "admin_ov_kpi_conversion")} value={`${conversion}%`} tint="#16a34a" />
-        <KpiCard icon="business" label={t(locale, "admin_ov_kpi_companies")} value={companyTotal} tint="#785a02" />
+        <KpiCard icon="inbox" label={t(locale, "admin_ov_kpi_total")} value={total} delta={delta} spark={spark} tint={CHART_COLORS.primary} />
+        <KpiCard icon="fiber_new" label={t(locale, "admin_ov_kpi_new")} value={newCount} tint={CHART_COLORS.blue} />
+        <KpiCard icon="trending_up" label={t(locale, "admin_ov_kpi_conversion")} value={`${conversion}%`} tint={CHART_COLORS.green} />
+        <KpiCard icon="business" label={t(locale, "admin_ov_kpi_companies")} value={companyTotal} tint={CHART_COLORS.secondary} />
       </div>
 
       {/* Trend + status */}
@@ -135,36 +132,39 @@ export function AdminOverview({
           <div className="space-y-1">
             {leaderboard.slice(0, 5).map((p, i) => (
               <div key={p.companyId} className="flex items-center gap-3 py-2 border-b border-outline-variant/10 last:border-0">
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-black flex-shrink-0
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-caption font-black flex-shrink-0
                   ${i === 0 ? "bg-secondary text-on-secondary" : "bg-surface-container text-outline"}`}>{i + 1}</span>
-                <img src={p.logo} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" loading="lazy" />
+                <img src={p.logo} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" loading="lazy" width={32} height={32} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[13px] text-on-surface truncate">{p.companyName}</p>
-                  <p className="text-[11px] text-outline">★ {p.rating} · {p.conversion}% {t(locale, "admin_ov_conversion_suffix")}</p>
+                  <p className="font-bold text-label text-on-surface truncate">{p.companyName}</p>
+                  <p className="text-caption text-outline">★ {p.rating} · {p.conversion}% {t(locale, "admin_ov_conversion_suffix")}</p>
                 </div>
-                <span className="font-black text-[15px] text-on-surface tabular-nums flex-shrink-0">{p.leads}</span>
+                <span className="font-black text-body text-on-surface tabular-nums flex-shrink-0">{p.leads}</span>
               </div>
             ))}
           </div>
         </ChartCard>
 
-        <ChartCard title={t(locale, "admin_ov_recent")} action={<button onClick={onViewAllLeads} className="text-[13px] font-bold text-primary hover:underline">{t(locale, "admin_ov_view_all")}</button>}>
+        <ChartCard title={t(locale, "admin_ov_recent")} action={<button onClick={onViewAllLeads} className="text-label font-bold text-primary hover:underline">{t(locale, "admin_ov_view_all")}</button>}>
           <div className="space-y-1">
             {leads.slice(0, 6).map((l) => (
-              <button key={l.id} onClick={() => onOpenLead(l)} className="w-full flex items-center gap-3 py-2 border-b border-outline-variant/10 last:border-0 text-left hover:bg-surface-container/40 rounded-lg px-1 transition-colors">
+              <button key={l.id} onClick={() => onOpenLead(l)} className="w-full flex items-center gap-3 py-2 border-b border-outline-variant/10 last:border-0 text-start hover:bg-surface-container/40 rounded-lg px-1 transition-colors">
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${l.status === "New" ? "bg-blue-500 pulse-dot" : "bg-outline-variant"}`} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-[13px] text-on-surface truncate">{l.name} → {l.companyName}</p>
-                  <p className="text-[11px] text-outline truncate">{l.service} · {formatDate(l.createdAt, locale)}</p>
+                  <p className="font-bold text-label text-on-surface truncate">{l.name} → {l.companyName}</p>
+                  <p className="text-caption text-outline truncate">{l.service} · {formatDate(l.createdAt, locale)}</p>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[l.status]}`}>{t(locale, LEAD_STATUS_KEYS[l.status])}</span>
+                <span className={`text-caption font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_COLORS[l.status]}`}>{t(locale, LEAD_STATUS_KEYS[l.status])}</span>
               </button>
             ))}
           </div>
         </ChartCard>
       </div>
 
-      <p className="text-[11px] text-outline text-center">{stats?.catalog ? stats.catalog.categories : categoriesCount} {t(locale, "admin_ov_footer_categories")} · {companyTotal} {t(locale, "admin_companies_count")} · {total} {t(locale, "admin_ov_footer_total")}</p>
+      <p className="text-caption text-outline text-center">
+        {stats?.catalog ? stats.catalog.categories : categoriesCount} {tCount(locale, "noun_category", stats?.catalog ? stats.catalog.categories : categoriesCount)}
+        {" "}· {companyTotal} {tCount(locale, "noun_company", companyTotal)} · {total} {t(locale, "admin_ov_footer_total")}
+      </p>
     </div>
   );
 }

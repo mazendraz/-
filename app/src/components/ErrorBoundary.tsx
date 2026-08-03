@@ -38,9 +38,11 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
   }
 }
 
+// ERR-03: `?debug=1` used to reveal stack traces to anyone who guessed the
+// param — a real internal-details leak, not just a convenience for admins
+// debugging their own session.
 function showDetails(): boolean {
   try {
-    if (new URLSearchParams(window.location.search).get("debug") === "1") return true;
     return getCurrentUser()?.role === "ADMIN";
   } catch {
     return false;

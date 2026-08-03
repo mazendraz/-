@@ -9,6 +9,7 @@ import ErrorPage from "./pages/ErrorPage"; // eager — needed to render route e
 import ErrorBoundary from "./components/ErrorBoundary"; // eager — the crash net must never be a lazy chunk
 import RequireAuth from "./components/AuthGate";
 import { LocaleProvider } from "./context/LocaleContext";
+import { ToastProvider } from "./context/ToastContext";
 
 // Everything else is code-split so the initial load only ships Home + chrome.
 // Each route's JS is fetched on first navigation (and cached thereafter).
@@ -23,7 +24,22 @@ const GuidedStart = lazy(() => import("./pages/GuidedStart"));
 const Saved = lazy(() => import("./pages/Saved"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const LegalPage = lazy(() => import("./pages/LegalPage"));
-const AdminDashboard = lazy(() => import("./pages/admin"));
+const About = lazy(() => import("./pages/About"));
+const Contact = lazy(() => import("./pages/Contact"));
+const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
+const AdminIndexRedirect = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminIndexRedirect })));
+// NAV-06: the admin dashboard's 10 tabs used to all ship in one chunk with
+// every editor — each is now its own lazy route, fetched only on first visit.
+const AdminOverviewPage = lazy(() => import("./pages/admin/tabs/OverviewPage"));
+const AdminLeadsPage = lazy(() => import("./pages/admin/tabs/LeadsPage"));
+const AdminCompaniesPage = lazy(() => import("./pages/admin/tabs/CompaniesPage"));
+const AdminServicesPage = lazy(() => import("./pages/admin/tabs/ServicesPage"));
+const AdminTeamPage = lazy(() => import("./pages/admin/tabs/TeamPage"));
+const AdminReviewsPage = lazy(() => import("./pages/admin/ReviewsTab").then((m) => ({ default: m.AdminReviewsTab })));
+const AdminChangesPage = lazy(() => import("./pages/admin/ChangeRequestsTab").then((m) => ({ default: m.ChangeRequestsTab })));
+const AdminChatPage = lazy(() => import("./pages/admin/ChatTab").then((m) => ({ default: m.ChatTab })));
+const AdminStatusPage = lazy(() => import("./pages/admin/SiteStatusTab").then((m) => ({ default: m.SiteStatusTab })));
+const AdminSettingsPage = lazy(() => import("./pages/admin/tabs/SettingsPage"));
 const ProviderDashboard = lazy(() => import("./pages/ProviderDashboard"));
 
 function DashboardFallback() {
@@ -49,6 +65,8 @@ const router = createBrowserRouter([
       { path: "/requests", element: <MyRequests /> },
       { path: "/messages", element: <Messages /> },
       { path: "/request", element: <RequestForm /> },
+      { path: "/about", element: <About /> },
+      { path: "/contact", element: <Contact /> },
       { path: "/terms", element: <LegalPage kind="terms" /> },
       { path: "/privacy", element: <LegalPage kind="privacy" /> },
       // Catch-all 404 — keeps the shared chrome so users can navigate out
@@ -67,20 +85,41 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
     element: (
       <LocaleProvider>
-        <RequireAuth role="ADMIN">
-          <Suspense fallback={<DashboardFallback />}><AdminDashboard /></Suspense>
-        </RequireAuth>
+        <ToastProvider>
+          <RequireAuth role="ADMIN">
+            <Suspense fallback={<DashboardFallback />}><AdminLayout /></Suspense>
+          </RequireAuth>
+        </ToastProvider>
       </LocaleProvider>
     ),
+    // Real nested routes (NAV-06), not `?tab=` state read once on load:
+    // the browser's Back button now moves between tabs instead of leaving
+    // the dashboard, `/admin/leads` opens straight to that tab, and a
+    // refresh doesn't snap back to Overview mid-task.
+    children: [
+      { index: true, element: <AdminIndexRedirect /> },
+      { path: "overview", element: <AdminOverviewPage /> },
+      { path: "leads", element: <AdminLeadsPage /> },
+      { path: "companies", element: <AdminCompaniesPage /> },
+      { path: "services", element: <AdminServicesPage /> },
+      { path: "team", element: <AdminTeamPage /> },
+      { path: "reviews", element: <AdminReviewsPage /> },
+      { path: "changes", element: <AdminChangesPage /> },
+      { path: "chat", element: <AdminChatPage /> },
+      { path: "status", element: <AdminStatusPage /> },
+      { path: "settings", element: <AdminSettingsPage /> },
+    ],
   },
   {
     path: "/provider",
     errorElement: <ErrorPage />,
     element: (
       <LocaleProvider>
-        <RequireAuth role="PROVIDER">
-          <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>
-        </RequireAuth>
+        <ToastProvider>
+          <RequireAuth role="PROVIDER">
+            <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>
+          </RequireAuth>
+        </ToastProvider>
       </LocaleProvider>
     ),
   },

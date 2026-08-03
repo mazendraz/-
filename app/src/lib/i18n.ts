@@ -1,7 +1,27 @@
+import type { PluralForms } from "./plural";
+import { selectPlural } from "./plural";
+
 export type Locale = "en" | "ar";
 
 const STRINGS = {
   en: {
+    // ── Brand ──
+    brand_name: "Al Assema",
+
+    // ── Page meta (title/description — see hooks/usePageMeta.ts) ──
+    meta_default_title: "Al Assema — Every Trusted Service in the New Capital",
+    meta_default_desc: "Find verified interior design, landscaping, smart home, and finishing companies in Egypt's New Administrative Capital.",
+    meta_guided_title: "Find Your Match",
+    meta_guided_desc: "Answer two quick questions and get matched with the right company for your project in the New Administrative Capital.",
+    meta_services_title: "Services",
+    meta_category_suffix: "in New Capital",
+    meta_company_fallback_title: "Company",
+    meta_companies_title: "Verified Companies",
+    meta_request_title: "Request a Service",
+    meta_request_desc: "Submit a service request to a verified company in the New Administrative Capital.",
+    meta_myrequests_title: "My Requests",
+    meta_myrequests_desc: "Track your service requests and see their current status.",
+
     // ── Navigation ──
     nav_home: "Home",
     nav_services: "Services",
@@ -9,6 +29,7 @@ const STRINGS = {
     nav_saved: "Saved",
     nav_requests: "Requests",
     nav_find_match: "Find My Match",
+    nav_section_label: "Section navigation",
     nav_browse_services: "Browse Services",
     nav_reviews: "Reviews",
     nav_about: "About",
@@ -65,6 +86,9 @@ const STRINGS = {
     common_clear_all: "Clear all",
     common_reset: "Reset",
     common_close: "Close",
+    toast_dismiss: "Dismiss",
+    toast_undo: "Undo",
+    a11y_skip_to_content: "Skip to main content",
     common_kind_waitlist: "Waitlist",
     common_all_categories: "All service categories",
     common_all_companies: "All companies",
@@ -104,6 +128,8 @@ const STRINGS = {
     home_reviews_title: "What Customers Say",
     home_reviews_sub: "Real experiences from NAC residents and businesses.",
     home_reviews_share: "Share Your Experience",
+    home_reviews_pause: "Pause",
+    home_reviews_play: "Play",
     home_reviews_closed: "Reviews are temporarily closed",
     home_companies_label: "companies",
 
@@ -187,6 +213,13 @@ const STRINGS = {
     profile_ready_title: "Ready to work together?",
     profile_ready_sub: "Submit a request in under a minute. No account needed.",
     profile_request_company: "Request This Company",
+    // Phase 9 — replaces every "Request a Service" CTA's label when the
+    // company's category has a fixed price catalog: the click no longer opens
+    // an empty form, it scrolls to the priced cards, so the label says so.
+    profile_choose_services: "Choose Services",
+    // The one escape hatch under the priced cards, for a request that isn't
+    // one of them — shown only in FIXED_CATALOG, once.
+    profile_custom_request: "Not what you need? Request something custom",
     profile_contact: "Contact",
     profile_report: "Report a Problem",
     // Availability + waiting list
@@ -210,11 +243,14 @@ const STRINGS = {
     profile_projects_count: "Projects",
     profile_like_what: "Like what you see? Request a service from",
     profile_photo_gallery: "Photo Gallery",
+    profile_view_all_photos: "View All Photos",
     profile_not_found: "Company not found.",
     profile_back_to_companies: "Back to companies",
     profile_close_gallery: "Close gallery",
     profile_prev_photo: "Previous photo",
     profile_next_photo: "Next photo",
+    profile_project_services_label: "Services",
+    profile_contact_title: "Contact Information",
 
     // Feedback modal
     feedback_title: "Contact / Report",
@@ -260,6 +296,7 @@ const STRINGS = {
     saved_sub: "Your shortlist — saved on this device, no account needed.",
     saved_empty_title: "No saved companies yet",
     saved_empty_sub: "Tap the heart on any company to add it here, so you can come back and decide later.",
+    personal_nav_label: "Your account",
     saved_tab: "Saved",
     requests_tab: "My Requests",
     messages_tab: "Messages",
@@ -373,6 +410,7 @@ const STRINGS = {
     // ── 404 ──
     nf_title: "Page not found",
     nf_sub: "The page you're looking for doesn't exist or has moved. Let's get you back on track.",
+    nf_popular_categories: "Or browse a popular category",
 
     // ── Site status (maintenance / offline / crash) ──
     status_maintenance_title: "We're making things better",
@@ -397,8 +435,10 @@ const STRINGS = {
     // ── Top navigation (screen-reader labels) ──
     nav_home_aria: "Al Assema — Home",
     nav_search_aria: "Search",
+    nav_search_shortcut_hint: "Search (press /)",
     nav_open_menu: "Open menu",
     nav_close_menu: "Close menu",
+    nav_menu: "Menu",
     companies_verified_title: "Verified",
 
     // ── Save button (on every company card) ──
@@ -416,7 +456,9 @@ const STRINGS = {
     // ── Catalog error ──
     catalog_error_title: "Couldn't load companies",
     catalog_error_body: "We couldn't reach the server. Please check your connection and try again.",
+    catalog_error_body_company: "We couldn't load this company. Please try again.",
     catalog_error_retry: "Try again",
+    search_error_generic: "Search failed. Please try again.",
 
     // ── Sign in / access (AuthGate) ──
     auth_role_admin: "Admin",
@@ -694,6 +736,7 @@ const STRINGS = {
     prov_tab_profile: "Profile",
     prov_tab_settings: "Settings",
     prov_portal_label: "PARTNER PORTAL",
+    prov_pricing_unavailable: "The price catalog isn't available for your business category right now.",
     prov_no_company: "No company found.",
     prov_back_to_site: "Back to site",
     prov_sign_out: "Sign out",
@@ -801,6 +844,9 @@ const STRINGS = {
     chart_funnel_received: "Received",
     chart_no_data: "No data yet.",
     chart_of_prev: "of prev",
+    chart_col_label: "Label",
+    chart_col_value: "Value",
+    chart_col_percent: "Percent",
     chart_leads: "leads",
     nav_switch_language: "Switch language",
     home_hero_alt: "New Administrative Capital skyline",
@@ -828,6 +874,11 @@ const STRINGS = {
     admin_delete: "Delete",
     admin_confirm_ok: "Confirm",
     admin_confirm_cancel: "Cancel",
+    admin_confirm_delete_body: "This is permanent and cannot be undone.",
+    admin_confirm_action_body: "This cannot be undone.",
+    unsaved_changes_title: "Discard your changes?",
+    unsaved_changes_body: "You have unsaved changes. Leaving now will lose them.",
+    unsaved_changes_discard: "Discard",
     admin_tag_add: "Add",
     // Split in two because "browse" is a coloured span inside the sentence.
     admin_upload_drag: "Drag & drop or",
@@ -859,9 +910,16 @@ const STRINGS = {
     admin_featured: "Featured",
     admin_busy: "Busy",
     admin_busy_toggle_failed: "Couldn't change availability. Try again.",
+    admin_mutation_failed: "Couldn't save that change. Please try again.",
+    admin_delete_failed: "Couldn't delete that. Please try again.",
     admin_busy_until: "Busy until",
     admin_mark_available: "Mark available",
     admin_mark_busy: "Mark busy (no end date)",
+    admin_confirm_mark_busy_body: "The public request button will switch to a waiting list until you mark this company available again.",
+    admin_confirm_mark_available_body: "The public request button will show again immediately.",
+    admin_busy_undo: "Undo",
+    admin_busy_toggle_success_busy: "Marked busy — customers now see a waiting list.",
+    admin_busy_toggle_success_available: "Marked available — the request button is back.",
     admin_open: "Open",
     admin_edit: "Edit",
     admin_view: "View",
@@ -926,19 +984,27 @@ const STRINGS = {
     admin_cat_meta_title_ph: "Leave blank to use the label",
     admin_cat_meta_desc: "Meta description (SEO — optional)",
     admin_cat_meta_desc_ph: "~160 characters shown in search results",
+    admin_cat_pricing_mode_label: "Pricing Catalog",
+    admin_cat_pricing_quote_only_label: "Simple",
+    admin_cat_pricing_quote_only_desc: "The customer requests and agrees on price directly (default)",
+    admin_cat_pricing_fixed_label: "Fixed Price Catalog",
+    admin_cat_pricing_fixed_desc: "Companies can show clear prices and the customer picks services and sees a total",
+    admin_cat_pricing_fixed_hint: "Companies in this category will be able to add prices from the provider dashboard, once approved.",
+    // Assembled as: "<has> <n> <company|companies> <switch_warning_suffix>"
+    admin_cat_pricing_switch_warning_suffix: "with published prices in this category. Turning this off won't delete them, but companies won't be able to add or edit new prices.",
+    admin_cat_pricing_switch_confirm: "Confirm switch",
     admin_cat_delete_failed: "Couldn't delete. Please try again.",
     // Assembled as: "<has> <n> <company|companies>. <cascade…> <undone>"
     admin_cat_has: "This category has",
-    admin_cat_cascade_one: "Deleting it will permanently delete that company too — along with their projects, reviews and leads.",
-    admin_cat_cascade_many: "Deleting it will permanently delete those companies too — along with their projects, reviews and leads.",
+    admin_cat_cascade_one: "Deleting it only removes this category from that company — it won't be deleted. A company left with no other category blocks this.",
+    admin_cat_cascade_many: "Deleting it only removes this category from them — none will be deleted. A company left with no other category blocks this.",
     admin_cat_undone: "This can't be undone.",
-    admin_cat_delete_plus: "Delete category +",
 
     // Company editor
     admin_saving: "Saving…",
     admin_save_changes: "Save Changes",
     admin_ce_name_min: "Company name must be at least 2 characters.",
-    admin_ce_pick_category: "Please choose a category.",
+    admin_ce_pick_category: "Please choose at least one category.",
     admin_ce_need_logo: "Please add a logo image.",
     admin_ce_need_cover: "Please add a cover image.",
     admin_ce_need_phone: "Please add a phone number (at least 8 digits).",
@@ -947,10 +1013,34 @@ const STRINGS = {
     admin_ce_tab_details: "Details",
     admin_ce_tab_projects: "Projects",
     admin_ce_tab_availability: "Availability",
+    admin_ce_tab_offerings: "Pricing",
+    admin_off_desc: "Add or edit this company's priced services and products. Anything you save here goes live immediately — no review needed.",
+    admin_off_add: "Add",
+    admin_off_empty: "No priced services or products yet. Add the first one.",
+    admin_off_edit: "Edit",
+    admin_off_save: "Save",
+    admin_off_state_draft: "Draft",
+    admin_off_state_hidden: "Hidden",
+    admin_off_state_live: "Live",
+    admin_off_flash_saved: "Saved and live.",
+    admin_off_flash_hidden: "Hidden from the profile.",
+    admin_off_flash_visible: "Visible on the profile again.",
+    admin_off_flash_deleted: "Deleted.",
+    admin_off_modal_new: "Add a service or product",
+    admin_off_modal_edit: "Edit",
+    admin_off_edit_note: "Saving here applies immediately — the company's provider dashboard will show the same change, no review needed.",
+    admin_off_err_load: "Couldn't load this company's services. Please try again.",
+    admin_off_err_generic: "Something went wrong. Please try again.",
     admin_ce_name: "Company Name",
     admin_ce_name_ph: "e.g. Aura Interiors",
     admin_ce_category: "Category",
     admin_ce_select_category: "Select category…",
+    admin_ce_categories: "Categories",
+    admin_ce_categories_search_ph: "Search categories…",
+    admin_ce_categories_no_match: "No matching categories.",
+    admin_ce_categories_primary_hint: "Set as primary category",
+    admin_ce_categories_primary_badge: "Primary",
+    admin_ce_categories_max_reached: "Maximum number of categories reached.",
     admin_ce_tagline: "Tagline",
     admin_ce_tagline_ph: "Where luxury meets precision",
     admin_ce_about: "About",
@@ -1049,9 +1139,8 @@ const STRINGS = {
     admin_anonymous: "Anonymous",
     admin_rev_customer_title: "Customer reviews",
     admin_rev_customer_sub: "Reviews from customers after a completed service — approve to publish on the company profile.",
-    // Rendered with a CSS `capitalize`, so the English stays lowercase here.
-    admin_rev_pending: "pending",
-    admin_rev_approved: "approved",
+    admin_rev_pending: "Pending",
+    admin_rev_approved: "Approved",
     admin_rev_load_error: "Couldn't load customer reviews.",
     admin_rev_approve_error: "Couldn't approve that review.",
     admin_rev_delete_error: "Couldn't delete that review.",
@@ -1280,6 +1369,23 @@ const STRINGS = {
   },
 
   ar: {
+    // ── Brand ──
+    brand_name: "العاصمة",
+
+    // ── Page meta (title/description — see hooks/usePageMeta.ts) ──
+    meta_default_title: "العاصمة — كل خدمة موثوقة في العاصمة الإدارية الجديدة",
+    meta_default_desc: "دوّر على شركات ديكور، لاندسكيب، سمارت هوم، وتشطيبات موثّقة في العاصمة الإدارية الجديدة.",
+    meta_guided_title: "دور على اختيارك",
+    meta_guided_desc: "جاوب سؤالين بسيطين وهنرشّحلك أنسب شركة لمشروعك في العاصمة الإدارية الجديدة.",
+    meta_services_title: "الخدمات",
+    meta_category_suffix: "في العاصمة الإدارية الجديدة",
+    meta_company_fallback_title: "شركة",
+    meta_companies_title: "الشركات الموثّقة",
+    meta_request_title: "اطلب خدمة",
+    meta_request_desc: "ابعت طلب خدمة لشركة موثّقة في العاصمة الإدارية الجديدة.",
+    meta_myrequests_title: "طلباتي",
+    meta_myrequests_desc: "تابع حالة طلبات الخدمة بتاعتك أول بأول.",
+
     // ── Navigation ──
     nav_home: "الرئيسية",
     nav_services: "الخدمات",
@@ -1287,6 +1393,7 @@ const STRINGS = {
     nav_saved: "المحفوظات",
     nav_requests: "الطلبات",
     nav_find_match: "ابحث عن شركتك",
+    nav_section_label: "التنقل بين الأقسام",
     nav_browse_services: "تصفح الخدمات",
     nav_reviews: "التقييمات",
     nav_about: "من نحن",
@@ -1342,6 +1449,9 @@ const STRINGS = {
     common_clear_all: "مسح الكل",
     common_reset: "إعادة ضبط",
     common_close: "إغلاق",
+    toast_dismiss: "إغلاق التنبيه",
+    toast_undo: "تراجع",
+    a11y_skip_to_content: "تخطَّ إلى المحتوى الرئيسي",
     common_kind_waitlist: "قائمة انتظار",
     common_all_categories: "كل فئات الخدمات",
     common_all_companies: "كل الشركات",
@@ -1381,6 +1491,8 @@ const STRINGS = {
     home_reviews_title: "ماذا يقول عملاؤنا",
     home_reviews_sub: "تجارب حقيقية من سكان وأعمال العاصمة الإدارية.",
     home_reviews_share: "شارك تجربتك",
+    home_reviews_pause: "إيقاف",
+    home_reviews_play: "تشغيل",
     home_reviews_closed: "التقييمات مغلقة مؤقتًا",
     home_companies_label: "شركة",
 
@@ -1464,6 +1576,8 @@ const STRINGS = {
     profile_ready_title: "مستعد للعمل معًا؟",
     profile_ready_sub: "أرسل طلبًا في أقل من دقيقة. بدون حساب.",
     profile_request_company: "اطلب هذه الشركة",
+    profile_choose_services: "اختر الخدمات",
+    profile_custom_request: "طلبك مش من ضمن دول؟ اطلب طلب مخصص",
     profile_contact: "تواصل",
     profile_report: "الإبلاغ عن مشكلة",
     // التوفّر + قائمة الانتظار
@@ -1487,11 +1601,14 @@ const STRINGS = {
     profile_projects_count: "المشاريع",
     profile_like_what: "أعجبك ما رأيت؟ اطلب خدمة من",
     profile_photo_gallery: "معرض الصور",
+    profile_view_all_photos: "عرض كل الصور",
     profile_not_found: "الشركة غير موجودة.",
     profile_back_to_companies: "العودة للشركات",
     profile_close_gallery: "إغلاق المعرض",
     profile_prev_photo: "الصورة السابقة",
     profile_next_photo: "الصورة التالية",
+    profile_project_services_label: "الخدمات",
+    profile_contact_title: "معلومات التواصل",
 
     // Feedback modal
     feedback_title: "تواصل / إبلاغ",
@@ -1537,6 +1654,7 @@ const STRINGS = {
     saved_sub: "قائمتك المختصرة — محفوظة على هذا الجهاز، بدون حساب.",
     saved_empty_title: "لا توجد شركات محفوظة بعد",
     saved_empty_sub: "اضغط على القلب في أي شركة لإضافتها هنا، لتعود وتقرّر لاحقًا.",
+    personal_nav_label: "حسابك",
     saved_tab: "المحفوظات",
     requests_tab: "طلباتي",
     messages_tab: "الرسايل",
@@ -1650,6 +1768,7 @@ const STRINGS = {
     // ── 404 ──
     nf_title: "الصفحة غير موجودة",
     nf_sub: "الصفحة التي تبحث عنها غير موجودة أو تم نقلها. دعنا نعيدك إلى المسار الصحيح.",
+    nf_popular_categories: "أو تصفّح فئة مشهورة",
 
     // ── حالة الموقع (صيانة / انقطاع / خطأ) ──
     status_maintenance_title: "بنطوّر حاجات حلوة",
@@ -1674,8 +1793,10 @@ const STRINGS = {
     // ── شريط التنقل العلوي (تسميات قارئ الشاشة) ──
     nav_home_aria: "العاصمة — الرئيسية",
     nav_search_aria: "بحث",
+    nav_search_shortcut_hint: "بحث (اضغط /)",
     nav_open_menu: "افتح القائمة",
     nav_close_menu: "أغلق القائمة",
+    nav_menu: "القائمة",
     companies_verified_title: "موثّقة",
 
     // ── زر الحفظ (موجود على كل كرت شركة) ──
@@ -1693,7 +1814,9 @@ const STRINGS = {
     // ── خطأ تحميل الكتالوج ──
     catalog_error_title: "تعذّر تحميل الشركات",
     catalog_error_body: "مش قادرين نوصل للسيرفر. اتأكد من اتصالك وجرّب تاني.",
+    catalog_error_body_company: "تعذّر تحميل بيانات الشركة. حاول مرة أخرى.",
     catalog_error_retry: "حاول تاني",
+    search_error_generic: "تعذّر البحث. حاول مرة أخرى.",
 
     // ── تسجيل الدخول والصلاحيات (AuthGate) ──
     auth_role_admin: "الإدارة",
@@ -1971,6 +2094,7 @@ const STRINGS = {
     prov_tab_profile: "البروفايل",
     prov_tab_settings: "الإعدادات",
     prov_portal_label: "بوابة الشركاء",
+    prov_pricing_unavailable: "كتالوج الأسعار مش متاح لفئة نشاطك حاليًا.",
     prov_no_company: "مفيش شركة مرتبطة بالحساب.",
     prov_back_to_site: "الرجوع للموقع",
     prov_sign_out: "تسجيل الخروج",
@@ -2078,6 +2202,9 @@ const STRINGS = {
     chart_funnel_received: "وصل",
     chart_no_data: "مفيش بيانات لسه.",
     chart_of_prev: "من السابق",
+    chart_col_label: "البيان",
+    chart_col_value: "القيمة",
+    chart_col_percent: "النسبة",
     chart_leads: "طلب",
     nav_switch_language: "تغيير اللغة",
     home_hero_alt: "أفق العاصمة الإدارية الجديدة",
@@ -2105,6 +2232,11 @@ const STRINGS = {
     admin_delete: "حذف",
     admin_confirm_ok: "تأكيد",
     admin_confirm_cancel: "إلغاء",
+    admin_confirm_delete_body: "الإجراء ده نهائي ومش هينفع تتراجع عنه.",
+    admin_confirm_action_body: "مش هينفع تتراجع عن الإجراء ده.",
+    unsaved_changes_title: "تتجاهل التعديلات؟",
+    unsaved_changes_body: "عندك تعديلات ماتحفظتش. لو خرجت دلوقتي هتضيع.",
+    unsaved_changes_discard: "تجاهل",
     admin_tag_add: "إضافة",
     // مقسومة لجزئين لأن "تصفّح" span ملوّن جوه الجملة.
     admin_upload_drag: "اسحب وأفلت أو",
@@ -2136,9 +2268,16 @@ const STRINGS = {
     admin_featured: "مميّزة",
     admin_busy: "مشغولة",
     admin_busy_toggle_failed: "تعذّر تغيير الإتاحة. حاول تاني.",
+    admin_mutation_failed: "تعذّر حفظ التعديل. حاول تاني.",
+    admin_delete_failed: "تعذّر الحذف. حاول تاني.",
     admin_busy_until: "مشغولة حتى",
     admin_mark_available: "علّمها متاحة",
     admin_mark_busy: "علّمها مشغولة (بدون تاريخ نهاية)",
+    admin_confirm_mark_busy_body: "زرار الطلب في الموقع العام هيتحوّل لقائمة انتظار لحد ما تعلّم الشركة متاحة تاني.",
+    admin_confirm_mark_available_body: "زرار الطلب في الموقع العام هيرجع يظهر فورًا.",
+    admin_busy_undo: "تراجع",
+    admin_busy_toggle_success_busy: "اتعلّمت مشغولة — العملاء دلوقتي بيشوفوا قائمة انتظار.",
+    admin_busy_toggle_success_available: "اتعلّمت متاحة — زرار الطلب رجع تاني.",
     admin_open: "متاحة",
     admin_edit: "تعديل",
     admin_view: "عرض",
@@ -2203,19 +2342,26 @@ const STRINGS = {
     admin_cat_meta_title_ph: "سيبه فاضي عشان يستخدم الاسم",
     admin_cat_meta_desc: "وصف SEO (اختياري)",
     admin_cat_meta_desc_ph: "حوالي ١٦٠ حرف بيظهروا في نتائج البحث",
+    admin_cat_pricing_mode_label: "كتالوج الأسعار",
+    admin_cat_pricing_quote_only_label: "بسيط",
+    admin_cat_pricing_quote_only_desc: "العميل يطلب ويتفق على السعر مباشرة (الافتراضي)",
+    admin_cat_pricing_fixed_label: "كتالوج أسعار ثابت",
+    admin_cat_pricing_fixed_desc: "الشركات تقدر تعرض أسعار واضحة والعميل يختار ويشوف الإجمالي",
+    admin_cat_pricing_fixed_hint: "الشركات في الفئة دي هتقدر تضيف أسعار من داشبورد البروفيدر بعد الموافقة.",
+    admin_cat_pricing_switch_warning_suffix: "عندها أسعار منشورة في الفئة دي. تعطيل الوضع مش هيحذفها، بس الشركات مش هتقدر تضيف أو تعدّل أسعار جديدة.",
+    admin_cat_pricing_switch_confirm: "أكّد التبديل",
     admin_cat_delete_failed: "مقدرناش نحذف. جرّب تاني.",
     // بتتركّب كده: "<has> <n> <شركة|شركات>. <cascade…> <undone>"
     admin_cat_has: "الفئة دي فيها",
-    admin_cat_cascade_one: "لو حذفتها هتتحذف الشركة دي كمان نهائيًا — ومعاها مشاريعها وتقييماتها وطلباتها.",
-    admin_cat_cascade_many: "لو حذفتها هتتحذف الشركات دي كمان نهائيًا — ومعاها مشاريعها وتقييماتها وطلباتها.",
+    admin_cat_cascade_one: "حذفها هيشيل الفئة دي من الشركة بس — مش هتتمسح. لو الشركة مالهاش فئة تانية، الحذف هيتمنع.",
+    admin_cat_cascade_many: "حذفها هيشيل الفئة دي منهم بس — محدش هيتمسح. أي شركة مالهاش فئة تانية هتمنع الحذف.",
     admin_cat_undone: "ده مش هيترجع تاني.",
-    admin_cat_delete_plus: "حذف الفئة +",
 
     // محرّر الشركة
     admin_saving: "جاري الحفظ…",
     admin_save_changes: "حفظ التعديلات",
     admin_ce_name_min: "اسم الشركة لازم يبقى حرفين على الأقل.",
-    admin_ce_pick_category: "اختار فئة من فضلك.",
+    admin_ce_pick_category: "اختار فئة واحدة على الأقل من فضلك.",
     admin_ce_need_logo: "ضيف صورة لوجو من فضلك.",
     admin_ce_need_cover: "ضيف صورة غلاف من فضلك.",
     admin_ce_need_phone: "ضيف رقم تليفون (٨ أرقام على الأقل).",
@@ -2224,10 +2370,34 @@ const STRINGS = {
     admin_ce_tab_details: "البيانات",
     admin_ce_tab_projects: "المشاريع",
     admin_ce_tab_availability: "الإتاحة",
+    admin_ce_tab_offerings: "الأسعار",
+    admin_off_desc: "ضيف أو عدّل الخدمات والمنتجات المسعّرة بتاعة الشركة دي. أي حاجة تحفظها هنا بتتنشر فورًا — من غير مراجعة.",
+    admin_off_add: "إضافة",
+    admin_off_empty: "لسه مفيش خدمات أو منتجات بسعرها. ضيف أول واحدة.",
+    admin_off_edit: "تعديل",
+    admin_off_save: "حفظ",
+    admin_off_state_draft: "مسودة",
+    admin_off_state_hidden: "مخفي",
+    admin_off_state_live: "منشور",
+    admin_off_flash_saved: "اتحفظ ونُشر.",
+    admin_off_flash_hidden: "اتخفى من البروفايل.",
+    admin_off_flash_visible: "بقى ظاهر على البروفايل تاني.",
+    admin_off_flash_deleted: "اتحذف.",
+    admin_off_modal_new: "إضافة خدمة أو منتج",
+    admin_off_modal_edit: "تعديل",
+    admin_off_edit_note: "الحفظ هنا بيتطبّق فورًا — داشبورد البروفيدر هيشوف نفس التعديل، من غير مراجعة.",
+    admin_off_err_load: "مقدرناش نحمّل خدمات الشركة دي. جرّب تاني.",
+    admin_off_err_generic: "حصلت مشكلة. جرّب تاني.",
     admin_ce_name: "اسم الشركة",
     admin_ce_name_ph: "مثال: أورا للديكور",
     admin_ce_category: "الفئة",
     admin_ce_select_category: "اختار فئة…",
+    admin_ce_categories: "الفئات",
+    admin_ce_categories_search_ph: "دوّر على فئة…",
+    admin_ce_categories_no_match: "مفيش فئات مطابقة.",
+    admin_ce_categories_primary_hint: "اجعلها الفئة الأساسية",
+    admin_ce_categories_primary_badge: "أساسية",
+    admin_ce_categories_max_reached: "وصلت لأقصى عدد فئات مسموح بيه.",
     admin_ce_tagline: "الجملة التعريفية",
     admin_ce_tagline_ph: "حيث تلتقي الفخامة بالإتقان",
     admin_ce_about: "نبذة",
@@ -2326,7 +2496,6 @@ const STRINGS = {
     admin_anonymous: "بدون اسم",
     admin_rev_customer_title: "تقييمات العملاء",
     admin_rev_customer_sub: "تقييمات العملاء بعد إتمام الخدمة — وافق عليها عشان تظهر في صفحة الشركة.",
-    // بتتعرض مع CSS capitalize، عشان كده الإنجليزي سايبه بحروف صغيرة.
     admin_rev_pending: "قيد المراجعة",
     admin_rev_approved: "مقبولة",
     admin_rev_load_error: "مقدرناش نحمّل تقييمات العملاء.",
@@ -2558,4 +2727,58 @@ export type StringKey = keyof typeof STRINGS.en;
 
 export function t(locale: Locale, key: StringKey): string {
   return (STRINGS[locale] as Record<StringKey, string>)[key] ?? STRINGS.en[key];
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  PLURALS (I18N-02) — every "{count} {noun}" in the product was built on
+//  `count === 1 ? singular : plural`, which only covers the two categories
+//  English has. Arabic has six (zero/one/two/few/many/other) and "2 شركات" /
+//  "11 شركات" are both wrong — 2 needs the dual ("شركتين"), 11-99 takes the
+//  singular tamyiz form ("11 شركة"), not the sound plural. See lib/plural.ts
+//  for the CLDR category selection; `tCount` below just looks up the form.
+//
+//  Arabic inanimate/broken plurals take FEMININE SINGULAR verb agreement (a
+//  standard MSA rule) — so in a phrase with a verb, only the NOUN needs a
+//  distinct form per category; the verb suffix can stay constant. That's why
+//  entries like `gallery_failed` only vary "صورة/صورتين/صور", not the verb.
+// ══════════════════════════════════════════════════════════════════════════
+
+const PLURALS = {
+  en: {
+    noun_lead: { one: "lead", other: "leads" },
+    noun_review: { one: "review", other: "reviews" },
+    noun_company: { one: "company", other: "companies" },
+    noun_account: { one: "account", other: "accounts" },
+    noun_category: { one: "category", other: "categories" },
+    noun_project: { one: "project", other: "projects" },
+    noun_field: { one: "field", other: "fields" },
+    noun_offer_item: { one: "item", other: "items" },
+    noun_profile_change: { one: "change", other: "changes" },
+    noun_search_result: { one: "result", other: "results" },
+    gallery_failed: { one: "image couldn't be uploaded.", other: "images couldn't be uploaded." },
+    category_available_suffix: { one: "verified company available.", other: "verified companies available." },
+  },
+  ar: {
+    noun_lead: { one: "طلب", two: "طلبين", few: "طلبات", other: "طلب" },
+    noun_review: { one: "تقييم", two: "تقييمين", few: "تقييمات", other: "تقييم" },
+    noun_company: { one: "شركة", two: "شركتين", few: "شركات", other: "شركة" },
+    noun_account: { one: "حساب", two: "حسابين", few: "حسابات", other: "حساب" },
+    noun_category: { one: "فئة", two: "فئتين", few: "فئات", other: "فئة" },
+    noun_project: { one: "مشروع", two: "مشروعين", few: "مشاريع", other: "مشروع" },
+    noun_field: { one: "حقل", two: "حقلين", few: "حقول", other: "حقل" },
+    noun_offer_item: { one: "خدمة", two: "خدمتين", few: "خدمات", other: "خدمة" },
+    noun_profile_change: { one: "تعديل", two: "تعديلين", few: "تعديلات", other: "تعديل" },
+    noun_search_result: { one: "نتيجة", two: "نتيجتين", few: "نتايج", other: "نتيجة" },
+    gallery_failed: { one: "صورة فشل رفعها.", two: "صورتين فشل رفعهم.", few: "صور فشل رفعها.", other: "صورة فشل رفعها." },
+    category_available_suffix: { one: "شركة موثّقة متاحة.", two: "شركتين موثّقتين متاحتين.", few: "شركات موثّقة متاحة.", other: "شركة موثّقة متاحة." },
+  },
+} as const satisfies Record<Locale, Record<string, PluralForms>>;
+
+export type PluralKey = keyof typeof PLURALS.en;
+
+/** The correctly-pluralized noun/phrase for `key` at count `n` — compose it
+ * yourself as `` `${n} ${tCount(locale, key, n)}` `` (or reorder for RTL as
+ * the phrase needs; this only returns the text, same as `t()`). */
+export function tCount(locale: Locale, key: PluralKey, n: number): string {
+  return selectPlural(locale, n, PLURALS[locale][key]);
 }

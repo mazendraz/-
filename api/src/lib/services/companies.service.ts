@@ -40,11 +40,23 @@ const relevantBusyWindows = {
   orderBy: { startsAt: "asc" },
 } satisfies Prisma.Company$busyWindowsArgs;
 
+// Every category a company is linked to, plus which one is primary — shared by
+// every include below. `orderBy: isPrimary desc` puts the primary link first,
+// but companyScalars() (serialize.ts) still finds it explicitly rather than
+// trusting array order.
+const companyCategoriesInclude = {
+  select: {
+    isPrimary: true,
+    category: { select: { slug: true, label: true, pricingMode: true } },
+  },
+  orderBy: { isPrimary: "desc" },
+} satisfies Prisma.Company$categoriesArgs;
+
 // Relations needed to serialize a full ApiCompany (detail route + admin list).
 // Reviews are capped (most recent first) so one profile can't return tens of
 // thousands of rows; the true total stays in company.reviewCount.
 const companyInclude = {
-  category: { select: { slug: true, label: true } },
+  categories: companyCategoriesInclude,
   busyWindows: relevantBusyWindows,
   projects: { orderBy: { sortOrder: "asc" } },
   reviews: { orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
@@ -63,7 +75,7 @@ const publicTierInclude = {
 } satisfies Prisma.OfferingInclude;
 
 const publicCompanyInclude = {
-  category: { select: { slug: true, label: true } },
+  categories: companyCategoriesInclude,
   busyWindows: relevantBusyWindows,
   projects: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } },
   reviews: { where: { approved: true }, orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
@@ -93,7 +105,7 @@ const publicCompanyInclude = {
 // Card view (public list endpoints): only the category relation — NOT the heavy
 // projects/reviews arrays. Pairs with serializeCompanyCard.
 const companyCardInclude = {
-  category: { select: { slug: true, label: true } },
+  categories: companyCategoriesInclude,
   busyWindows: relevantBusyWindows,
 } satisfies Prisma.CompanyInclude;
 
@@ -121,7 +133,10 @@ function buildWhere(
   const where: Prisma.CompanyWhereInput = { status: CompanyStatus.ACTIVE };
 
   const slug = categorySlug ?? query.category;
-  if (slug) where.category = { slug };
+  // `some` — a company matches if ANY of its linked categories has this slug,
+  // not just its primary. Compiles to an indexed EXISTS join through
+  // CompanyCategory, single round trip.
+  if (slug) where.categories = { some: { category: { slug } } };
 
   if (typeof query.minRating === "number" && query.minRating > 0) {
     where.rating = { gte: query.minRating };
@@ -132,7 +147,7 @@ function buildWhere(
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
       { tagline: { contains: search, mode: "insensitive" } },
-      { category: { label: { contains: search, mode: "insensitive" } } },
+      { categories: { some: { category: { label: { contains: search, mode: "insensitive" } } } } },
       { services: { has: search } },
     ];
   }
@@ -194,7 +209,10 @@ export async function getActiveBySlug(slug: string): Promise<ApiCompany> {
 // ── Admin (Phase 6) ───────────────────────────────────────────────────────────
 
 export interface CompanyInput {
-  categoryId: string;
+  categoryIds: string[];
+  // Which of categoryIds is primary — see CompanyCategory. Defaults to
+  // categoryIds[0] when omitted.
+  primaryCategoryId?: string;
   name: string;
   tagline: string;
   about: string;
@@ -252,12 +270,22 @@ export interface AdminCompanyListQuery extends CompanyListQuery {
   status?: CompanyStatusValue;
 }
 
-async function assertCategoryExists(categoryId: string): Promise<void> {
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
+/** Throws NotFoundError naming the first missing id, if any. One round trip. */
+async function assertCategoriesExist(categoryIds: string[]): Promise<void> {
+  const found = await prisma.category.findMany({
+    where: { id: { in: categoryIds } },
     select: { id: true },
   });
-  if (!category) throw new NotFoundError("Category");
+  if (found.length !== categoryIds.length) {
+    const foundIds = new Set(found.map((c) => c.id));
+    const missing = categoryIds.find((id) => !foundIds.has(id));
+    throw new NotFoundError(`Category (${missing})`);
+  }
+}
+
+/** Resolves the primary id, defaulting to the first category when unset. */
+function resolvePrimaryCategoryId(categoryIds: string[], primaryCategoryId?: string): string {
+  return primaryCategoryId ?? categoryIds[0];
 }
 
 /** Admin: paginated companies of ANY status, with optional filters. */
@@ -265,14 +293,14 @@ export async function listAll(
   query: AdminCompanyListQuery,
 ): Promise<ApiPage<ApiCompany>> {
   const where: Prisma.CompanyWhereInput = {};
-  if (query.category) where.category = { slug: query.category };
+  if (query.category) where.categories = { some: { category: { slug: query.category } } };
   if (query.status) where.status = query.status;
   const search = query.search?.trim();
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
       { tagline: { contains: search, mode: "insensitive" } },
-      { category: { label: { contains: search, mode: "insensitive" } } },
+      { categories: { some: { category: { label: { contains: search, mode: "insensitive" } } } } },
       { services: { has: search } },
     ];
   }
@@ -293,7 +321,8 @@ export async function listAll(
 
 /** Admin: create a company. Slug is auto-generated from the name. */
 export async function create(input: CompanyInput): Promise<ApiCompany> {
-  await assertCategoryExists(input.categoryId);
+  await assertCategoriesExist(input.categoryIds);
+  const primaryCategoryId = resolvePrimaryCategoryId(input.categoryIds, input.primaryCategoryId);
   const slug = await uniqueSlug(
     input.name,
     async (s) => (await prisma.company.count({ where: { slug: s } })) > 0,
@@ -301,7 +330,12 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
 
   const company = await prisma.company.create({
     data: {
-      categoryId: input.categoryId,
+      categories: {
+        create: input.categoryIds.map((categoryId) => ({
+          categoryId,
+          isPrimary: categoryId === primaryCategoryId,
+        })),
+      },
       slug,
       name: input.name,
       tagline: input.tagline,
@@ -348,10 +382,12 @@ export async function update(
     select: { id: true },
   });
   if (!existing) throw new NotFoundError("Company");
-  if (input.categoryId) await assertCategoryExists(input.categoryId);
+  if (input.categoryIds) await assertCategoriesExist(input.categoryIds);
+  const primaryCategoryId = input.categoryIds
+    ? resolvePrimaryCategoryId(input.categoryIds, input.primaryCategoryId)
+    : undefined;
 
   const scalarData = {
-    categoryId: input.categoryId ?? undefined,
     name: input.name ?? undefined,
     tagline: input.tagline ?? undefined,
     about: input.about ?? undefined,
@@ -380,17 +416,34 @@ export async function update(
     whatsapp: input.whatsapp === undefined ? undefined : input.whatsapp,
   };
 
-  // When projects are supplied, replace the admin-curated (APPROVED) list
-  // atomically. Provider submissions still awaiting moderation (PENDING/REJECTED)
-  // are left untouched so an admin company edit never wipes them.
-  const company = input.projects
+  // When projects and/or categoryIds are supplied, replace those lists
+  // atomically. Provider project submissions still awaiting moderation
+  // (PENDING/REJECTED) are left untouched so an admin company edit never wipes
+  // them. Categories are always a full replace-all (same pattern as projects) —
+  // the multi-select editor always sends the complete membership, not a diff.
+  const company = input.projects || input.categoryIds
     ? await prisma.$transaction(async (tx) => {
-        await tx.project.deleteMany({ where: { companyId: id, status: "APPROVED" } });
+        if (input.projects) {
+          await tx.project.deleteMany({ where: { companyId: id, status: "APPROVED" } });
+        }
+        if (input.categoryIds) {
+          await tx.companyCategory.deleteMany({ where: { companyId: id } });
+        }
         return tx.company.update({
           where: { id },
           data: {
             ...scalarData,
-            projects: { create: projectCreateData(input.projects!) },
+            ...(input.projects ? { projects: { create: projectCreateData(input.projects) } } : {}),
+            ...(input.categoryIds
+              ? {
+                  categories: {
+                    create: input.categoryIds.map((categoryId) => ({
+                      categoryId,
+                      isPrimary: categoryId === primaryCategoryId,
+                    })),
+                  },
+                }
+              : {}),
           },
           include: companyInclude,
         });

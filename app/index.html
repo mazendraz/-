@@ -1,19 +1,36 @@
 <!DOCTYPE html>
-<html class="light" lang="ar" dir="rtl">
+<html lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Al Assema — Every Trusted Service in the New Capital</title>
-    <meta name="description" content="Find verified interior design, landscaping, smart home, and finishing companies in Egypt's New Administrative Capital." />
+    <!-- DS-02: no dark theme exists (darkMode config removed) — declaring
+         color-scheme keeps the OS/browser from applying its own dark-mode
+         guesses (inverted form controls, dark scrollbars) on top of a page
+         that has no dark palette to match them. -->
+    <meta name="color-scheme" content="light" />
+    <!-- Arabic is the default language (see LocaleContext.tsx / locale-init.js) — these
+         are the pre-hydration defaults a crawler or an unfurled share link sees before
+         hooks/usePageMeta.ts overwrites them per-route/per-locale after mount. -->
+    <title>العاصمة — كل خدمة موثوقة في العاصمة الإدارية الجديدة</title>
+    <meta name="description" content="دوّر على شركات ديكور، لاندسكيب، سمارت هوم، وتشطيبات موثّقة في العاصمة الإدارية الجديدة." />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Al Assema" />
-    <meta property="og:title" content="Al Assema — Every Trusted Service in the New Capital" />
-    <meta property="og:description" content="Find verified interior design, landscaping, smart home, and finishing companies in Egypt's New Administrative Capital." />
+    <meta property="og:site_name" content="العاصمة" />
+    <meta property="og:title" content="العاصمة — كل خدمة موثوقة في العاصمة الإدارية الجديدة" />
+    <meta property="og:description" content="دوّر على شركات ديكور، لاندسكيب، سمارت هوم، وتشطيبات موثّقة في العاصمة الإدارية الجديدة." />
+    <meta property="og:locale" content="ar_EG" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:url" content="https://alassema.com/?lang=ar" />
+    <meta property="og:image" content="https://alassema.com/logo.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Al Assema — Every Trusted Service in the New Capital" />
-    <meta name="twitter:description" content="Find verified interior design, landscaping, smart home, and finishing companies in Egypt's New Administrative Capital." />
+    <meta name="twitter:title" content="العاصمة — كل خدمة موثوقة في العاصمة الإدارية الجديدة" />
+    <meta name="twitter:description" content="دوّر على شركات ديكور، لاندسكيب، سمارت هوم، وتشطيبات موثّقة في العاصمة الإدارية الجديدة." />
+    <meta name="twitter:image" content="https://alassema.com/logo.png" />
+    <link rel="canonical" href="https://alassema.com/?lang=ar" />
+    <link rel="alternate" hreflang="ar" href="https://alassema.com/?lang=ar" />
+    <link rel="alternate" hreflang="en" href="https://alassema.com/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://alassema.com/?lang=ar" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#005578" />
     <link rel="preload" as="image" href="/img/seed-16.jpg" />
     <!-- Locale init: apply saved dir/lang before React hydrates to prevent FOUC.
          External (not inline) so the CSP can drop 'unsafe-inline' from script-src. -->

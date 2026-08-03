@@ -31,8 +31,16 @@ export type Company = {
   about: string;
   logo: string;
   cover: string;
+  // A company may belong to MULTIPLE categories — `category`/`categoryLabel`
+  // are always the PRIMARY one (what every single-value display spot shows);
+  // `categories` carries full membership, used by the admin editor's
+  // multi-select and the Offerings gate (any linked category may enable it).
   category: string;    // primary category slug
   categoryLabel: string;
+  categories: { slug: string; label: string; pricingMode?: CategoryPricingMode; isPrimary: boolean }[];
+  // Phase 9 — computed server-side from the company's PRIMARY category; the
+  // Offerings gate itself is a union over ALL of `categories`, not just this one.
+  categoryPricingMode?: CategoryPricingMode;
   services: string[];
   rating: number;
   reviewCount: number;
@@ -75,6 +83,8 @@ export type Company = {
   metaDescription?: string;
 };
 
+export type CategoryPricingMode = "QUOTE_ONLY" | "FIXED_CATALOG";
+
 export type ServiceCategory = {
   slug: string;
   label: string;
@@ -82,6 +92,12 @@ export type ServiceCategory = {
   description: string;
   count: number;
   cover: string;
+  // Phase 9 — whether this category's companies may run a priced Offering
+  // catalog. Optional/possibly-missing on old cached data; treat a missing
+  // value as "QUOTE_ONLY" (the schema default).
+  pricingMode?: CategoryPricingMode;
+  // Admin only — see ApiAdminCategory.publishedOfferingCompanyCount.
+  publishedOfferingCompanyCount?: number;
   // Optional per-page SEO overrides (admin-set); blank → label/description defaults.
   metaTitle?: string;
   metaDescription?: string;
@@ -128,6 +144,12 @@ export const COMPANIES: Company[] = [
     cover: IMG.interior1,
     category: "interior-finishing",
     categoryLabel: "Interior & Finishing",
+    // Demoing the many-to-many capability: Aura also does landscaping, in
+    // addition to its primary interior-finishing category.
+    categories: [
+      { slug: "interior-finishing", label: "Interior & Finishing", isPrimary: true },
+      { slug: "landscape", label: "Landscape & Outdoor", isPrimary: false },
+    ],
     services: ["Full Interior Design", "Residential Finishing", "Commercial Fit-Out", "Custom Furniture", "Lighting Design", "Material Sourcing"],
     rating: 4.9,
     reviewCount: 124,
@@ -161,6 +183,7 @@ export const COMPANIES: Company[] = [
     cover: IMG.smartHome,
     category: "smart-home",
     categoryLabel: "Smart Home & Security",
+    categories: [{ slug: "smart-home", label: "Smart Home & Security", isPrimary: true }],
     services: ["Full Home Automation", "CCTV & Security", "Access Control", "Smart Lighting", "Climate Automation", "AV & Cinema Rooms"],
     rating: 4.8,
     reviewCount: 96,
@@ -194,6 +217,7 @@ export const COMPANIES: Company[] = [
     cover: IMG.landscape,
     category: "landscape",
     categoryLabel: "Landscape & Outdoor",
+    categories: [{ slug: "landscape", label: "Landscape & Outdoor", isPrimary: true }],
     services: ["Landscape Design", "Pool & Water Features", "Outdoor Lighting", "Irrigation Systems", "Rooftop Gardens", "Hardscaping"],
     rating: 5.0,
     reviewCount: 89,
@@ -227,6 +251,7 @@ export const COMPANIES: Company[] = [
     cover: IMG.corporate,
     category: "interior-finishing",
     categoryLabel: "Interior & Finishing",
+    categories: [{ slug: "interior-finishing", label: "Interior & Finishing", isPrimary: true }],
     services: ["Architectural Design", "Interior Architecture", "Master Planning", "Project Management", "3D Visualization", "Technical Documentation"],
     rating: 4.9,
     reviewCount: 78,

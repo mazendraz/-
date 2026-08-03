@@ -15,7 +15,7 @@ const FORBIDDEN_ON_COMPANY = [
   "verified", "verifiedSince", "featured", "status",
   "rating", "reviewCount", "ratingOverridden", "completedProjects",
   // identity / ownership
-  "id", "slug", "categoryId", "companyId",
+  "id", "slug", "categoryIds", "primaryCategoryId", "companyId",
   // auth material
   "telegramChatId", "telegramLinkToken", "telegramLinkExpires",
   // bookkeeping
@@ -25,7 +25,7 @@ const FORBIDDEN_ON_COMPANY = [
   // moves to Offerings in Feature B
   "services",
   // relation keys
-  "category", "projects", "reviews", "leads", "users",
+  "categories", "projects", "reviews", "leads", "users",
   // Feature B columns that must never be provider-writable
   "isPublished", "priceUpdatedAt",
 ];

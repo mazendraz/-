@@ -3,6 +3,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { useSettings, type MaintenanceStatus } from "../lib/settings";
 import Logo from "./Logo";
+import Icon from "./Icon";
 
 /**
  * Full-screen status for the two cases where the app itself is healthy:
@@ -42,7 +43,7 @@ function Countdown({ eta }: { eta: number }) {
   // frozen 00:00 that makes the site look abandoned.
   if (remaining <= 0) {
     return (
-      <p className="text-[14px] font-bold text-primary">{t(locale, "status_back_soon")}</p>
+      <p className="text-label font-bold text-primary">{t(locale, "status_back_soon")}</p>
     );
   }
 
@@ -55,17 +56,17 @@ function Countdown({ eta }: { eta: number }) {
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      <p className="text-[12px] font-bold text-outline uppercase tracking-wide">
+      <p className="text-caption font-bold text-outline ltr:uppercase ltr:tracking-wide">
         {t(locale, "status_back_in")}
       </p>
       {/* Logical order: flex-row follows `dir`, so this reads correctly in RTL. */}
       <div className="flex items-center gap-2">
         {parts.map(([value, unit], i) => (
           <div key={i} className="flex items-baseline gap-0.5">
-            <span className="font-display font-black text-[26px] text-on-surface tabular-nums">
+            <span className="font-display font-black text-headline text-on-surface tabular-nums">
               {String(value).padStart(2, "0")}
             </span>
-            <span className="text-[12px] font-bold text-outline">{unit}</span>
+            <span className="text-caption font-bold text-outline">{unit}</span>
           </div>
         ))}
       </div>
@@ -86,7 +87,7 @@ function Illustration({ variant }: { variant: StatusVariant }) {
       <div className="absolute inset-0 flex items-center justify-center">
         <span
           className="material-symbols-outlined text-primary text-[46px] motion-safe:animate-pulse"
-          style={{ fontVariationSettings: "'FILL' 1" }}
+          style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no"
         >
           {variant === "maintenance" ? "construction" : "cloud_off"}
         </span>
@@ -119,14 +120,14 @@ export default function StatusScreen({ variant, status }: {
   return (
     <div className="min-h-screen bg-surface-container flex items-center justify-center p-6">
       <div className="w-full max-w-md text-center">
-        <Logo className="h-12 w-12 object-contain rounded-xl mx-auto mb-8" />
+        <Logo className="h-16 w-16 object-contain rounded-xl mx-auto mb-8" width={64} height={64} />
 
         <Illustration variant={variant} />
 
-        <h1 className="font-display font-black text-[26px] md:text-[30px] text-on-surface mb-3 leading-tight">
+        <h1 className="font-display font-black text-headline md:text-headline text-on-surface mb-3 leading-tight">
           {title}
         </h1>
-        <p className="text-[15px] text-on-surface-variant leading-relaxed mb-7">{message}</p>
+        <p className="text-body text-on-surface-variant leading-relaxed mb-7">{message}</p>
 
         {isMaintenance && status?.eta != null && (
           <div className="mb-7">
@@ -137,17 +138,17 @@ export default function StatusScreen({ variant, status }: {
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button
             onClick={() => window.location.reload()}
-            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-[14px] hover:bg-primary-container transition-colors touch-press btn-press"
+            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press"
           >
-            <span className="material-symbols-outlined text-[18px]">refresh</span>
+            <Icon name="refresh" className="text-subhead" />
             {t(locale, isMaintenance ? "status_reload" : "status_retry")}
           </button>
           {contact && (
             <a
               href={`mailto:${contact}`}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-[14px] text-on-surface border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl font-bold text-label text-on-surface border border-outline-variant/30 hover:bg-surface-container-high transition-colors"
             >
-              <span className="material-symbols-outlined text-[18px]">mail</span>
+              <Icon name="mail" className="text-subhead" />
               {t(locale, "status_contact")}
             </a>
           )}

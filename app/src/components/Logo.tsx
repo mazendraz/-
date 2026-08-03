@@ -6,10 +6,15 @@ export default function Logo({
   className = "",
   alt,
   style,
+  width,
+  height,
 }: {
   className?: string;
   alt?: string;
   style?: React.CSSProperties;
+  /** Intrinsic box for CLS (PERF-01) — actual render size still comes from className/style. */
+  width?: number;
+  height?: number;
 }) {
   const { logo_url, site_name, logo_scale } = useSettings();
   // Admin-tunable size: a percentage (blank = 100). Applied as a transform so it
@@ -23,6 +28,8 @@ export default function Logo({
       alt={alt ?? site_name ?? "Logo"}
       className={className}
       style={transform ? { ...style, transform } : style}
+      width={width}
+      height={height}
       loading="eager"
       decoding="async"
     />

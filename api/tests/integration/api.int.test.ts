@@ -49,7 +49,7 @@ const ctx = <T extends Record<string, string>>(params: T) => ({
 
 function companyData(slug: string, status: "ACTIVE" | "SUSPENDED", categoryId: string) {
   return {
-    categoryId,
+    categories: { create: [{ categoryId, isPrimary: true }] },
     slug,
     name: `Co ${slug}`,
     tagline: "tag",
@@ -114,7 +114,7 @@ afterAll(async () => {
   // Audit rows aren't FK-linked (append-only), so clean this run's by actor.
   await prisma.auditLog.deleteMany({ where: { actorEmail: `${tag}-admin@test` } });
   await prisma.user.deleteMany({ where: { id: { in: [adminId, providerId] } } });
-  await prisma.company.deleteMany({ where: { categoryId } });
+  await prisma.company.deleteMany({ where: { categories: { some: { categoryId } } } });
   await prisma.category.delete({ where: { id: categoryId } }).catch(() => {});
   await prisma.$disconnect();
 });

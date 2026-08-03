@@ -8,11 +8,79 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-snap: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  /* TopNav's real fixed height (NAV-01/NAV-02) — the single source of truth
+     every page's top clearance and the sticky filter bar derive from, instead
+     of each page guessing its own padding. */
+  --nav-h: 64px;
+  /* BottomNav's real fixed height (mobile only) — used everywhere that needs
+     to clear it instead of the 3.5rem literal repeated in three places. */
+  --bottom-nav-h: 3.5rem;
+}
+@media (min-width: 768px) {
+  :root { --nav-h: 76px; }
+}
+
+/* RESP-03: iOS Safari's `100vh` measures the LARGEST viewport (address bar
+   collapsed) — the scroll cue at the bottom of the hero sits under the fold
+   until the visitor scrolls once. `100svh` measures the SMALLEST viewport
+   (address bar visible), matching what's actually on screen on first paint.
+   Two declarations in one rule, not two Tailwind classes: a browser that
+   can't parse `100svh` drops only that one declaration and keeps `100vh`
+   above it — the standard progressive-enhancement fallback pattern. */
+.h-hero {
+  height: 100vh;
+  height: 100svh;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PERF-03: TopNav's scroll-tint, driven by a single custom property
+   (--nav-progress, set imperatively via ref.style.setProperty on scroll — see
+   TopNav.tsx — NEVER through React state/inline styles). Before this, every
+   scroll-frame re-render rebuilt a 3-layer backgroundImage string + boxShadow
+   + borderBottom on a fixed, full-width, backdrop-blurred element — the most
+   expensive possible repaint target, and the prime suspect for scroll jank on
+   mid-range Android. Two pre-built layers now crossfade via `opacity` instead.
+════════════════════════════════════════════════════════════════════════════ */
+.nav-glass {
+  --nav-progress: 0;
+  position: relative;
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 55%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / calc(0.28 - var(--nav-progress) * 0.14)),
+    0 8px 40px rgb(0 40 80 / calc(0.10 + var(--nav-progress) * 0.08));
+  border-bottom: 1px solid rgb(255 255 255 / calc(0.18 + var(--nav-progress) * 0.02));
+  transition: border-color 0.3s ease;
+}
+.nav-glass::before,
+.nav-glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+/* Dark tint over the hero (home, unscrolled) — fades out as --nav-progress rises. */
+.nav-glass::before {
+  background: rgba(10, 26, 45, 0.22);
+  opacity: calc(1 - var(--nav-progress));
+}
+/* Light frost once scrolled / on non-home pages — fades in as --nav-progress rises. */
+.nav-glass::after {
+  background: rgba(255, 255, 255, 0.72);
+  opacity: var(--nav-progress);
+}
+/* Border switches to the solid-bg tint once past the scroll threshold — a
+   discrete flip, so it rides on the (rare) `scrolled` state class rather than
+   needing a continuous calc() for a hard color switch. */
+.nav-glass--solid {
+  border-bottom-color: rgb(0 85 120 / calc(0.18 + var(--nav-progress) * 0.02));
 }
 
 @layer base {
   body {
-    @apply bg-background text-on-background font-body-md antialiased;
+    @apply bg-background text-on-background font-sans antialiased;
     -webkit-tap-highlight-color: rgba(0, 85, 120, 0.08);
   }
 
@@ -67,16 +135,19 @@
   font-variation-settings: "FILL" 1;
 }
 
-/* ── Shadows & Bloom ───────────────────────────────────────────────────── */
+/* ── Shadows & Bloom (DS-05) ──────────────────────────────────────────────
+   Two elevation tiers, one hover-promotion rule (translateY(-4px)):
+     .shadow-bloom / .shadow-bloom-hover — the heavier tier: cards, panels,
+       anything meant to read as a distinct surface floating above the page.
+     .shadow-soft  / .shadow-soft-hover  — the lighter tier: inline chips,
+       nested elements, anything that shouldn't compete with a card's own
+       elevation.
+   (.soft-bloom, .soft-bloom-hover and .soft-shadow used to exist here too —
+   three more names for near-identical effects, per UI-UX-AUDIT.md DS-05 —
+   and were never referenced by any component; removed rather than kept as
+   a third unused tier.) */
 .bg-gold-gradient {
   background: linear-gradient(135deg, #ffd578 0%, #eac167 100%);
-}
-.soft-bloom {
-  box-shadow: 0 10px 40px -10px rgba(0, 85, 120, 0.08);
-}
-.soft-bloom-hover:hover {
-  box-shadow: 0 24px 56px -12px rgba(0, 85, 120, 0.14);
-  transform: translateY(-4px);
 }
 .glass-panel {
   background: rgba(255, 255, 255, 0.9);
@@ -98,22 +169,14 @@
 .shadow-bloom-hover:hover {
   box-shadow: 0 28px 56px -8px rgba(0, 0, 0, 0.09),
     0 14px 28px -6px rgba(0, 0, 0, 0.05);
-  transform: translateY(-5px);
+  transform: translateY(-4px);
 }
 .shadow-soft {
   box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04), 0 0 3px rgba(0, 0, 0, 0.02);
 }
 .shadow-soft-hover:hover {
   box-shadow: 0 8px 30px -4px rgba(0, 0, 0, 0.08), 0 0 4px rgba(0, 0, 0, 0.03);
-  transform: translateY(-2px);
-}
-.soft-shadow {
-  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.12);
-}
-.input-premium:focus {
-  outline: none;
-  border-color: transparent;
-  box-shadow: 0 0 0 2px rgba(113, 69, 0, 0.2);
+  transform: translateY(-4px);
 }
 
 /* ── Glassmorphism ─────────────────────────────────────────────────────── */
@@ -132,11 +195,6 @@
     rgba(0, 10, 30, 0.40) 45%,
     rgba(0, 10, 30, 0.72) 100%
   );
-}
-
-/* ── Transitions ───────────────────────────────────────────────────────── */
-.transition-all-spring {
-  transition: all 0.4s var(--ease-snap);
 }
 
 /* ── Scrollbar Hide ────────────────────────────────────────────────────── */
@@ -169,24 +227,6 @@
   display: inline-block;
   width: 100%;
 }
-
-/* ── Modal input ───────────────────────────────────────────────────────── */
-.modal-input {
-  width: 100%;
-  background: #ffffff;
-  border: 1px solid #bfc7cf;
-  border-radius: 0.5rem;
-  padding: 0.65rem 0.85rem;
-  font-size: 16px;
-  color: #181c1f;
-  outline: none;
-  transition: box-shadow 0.15s, border-color 0.15s;
-}
-.modal-input:focus {
-  border-color: #005578;
-  box-shadow: 0 0 0 2px rgba(0, 85, 120, 0.18);
-}
-.modal-input::placeholder { color: #70787f; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    ANIMATIONS
@@ -243,6 +283,15 @@
      turn <main> into the containing block for position:fixed children, which breaks
      fixed-positioned modals/overlays (they'd anchor to <main> instead of the viewport). */
   animation: pageEnter 0.45s var(--ease-out-expo) backwards;
+}
+
+/* ── Toast entrance (CMP-12) ──────────────────────────────────────────── */
+@keyframes toastEnter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.toast-enter {
+  animation: toastEnter 0.3s var(--ease-out-expo) backwards;
 }
 
 /* ── Skeleton shimmer ─────────────────────────────────────────────────── */
@@ -372,6 +421,11 @@
   -ms-overflow-style: none;
   gap: 16px;
   padding-bottom: 8px;
+  /* RESP-04: the native scrollbar is hidden with nothing standing in for it —
+     an edge fade (same technique as .review-marquee) is the only remaining
+     hint there's more content to either side. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+          mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
 }
 .mobile-scroll::-webkit-scrollbar { display: none; }
 .mobile-scroll > * {
@@ -419,6 +473,10 @@
 /* Pause on hover / focus-within so a reader can stop on a card. */
 .review-marquee:hover .review-marquee-track,
 .review-marquee:focus-within .review-marquee-track { animation-play-state: paused; }
+/* HOME-07: hover/focus-within isn't a real pause mechanism (WCAG 2.2.2 needs
+   one under explicit user control — a touch user can't "hover", and letting
+   go of focus resumes it) — driven by an explicit toggle button instead. */
+.review-marquee--paused .review-marquee-track { animation-play-state: paused; }
 
 /* ── Bleed mobile margins for horizontal scroll ───────────────────────── */
 .mobile-bleed {
@@ -514,10 +572,14 @@
 /* ── Select arrow ─────────────────────────────────────────────────────── */
 select.field-input {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2370787f' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+  padding-inline-end: 44px;
   background-repeat: no-repeat;
   background-position: right 14px center;
-  padding-right: 44px;
 }
+/* The arrow itself can't be a logical background-position, so mirror it
+   explicitly for RTL instead — otherwise it draws over the start of the
+   text, which in Arabic is the right edge where the chevron already sits. */
+[dir="rtl"] select.field-input { background-position: left 14px center; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    CARD ENHANCEMENTS
@@ -528,7 +590,7 @@ select.field-input {
 .card-lift:hover {
   box-shadow: 0 24px 48px -8px rgba(0, 85, 120, 0.12),
               0 12px 24px -4px rgba(0, 0, 0, 0.06);
-  transform: translateY(-6px);
+  transform: translateY(-4px);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -607,6 +669,14 @@ select.field-input {
   /* Lazy image blur-in — skip the blur, show immediately */
   .img-lazy { transition: none; }
   .img-lazy.img-loading { opacity: 1; filter: none; }
+
+  /* Toast entrance */
+  .toast-enter { animation: none; }
+
+  /* ANIM-05: `html { scroll-behavior: smooth }` above was unconditional — an
+     in-page jump (hash link, "scroll to top") animated the scroll position
+     regardless of this setting. */
+  html { scroll-behavior: auto; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -622,7 +692,7 @@ select.field-input {
 }
 @media (max-width: 767px) {
   .compare-bar-offset {
-    bottom: calc(3.5rem + 12px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--bottom-nav-h) + 12px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -653,7 +723,22 @@ select.field-input {
   to   { transform: translateX(0); }
 }
 
-/* Directional icon flip helper (e.g. back arrows → forward arrows in RTL) */
-[dir="rtl"] .rtl-flip {
-  transform: scaleX(-1);
+/* ══════════════════════════════════════════════════════════════════════════
+   PRINT — LEG-03: Terms/Privacy had no print stylesheet at all. Strips the
+   app chrome everywhere (nav/footer/bottom-nav/skip-link/search overlay),
+   which is a reasonable default for the whole site, not just legal pages.
+════════════════════════════════════════════════════════════════════════════ */
+@media print {
+  .nav-glass,
+  footer,
+  .bottom-nav-safe {
+    display: none !important;
+  }
+  main {
+    padding-top: 0 !important;
+  }
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
 }

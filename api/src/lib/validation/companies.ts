@@ -13,8 +13,18 @@ const companyProjectSchema = z.object({
   featured: z.boolean().default(false),
 });
 
-export const upsertCompanySchema = z.object({
-  categoryId: z.string().uuid(),
+// No maximum unless configured — this constant IS the config point (requirement:
+// "no max number of categories unless explicitly configured").
+export const MAX_CATEGORIES_PER_COMPANY = 5;
+
+const baseCompanySchema = z.object({
+  categoryIds: z
+    .array(z.string().uuid())
+    .min(1, "At least one category is required")
+    .max(MAX_CATEGORIES_PER_COMPANY, `A company may belong to at most ${MAX_CATEGORIES_PER_COMPANY} categories`),
+  // Which of categoryIds is the primary (see CompanyCategory). Defaults to
+  // categoryIds[0] in the service layer when omitted.
+  primaryCategoryId: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(150),
   tagline: sanitizedOptionalText(200),
   about: sanitizedOptionalText(5000),
@@ -44,10 +54,23 @@ export const upsertCompanySchema = z.object({
   projects: z.array(companyProjectSchema).optional(),
 });
 
+// Shared by both schemas below — Zod drops .refine()'s effect across .partial(),
+// so each derives independently from baseCompanySchema rather than one wrapping
+// the other.
+function primaryInCategoryIds(data: { categoryIds?: string[]; primaryCategoryId?: string }): boolean {
+  if (!data.categoryIds || !data.primaryCategoryId) return true; // nothing to cross-check
+  return data.categoryIds.includes(data.primaryCategoryId);
+}
+const primaryRefineOptions = {
+  message: "primaryCategoryId must be one of categoryIds",
+  path: ["primaryCategoryId"] as string[],
+};
+
+export const upsertCompanySchema = baseCompanySchema.refine(primaryInCategoryIds, primaryRefineOptions);
 export type UpsertCompanyInput = z.infer<typeof upsertCompanySchema>;
 
 // All fields optional for PATCH/PUT updates.
-export const updateCompanySchema = upsertCompanySchema.partial();
+export const updateCompanySchema = baseCompanySchema.partial().refine(primaryInCategoryIds, primaryRefineOptions);
 export type UpdateCompanyInput = z.infer<typeof updateCompanySchema>;
 
 export const companyStatusSchema = z.object({
