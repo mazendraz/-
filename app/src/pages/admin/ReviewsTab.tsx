@@ -67,7 +67,7 @@ export function AdminCustomerReviews() {
         <div className="flex bg-surface-container rounded-xl p-0.5">
           {(["pending", "approved"] as AdminReviewStatus[]).map((s) => (
             <button key={s} onClick={() => setStatus(s)}
-              className={`px-3 py-1.5 rounded-lg text-caption font-bold transition-colors ${status === s ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}>
+              className={`px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold transition-colors ${status === s ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}>
               {t(locale, s === "pending" ? "admin_rev_pending" : "admin_rev_approved")}
             </button>
           ))}
@@ -147,7 +147,9 @@ export function AdminReviewsTab() {
             <p className="text-caption text-outline mt-0.5">{t(locale, "admin_platform_sub")}</p>
           </div>
           {/* Enable/disable toggle */}
-          <label className="flex items-center gap-2.5 bg-surface-container-lowest border border-outline-variant/25 rounded-xl px-4 py-2.5 cursor-pointer shadow-bloom">
+          {/* DM-06: the checkbox is 16px by design — the LABEL is the target,
+              so it carries the 44px minimum (was 38px). */}
+          <label className="flex items-center gap-2.5 bg-surface-container-lowest border border-outline-variant/25 rounded-xl px-4 py-2.5 min-h-[44px] cursor-pointer shadow-bloom">
             <input type="checkbox" className="w-4 h-4 accent-primary" checked={reviewsOn} onChange={(e) => toggleReviews(e.target.checked)} />
             <span className="text-label font-bold text-on-surface">{t(locale, "admin_platform_allow")}</span>
           </label>
@@ -267,7 +269,7 @@ export function FeedbackDetailModal({ feedback: f, onClose, onDelete }: { feedba
           {t(locale, FEEDBACK_TYPE_KEYS[f.type])}
           {f.companyName && <span className="opacity-70 font-normal ms-1">{t(locale, "admin_fb_re")} {f.companyName}</span>}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><p className="text-caption font-bold text-outline mb-0.5">{t(locale, "admin_lead_name")}</p><p className="text-label text-on-surface">{f.name || "—"}</p></div>
           <div><p className="text-caption font-bold text-outline mb-0.5">{t(locale, "admin_lead_phone")}</p><p className="text-label text-on-surface">{f.phone || "—"}</p></div>
           <div><p className="text-caption font-bold text-outline mb-0.5">{t(locale, "admin_lead_date")}</p><p className="text-label text-on-surface">{formatDateTime(f.createdAt, locale)}</p></div>

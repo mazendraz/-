@@ -84,7 +84,11 @@ export function Sparkline({ data, color = CHART_COLORS.primary, height = 32 }: {
         </linearGradient>
       </defs>
       <path d={area} fill={`url(#${gradId})`} />
-      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {/* DM-14: constant stroke width regardless of the non-uniform x/y scale
+          `preserveAspectRatio="none"` applies — see the longer comment on
+          AreaLineChart's equivalent line for why this isn't a switch to
+          `meet` instead. */}
+      <path d={line} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -141,17 +145,30 @@ export function AreaLineChart({
           </linearGradient>
         </defs>
         {/* gridlines */}
+        {/* DM-14: `vector-effect="non-scaling-stroke"` on every stroked element
+            here — NOT a switch to `preserveAspectRatio="xMidYMid meet"`, which
+            the audit's own one-line suggestion was. Measured: this card's
+            viewBox is 600×220 (2.7:1) but its rendered box ranges from ~1.6:1
+            on a 390px phone to ~3:1 on desktop — `meet` would letterbox the
+            NARROWER dimension to preserve that ratio, which on mobile means
+            the chart shrinking to a fraction of the card height with blank
+            space above/below it. The actual defect the audit measured (a
+            trend line rendering thicker in one direction than another, and a
+            hover-marker circle going elliptical) is `preserveAspectRatio=
+            "none"`'s non-uniform x/y scale acting on stroke width — fixed by
+            keeping stroke width constant in screen pixels regardless of that
+            scale, without touching the intentional full-bleed responsive fill. */}
         {[0.25, 0.5, 0.75, 1].map((g) => (
           <line key={g} x1={padL} x2={VW - padR} y1={padT + innerH - g * innerH} y2={padT + innerH - g * innerH}
-            stroke="#000" strokeOpacity="0.05" strokeWidth="1" />
+            stroke="#000" strokeOpacity="0.05" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         ))}
         <path d={area} fill={`url(#${gradId})`} />
-        <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {/* active marker */}
         {active !== null && data[active] && (
           <>
-            <line x1={x(active)} x2={x(active)} y1={padT} y2={padT + innerH} stroke={color} strokeOpacity="0.3" strokeWidth="1.5" strokeDasharray="3 3" />
-            <circle cx={x(active)} cy={y(data[active].value)} r="5" fill="#fff" stroke={color} strokeWidth="2.5" />
+            <line x1={x(active)} x2={x(active)} y1={padT} y2={padT + innerH} stroke={color} strokeOpacity="0.3" strokeWidth="1.5" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+            <circle cx={x(active)} cy={y(data[active].value)} r="5" fill="#fff" stroke={color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
           </>
         )}
       </svg>
@@ -204,7 +221,13 @@ export function BarChart({
           const h = (d.value / max) * (height - 24);
           return (
             <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group">
-              <span className="text-caption font-bold text-on-surface mb-1 opacity-0 group-hover:opacity-100 transition-opacity">{d.value}</span>
+              {/* DM-11: was opacity-0 until :hover — a touch device has no
+                  hover state, so the chart was shape with no numbers on
+                  every phone. Always visible below md:; md:+ keeps the
+                  hover-reveal (a wide chart with many bars gets crowded if
+                  every value is shown labeled at once — that's still a
+                  mouse-available affordance there, not the only way in). */}
+              <span className="text-caption font-bold text-on-surface mb-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">{d.value}</span>
               <div
                 className="w-full max-w-[44px] rounded-t-lg chart-bar"
                 style={{ height: Math.max(2, h), backgroundColor: color, animationDelay: `${i * 50}ms` }}
@@ -216,7 +239,10 @@ export function BarChart({
       </div>
       <div className="flex justify-between gap-2 mt-2">
         {data.map((d, i) => (
-          <span key={i} className="flex-1 text-center text-caption text-outline font-medium truncate">{d.label}</span>
+          // DM-14: 6 month labels at ~50px each truncated on a phone-width
+          // card. Every other label below sm: — the bars themselves still
+          // all render, only their x-axis text thins out.
+          <span key={i} className={`flex-1 text-center text-caption text-outline font-medium truncate ${i % 2 === 1 ? "hidden sm:block" : ""}`}>{d.label}</span>
         ))}
       </div>
     </div>

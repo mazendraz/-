@@ -172,7 +172,7 @@ export default function OfferingsEditor() {
                       onClick={() => setEditing(o)}
                       disabled={locked || busyId === o.id}
                       title={locked ? t(locale, "prov_off_edit_locked") : undefined}
-                      className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1 bg-surface-container px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40"
                     >
                       <Icon name="edit" className="text-label" /> {t(locale, "prov_off_edit")}
                     </button>

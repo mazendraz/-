@@ -12,10 +12,6 @@ export const createReviewSchema = z.object({
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 
-// Egyptian mobile — same pattern as validation/leads.ts (the shared secret that
-// gates a customer's review against their own completed lead).
-const egyptianPhone = /^(?:\+?20)?0?1[0125]\d{8}$/;
-
 // Public customer review submission (POST /reviews). author/date/district are
 // derived server-side from the lead, so the customer only sends rating + text.
 // Gated by the lead's tracking token (new leads) or phone (legacy) — at least one.
@@ -23,11 +19,9 @@ export const submitReviewSchema = z
   .object({
     ref: z.string().trim().min(1),
     token: z.string().trim().min(1).max(200).optional(),
-    phone: z
-      .string()
-      .trim()
-      .regex(egyptianPhone, "Invalid Egyptian mobile number")
-      .optional(),
+    // Same pattern as trackLeadSchema.phone (validation/leads.ts): a lookup
+    // secret compared via phoneTail(), not a stored value — length check only.
+    phone: z.string().trim().min(8).max(20).optional(),
     rating: z.number().int().min(1).max(5),
     text: sanitizedText(1, 2000),
   })

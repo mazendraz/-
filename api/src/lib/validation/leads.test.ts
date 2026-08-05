@@ -6,29 +6,32 @@ const base = {
   companyName: "Aura Interiors",
   service: "Full Interior Design",
   name: "Mona Adel",
-  phone: "01012345678",
+  phone: "+201012345678",
   district: "R7 District",
   budget: "EGP 150,000 – 500,000",
   description: "I need a full fit-out for a 3-bedroom apartment.",
 };
 
+// The frontend's PhoneInput always normalizes to E.164 before submitting, so
+// the server now validates real international E.164 (via libphonenumber-js)
+// instead of an Egypt-only regex — see PhoneInput plan (international support).
 describe("createLeadSchema phone", () => {
   it.each([
-    "01012345678", // local
-    "01112345678",
-    "01212345678",
-    "01512345678",
-    "201012345678", // country code, no plus
-    "+201012345678", // E.164 (trunk 0 dropped)
+    "+201012345678", // Egypt mobile, E.164
+    "+201112345678",
+    "+201512345678",
+    "+14155552671", // a valid non-Egyptian number, now accepted
+    "+442071838750",
   ])("accepts %s", (phone) => {
     expect(createLeadSchema.safeParse({ ...base, phone }).success).toBe(true);
   });
 
   it.each([
-    "12345", // too short
-    "01312345678", // invalid operator prefix 013
-    "0101234567", // one digit short
-    "010123456789", // one digit long
+    "12345", // too short, no country code
+    "01012345678", // local form without a leading + — no longer accepted directly
+    "201012345678", // country code without a leading +
+    "+201", // truncated
+    "+999123456789", // unrecognized country calling code
     "abcdefghijk",
   ])("rejects %s", (phone) => {
     expect(createLeadSchema.safeParse({ ...base, phone }).success).toBe(false);
@@ -40,11 +43,12 @@ describe("createLeadSchema fields", () => {
     expect(createLeadSchema.safeParse(base).success).toBe(true);
   });
 
-  it("trims and rejects too-short name / description", () => {
+  it("trims and rejects a too-short name", () => {
     expect(createLeadSchema.safeParse({ ...base, name: "A" }).success).toBe(false);
-    expect(
-      createLeadSchema.safeParse({ ...base, description: "too short" }).success,
-    ).toBe(false);
+  });
+
+  it("accepts an empty budget and description — neither is required anymore", () => {
+    expect(createLeadSchema.safeParse({ ...base, budget: "", description: "" }).success).toBe(true);
   });
 
   it("ignores unknown keys like the honeypot field", () => {

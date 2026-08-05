@@ -167,12 +167,15 @@ export default function LeadsPage() {
     <div className="space-y-4">
       <SearchInput value={leadQuery} onChange={setLeadQuery} placeholder={t(locale, "admin_leads_search")} />
       <div className="flex flex-wrap gap-3 items-center">
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as LeadStatus | "All" | "Waitlist")} className="field-input !w-auto !py-2">
+        {/* Found while closing out Phase 5: unnamed to a screen reader — no
+            visible label, no aria-label, same class of bug as DM-06b's lead
+            row selects, just on the filter row above them instead. */}
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as LeadStatus | "All" | "Waitlist")} aria-label={t(locale, "admin_lead_status")} className="field-input !w-auto !py-2 !min-h-[44px]">
           <option value="All">{t(locale, "admin_all_statuses")}</option>
           {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
           <option value="Waitlist">{t(locale, "requests_filter_waitlist")}</option>
         </select>
-        <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="field-input !w-auto !py-2">
+        <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} aria-label={t(locale, "admin_chat_filter_company")} className="field-input !w-auto !py-2 !min-h-[44px]">
           <option value="all">{t(locale, "admin_all_companies")}</option>
           {companies.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
         </select>

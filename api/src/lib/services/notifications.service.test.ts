@@ -49,6 +49,15 @@ describe("buildNewLeadEmail", () => {
     expect(email!.html).not.toContain("<script>");
     expect(email!.html).toContain("&lt;script&gt;");
   });
+
+  it("omits the Budget/Details rows when the customer left them blank", () => {
+    const email = buildNewLeadEmail(
+      { ...lead, budget: "", description: "" },
+      { email: "owner@aura.test", companyName: "Aura Interiors" },
+    );
+    expect(email!.text).not.toContain("Budget");
+    expect(email!.text).not.toContain("Details");
+  });
 });
 
 describe("buildAdminAlertEmail (PII-minimized)", () => {

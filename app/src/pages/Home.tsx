@@ -94,13 +94,18 @@ export default function Home() {
       {/* ═══════════════════════════════════════════════════
           HERO — full-screen NAC skyline
       ═══════════════════════════════════════════════════ */}
-      {/* -mt cancels out <main>'s new pt-[calc(var(--nav-h)+2rem)] (NAV-01) so
-          this full-bleed hero still starts at the very top of the viewport,
-          behind the transparent nav, exactly as before that shared padding
-          existed — every other page wants the padding, this one specifically
+      {/* RootLayout skips <main>'s nav-clearance padding on "/" (NAV-01) so this
+          full-bleed hero starts at the very top of the viewport, behind the
+          transparent nav — every other page wants the padding, this one
           doesn't. */}
-      <header className="h-hero relative w-full min-h-[640px] max-h-[900px] flex items-center justify-center overflow-hidden -mt-[calc(var(--nav-h)+2rem)]">
-        {/* Background — eager loaded, above the fold */}
+      <header className="h-hero relative w-full min-h-[640px] max-h-[900px] flex items-center justify-center overflow-hidden">
+        {/* Background — eager loaded, above the fold. object-top (not center):
+            the hero is capped at max-h-[900px] while the source image is a 16:9
+            skyline shot, so on any viewport wider than ~16:9 (most laptops,
+            all ultra-wides) object-fit:cover has to crop the vertical axis.
+            Anchoring to the top keeps that crop entirely inside the plaza/
+            palm-tree foreground at the bottom and never touches the tower —
+            the actual focal point — which object-center was eating into. */}
         <img
           src={heroImage}
           alt={t(locale, "home_hero_alt")}
@@ -108,7 +113,7 @@ export default function Home() {
           decoding="async"
           width={1920}
           height={900}
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          className="absolute inset-0 w-full h-full object-cover object-top"
         />
         <div className="absolute inset-0 hero-scrim" />
 

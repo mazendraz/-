@@ -1,4 +1,5 @@
 import { useSettings } from "../lib/settings";
+import { formatPhoneDisplay } from "../lib/phone";
 
 interface Props {
   /** "inverse" = footer's light-on-dark styling; "surface" = standalone page's normal on-surface styling. */
@@ -29,7 +30,7 @@ export default function ContactInfo({ tone = "surface" }: Props) {
             <ContactLine icon="mail" href={`mailto:${s.support_email}`} text={s.support_email} textClass={textClass} hoverClass={hoverClass} />
           )}
           {s.public_phone && (
-            <ContactLine icon="call" href={`tel:${s.public_phone.replace(/\s/g, "")}`} text={s.public_phone} textClass={textClass} hoverClass={hoverClass} />
+            <ContactLine icon="call" href={`tel:${s.public_phone.replace(/\s/g, "")}`} text={formatPhoneDisplay(s.public_phone)} textClass={textClass} hoverClass={hoverClass} ltr />
           )}
           {s.address && <ContactLine icon="location_on" text={s.address} textClass={textClass} hoverClass={hoverClass} />}
         </ul>
@@ -53,13 +54,13 @@ export default function ContactInfo({ tone = "surface" }: Props) {
   );
 }
 
-function ContactLine({ icon, text, href, textClass, hoverClass }: {
-  icon: string; text: string; href?: string; textClass: string; hoverClass: string;
+function ContactLine({ icon, text, href, textClass, hoverClass, ltr }: {
+  icon: string; text: string; href?: string; textClass: string; hoverClass: string; ltr?: boolean;
 }) {
   const body = (
     <span className={`flex items-center gap-2 text-sm ${textClass}`}>
       <span className="material-symbols-outlined text-body flex-shrink-0" aria-hidden="true" translate="no">{icon}</span>
-      <span className="break-words">{text}</span>
+      <span className="break-words" dir={ltr ? "ltr" : undefined}>{text}</span>
     </span>
   );
   return (

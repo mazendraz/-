@@ -20,7 +20,8 @@ export default function ServicesPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-[200px]"><SearchInput value={categoryQuery} onChange={setCategoryQuery} placeholder={t(locale, "admin_categories_search")} /></div>
-        <button onClick={() => setEditingCategory({ category: null })} className="flex items-center gap-1.5 bg-primary text-on-primary px-3 md:px-4 py-2 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press flex-shrink-0">
+        {/* DM-17 pattern (missed in Phase 1's pass) — label is hidden below sm:. */}
+        <button onClick={() => setEditingCategory({ category: null })} aria-label={t(locale, "admin_add_category")} className="flex items-center gap-1.5 bg-primary text-on-primary px-3 md:px-4 py-2 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press flex-shrink-0">
           <Icon name="add" className="text-subhead" /><span className="hidden sm:inline">{t(locale, "admin_add_category")}</span>
         </button>
       </div>

@@ -106,7 +106,7 @@ export default function AvailabilityControl({
 
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={saving}
-          className="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
+          className="px-6 py-2.5 min-h-[44px] rounded-xl bg-primary text-on-primary font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
           {saving && <Icon name="progress_activity" className="text-subhead animate-spin" />}
           {t(locale, saving ? "prov_avail_saving" : "prov_avail_save")}
         </button>

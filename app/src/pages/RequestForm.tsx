@@ -1,7 +1,7 @@
 import { useState, useId } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isApiConfigured } from "../lib/api";
-import { DISTRICTS, BUDGETS, addLead, getMyLeads, type Lead } from "../lib/requests";
+import { DISTRICTS, addLead, getMyLeads, type Lead } from "../lib/requests";
 import { useSettings, parseLines } from "../lib/settings";
 import { useCompanyDetail } from "../lib/catalog";
 import { isBusy, formatReopenDate, availableAgainAt } from "../lib/availability";
@@ -15,6 +15,8 @@ import { readCart, clearCart, type CartItem } from "../lib/cart";
 import { chatAvailable } from "../lib/chat";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import PhoneInput from "../components/PhoneInput";
+import { isValidE164, formatPhoneDisplay } from "../lib/phone";
 import Icon from "../components/Icon";
 
 type Step = "form" | "success";
@@ -23,25 +25,12 @@ interface FormState {
   name: string;
   phone: string;
   district: string;
-  budget: string;
   description: string;
   service: string;
 }
 
-const EMPTY: FormState = { name: "", phone: "", district: "", budget: "", description: "", service: "" };
+const EMPTY: FormState = { name: "", phone: "", district: "", description: "", service: "" };
 const DESCRIPTION_MAX = 500;
-
-// Egyptian mobile, matching the backend (api/src/lib/validation/leads.ts). The
-// server trims but does NOT strip internal spaces/dashes, so normalize to ASCII
-// digits with no separators before validating/sending — otherwise a number like
-// "+20 100 123 4567" would pass here yet be rejected by the API.
-const EG_MOBILE = /^(?:\+?20)?0?1[0125]\d{8}$/;
-function normalizePhone(raw: string): string {
-  return raw
-    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString())
-    .replace(/[\s\-()]/g, "")
-    .trim();
-}
 
 export default function RequestForm() {
   const { locale } = useLocale();
@@ -57,11 +46,10 @@ export default function RequestForm() {
   const { company } = useCompanyDetail(companySlug);
   const companyName = company?.name ?? (companyNameParam || t(locale, "brand_name"));
 
-  // District/budget options are admin-configurable (Settings); fall back to the
-  // built-in lists when not overridden.
+  // District options are admin-configurable (Settings); fall back to the
+  // built-in list when not overridden.
   const settings = useSettings();
   const districts = parseLines(settings.districts, DISTRICTS);
-  const budgets = parseLines(settings.budgets, BUDGETS);
 
   // Smart pre-fill: reuse contact details from this device's last request
   const lastLead = getMyLeads()[0];
@@ -112,11 +100,8 @@ export default function RequestForm() {
     const e: Partial<FormState> = {};
     if (!form.name.trim()) e.name = t(locale, "form_err_name");
     if (!form.phone.trim()) e.phone = t(locale, "form_err_phone");
-    else if (!EG_MOBILE.test(normalizePhone(form.phone))) e.phone = t(locale, "form_err_phone_invalid");
+    else if (!isValidE164(form.phone)) e.phone = t(locale, "form_err_phone_invalid");
     if (!form.district) e.district = t(locale, "form_err_district");
-    if (!form.budget) e.budget = t(locale, "form_err_budget");
-    if (!form.description.trim()) e.description = t(locale, "form_err_description");
-    else if (form.description.trim().length < 10) e.description = t(locale, "form_err_description_short");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -149,9 +134,11 @@ export default function RequestForm() {
         // human-readable summary the older screens and emails read.
         service: form.service || "General Inquiry",
         name: form.name.trim(),
-        phone: normalizePhone(form.phone),
+        phone: form.phone,
         district: form.district,
-        budget: form.budget,
+        // Budget is no longer collected on this form; the field stays required
+        // on the Lead/API shape (existing leads have real values), so send "".
+        budget: "",
         description: form.description.trim(),
         ...(items.length > 0 ? { items } : {}),
       }, honeypot, captchaToken);
@@ -291,19 +278,14 @@ export default function RequestForm() {
 
           <Field label={t(locale, "form_phone")} required error={errors.phone}>
             {(p) => (
-              <input
+              <PhoneInput
                 id={p.id}
-                aria-invalid={p.invalid}
-                aria-describedby={p.describedById}
-                type="tel"
+                ariaInvalid={p.invalid}
+                describedById={p.describedById}
+                hasError={!!errors.phone}
                 value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
-                placeholder="+20 100 123 4567"
-                autoComplete="tel"
-                inputMode="tel"
-                dir="ltr"
-                className={`field-input ${errors.phone ? "error" : ""}`}
-                data-has-error={!!errors.phone}
+                onChange={(v) => set("phone", v)}
+                hideError
               />
             )}
           </Field>
@@ -359,36 +341,16 @@ export default function RequestForm() {
             )}
           </Field>
 
-          <Field label={t(locale, "form_budget")} required error={errors.budget}>
-            {(p) => (
-              <select
-                id={p.id}
-                aria-invalid={p.invalid}
-                aria-describedby={p.describedById}
-                value={form.budget}
-                onChange={(e) => set("budget", e.target.value)}
-                className={`field-input ${errors.budget ? "error" : ""}`}
-                data-has-error={!!errors.budget}
-              >
-                <option value="">{t(locale, "form_budget_ph")}</option>
-                {budgets.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            )}
-          </Field>
-
-          <Field label={t(locale, "form_description")} required error={errors.description}>
+          <Field label={t(locale, "form_description")}>
             {(p) => (
               <div className="relative">
                 <textarea
                   id={p.id}
-                  aria-invalid={p.invalid}
-                  aria-describedby={p.describedById}
                   value={form.description}
                   onChange={(e) => set("description", e.target.value)}
                   placeholder={t(locale, "form_description_ph")}
                   rows={4}
-                  className={`field-input resize-none ${errors.description ? "error" : ""}`}
-                  data-has-error={!!errors.description}
+                  className="field-input resize-none"
                   style={{ paddingBottom: "2.5rem" }}
                 />
                 {/* Character counter */}
@@ -472,7 +434,7 @@ export default function RequestForm() {
             data-form-type="other"
             value={honeypot}
             onChange={(e) => setHoneypot(e.target.value)}
-            className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+            className="sr-only"
           />
         </form>
       </div>
@@ -607,9 +569,8 @@ function SuccessScreen({ lead, companyName, locale }: { lead: Lead; companyName:
           <p className="font-black text-primary text-[1.8rem] ltr:tracking-widest mb-5 font-mono" dir="ltr">{lead.refNumber}</p>
           <div className="space-y-2.5 pt-4 border-t border-outline-variant/20">
             <InfoRow icon="person" label={t(locale, "form_name")} val={lead.name} />
-            <InfoRow icon="phone" label={t(locale, "form_phone_label")} val={lead.phone} />
+            <InfoRow icon="phone" label={t(locale, "form_phone_label")} val={formatPhoneDisplay(lead.phone)} />
             <InfoRow icon="location_on" label={t(locale, "requests_district")} val={lead.district} />
-            <InfoRow icon="payments" label={t(locale, "requests_budget")} val={lead.budget} />
             <InfoRow icon="business" label={t(locale, "form_company")} val={companyName} />
           </div>
         </div>

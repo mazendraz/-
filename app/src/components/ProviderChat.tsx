@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   listProviderConversations, fetchProviderThread, sendProviderMessage,
   type Conversation,
@@ -8,6 +9,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import ChatThread from "./ChatThread";
 import ConversationListItem from "./ConversationListItem";
+import MobileChatOverlay from "./MobileChatOverlay";
 import Icon from "./Icon";
 
 /**
@@ -21,13 +23,31 @@ import Icon from "./Icon";
  */
 export default function ProviderChat() {
   const { locale } = useLocale();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Conversation[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // Either a server message (already a string) or a translation KEY resolved at
   // render. Calling t() inside the callback froze the language it was built with.
   const [error, setError] = useState<{ text?: string; key?: StringKey } | null>(null);
   const errorText = error?.text ?? (error?.key ? t(locale, error.key) : "");
+
+  // DM-05: same push-navigation pattern as admin/ChatTab.tsx — the selected
+  // conversation lives in the URL (?c=id) so below md: the list and the
+  // thread are never both scrollable regions on screen at once, and the
+  // browser's own Back button closes an open thread.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeId = searchParams.get("c");
+  const active = items.find((c) => c.id === activeId) ?? null;
+  const selectedByUsRef = useRef(false);
+  function selectConversation(c: Conversation) {
+    selectedByUsRef.current = true;
+    setSearchParams({ c: c.id });
+  }
+  function closeConversation() {
+    if (selectedByUsRef.current) navigate(-1);
+    else setSearchParams({}, { replace: true });
+    selectedByUsRef.current = false;
+  }
 
   const load = useCallback(() => {
     if (!isApiConfigured()) { setLoading(false); return; }
@@ -75,9 +95,13 @@ export default function ProviderChat() {
         <div className="bg-error/10 border border-error/25 text-error rounded-xl px-4 py-2.5 text-label font-bold mb-3">{errorText}</div>
       )}
 
+      {/* DM-05: below md:, only one of the two panes below is ever shown —
+          see admin/ChatTab.tsx for the fuller rationale (same broken-
+          nested-scroll pattern, same fix). md:+ is untouched: both columns,
+          same as before this phase. */}
       <div className="grid grid-cols-1 md:grid-cols-[18rem_1fr] gap-4">
         {/* Thread list */}
-        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden">
+        <div className={`bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden ${active ? "hidden md:block" : ""}`}>
           {items.length === 0 ? (
             <div className="text-center py-12 px-5">
               <Icon name="forum" className="text-outline text-[40px] mb-2 block" />
@@ -99,18 +123,20 @@ export default function ProviderChat() {
                   unread={c.providerUnread}
                   closed={c.closed}
                   active={activeId === c.id}
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => selectConversation(c)}
                 />
               ))}
             </div>
           )}
         </div>
 
-        {/* Conversation */}
-        <div className="bg-surface-container-lowest rounded-2xl shadow-bloom p-4">
-          {activeId ? (
+        {/* Conversation — md:+ only now. Below md:, MobileChatOverlay takes
+            over the whole screen instead, fixed to the viewport so it can't
+            scroll away with the rest of the dashboard. */}
+        <div className="hidden md:block bg-surface-container-lowest rounded-2xl shadow-bloom p-4">
+          {active ? (
             <ChatThread
-              key={activeId}
+              key={active.id}
               viewer="provider"
               className="h-[28rem]"
               load={loadThread}
@@ -125,6 +151,37 @@ export default function ProviderChat() {
           )}
         </div>
       </div>
+
+      {/* Below md: — WhatsApp-style full-screen takeover, pinned to the
+          viewport (not the page) so the input bar can never scroll out of
+          view and rides above the on-screen keyboard. */}
+      {active && (
+        <MobileChatOverlay
+          hiddenFrom="md"
+          header={
+            <div className="dashboard-topbar-safe flex items-center gap-2 px-3 pb-3 border-b border-outline-variant/15 min-w-0 flex-shrink-0">
+              <button
+                onClick={closeConversation}
+                className="w-11 h-11 -ms-2.5 flex items-center justify-center rounded-lg hover:bg-surface-container transition-colors flex-shrink-0"
+                aria-label={t(locale, "common_back")}
+              >
+                <Icon name="arrow_back" className="rtl-flip" />
+              </button>
+              <p className="font-bold text-label text-on-surface truncate">
+                {active.customerName ?? active.refNumber ?? ""}
+              </p>
+            </div>
+          }
+        >
+          <ChatThread
+            key={active.id}
+            viewer="provider"
+            className="h-full"
+            load={loadThread}
+            send={sendThread}
+          />
+        </MobileChatOverlay>
+      )}
     </div>
   );
 }

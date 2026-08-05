@@ -46,7 +46,14 @@ export default function Tabs<T extends string>({ items, activeId, onChange, idPr
   }
 
   return (
-    <div role="tablist" className={className}>
+    // DM-09: `max-w-full overflow-x-auto scrollbar-hide` lives here rather than
+    // at each call site. CompanyEditor's four Arabic sub-tab labels measure
+    // ~360px inside a ~318px modal at 390px — a horizontal overflow INSIDE a
+    // modal, which is both the hardest kind to notice and the most annoying to
+    // use. SettingsTab's equivalent strip had already been given the same
+    // treatment by hand; putting it in the component means the next caller
+    // can't forget it. Same pattern as PersonalTabs.tsx.
+    <div role="tablist" className={`max-w-full overflow-x-auto scrollbar-hide ${className}`}>
       {items.map((item, index) => {
         const active = item.id === activeId;
         return (

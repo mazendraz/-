@@ -1,28 +1,44 @@
 import { NavLink } from "react-router-dom";
-import { useSaved } from "../hooks/useSaved";
-import { useLocale } from "../context/LocaleContext";
-import { t, type StringKey } from "../lib/i18n";
 
-const TABS: { to: string; key: StringKey; icon: string; end: boolean }[] = [
-  { to: "/", key: "nav_home", icon: "home", end: true },
-  { to: "/services", key: "nav_services", icon: "grid_view", end: false },
-  { to: "/saved", key: "nav_saved", icon: "favorite", end: false },
-  { to: "/requests", key: "nav_requests", icon: "receipt_long", end: false },
-];
+export interface BottomNavItem {
+  to: string;
+  label: string;
+  icon: string;
+  /** Passed straight to NavLink's `end` — true for a root path like "/" or
+   *  "/admin/overview" that would otherwise match every nested route under it. */
+  end?: boolean;
+  /** Omit or 0 to show no badge. */
+  badge?: number;
+}
 
-export default function BottomNav() {
-  const { count } = useSaved();
-  const { locale } = useLocale();
+interface BottomNavProps {
+  items: BottomNavItem[];
+  ariaLabel: string;
+}
+
+/**
+ * The mobile bottom tab bar — shared by the public site (RootLayout) and,
+ * since DM-07, both dashboards (AdminLayout/ProviderLayout).
+ *
+ * Generalized over an item list rather than forked a third time: it used to
+ * read `useSaved()` directly and hardcode the public site's four tabs, which
+ * only worked because it had exactly one caller. Each caller now computes its
+ * own items — the public site's saved-count badge, admin's leads/chat/changes
+ * badges, provider's leads badge — from whatever it already has on hand
+ * (DM-07's acceptance bar: dashboard badges must match the sidebar's numbers,
+ * not invent new ones).
+ */
+export default function BottomNav({ items, ariaLabel }: BottomNavProps) {
   return (
     <nav
-      aria-label={t(locale, "nav_more")}
+      aria-label={ariaLabel}
       // PERF-04: this already read as solid at 97% opacity — backdrop-blur-xl
       // was pure repaint cost on a fixed, full-width element with zero visible
       // effect. Plain white removes that cost entirely.
       className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/20 bottom-nav-safe"
     >
       <div className="flex h-[var(--bottom-nav-h)]">
-        {TABS.map(({ to, key, icon, end }) => (
+        {items.map(({ to, label, icon, end, badge }) => (
           <NavLink
             key={to}
             to={to}
@@ -44,12 +60,12 @@ export default function BottomNav() {
                 >
                   {icon}
                 </span>
-                {key === "nav_saved" && count > 0 && (
+                {!!badge && badge > 0 && (
                   <span className="absolute top-1.5 right-[calc(50%-14px)] min-w-[16px] h-[16px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center leading-none">
-                    {count}
+                    {badge}
                   </span>
                 )}
-                <span className="text-caption font-bold leading-none">{t(locale, key)}</span>
+                <span className="text-caption font-bold leading-none">{label}</span>
               </>
             )}
           </NavLink>

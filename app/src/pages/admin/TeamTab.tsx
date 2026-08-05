@@ -127,7 +127,7 @@ export function TeamTab({ companies, initialCompanyId, onConsumeInitial }: {
                 </p>
               </div>
               <button onClick={() => setEditing({ user: u })}
-                className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0">
+                className="flex items-center gap-1 bg-surface-container px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors flex-shrink-0">
                 <Icon name="edit" className="text-label" /> {t(locale, "admin_team_manage")}
               </button>
             </div>

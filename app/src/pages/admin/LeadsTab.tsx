@@ -144,7 +144,12 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
 }
 
 export function LeadModal({ lead, onClose, onStatusChange, onDelete }: {
-  lead: Lead; onClose: () => void; onStatusChange: (id: string, s: LeadStatus) => void; onDelete: (id: string) => void;
+  lead: Lead; onClose: () => void; onStatusChange: (id: string, s: LeadStatus) => void;
+  /** Omit to hide the delete affordance entirely. The provider dashboard
+   * (DM-03) reuses this modal but has no lead-delete capability — deleting
+   * another party's lead is an admin action, and rendering a dead button (or
+   * quietly granting the permission) would both be wrong. */
+  onDelete?: (id: string) => void;
 }) {
   const { locale } = useLocale();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -158,17 +163,17 @@ export function LeadModal({ lead, onClose, onStatusChange, onDelete }: {
             {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={lead.name} /><InfoField label={t(locale, "admin_lead_phone")} val={lead.phone} />
           <InfoField label={t(locale, "admin_lead_company")} val={lead.companyName} /><InfoField label={t(locale, "admin_lead_service")} val={lead.service} />
-          <InfoField label={t(locale, "admin_lead_district")} val={lead.district} /><InfoField label={t(locale, "admin_lead_budget")} val={lead.budget} />
+          <InfoField label={t(locale, "admin_lead_district")} val={lead.district} /><InfoField label={t(locale, "admin_lead_budget")} val={lead.budget || "—"} />
           <InfoField label={t(locale, "admin_lead_date")} val={formatDateTime(lead.createdAt, locale)} span={2} />
         </div>
         <div>
           <p className="text-caption font-bold text-outline mb-1.5">{t(locale, "admin_lead_description")}</p>
           <div className="bg-surface-container rounded-xl p-4 text-label text-on-surface leading-relaxed">{lead.description || <span className="text-outline italic">{t(locale, "admin_lead_no_description")}</span>}</div>
         </div>
-        {!confirmDelete ? (
+        {!onDelete ? null : !confirmDelete ? (
           <button onClick={() => setConfirmDelete(true)} className="w-full py-2.5 rounded-xl border border-error/30 text-error font-bold text-label hover:bg-error/5 transition-colors">{t(locale, "admin_lead_delete")}</button>
         ) : (
           <div className="rounded-xl border border-error/30 p-4 bg-error/5">
@@ -207,7 +212,7 @@ export function WaitlistDetailModal({ entry, onClose, onStatusChange, onDelete }
             {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={entry.name} /><InfoField label={t(locale, "admin_lead_phone")} val={entry.phone} />
           <InfoField label={t(locale, "admin_lead_company")} val={entry.companyName} /><InfoField label={t(locale, "waitlist_service")} val={entry.service || "—"} />
           <InfoField label={t(locale, "admin_lead_date")} val={formatDateTime(entry.createdAt, locale)} span={2} />

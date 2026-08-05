@@ -128,7 +128,7 @@ export function AdminOfferingsPanel({ companyId }: { companyId: string }) {
                     <button
                       onClick={() => setEditing(o)}
                       disabled={busyId === o.id}
-                      className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1 bg-surface-container px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors disabled:opacity-40"
                     >
                       <Icon name="edit" className="text-label" /> {t(locale, "admin_off_edit")}
                     </button>
@@ -253,7 +253,7 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
             <textarea className="field-input" rows={3} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_type")}</label>
               <select className="field-input" value={form.kind} onChange={(e) => set("kind", e.target.value as "SERVICE" | "PRODUCT")}>
@@ -276,7 +276,7 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
               {t(locale, "prov_off_quote_note_before")} “{formatPrice({ pricingModel: "ON_INSPECTION", priceMin: null, priceMax: null, unit: null }, locale)}”. {t(locale, "prov_off_quote_note_after")}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-caption font-bold text-outline mb-1.5">
                   {t(locale, model === "RANGE" ? "prov_off_price_min" : "prov_off_price")} * {t(locale, "prov_off_currency")}

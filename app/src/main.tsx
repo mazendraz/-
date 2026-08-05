@@ -40,7 +40,23 @@ const AdminChangesPage = lazy(() => import("./pages/admin/ChangeRequestsTab").th
 const AdminChatPage = lazy(() => import("./pages/admin/ChatTab").then((m) => ({ default: m.ChatTab })));
 const AdminStatusPage = lazy(() => import("./pages/admin/SiteStatusTab").then((m) => ({ default: m.SiteStatusTab })));
 const AdminSettingsPage = lazy(() => import("./pages/admin/tabs/SettingsPage"));
-const ProviderDashboard = lazy(() => import("./pages/ProviderDashboard"));
+const ProviderLayout = lazy(() => import("./pages/provider/ProviderLayout"));
+const ProviderIndexRedirect = lazy(() => import("./pages/provider/ProviderLayout").then((m) => ({ default: m.ProviderIndexRedirect })));
+// DM-02/DM-12: the provider dashboard used to be one 1,000-line component
+// holding all ten tab bodies, statically importing the charting library, the
+// offerings editor, the profile editor and the chat client — a provider opening
+// their dashboard on 3G downloaded all of it before seeing a lead count. Each
+// tab is now its own route and its own chunk, like admin's.
+const ProviderOverviewPage = lazy(() => import("./pages/provider/tabs/OverviewPage"));
+const ProviderLeadsPage = lazy(() => import("./pages/provider/tabs/LeadsPage"));
+const ProviderMessagesPage = lazy(() => import("./pages/provider/tabs/MessagesPage"));
+const ProviderProjectsPage = lazy(() => import("./pages/provider/tabs/ProjectsPage"));
+const ProviderReviewsPage = lazy(() => import("./pages/provider/tabs/ReviewsPage"));
+const ProviderAnalyticsPage = lazy(() => import("./pages/provider/tabs/AnalyticsPage"));
+const ProviderAvailabilityPage = lazy(() => import("./pages/provider/tabs/AvailabilityPage"));
+const ProviderPricingPage = lazy(() => import("./pages/provider/tabs/PricingPage"));
+const ProviderProfilePage = lazy(() => import("./pages/provider/tabs/ProfilePage"));
+const ProviderSettingsPage = lazy(() => import("./pages/provider/tabs/SettingsPage"));
 
 function DashboardFallback() {
   return (
@@ -117,13 +133,47 @@ const router = createBrowserRouter([
       <LocaleProvider>
         <ToastProvider>
           <RequireAuth role="PROVIDER">
-            <Suspense fallback={<DashboardFallback />}><ProviderDashboard /></Suspense>
+            <Suspense fallback={<DashboardFallback />}><ProviderLayout /></Suspense>
           </RequireAuth>
         </ToastProvider>
       </LocaleProvider>
     ),
+    // DM-02: real nested routes, not `?tab=` state read once on mount. Back
+    // now moves between tabs instead of leaving the dashboard — the thing that
+    // mattered most on a phone, where Back is the primary navigation control
+    // and an installed PWA has no URL bar to fall back on.
+    //
+    // The index route keeps `?tab=` working: the server still builds
+    // `/provider?tab=messages` into chat push-notification payloads.
+    children: [
+      { index: true, element: <ProviderIndexRedirect /> },
+      { path: "overview", element: <ProviderOverviewPage /> },
+      { path: "leads", element: <ProviderLeadsPage /> },
+      { path: "messages", element: <ProviderMessagesPage /> },
+      { path: "projects", element: <ProviderProjectsPage /> },
+      { path: "reviews", element: <ProviderReviewsPage /> },
+      { path: "analytics", element: <ProviderAnalyticsPage /> },
+      { path: "availability", element: <ProviderAvailabilityPage /> },
+      { path: "pricing", element: <ProviderPricingPage /> },
+      { path: "profile", element: <ProviderProfilePage /> },
+      { path: "settings", element: <ProviderSettingsPage /> },
+    ],
   },
 ]);
+
+// DM-13: sw.js posts { type: "navigate", url } to an already-open dashboard
+// window instead of opening a duplicate one when a notification's target tab
+// differs from the current one. Wired at the router level (not inside
+// ProviderLayout/AdminLayout) so one listener covers both dashboards and
+// survives whichever tab happens to be mounted when the message arrives.
+navigator.serviceWorker?.addEventListener("message", (event) => {
+  if (event.data?.type === "navigate" && typeof event.data.url === "string") {
+    const path = event.data.url.startsWith("http")
+      ? new URL(event.data.url).pathname + new URL(event.data.url).search
+      : event.data.url;
+    void router.navigate(path);
+  }
+});
 
 // ErrorBoundary sits ABOVE RouterProvider on purpose. The router's errorElement
 // only catches throws from inside a route; anything that fails above it — the

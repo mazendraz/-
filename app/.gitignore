@@ -10,3 +10,5 @@ dist
 /playwright-report/
 /blob-report/
 /.playwright/
+# Saved login sessions written by tests/auth.setup.ts — real session cookies.
+/tests/.auth/

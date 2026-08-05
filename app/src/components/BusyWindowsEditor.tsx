@@ -217,16 +217,28 @@ export default function BusyWindowsEditor({ companyId }: {
                       </span>
                     )}
                     {w.createdByAdmin && (
+                      // DM-11: `title` alone put "من إدارة العاصمة" behind a
+                      // hover a touch device never gets. The badge's own
+                      // aria-label carries it for screen readers; the `title`
+                      // stays too as a harmless bonus for mouse users.
                       <span
                         className="flex items-center gap-0.5 text-caption font-bold px-2 py-0.5 rounded-full bg-surface-container text-outline"
                         title={t(locale, "prov_bw_admin_title")}
+                        aria-label={`${t(locale, "prov_bw_admin_badge")} — ${t(locale, "prov_bw_admin_title")}`}
                       >
-                        <Icon name="lock" className="text-caption" />
+                        <Icon name="lock" className="text-caption" aria-hidden="true" />
                         {t(locale, "prov_bw_admin_badge")}
                       </span>
                     )}
                   </div>
                   {w.note && <p className="text-caption text-outline mt-0.5">{w.note}</p>}
+                  {/* DM-11: was `title`-only on a DISABLED button — the worst
+                      case for hover-only info, since a disabled control can't
+                      even be tapped to reveal it. Visible text, not another
+                      hover affordance. */}
+                  {locked && (
+                    <p className="text-caption text-outline mt-0.5">{t(locale, "prov_bw_admin_locked")}</p>
+                  )}
                 </div>
 
                 <button
@@ -236,7 +248,7 @@ export default function BusyWindowsEditor({ companyId }: {
                     ? t(locale, "prov_bw_admin_locked")
                     : undefined}
                   className="text-outline hover:text-error transition-colors disabled:opacity-30 flex-shrink-0"
-                  aria-label={t(locale, "prov_bw_remove")}
+                  aria-label={locked ? `${t(locale, "prov_bw_remove")} — ${t(locale, "prov_bw_admin_locked")}` : t(locale, "prov_bw_remove")}
                 >
                   <Icon name="delete" className="text-subhead" />
                 </button>

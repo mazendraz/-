@@ -37,7 +37,7 @@ describe("lead description sanitization (integration with schema)", () => {
       companyName: "Aura",
       service: "Design",
       name: "Mona Adel",
-      phone: "01012345678",
+      phone: "+201012345678",
       district: "R7",
       budget: "EGP 100k",
       description: "Please call me <script>steal()</script> about a full villa fit-out.",

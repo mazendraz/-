@@ -19,7 +19,9 @@ import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
+import { isValidE164 } from "../../lib/phone";
 import Icon from "../../components/Icon";
+import PhoneInput from "../../components/PhoneInput";
 
 // Sub-tab id → label key. The ids are internal state, the labels are not.
 const EDITOR_TAB_KEYS: Record<EditorTab, StringKey> = {
@@ -89,7 +91,7 @@ export function CompanyEditor({ company, categories, onClose }: {
       if (draft.categories.length === 0) return t(locale, "admin_ce_pick_category");
       if (!draft.logo) return t(locale, "admin_ce_need_logo");
       if (!draft.cover) return t(locale, "admin_ce_need_cover");
-      if (draft.phone.trim().length < 8) return t(locale, "admin_ce_need_phone");
+      if (!isValidE164(draft.phone)) return t(locale, "admin_ce_need_phone");
     }
     return null;
   }
@@ -129,7 +131,11 @@ export function CompanyEditor({ company, categories, onClose }: {
         activeId={tab}
         onChange={setTab}
         className="flex gap-1 border-b border-outline-variant/20 px-1 -mt-2 mb-5"
-        tabClassName={(active) => `px-4 py-2.5 text-label font-bold border-b-2 transition-colors ${active ? "text-primary border-primary" : "text-outline border-transparent hover:text-on-surface"}`}
+        // whitespace-nowrap + flex-shrink-0 are what make the scroll container
+        // on <Tabs> actually scroll (DM-09) — without them the labels wrap and
+        // squash instead of overflowing.
+        // DM-06: py-2.5 + text-label measured 38px (logged during Phase 1).
+        tabClassName={(active) => `px-4 py-2.5 min-h-[44px] text-label font-bold border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${active ? "text-primary border-primary" : "text-outline border-transparent hover:text-on-surface"}`}
         items={([
           "details", "projects",
           ...(isNew ? [] : ["availability" as const]),
@@ -169,7 +175,7 @@ export function CompanyEditor({ company, categories, onClose }: {
           </div>
           <GalleryUpload images={draft.gallery} onChange={(g) => set("gallery", g)} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <LField label={t(locale, "admin_ce_phone")}><input className="field-input" value={draft.phone} onChange={(e) => set("phone", e.target.value)} placeholder={t(locale, "admin_ce_phone_ph")} /></LField>
+            <LField label={t(locale, "admin_ce_phone")}><PhoneInput value={draft.phone} onChange={(v) => set("phone", v)} /></LField>
             <LField label={t(locale, "admin_ce_location")}><input className="field-input" value={draft.location} onChange={(e) => set("location", e.target.value)} /></LField>
           </div>
 
@@ -186,7 +192,7 @@ export function CompanyEditor({ company, categories, onClose }: {
                 <input className="field-input" type="email" value={draft.email ?? ""} onChange={(e) => set("email", e.target.value)} placeholder={t(locale, "admin_ce_notif_email_ph")} />
               </LField>
               <LField label={t(locale, "admin_ce_whatsapp")}>
-                <input className="field-input" value={draft.whatsapp ?? ""} onChange={(e) => set("whatsapp", e.target.value)} placeholder={t(locale, "admin_ce_phone_ph")} />
+                <PhoneInput value={draft.whatsapp ?? ""} onChange={(v) => set("whatsapp", v)} />
               </LField>
             </div>
           </div>
@@ -379,8 +385,10 @@ export function ProjectsEditor({ projects, onChange }: { projects: Project[]; on
             <p className="font-bold text-label text-on-surface truncate">{p.title}</p>
             <p className="text-caption text-outline truncate">{p.year} · {p.description}</p>
           </div>
+          {/* DM-06: was ~38px. */}
           <button onClick={() => toggleFeatured(i)} title={t(locale, p.featured ? "admin_ce_featured" : "admin_pe_feature_title")}
-            className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${p.featured ? "text-secondary" : "text-outline hover:text-secondary"}`}>
+            aria-label={`${t(locale, p.featured ? "admin_ce_featured" : "admin_pe_feature_title")} — ${p.title}`}
+            className={`w-11 h-11 -m-2.5 flex items-center justify-center rounded-lg transition-colors flex-shrink-0 ${p.featured ? "text-secondary" : "text-outline hover:text-secondary"}`}>
             <Icon name="star" className="text-subhead" style={{ fontVariationSettings: p.featured ? "'FILL' 1" : "'FILL' 0" }} />
           </button>
           <button onClick={() => onChange(projects.filter((_, idx) => idx !== i))} aria-label={`${t(locale, "admin_delete")} ${p.title}`} className="w-11 h-11 -m-2.5 flex items-center justify-center rounded-lg hover:bg-error/10 text-outline hover:text-error transition-colors flex-shrink-0">

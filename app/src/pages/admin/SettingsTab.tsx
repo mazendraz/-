@@ -17,6 +17,7 @@ import { ConfirmAction } from "./components/confirm";
 import { useLocale } from "../../context/LocaleContext";
 import { t, tCount, type StringKey } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import PhoneInput from "../../components/PhoneInput";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  SETTINGS
@@ -189,7 +190,9 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
           const on = active === tab.id;
           return (
             <button key={tab.id} onClick={() => setActive(tab.id)}
-              className={`relative px-3 sm:px-4 py-3 text-label font-bold whitespace-nowrap border-b-2 -mb-px transition-colors ${
+              // DM-18: py-3 + text-label's 18px line-height measured 42px — 2px
+              // under the 44px minimum.
+              className={`relative px-3 sm:px-4 py-3 min-h-[44px] text-label font-bold whitespace-nowrap border-b-2 -mb-px transition-colors ${
                 on ? "border-primary text-primary" : "border-transparent text-outline hover:text-on-surface"
               }`}>
               {t(locale, tab.labelKey)}
@@ -208,7 +211,9 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
       </div>
 
       {/* Sticky save bar — always reachable, bottom-right of the container. */}
-      <div className="sticky bottom-0 flex items-center justify-end gap-3 px-5 py-3 rounded-b-2xl bg-surface-container-lowest/95 backdrop-blur border-t border-outline-variant/20">
+      {/* DM-04: `sticky bottom-0` put the Save button itself under the home
+          indicator in standalone mode. */}
+      <div className="sticky bottom-0 flex items-center justify-end gap-3 px-5 py-3 dashboard-bottom-safe rounded-b-2xl bg-surface-container-lowest/95 backdrop-blur border-t border-outline-variant/20">
         {anyDirty && <span className="me-auto text-caption font-bold text-secondary">{t(locale, "admin_set_unsaved")}</span>}
         <button onClick={saveAll} disabled={saving || !anyDirty}
           className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
@@ -249,7 +254,9 @@ export function GeneralSettings({ form, setP }: { form: PlatformSettings; setP: 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <TextField label={t(locale, "admin_set_site_name")} value={form.site_name} onChange={(v) => setP("site_name", v)} placeholder="Al Assema" />
         <TextField label={t(locale, "admin_set_support_email")} type="email" value={form.support_email} onChange={(v) => setP("support_email", v)} placeholder={t(locale, "admin_set_support_email_ph")} />
-        <TextField label={t(locale, "admin_set_public_phone")} value={form.public_phone} onChange={(v) => setP("public_phone", v)} placeholder={t(locale, "admin_ce_phone_ph")} />
+        <LField label={t(locale, "admin_set_public_phone")}>
+          <PhoneInput value={form.public_phone} onChange={(v) => setP("public_phone", v)} />
+        </LField>
         <TextField label={t(locale, "admin_set_address")} value={form.address} onChange={(v) => setP("address", v)} placeholder={t(locale, "admin_set_address_ph")} />
         <TextField label={t(locale, "admin_set_facebook")} value={form.social_facebook} onChange={(v) => setP("social_facebook", v)} placeholder="https://facebook.com/…" />
         <TextField label={t(locale, "admin_set_instagram")} value={form.social_instagram} onChange={(v) => setP("social_instagram", v)} placeholder="https://instagram.com/…" />

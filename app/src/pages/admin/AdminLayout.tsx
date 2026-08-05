@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { Outlet, useLocation, useSearchParams, Navigate } from "react-router-dom";
 import { useLeads } from "../../lib/requests";
 import { useUnreadFeedbackCount } from "../../lib/feedback";
@@ -7,6 +7,8 @@ import { useUnreadChatCount } from "../../lib/chat";
 import { useLeadStats } from "../../lib/stats";
 import { logout, isAuthenticated } from "../../lib/auth";
 import DashboardShell from "../../components/DashboardShell";
+import BottomNav from "../../components/BottomNav";
+import DashboardRefreshButton from "../../components/DashboardRefreshButton";
 import { type AdminTab, NAV } from "./nav";
 import { SidebarBody } from "./components/SidebarBody";
 import { useLocale } from "../../context/LocaleContext";
@@ -38,13 +40,27 @@ export default function AdminLayout() {
   const tab = (location.pathname.split("/").filter(Boolean).pop() ?? "overview") as AdminTab;
   const topbarTitle = (() => { const cfg = NAV.find((n) => n.id === tab); return cfg ? t(locale, cfg.labelKey) : ""; })();
 
+  // DM-16: forces the current tab to remount — see DashboardRefreshButton.tsx
+  // for why that's a real refetch and not decoration. Scoped to the tab on
+  // screen, not the whole layout: the sidebar's own badge counts (leads/chat/
+  // changes, all one-shot fetches with no polling) don't refresh with it —
+  // an admin pulling on the Leads list is asking to update THAT list, not
+  // silently also reset the drawer/sidebar state around it.
+  const [refreshKey, setRefreshKey] = useState(0);
+
   return (
     <DashboardShell
       title={topbarTitle}
       topbarActions={isAuthenticated() && (
-        <button onClick={() => logout()} title={t(locale, "admin_sign_out")} className="flex items-center gap-1.5 bg-surface-container text-on-surface px-3 py-2 rounded-xl font-bold text-label hover:bg-surface-container-high transition-colors touch-press btn-press">
-          <Icon name="logout" className="text-subhead" /><span className="hidden sm:inline">{t(locale, "admin_sign_out")}</span>
-        </button>
+        <>
+          <DashboardRefreshButton onRefresh={() => setRefreshKey((k) => k + 1)} />
+          {/* DM-17: the label is `hidden sm:inline`, so below sm this is a bare
+              glyph. `title` does not surface on touch — aria-label is what names
+              it for a screen reader once the text node is hidden. */}
+          <button onClick={() => logout()} title={t(locale, "admin_sign_out")} aria-label={t(locale, "admin_sign_out")} className="flex items-center gap-1.5 bg-surface-container text-on-surface px-3 py-2 min-h-[44px] rounded-xl font-bold text-label hover:bg-surface-container-high transition-colors touch-press btn-press">
+            <Icon name="logout" className="text-subhead" /><span className="hidden sm:inline">{t(locale, "admin_sign_out")}</span>
+          </button>
+        </>
       )}
       renderSidebar={(closeDrawer) => (
         <SidebarBody
@@ -56,12 +72,29 @@ export default function AdminLayout() {
           onClose={closeDrawer}
         />
       )}
+      // DM-07: below md:, tab-switching was hamburger → drawer → tap → close,
+      // for all 10 tabs alike — the four an admin actually lives in (new
+      // leads, chat replies, pending approvals) buried exactly as deep as
+      // Settings. Badges reuse the same three counts the sidebar already
+      // computes above — no new counters invented, so the two stay in sync
+      // by construction rather than by two places agreeing to update together.
+      bottomNav={
+        <BottomNav
+          ariaLabel={t(locale, "nav_bottom_quick")}
+          items={[
+            { to: "/admin/overview", label: t(locale, "admin_tab_overview"), icon: "dashboard" },
+            { to: "/admin/leads", label: t(locale, "admin_tab_leads"), icon: "inbox", badge: newLeadCount },
+            { to: "/admin/chat", label: t(locale, "admin_tab_chat"), icon: "forum", badge: unreadChats },
+            { to: "/admin/changes", label: t(locale, "admin_tab_changes"), icon: "rate_review", badge: pendingChanges },
+          ]}
+        />
+      }
     >
       {/* Own Suspense boundary so switching tabs shows a lightweight fallback
           within the shell (sidebar + topbar stay put) instead of a blank
           screen while that tab's chunk loads. */}
       <Suspense fallback={<TabFallback />}>
-        <Outlet />
+        <Outlet key={refreshKey} />
       </Suspense>
     </DashboardShell>
   );

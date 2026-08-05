@@ -76,14 +76,16 @@ export function buildNewLeadEmail(
   if (!target.email) return null;
 
   const subject = `New lead ${lead.refNumber} — ${lead.service}`;
+  // Budget and details are optional on the request form now — a customer who
+  // left them blank shouldn't produce a "Budget: " row with nothing after it.
   const rows: [string, string][] = [
     ["Reference", lead.refNumber],
     ["Service", lead.service],
     ["Customer", lead.name],
     ["Phone", lead.phone],
     ["District", lead.district],
-    ["Budget", lead.budget],
-    ["Details", lead.description],
+    ...(lead.budget ? [["Budget", lead.budget]] as [string, string][] : []),
+    ...(lead.description ? [["Details", lead.description]] as [string, string][] : []),
   ];
 
   const text =

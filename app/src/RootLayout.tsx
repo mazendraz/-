@@ -7,16 +7,28 @@ import Footer from "./components/Footer";
 import ScrollProgress from "./components/ScrollProgress";
 import SearchOverlay from "./components/SearchOverlay";
 import BottomNav from "./components/BottomNav";
-import { LocaleProvider } from "./context/LocaleContext";
+import { LocaleProvider, useLocale } from "./context/LocaleContext";
 import { ToastProvider } from "./context/ToastContext";
 import StatusScreen from "./components/StatusScreen";
 import { useMaintenance } from "./lib/settings";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { useHashScroll } from "./hooks/useHashScroll";
+import { useSaved } from "./hooks/useSaved";
 import { getCurrentUser } from "./lib/auth";
+import { hasFullBleedHero } from "./lib/heroRoutes";
+import { t } from "./lib/i18n";
 
 export default function RootLayout() {
   const { pathname } = useLocation();
+  // Home and company-profile pages render their own full-bleed hero/cover
+  // that starts flush under the (transparent, floating) nav — every other
+  // page needs real clearance from the fixed nav instead. Gating the padding
+  // here, once, off the same predicate TopNav uses for its transparency,
+  // replaces the old pattern of adding the padding on <main> and cancelling
+  // it back out with a matching negative margin on the hero itself (two
+  // numbers in two files that had to stay byte-for-byte identical to avoid a
+  // gap or an overlap).
+  const hasHero = hasFullBleedHero(pathname);
   const [searchOpen, setSearchOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   useHashScroll();
@@ -124,18 +136,47 @@ export default function RootLayout() {
       <ScrollProgress />
       <TopNav onOpenSearch={openSearch} />
 
-      <main ref={mainRef} id="main" className="flex-grow page-enter pb-14 md:pb-0 pt-[calc(var(--nav-h)+2rem)]">
+      <main
+        ref={mainRef}
+        id="main"
+        className={`flex-grow page-enter pb-14 md:pb-0 ${hasHero ? "" : "pt-[calc(var(--nav-h)+2rem)]"}`}
+      >
         <Suspense fallback={<RouteFallback />}>
           <Outlet context={{ openSearch }} />
         </Suspense>
       </main>
 
       <Footer />
-      <BottomNav />
+      <PublicBottomNav />
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
     </ToastProvider>
     </LocaleProvider>
+  );
+}
+
+/**
+ * Builds the public site's 4 tabs (DM-07's BottomNav generalization). Its own
+ * component, not inline in RootLayout: RootLayout renders `<LocaleProvider>`
+ * itself, so a `useLocale()` call in RootLayout's own body would read the
+ * context DEFAULT rather than the provider's value — the same bug class
+ * main.tsx's dashboard routes hit before they got the fix (see the comment
+ * there). A child component is a real descendant of the provider and reads
+ * correctly.
+ */
+function PublicBottomNav() {
+  const { locale } = useLocale();
+  const { count } = useSaved();
+  return (
+    <BottomNav
+      ariaLabel={t(locale, "nav_more")}
+      items={[
+        { to: "/", label: t(locale, "nav_home"), icon: "home", end: true },
+        { to: "/services", label: t(locale, "nav_services"), icon: "grid_view" },
+        { to: "/saved", label: t(locale, "nav_saved"), icon: "favorite", badge: count },
+        { to: "/requests", label: t(locale, "nav_requests"), icon: "receipt_long" },
+      ]}
+    />
   );
 }
 

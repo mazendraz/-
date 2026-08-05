@@ -24,13 +24,16 @@ export default function SearchInput({ value, onChange, placeholder, className = 
         onChange={(e) => onChange(e.target.value)}
         placeholder={ph}
         aria-label={ph}
-        className="w-full ps-10 pe-9 py-2.5 rounded-xl border border-outline-variant/40 bg-surface-container-lowest text-on-surface text-label placeholder:text-outline focus:ring-2 focus:ring-primary/25 focus:border-primary focus:outline-none transition"
+        // DM-06: py-2.5 measured 40px. This box appears on nearly every list
+        // screen in both dashboards and the public site, so it was one of the
+        // most-repeated undersized targets in the app.
+        className="w-full ps-10 pe-9 py-2.5 min-h-[44px] rounded-xl border border-outline-variant/40 bg-surface-container-lowest text-on-surface text-label placeholder:text-outline focus:ring-2 focus:ring-primary/25 focus:border-primary focus:outline-none transition"
         style={{ fontSize: "16px" }}
       />
       {value && (
         <button
           onClick={() => onChange("")}
-          className="absolute end-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-surface-container transition-colors"
+          className="absolute end-1 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-full hover:bg-surface-container transition-colors"
           aria-label={t(locale, "search_clear")}
         >
           <Icon name="close" className="text-outline text-subhead" />

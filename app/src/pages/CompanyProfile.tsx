@@ -21,6 +21,8 @@ import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
+import PhoneInput from "../components/PhoneInput";
+import { isValidE164 } from "../lib/phone";
 import Icon from "../components/Icon";
 
 export default function CompanyProfile() {
@@ -171,10 +173,16 @@ export default function CompanyProfile() {
         requestHref={requestHref}
       />
 
-      {/* Hero cover */}
+      {/* Hero cover. RootLayout skips <main>'s nav-clearance padding on a
+          company profile (see hasFullBleedHero) so this starts flush at the
+          top of the viewport, behind the transparent nav, the same treatment
+          as the homepage hero — one continuous image instead of a page that
+          starts below a gap. hero-scrim (shared with Home) darkens the top
+          enough to keep the nav's icons/text readable over any cover photo,
+          not just this one's. */}
       <div className="relative w-full h-64 md:h-96 overflow-hidden">
         <LazyImage src={company.cover} alt={company.name} eager wrapperClassName="absolute inset-0" className="w-full h-full object-cover" width={1280} height={384} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+        <div className="absolute inset-0 hero-scrim" />
         {/* Back breadcrumb. CP-05: was a fixed top-20 (80px) that didn't track
             the nav's own height (64px mobile / 76px desktop) — clears the
             actual nav via the shared --nav-h token instead. */}
@@ -420,7 +428,7 @@ export default function CompanyProfile() {
               </div>
               <button
                 onClick={() => setFeedbackOpen(true)}
-                className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-outline-variant/30 text-outline hover:text-on-surface hover:border-outline-variant/60 hover:bg-surface-container transition-colors text-label font-bold"
+                className="w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border border-error/30 text-error hover:bg-error/5 hover:border-error/50 transition-colors text-label font-bold"
               >
                 <Icon name="report_problem" className="text-subhead" />
                 {t(locale, "profile_report")}
@@ -576,7 +584,7 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                 </div>
                 <div>
                   <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "feedback_phone")}</label>
-                  <input className="field-input !py-2 text-label" placeholder={t(locale, "feedback_optional")} value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
+                  <PhoneInput value={phone} onChange={setPhone} placeholder={t(locale, "feedback_optional")} />
                 </div>
               </div>
 
@@ -621,7 +629,7 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
                 data-form-type="other"
                 value={honeypot}
                 onChange={(e) => setHoneypot(e.target.value)}
-                className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+                className="sr-only"
               />
             </form>
           )}
@@ -655,7 +663,7 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (name.trim().length < 2) { setError(t(locale, "waitlist_err_name")); return; }
-    if (phone.trim().length < 8) { setError(t(locale, "waitlist_err_phone")); return; }
+    if (!isValidE164(phone)) { setError(t(locale, "waitlist_err_phone")); return; }
     if (captchaConfigured() && !captchaToken) { setError(t(locale, "form_err_captcha")); return; }
     setIsSubmitting(true);
     setError("");
@@ -714,7 +722,7 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
                 </div>
                 <div>
                   <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_phone")} <span className="text-error">*</span></label>
-                  <input className="field-input !py-2 text-label" type="tel" value={phone} onChange={(e) => { setPhone(e.target.value); if (error) setError(""); }} />
+                  <PhoneInput value={phone} onChange={(v) => { setPhone(v); if (error) setError(""); }} hideError />
                 </div>
               </div>
 
@@ -764,7 +772,7 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
                 data-form-type="other"
                 value={honeypot}
                 onChange={(e) => setHoneypot(e.target.value)}
-                className="absolute -left-[9999px] top-0 w-px h-px opacity-0"
+                className="sr-only"
               />
             </form>
           )}

@@ -37,6 +37,10 @@ const STRINGS = {
     nav_my_activity: "My Activity",
     nav_more: "More",
     nav_admin: "Admin",
+    // Landmark label for the dashboards' mobile bottom bar (DM-07) — distinct
+    // wording from nav_more (public site) so the two <nav> landmarks that can
+    // both exist don't share an accessible name.
+    nav_bottom_quick: "Quick navigation",
 
     // ── Search ──
     search_placeholder: "Search…",
@@ -80,6 +84,11 @@ const STRINGS = {
     common_view_companies: "View Companies",
     common_back: "Back",
     common_back_to_home: "Back to Home",
+    // DM-16: the dashboards' topbar refresh button — an installed PWA has no
+    // browser reload control at all, so this is the only way to pull fresh
+    // data into the tab currently on screen.
+    common_refresh: "Refresh",
+    common_refreshed: "Refreshed",
     common_request: "Request",
     common_request_service: "Request a Service",
     common_clear: "Clear",
@@ -360,8 +369,6 @@ const STRINGS = {
     form_service_optional: "Select a service (optional)",
     form_district: "Your District in NAC",
     form_district_ph: "Select your district",
-    form_budget: "Budget Range",
-    form_budget_ph: "Select an estimated budget",
     form_description: "Project Description",
     form_description_ph: "Describe your project, timeline, and any specific requirements…",
     form_next_title: "What happens next",
@@ -376,9 +383,6 @@ const STRINGS = {
     form_err_phone: "Phone number is required",
     form_err_phone_invalid: "Enter a valid phone number",
     form_err_district: "Please select your district",
-    form_err_budget: "Please select a budget range",
-    form_err_description: "A brief description helps us match you better",
-    form_err_description_short: "Please add a bit more detail (at least 10 characters)",
     form_err_submit: "Something went wrong submitting your request. Please try again.",
     form_err_captcha: "Please complete the verification below.",
     form_success_title: "Request Received!",
@@ -452,6 +456,12 @@ const STRINGS = {
     pagination_of: "of",
     pagination_prev: "Previous page",
     pagination_next: "Next page",
+
+    // ── Phone input (PhoneInput.tsx — country picker + validation) ──
+    phone_select_country_aria: "Select country",
+    phone_search_ph: "Search country or code…",
+    phone_no_match: "No countries match",
+    phone_invalid: "Enter a valid phone number",
 
     // ── Catalog error ──
     catalog_error_title: "Couldn't load companies",
@@ -635,6 +645,49 @@ const STRINGS = {
     prov_profile_err_load: "Couldn't load your profile.",
     prov_profile_err_submit: "Couldn't submit your changes.",
     prov_profile_err_withdraw: "Couldn't withdraw the request.",
+
+    // ── Profile editor — redesigned sections ──
+    prov_profile_section_info_title: "Company Information",
+    prov_profile_section_info_desc: "The basics customers see first.",
+    prov_profile_section_images_title: "Images",
+    prov_profile_section_images_desc: "Your logo and cover photo set the first impression.",
+    prov_profile_section_gallery_desc: "Showcase your work with photos and videos.",
+    prov_profile_section_services_note: "Services are set by the Al Assema team — contact admin to update them.",
+    prov_profile_section_contact_title: "Contact Information",
+    prov_profile_section_contact_desc: "How customers and the admin team can reach you.",
+    prov_profile_section_business_title: "Business Details",
+    prov_profile_section_business_desc: "Experience, response time, and badges.",
+    prov_profile_section_seo_title: "SEO",
+    prov_profile_section_seo_desc: "How your profile appears in search results.",
+    prov_profile_unsaved: "Unsaved changes",
+    prov_profile_cancel: "Cancel",
+    prov_profile_save_changes: "Save changes",
+    prov_profile_saving: "Saving…",
+    prov_profile_submitted_title: "Submitted for review",
+    prov_profile_submitted_body: "The changes have been submitted for review and will appear after administrator approval.",
+    prov_badges_add: "Add",
+    prov_badges_ph: "e.g. Certified, Licensed",
+
+    // ── Image picker (logo / cover) ──
+    prov_img_upload: "Upload",
+    prov_img_replace: "Replace",
+    prov_img_remove: "Remove",
+    prov_img_drag_hint: "Drag & drop, or",
+    prov_img_browse: "browse",
+    prov_img_recommended_logo: "Recommended: 512×512px, square · up to 5MB",
+    prov_img_recommended_cover: "Recommended: 1200×400px · up to 5MB",
+    prov_img_advanced_url: "Paste an image URL instead",
+    prov_img_url_ph: "https://…",
+    prov_img_uploading: "Uploading…",
+
+    // ── Gallery manager ──
+    prov_gallery_add: "Add photos",
+    prov_gallery_replace: "Replace",
+    prov_gallery_delete: "Delete",
+    prov_gallery_move_earlier: "Move earlier",
+    prov_gallery_move_later: "Move later",
+    prov_gallery_empty: "No photos yet — add some to show off your work.",
+    prov_gallery_drag_hint: "Drag to reorder",
 
     // ── Editable profile field names (shared with the admin review screen) ──
     prov_field_name: "Company name",
@@ -1401,6 +1454,7 @@ const STRINGS = {
     nav_my_activity: "نشاطي",
     nav_more: "المزيد",
     nav_admin: "الإدارة",
+    nav_bottom_quick: "تنقّل سريع",
 
     // ── Search ──
     search_placeholder: "بحث…",
@@ -1443,6 +1497,8 @@ const STRINGS = {
     common_view_companies: "عرض الشركات",
     common_back: "رجوع",
     common_back_to_home: "العودة للرئيسية",
+    common_refresh: "تحديث",
+    common_refreshed: "تم التحديث",
     common_request: "اطلب",
     common_request_service: "اطلب خدمة",
     common_clear: "مسح",
@@ -1718,8 +1774,6 @@ const STRINGS = {
     form_service_optional: "اختر خدمة (اختياري)",
     form_district: "حيّك في العاصمة الإدارية",
     form_district_ph: "اختر حيّك",
-    form_budget: "نطاق الميزانية",
-    form_budget_ph: "اختر ميزانية تقديرية",
     form_description: "وصف المشروع",
     form_description_ph: "صف مشروعك، الجدول الزمني، وأي متطلبات محددة…",
     form_next_title: "ماذا يحدث بعد ذلك",
@@ -1734,9 +1788,6 @@ const STRINGS = {
     form_err_phone: "رقم الهاتف مطلوب",
     form_err_phone_invalid: "أدخل رقم هاتف صحيح",
     form_err_district: "من فضلك اختر حيّك",
-    form_err_budget: "من فضلك اختر نطاق الميزانية",
-    form_err_description: "وصف موجز يساعدنا على ترشيح الأنسب لك",
-    form_err_description_short: "من فضلك اكتب تفاصيل أكتر شوية (10 حروف على الأقل)",
     form_err_submit: "حدث خطأ أثناء إرسال طلبك. من فضلك حاول مرة أخرى.",
     form_err_captcha: "من فضلك أكمل التحقق بالأسفل.",
     form_success_title: "تم استلام الطلب!",
@@ -1810,6 +1861,12 @@ const STRINGS = {
     pagination_of: "من",
     pagination_prev: "الصفحة السابقة",
     pagination_next: "الصفحة التالية",
+
+    // ── حقل رقم الهاتف (PhoneInput.tsx — اختيار الدولة + التحقق) ──
+    phone_select_country_aria: "اختر الدولة",
+    phone_search_ph: "ابحث عن دولة أو كود…",
+    phone_no_match: "لا توجد دول مطابقة",
+    phone_invalid: "أدخل رقم هاتف صحيح",
 
     // ── خطأ تحميل الكتالوج ──
     catalog_error_title: "تعذّر تحميل الشركات",
@@ -1993,6 +2050,49 @@ const STRINGS = {
     prov_profile_err_load: "تعذّر تحميل بروفايلك.",
     prov_profile_err_submit: "تعذّر إرسال تعديلاتك.",
     prov_profile_err_withdraw: "تعذّر سحب الطلب.",
+
+    // ── محرر البروفايل — الأقسام الجديدة ──
+    prov_profile_section_info_title: "معلومات الشركة",
+    prov_profile_section_info_desc: "الأساسيات اللي العميل بيشوفها الأول.",
+    prov_profile_section_images_title: "الصور",
+    prov_profile_section_images_desc: "الشعار وصورة الغلاف بيكوّنوا الانطباع الأول.",
+    prov_profile_section_gallery_desc: "اعرض شغلك بصور وفيديوهات.",
+    prov_profile_section_services_note: "الخدمات بتحددها إدارة العاصمة — كلّم الإدارة لو عايز تعدّلها.",
+    prov_profile_section_contact_title: "بيانات التواصل",
+    prov_profile_section_contact_desc: "إزاي العملاء والإدارة يقدروا يوصلولك.",
+    prov_profile_section_business_title: "تفاصيل العمل",
+    prov_profile_section_business_desc: "الخبرة، وقت الرد، والشارات.",
+    prov_profile_section_seo_title: "SEO",
+    prov_profile_section_seo_desc: "بروفايلك هيظهر إزاي في نتائج البحث.",
+    prov_profile_unsaved: "تعديلات لسه ما اتحفظتش",
+    prov_profile_cancel: "إلغاء",
+    prov_profile_save_changes: "حفظ التعديلات",
+    prov_profile_saving: "جاري الحفظ…",
+    prov_profile_submitted_title: "اتبعت للمراجعة",
+    prov_profile_submitted_body: "التعديلات اتبعتت للمراجعة وهتظهر بعد ما الإدارة توافق عليها.",
+    prov_badges_add: "إضافة",
+    prov_badges_ph: "زي: معتمد، مرخّص",
+
+    // ── اختيار الصورة (الشعار / الغلاف) ──
+    prov_img_upload: "رفع صورة",
+    prov_img_replace: "استبدال",
+    prov_img_remove: "إزالة",
+    prov_img_drag_hint: "اسحب وأفلت، أو",
+    prov_img_browse: "اختار ملف",
+    prov_img_recommended_logo: "المقاس المناسب: 512×512 بكسل، مربع · لحد 5 ميجا",
+    prov_img_recommended_cover: "المقاس المناسب: 1200×400 بكسل · لحد 5 ميجا",
+    prov_img_advanced_url: "الصق رابط صورة بدلًا من كده",
+    prov_img_url_ph: "https://…",
+    prov_img_uploading: "جاري الرفع…",
+
+    // ── إدارة المعرض ──
+    prov_gallery_add: "إضافة صور",
+    prov_gallery_replace: "استبدال",
+    prov_gallery_delete: "حذف",
+    prov_gallery_move_earlier: "تحريك لقبل",
+    prov_gallery_move_later: "تحريك لبعد",
+    prov_gallery_empty: "مفيش صور لسه — ضيف شوية تعرض بيها شغلك.",
+    prov_gallery_drag_hint: "اسحب لإعادة الترتيب",
 
     // ── أسماء حقول البروفايل (مشتركة مع شاشة مراجعة الأدمن) ──
     prov_field_name: "اسم الشركة",

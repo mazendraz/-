@@ -238,7 +238,7 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
                               setError(t(locale, "chat_err_moderate"));
                             });
                         }}
-                        className="text-caption font-bold text-outline hover:text-error transition-colors"
+                        className="min-h-[44px] px-2 -mx-2 text-caption font-bold text-outline hover:text-error transition-colors"
                       >
                         {t(locale, m.hidden ? "chat_unhide" : "chat_hide")}
                       </button>

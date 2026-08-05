@@ -1,12 +1,8 @@
 // Zod schemas for lead endpoints. createLeadSchema validates ApiLeadPayload
 // (POST /leads); leadStatusSchema validates PATCH /leads/:id (used in Phase 8).
 import { z } from "zod";
-import { sanitizedText } from "@/lib/utils/sanitize";
-
-// Egyptian mobile. Accepts local and international forms:
-//   01012345678 · 201012345678 · +201012345678 (E.164, trunk 0 dropped)
-// Optional +20/20 country code, optional trunk 0, then 1[0125] + 8 digits.
-const egyptianPhone = /^(?:\+?20)?0?1[0125]\d{8}$/;
+import { sanitizedText, sanitizedOptionalText } from "@/lib/utils/sanitize";
+import { isValidE164Phone } from "@/lib/utils/phone";
 
 /**
  * One selected line. NO PRICES: the server looks them up from the catalogue.
@@ -30,10 +26,17 @@ export const createLeadSchema = z.object({
   // supplied the service fills it from their names.
   service: sanitizedText(1, 150),
   name: sanitizedText(2, 100),
-  phone: z.string().trim().regex(egyptianPhone, "Invalid Egyptian mobile number"),
+  // The frontend's PhoneInput always normalizes to E.164 before sending, so
+  // this can require a genuinely valid international number rather than an
+  // Egypt-only regex (PhoneInput plan — international support, confirmed).
+  phone: z.string().trim().refine(isValidE164Phone, "Invalid phone number"),
   district: sanitizedText(1, 100),
-  budget: sanitizedText(1, 100),
-  description: sanitizedText(10, 2000),
+  // No longer collected on the request form (customer choice — the field
+  // stays required on the Lead/DB shape, so the client sends ""); older
+  // leads still carry a real value.
+  budget: sanitizedOptionalText(100),
+  // Optional: a customer may submit with no project details at all.
+  description: sanitizedOptionalText(2000),
   // Feature C. Absent → the classic single-service request, unchanged.
   items: z.array(requestedItem).min(1).max(25).optional(),
 });
@@ -51,11 +54,10 @@ export const trackLeadSchema = z
   .object({
     ref: z.string().trim().min(1),
     token: z.string().trim().min(1).max(200).optional(),
-    phone: z
-      .string()
-      .trim()
-      .regex(egyptianPhone, "Invalid Egyptian mobile number")
-      .optional(),
+    // A lookup secret compared via phoneTail()'s fuzzy last-10-digits match,
+    // not a stored value — a length check is enough, and it stays backward
+    // compatible with any format a bookmarked tracking link might carry.
+    phone: z.string().trim().min(8).max(20).optional(),
   })
   .refine((o) => Boolean(o.token) || Boolean(o.phone), {
     message: "A tracking token or phone number is required",

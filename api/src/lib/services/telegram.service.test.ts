@@ -68,6 +68,12 @@ describe("buildLeadTelegramMessage", () => {
     expect(msg).toContain("&lt;script&gt;&amp;x");
     expect(msg).not.toContain("<script>");
   });
+
+  it("omits the budget/details lines when the customer left them blank", () => {
+    const msg = buildLeadTelegramMessage({ ...lead, budget: "", description: "" }, "Aura Interiors");
+    expect(msg).not.toContain("الميزانية");
+    expect(msg).not.toContain("التفاصيل");
+  });
 });
 
 describe("provider phone matching (phoneTail)", () => {

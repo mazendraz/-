@@ -83,7 +83,8 @@ export default function CompaniesPage() {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-[200px]"><SearchInput value={companyQuery} onChange={setCompanyQuery} placeholder={t(locale, "admin_companies_search")} /></div>
-        <button onClick={() => setEditingCompany({ company: null })} className="flex items-center gap-1.5 bg-primary text-on-primary px-3 md:px-4 py-2 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press flex-shrink-0">
+        {/* DM-17: label is `hidden sm:inline` below sm, leaving a bare "+". */}
+        <button onClick={() => setEditingCompany({ company: null })} aria-label={t(locale, "admin_add_company")} className="flex items-center gap-1.5 bg-primary text-on-primary px-3 md:px-4 py-2 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press flex-shrink-0">
           <Icon name="add" className="text-subhead" /><span className="hidden sm:inline">{t(locale, "admin_add_company")}</span>
         </button>
       </div>
@@ -111,25 +112,41 @@ export default function CompaniesPage() {
           const cLeads = c.leadCount ?? leads.filter((l) => l.companySlug === c.slug).length;
           const cBackAt = availableAgainAt(c);
           return (
-            <div key={c.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex items-center gap-4">
+            // DM-08: was `flex items-center gap-4` with no breakpoint — a 56px
+            // logo + text + a 4-button vertical action column (~190px tall
+            // regardless of content) left ~128px for the name, category and
+            // stats line at 390px. Column below sm:, the original row above it.
+            <div key={c.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <img src={c.logo} alt="" className="w-14 h-14 rounded-xl object-cover border border-outline-variant/20 flex-shrink-0" loading="lazy" width={56} height={56} />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 w-full">
                 <div className="flex items-center gap-1.5">
                   <p className="font-bold text-body text-on-surface truncate">{c.name}</p>
                   {c.featured !== false && <Icon name="star" className="text-secondary text-body" style={{ fontVariationSettings: "'FILL' 1" }} title={t(locale, "admin_featured")} />}
                   {isBusy(c) && (
-                    <span className="flex items-center gap-0.5 bg-amber-100 text-amber-800 text-caption font-bold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                    // DM-11: the reopen date used to live ONLY in `title` — a
+                    // touch device (this is the admin company LIST, the one
+                    // screen where an admin scans "who's busy and until
+                    // when" across many rows at once) never saw it at all.
+                    // Now shown inline; `title` stays as a bonus mouse
+                    // tooltip that says the same thing.
+                    <span className="flex items-center gap-0.5 bg-amber-100 text-amber-800 text-caption font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 flex-wrap"
                       title={cBackAt ? `${t(locale, "admin_busy_until")} ${formatReopenDate(cBackAt, locale)}` : t(locale, "admin_busy")}>
-                      <Icon name="event_busy" className="text-caption" style={{ fontVariationSettings: "'FILL' 1" }} />{t(locale, "admin_busy")}
+                      <Icon name="event_busy" className="text-caption" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" />
+                      {t(locale, "admin_busy")}
+                      {cBackAt && <span className="font-normal opacity-90">· {formatReopenDate(cBackAt, locale)}</span>}
                     </span>
                   )}
                 </div>
                 <p className="text-caption text-outline truncate">{c.categoryLabel}</p>
-                <div className="flex items-center gap-2 text-caption text-outline mt-0.5">
+                {/* flex-wrap: DM-08 — the row stayed on one line before and
+                    could get clipped in a narrow column layout. */}
+                <div className="flex flex-wrap items-center gap-2 text-caption text-outline mt-0.5">
                   <span>★ {c.rating}</span><span>·</span><span>{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span><span>·</span><span>{cLeads} {tCount(locale, "noun_lead", cLeads)}</span>
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5 flex-shrink-0">
+              {/* DM-08: row of buttons on mobile (wraps if needed) instead of
+                  a fixed vertical stack that ate most of the card's width. */}
+              <div className="flex flex-row flex-wrap sm:flex-col gap-1.5 flex-shrink-0 w-full sm:w-auto">
                 <button onClick={() => setEditingCompany({ company: c })} className="flex items-center gap-1 bg-surface-container px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors">
                   <Icon name="edit" className="text-label" /> {t(locale, "admin_edit")}
                 </button>

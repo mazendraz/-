@@ -230,7 +230,7 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
         <Detail icon="tag" label={t(locale, "requests_ref")} val={lead.refNumber} mono />
         <Detail icon="calendar_today" label={t(locale, "requests_submitted")} val={new Date(lead.createdAt).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US")} />
         <Detail icon="location_on" label={t(locale, "requests_district")} val={lead.district} />
-        <Detail icon="payments" label={t(locale, "requests_budget")} val={lead.budget} />
+        {lead.budget && <Detail icon="payments" label={t(locale, "requests_budget")} val={lead.budget} />}
       </div>
 
       {/* Conversation with the company. The thread itself lives on

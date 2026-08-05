@@ -53,7 +53,7 @@ export function ProjectApprovals() {
         <div className="flex bg-surface-container rounded-xl p-0.5">
           {(["PENDING", "REJECTED"] as ProjectStatus[]).map((s) => (
             <button key={s} onClick={() => setStatus(s)}
-              className={`px-3 py-1.5 rounded-lg text-caption font-bold transition-colors ${status === s ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}>
+              className={`px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold transition-colors ${status === s ? "bg-surface-container-lowest text-primary shadow-sm" : "text-outline hover:text-on-surface"}`}>
               {t(locale, s === "PENDING" ? "admin_pa_pending" : "admin_pa_rejected")}
             </button>
           ))}
@@ -82,25 +82,32 @@ export function ProjectApprovals() {
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={() => setPreview(p)} className="font-bold text-label text-on-surface text-start hover:text-primary transition-colors">{p.title}</button>
+                  <button onClick={() => setPreview(p)} className="font-bold text-label text-on-surface text-start hover:text-primary transition-colors min-h-[44px] flex items-center">{p.title}</button>
                   <span className="text-caption text-outline">{p.year}</span>
                 </div>
                 <p className="text-caption font-bold text-primary truncate">{p.companyName}</p>
                 <p className="text-caption text-on-surface-variant line-clamp-2 mt-0.5">{p.description}</p>
-                <div className="flex gap-2 mt-2">
+                {/* flex-wrap: found while closing out Phase 3 — up to 4 actions
+                    (view/approve/reject/delete) in a row with a fixed 80px
+                    thumbnail left ~278px of a 390px card for them, and Phase 2's
+                    44px touch-target pass (min-h-[44px] on View/Approve) was
+                    enough width to push it into a real horizontal overflow.
+                    Wrapping keeps every button reachable without shrinking the
+                    touch targets back down. */}
+                <div className="flex flex-wrap gap-2 mt-2">
                   <button onClick={() => setPreview(p)}
-                    className="flex items-center gap-1 bg-surface-container px-3 py-1.5 rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors">
+                    className="flex items-center gap-1 bg-surface-container px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors">
                     <Icon name="visibility" className="text-label" /> {t(locale, "admin_view")}
                   </button>
                   {status !== "APPROVED" && (
                     <button onClick={() => act(p, "APPROVED")} disabled={busyId === p.id}
-                      className="flex items-center gap-1 bg-primary text-on-primary px-3 py-1.5 rounded-lg text-caption font-bold hover:bg-primary-container transition-colors disabled:opacity-60">
+                      className="flex items-center gap-1 bg-primary text-on-primary px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold hover:bg-primary-container transition-colors disabled:opacity-60">
                       <Icon name="check" className="text-label" /> {t(locale, "admin_approve")}
                     </button>
                   )}
                   {status === "PENDING" && (
                     <button onClick={() => act(p, "REJECTED")} disabled={busyId === p.id}
-                      className="flex items-center gap-1 border border-error/30 text-error px-3 py-1.5 rounded-lg text-caption font-bold hover:bg-error/5 transition-colors disabled:opacity-60">
+                      className="flex items-center gap-1 border border-error/30 text-error px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold hover:bg-error/5 transition-colors disabled:opacity-60">
                       <Icon name="close" className="text-label" /> {t(locale, "admin_reject")}
                     </button>
                   )}

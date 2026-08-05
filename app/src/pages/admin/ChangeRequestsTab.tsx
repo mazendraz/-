@@ -397,7 +397,11 @@ function FieldDiff({ field, before, after, conflicted, selectable, selected, onT
   return (
     <div className={`rounded-xl border p-3 ${conflicted ? "border-amber-300 bg-amber-50/50" : "border-outline-variant/20"}`}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <label className="flex items-center gap-2 min-w-0">
+        {/* DM-06: the checkbox itself is 16px. Selective approval — accept 3 of
+            5 changed fields — is the admin's main lever on this screen, so the
+            LABEL carries the 44px target and the whole row is tappable. The
+            box stays 16px visually; only the hit area grows. */}
+        <label className="flex items-center gap-2 min-w-0 min-h-[44px] cursor-pointer">
           {selectable && (
             <input
               type="checkbox" checked={selected} onChange={onToggle}

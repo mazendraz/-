@@ -35,13 +35,41 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || "/";
 
+  // DM-13: this used to require `client.url.includes(target)` — a full-URL
+  // match. A provider sitting on /provider/overview failed that test when the
+  // notification targeted /provider/messages, so the SW opened a SECOND window
+  // instead of focusing the one already open. In an installed PWA a duplicate
+  // window is especially disorienting.
+  //
+  // Match on the dashboard ROOT instead (/provider or /admin), then hand the
+  // full path to the focused client via postMessage so it can route there
+  // in place. ProviderLayout/AdminLayout listen for this.
+  const targetPath = (() => {
+    try {
+      return new URL(target, self.location.origin).pathname;
+    } catch {
+      return typeof target === "string" ? target : "/";
+    }
+  })();
+  const root = "/" + targetPath.split("/").filter(Boolean)[0];
+
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clients) => {
-        // Focus an existing dashboard tab if one is open; else open a new one.
         for (const client of clients) {
-          if (client.url.includes(target) && "focus" in client) {
+          let clientPath = "";
+          try {
+            clientPath = new URL(client.url).pathname;
+          } catch {
+            clientPath = "";
+          }
+          if (root !== "/" && clientPath.startsWith(root) && "focus" in client) {
+            // Tell the app where to go BEFORE focusing, so the route change and
+            // the window coming forward land together.
+            if ("postMessage" in client) {
+              client.postMessage({ type: "navigate", url: target });
+            }
             return client.focus();
           }
         }

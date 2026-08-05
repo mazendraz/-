@@ -4,6 +4,7 @@ import { useSaved } from "../hooks/useSaved";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
+import { hasFullBleedHero } from "../lib/heroRoutes";
 import Logo from "./Logo";
 import Icon from "./Icon";
 
@@ -42,7 +43,9 @@ export default function TopNav({ onOpenSearch }: Props) {
   const [scrolled, setScrolled] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { pathname } = useLocation();
-  const isHome = pathname === "/";
+  // Transparent-over-hero on "/" AND on a company profile — both render a
+  // full-bleed cover under the nav instead of clearing it with padding.
+  const hasHero = hasFullBleedHero(pathname);
   const { count: savedCount } = useSaved();
   const { locale, setLocale } = useLocale();
   // PERF-03: both navs (only one visible at a time via md: breakpoint classes,
@@ -60,7 +63,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       requestAnimationFrame(() => {
         const y = window.scrollY;
         setScrolled(y > 60);
-        const p = isHome ? Math.min(y / 80, 1) : 1;
+        const p = hasHero ? Math.min(y / 80, 1) : 1;
         desktopNavRef.current?.style.setProperty("--nav-progress", String(p));
         mobileNavRef.current?.style.setProperty("--nav-progress", String(p));
         ticking = false;
@@ -69,7 +72,7 @@ export default function TopNav({ onOpenSearch }: Props) {
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
-  }, [isHome]);
+  }, [hasHero]);
 
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
@@ -88,7 +91,7 @@ export default function TopNav({ onOpenSearch }: Props) {
   }, [onOpenSearch]);
 
   const { containerRef: drawerRef, trapTab: trapDrawerTab } = useDialogA11y(drawerOpen, () => setDrawerOpen(false));
-  const solidBg = !isHome || scrolled;
+  const solidBg = !hasHero || scrolled;
 
   const linkBase = "text-label font-semibold transition-colors duration-base px-4 py-2 rounded-lg";
   // Current page must be perceivable without colour (A11Y-10, WCAG 1.4.1) —

@@ -1,3 +1,7 @@
+/* PhoneInput's country picker (pixel-accurate SVG flags, `fi fi-eg` etc.) —
+   @import must precede every other rule, including @tailwind. */
+@import "flag-icons/css/flag-icons.min.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,6 +19,16 @@
   /* BottomNav's real fixed height (mobile only) — used everywhere that needs
      to clear it instead of the 3.5rem literal repeated in three places. */
   --bottom-nav-h: 3.5rem;
+  /* DM-04: the notch/home-indicator insets, behind variables rather than
+     inlined `env()` calls.
+     The indirection is load-bearing for TESTING, not for styling: Chromium
+     cannot emulate safe-area insets at all (measured 2026-08-03 —
+     `--safe-area-insets` and `--force-display-mode-standalone` both leave
+     `env(safe-area-inset-top)` at 0px). With the value behind a variable, a
+     test can override `--safe-top` and assert the layout really responds;
+     with a bare `env()` the fix would pass whether or not it worked. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 @media (min-width: 768px) {
   :root { --nav-h: 76px; }
@@ -43,7 +57,11 @@
 ════════════════════════════════════════════════════════════════════════════ */
 .nav-glass {
   --nav-progress: 0;
-  position: relative;
+  /* No `position` here: this class always pairs with Tailwind's `fixed`
+     utility (TopNav.tsx), and both land at the same specificity — setting
+     `position: relative` here used to win by source order and silently
+     downgrade the nav to in-flow, breaking its float-over-content behavior.
+     `fixed` alone already gives ::before/::after a positioned ancestor. */
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0) 55%);
@@ -421,11 +439,19 @@
   -ms-overflow-style: none;
   gap: 16px;
   padding-bottom: 8px;
-  /* RESP-04: the native scrollbar is hidden with nothing standing in for it —
-     an edge fade (same technique as .review-marquee) is the only remaining
-     hint there's more content to either side. */
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
-          mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+}
+/* RESP-04: the native scrollbar is hidden with nothing standing in for it —
+   an edge fade (same technique as .review-marquee) is the only remaining
+   hint there's more content to either side. Scoped to the mobile breakpoint
+   only: at md+ these same elements switch to `md:grid` (a plain grid, not a
+   scrollable strip), where the exact same class was leaving every row's
+   first/last card permanently faded — making a grid look like a stuck
+   carousel. */
+@media (max-width: 767px) {
+  .mobile-scroll {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+            mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+  }
 }
 .mobile-scroll::-webkit-scrollbar { display: none; }
 .mobile-scroll > * {
@@ -683,7 +709,35 @@ select.field-input {
    BOTTOM NAV — iOS safe area support
 ════════════════════════════════════════════════════════════════════════════ */
 .bottom-nav-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: var(--safe-bottom);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DASHBOARD SAFE AREA (DM-04)
+   The admin/provider shells have a sticky topbar, a full-height drawer and a
+   sticky save bar — all of which collided with the notch and the home
+   indicator in standalone mode. Siblings of .bottom-nav-safe above so the
+   whole app states its insets in one place.
+════════════════════════════════════════════════════════════════════════════ */
+.dashboard-topbar-safe {
+  padding-top: max(0.75rem, var(--safe-top));
+}
+.dashboard-bottom-safe {
+  padding-bottom: max(0.75rem, var(--safe-bottom));
+}
+/* DM-07: below md:, both dashboards now ALSO have a fixed bottom tab bar
+   (--bottom-nav-h tall) sitting on top of whatever .dashboard-bottom-safe was
+   already clearing — without this, the bar would sit directly over the
+   sticky settings Save button (and over the last row of any scrollable list).
+   `.dashboard-has-bottom-nav` is added to DashboardShell's wrapper only when
+   a bottomNav is actually passed in, so every `.dashboard-bottom-safe`
+   descendant (the shell's own content padding, AND SettingsTab's save bar,
+   with zero prop-drilling into that component) gets the extra clearance
+   automatically — and only on the width where the bar actually renders. */
+@media (max-width: 767px) {
+  .dashboard-has-bottom-nav .dashboard-bottom-safe {
+    padding-bottom: calc(var(--bottom-nav-h) + max(0.75rem, var(--safe-bottom)));
+  }
 }
 
 /* CompareBar floats above the bottom nav on mobile, above safe area on desktop */

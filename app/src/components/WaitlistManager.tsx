@@ -8,6 +8,7 @@ import {
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { formatDate } from "../lib/format";
+import { formatPhoneDisplay } from "../lib/phone";
 import Icon from "./Icon";
 
 const FILTERS: (WaitlistStatus | "All")[] = ["All", ...WAITLIST_STATUSES];
@@ -86,7 +87,7 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
       <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
         {FILTERS.map((f) => (
           <button key={f} onClick={() => setFilter(f)}
-            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-label font-bold transition-colors border ${
+            className={`flex-shrink-0 px-3.5 py-1.5 min-h-[44px] rounded-full text-label font-bold transition-colors border ${
               filter === f ? "bg-primary text-on-primary border-primary" : "bg-surface-container-lowest text-on-surface-variant border-outline-variant/30 hover:border-outline-variant"
             }`}>
             {f === "All" ? t(locale, "prov_wl_filter_all") : t(locale, WAITLIST_STATUS_KEYS[f])}
@@ -115,22 +116,26 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
                     <span className=" text-label text-on-surface">{e.name}</span>
                     <span className={`text-caption px-2 py-0.5 rounded-full ${WAITLIST_STATUS_COLORS[e.status]}`}>{t(locale, WAITLIST_STATUS_KEYS[e.status])}</span>
                   </div>
-                  <a href={`tel:${e.phone}`} className="text-label font-bold text-primary hover:underline">{e.phone}</a>
+                  <a href={`tel:${e.phone}`} className="text-label font-bold text-primary hover:underline" dir="ltr">{formatPhoneDisplay(e.phone)}</a>
                   {e.service && <p className="text-caption text-outline">{t(locale, "prov_wl_waiting_for")} {e.service}</p>}
                   {e.note && <p className="text-sm text-on-surface-variant mt-1 line-clamp-2">{e.note}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <div className="flex items-center gap-2">
+                    {/* DM-06b: unnamed select, same class as the one fixed in
+                        LeadRows.tsx — missed here on the first pass. */}
                     <select
                       value={e.status}
+                      aria-label={`${t(locale, "admin_lead_status")} — ${e.name}`}
                       disabled={busyId === e.id}
                       onChange={(ev) => changeStatus(e.id, ev.target.value as WaitlistStatus)}
-                      className="border border-outline-variant rounded-lg px-2.5 py-1 text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-60"
+                      className="border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-60"
                     >
                       {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
                     </select>
                     <button onClick={() => remove(e.id)} disabled={busyId === e.id} title={t(locale, "prov_wl_remove")}
-                      className="p-1.5 rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
+                      aria-label={`${t(locale, "prov_wl_remove")} — ${e.name}`}
+                      className="w-11 h-11 flex items-center justify-center rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
                       <span className="material-symbols-outlined text-subhead" aria-hidden="true" translate="no">{busyId === e.id ? "progress_activity" : "delete"}</span>
                     </button>
                   </div>

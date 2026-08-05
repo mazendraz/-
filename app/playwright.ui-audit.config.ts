@@ -6,6 +6,11 @@ import { defineConfig, devices } from "@playwright/test";
 // that should currently FAIL — see tests/ui-audit.spec.ts. Same prerequisites
 // as the e2e config: local Postgres up + migrated + seeded, and
 // app/.env.local pointing VITE_API_URL at the local API.
+//
+// Dashboard-audit addendum (DASHBOARD-FIX-PROMPT.md Phase 0): the matrix now
+// covers the real /admin and /provider tabs, which need a session — hence the
+// "setup" project below and one extra prerequisite:
+//   cd ../api && npm run seed:test-users    (creates the two fixed accounts)
 export default defineConfig({
   testDir: "./tests",
   timeout: 30_000,
@@ -22,7 +27,30 @@ export default defineConfig({
     baseURL: "http://localhost:5173",
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // Logs both roles in once and writes tests/.auth/*.json. Everything else
+    // depends on it, so a login regression fails here — loudly and once —
+    // instead of surfacing as a wall of unexplained screenshot diffs.
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["setup"],
+      testMatch: /ui-audit(-modals)?\.spec\.ts/,
+    },
+    // NO "standalone" project here, deliberately. DM-04 (safe-area insets)
+    // would ideally be verified with non-zero insets, but Chromium cannot
+    // emulate them: `--force-display-mode-standalone` and `--safe-area-insets`
+    // were both tried and measured on 2026-08-03 — `env(safe-area-inset-top)`
+    // still computes to 0px and `(display-mode: standalone)` still reports
+    // false. A project using them would have passed unconditionally while
+    // measuring nothing, which is precisely the DM-01 failure this whole phase
+    // exists to remove.
+    //
+    // DM-04 is therefore verified in Phase 2 instead, by routing the insets
+    // through CSS custom properties (`--safe-top: env(safe-area-inset-top)`)
+    // that a test CAN override — see DASHBOARD-FIX-PROMPT.md Phase 2.2.
+  ],
   webServer: [
     {
       command: "npm run dev",

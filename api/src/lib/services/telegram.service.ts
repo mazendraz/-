@@ -42,16 +42,18 @@ export function buildLeadTelegramMessage(
   const header = forAdmin
     ? `🔔 <b>طلب جديد على ${e(companyName)}</b>`
     : `🔔 <b>عندك طلب جديد على العاصمة</b>`;
-  return (
-    `${header}\n\n` +
-    `📄 رقم الطلب: <b>${e(lead.refNumber)}</b>\n` +
-    `🛠️ الخدمة: ${e(lead.service)}\n` +
-    `👤 العميل: ${e(lead.name)}\n` +
-    `📞 التليفون: ${e(lead.phone)}\n` +
-    `📍 المنطقة: ${e(lead.district)}\n` +
-    `💰 الميزانية: ${e(lead.budget)}\n` +
-    `📝 التفاصيل: ${e(lead.description)}`
-  );
+  const lines = [
+    `📄 رقم الطلب: <b>${e(lead.refNumber)}</b>`,
+    `🛠️ الخدمة: ${e(lead.service)}`,
+    `👤 العميل: ${e(lead.name)}`,
+    `📞 التليفون: ${e(lead.phone)}`,
+    `📍 المنطقة: ${e(lead.district)}`,
+    // Budget and description are optional on the request form — a customer who
+    // left them blank shouldn't produce a message with dangling empty lines.
+    lead.budget && `💰 الميزانية: ${e(lead.budget)}`,
+    lead.description && `📝 التفاصيل: ${e(lead.description)}`,
+  ].filter(Boolean);
+  return `${header}\n\n${lines.join("\n")}`;
 }
 
 /**
