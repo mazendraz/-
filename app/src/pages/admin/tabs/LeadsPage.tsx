@@ -65,7 +65,11 @@ export default function LeadsPage() {
   // tagged and colored differently (see LeadListRow/LeadTable in LeadsTab.tsx).
   // Pagination stays driven by leadSearch when both are shown together: real
   // volume here is small (it only accumulates while a company is busy), so a
-  // perfectly unified cross-table sort isn't worth the complexity.
+  // perfectly unified cross-table sort isn't worth the complexity. Because of
+  // that, `waitlistSearch`'s own page never advances past 1 in mixed mode (no
+  // Pagination control below is wired to it there) — see the page-1 guard on
+  // `waitlistRows` below, which stops that fixed page-1 slice from being
+  // silently re-merged as duplicate rows into every subsequent lead page.
   const waitlistSearch = useServerSearch<WaitlistEntry>(
     "/admin/waitlist",
     leadQuery,
@@ -89,7 +93,13 @@ export default function LeadsPage() {
   const waitlistTotal = leadApiMode ? waitlistSearch.total : 0;
 
   const leadRows: LeadListRow[] = leadList.map((data) => ({ kind: "lead", data }) as const);
-  const waitlistRows: LeadListRow[] = waitlistList.map((data) => ({ kind: "waitlist", data }) as const);
+  // In mixed mode (both sources shown, paginated by leadSearch alone) only fold
+  // the waitlist's page-1 slice in on the leads' own page 1 — otherwise the same
+  // fixed slice would reappear as duplicates on every later lead page, since
+  // there is no control that ever advances waitlistSearch past page 1 here.
+  const waitlistRows: LeadListRow[] = showLeads && showWaitlist && leadSearch.page > 1
+    ? []
+    : waitlistList.map((data) => ({ kind: "waitlist", data }) as const);
   const mergedRows: LeadListRow[] = showLeads && showWaitlist
     ? [...leadRows, ...waitlistRows].sort((a, b) => b.data.createdAt - a.data.createdAt)
     : showWaitlist ? waitlistRows : leadRows;
@@ -119,7 +129,14 @@ export default function LeadsPage() {
       if (prev?.id === id) setSelectedLead({ ...prev, status });
       return () => { if (prev?.id === id) setSelectedLead(prev); };
     },
-    onSuccess: () => { if (leadApiMode) leadSearch.refresh(); },
+    // Patch the row in place first — instant feedback instead of waiting on a
+    // full re-fetch — then refresh so filter membership/sort stay correct
+    // (e.g. the row leaving a status-filtered view entirely).
+    onSuccess: ({ id, status }) => {
+      if (!leadApiMode) return;
+      leadSearch.patch((l) => l.id === id, (l) => ({ ...l, status }));
+      leadSearch.refresh();
+    },
     errorMessage: t(locale, "admin_mutation_failed"),
   });
   const leadDeleteMutation = useMutation<string>({
@@ -138,7 +155,8 @@ export default function LeadsPage() {
     // waitlist.service.ts convertToLead) — refresh the lead list too, so the row
     // that was tagged "waitlist" reappears immediately as a normal lead instead of
     // only showing up after the next full reload.
-    onSuccess: ({ status }) => {
+    onSuccess: ({ entry, status }) => {
+      waitlistSearch.patch((e) => e.id === entry.id, (e) => ({ ...e, status }));
       waitlistSearch.refresh();
       if (status === "CONVERTED" && leadApiMode) leadSearch.refresh();
     },

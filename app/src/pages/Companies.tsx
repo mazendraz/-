@@ -164,15 +164,20 @@ export default function Companies() {
               available-now + 2 selects in one row — 768px (tablet) doesn't have
               it. Stays the sheet-based mobile pattern through tablet, up to lg:. */}
           <div className="hidden lg:flex items-center gap-3 flex-wrap">
-            {/* Category chips */}
-            <div className="flex items-center gap-2 flex-wrap flex-1">
-              <FilterChip active={category === "all"} onClick={() => setCategory("all")}>{t(locale, "companies_all")}</FilterChip>
+            {/* Category — single dropdown instead of a chip row (was wrapping
+                into multiple lines once the category count grew). */}
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              aria-label={t(locale, "companies_all")}
+              className="field-input !w-auto !py-2 !rounded-full text-label font-bold cursor-pointer"
+            >
+              <option value="all">{t(locale, "companies_all")}</option>
               {SERVICE_CATEGORIES.map((cat) => (
-                <FilterChip key={cat.slug} active={category === cat.slug} onClick={() => setCategory(cat.slug)} icon={cat.icon}>
-                  {cat.label}
-                </FilterChip>
+                <option key={cat.slug} value={cat.slug}>{cat.label}</option>
               ))}
-            </div>
+            </select>
+            <div className="flex-1" />
             {/* Available now — was mobile-sheet-only (UX-04); the desktop bar had
                 no way to reach it at all, only the filter count badge on mobile
                 hinted it existed. */}
@@ -226,7 +231,7 @@ export default function Companies() {
               <Icon name="tune" className="text-subhead" />
               {t(locale, "companies_filters")}
               {(minRating > 0 || sort !== "recommended" || category !== "all" || availableOnly) && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary text-on-primary text-caption font-black rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 rtl:right-auto rtl:-left-1 w-4 h-4 bg-primary text-on-primary text-caption font-black rounded-full flex items-center justify-center">
                   {(minRating > 0 ? 1 : 0) + (sort !== "recommended" ? 1 : 0) + (category !== "all" ? 1 : 0) + (availableOnly ? 1 : 0)}
                 </span>
               )}
@@ -448,7 +453,7 @@ function CompanyCard({ company: c, delay }: { company: Company; delay: number })
           <p className="text-label text-on-surface-variant line-clamp-2 flex-grow leading-relaxed">{c.tagline}</p>
           <div className="mt-4 pt-4 border-t border-outline-variant/20 flex items-center justify-between">
             <span className="text-caption text-outline">{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>
-            <span className="text-label font-bold text-primary flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+            <span className="text-label font-bold text-primary flex items-center gap-1 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform">
               {t(locale, "common_view_profile")} <Icon name="arrow_forward" className="text-body rtl-flip" />
             </span>
           </div>

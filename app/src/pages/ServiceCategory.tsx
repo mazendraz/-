@@ -103,14 +103,20 @@ export default function ServiceCategoryPage() {
         ) : errorEmpty ? (
           <CatalogError />
         ) : allCompanies.length === 0 ? (
-          <div className="text-center py-20">
+          <div className="text-center py-20" role="status" aria-live="polite" aria-atomic="true">
             <Icon name="search_off" className="text-outline text-[64px] mb-4 block" />
             <p className="text-subhead text-outline">
               {q ? `${t(locale, "common_no_results_for")} "${query}".` : t(locale, "category_none_yet")}
             </p>
-            <Link to="/services" className="mt-4 inline-flex items-center text-primary font-display text-label hover:underline">
-              <Icon name="arrow_back" className="text-subhead rtl-flip" /> {t(locale, "category_browse_all")}
-            </Link>
+            {q ? (
+              <button onClick={() => setQuery("")} className="mt-4 inline-flex items-center text-primary font-display text-label hover:underline">
+                {t(locale, "search_clear")}
+              </button>
+            ) : (
+              <Link to="/services" className="mt-4 inline-flex items-center text-primary font-display text-label hover:underline">
+                <Icon name="arrow_back" className="text-subhead rtl-flip" /> {t(locale, "category_browse_all")}
+              </Link>
+            )}
           </div>
         ) : (
           <>
@@ -171,7 +177,7 @@ function CompanyRow({ company: c, delay, locale }: { company: Company; delay: nu
                 <h2 className="font-display text-title text-on-surface group-hover:text-primary transition-colors mb-1">{c.name}</h2>
                 <p className="text-label font-display text-outline mb-2">{c.categoryLabel}</p>
               </div>
-              <span className="text-label font-display text-primary flex items-center gap-1 whitespace-nowrap group-hover:translate-x-1 transition-transform hidden sm:flex">
+              <span className="text-label font-display text-primary flex items-center gap-1 whitespace-nowrap group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform hidden sm:flex">
                 {t(locale, "common_view_profile")} <Icon name="arrow_forward" className="text-subhead rtl-flip" />
               </span>
             </div>

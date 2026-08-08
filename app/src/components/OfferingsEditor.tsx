@@ -11,6 +11,7 @@ import { isApiConfigured } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import Icon from "./Icon";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 
 /**
  * The provider's "Services & Pricing" screen.
@@ -334,9 +335,18 @@ function OfferingModal({ offering, onClose, onSaved }: {
     }
   }
 
+  // See ProjectEditorModal's comment in ProjectsPage.tsx: caps the panel to the
+  // visible height once the on-screen keyboard opens, so the sticky footer
+  // doesn't end up rendered underneath it.
+  const { height: vvHeight } = useVisualViewport();
+  const keyboardOpen = typeof window !== "undefined" && window.innerHeight - vvHeight > 60;
+
   return (
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm">
-      <div className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto">
+      <div
+        className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto"
+        style={keyboardOpen ? { maxHeight: vvHeight } : undefined}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/15 sticky top-0 bg-surface-container-lowest z-10">
           <h3 className="font-bold text-body text-on-surface">
             {t(locale, offering ? "prov_off_modal_edit" : "prov_off_modal_new")}

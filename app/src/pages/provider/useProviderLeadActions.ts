@@ -10,12 +10,13 @@ import { t } from "../../lib/i18n";
 import type { LeadListRow } from "../admin/LeadsTab";
 
 interface Options {
-  /** Called after a successful lead-status change. The Leads tab passes its
-   *  server-search refresh here; Overview passes nothing, because its list
-   *  comes from the `useLeads` store, which the mutation already updates. */
-  onLeadChanged?: (status: LeadStatus) => void;
+  /** Called after a successful lead-status change. The Leads tab patches its
+   *  server-search list here (instant feedback) and refreshes it (filter/sort
+   *  reconciliation); Overview passes nothing, because its list comes from
+   *  the `useLeads` store, which the mutation already updates. */
+  onLeadChanged?: (id: string, status: LeadStatus) => void;
   /** Same, for the waiting-list sources. */
-  onWaitlistChanged?: (status: WaitlistStatus) => void;
+  onWaitlistChanged?: (entry: WaitlistEntry, status: WaitlistStatus) => void;
   onWaitlistDeleted?: () => void;
 }
 
@@ -47,7 +48,7 @@ export function useProviderLeadActions({ onLeadChanged, onWaitlistChanged, onWai
       if (prev?.id === id) setSelectedLead({ ...prev, status });
       return () => { if (prev?.id === id) setSelectedLead(prev); };
     },
-    onSuccess: ({ status }) => onLeadChanged?.(status),
+    onSuccess: ({ id, status }) => onLeadChanged?.(id, status),
     errorMessage: t(locale, "admin_mutation_failed"),
   });
 
@@ -58,7 +59,7 @@ export function useProviderLeadActions({ onLeadChanged, onWaitlistChanged, onWai
       if (prev?.id === entry.id) setSelectedWaitlist({ ...prev, status });
       return () => { if (prev?.id === entry.id) setSelectedWaitlist(prev); };
     },
-    onSuccess: ({ status }) => onWaitlistChanged?.(status),
+    onSuccess: ({ entry, status }) => onWaitlistChanged?.(entry, status),
     errorMessage: t(locale, "admin_mutation_failed"),
   });
 

@@ -288,7 +288,10 @@ export async function addLead(
 }
 
 // Returns a promise that resolves once the server PATCH settles, so callers driving
-// a server-paginated list can refresh() afterward without racing the write.
+// a server-paginated list can refresh() afterward without racing the write. Rejects
+// on failure — both callers wrap this in useMutation, which rolls back the optimistic
+// change and shows an error toast; swallowing the error here used to leave that toast
+// unreachable, so a failed save just silently reverted with no explanation.
 export function updateLeadStatus(id: string, status: LeadStatus): Promise<void> {
   write(read().map((l) => (l.id === id ? { ...l, status } : l))); // optimistic
   if (isApiConfigured() && isAuthenticated()) {
@@ -297,6 +300,7 @@ export function updateLeadStatus(id: string, status: LeadStatus): Promise<void> 
       .catch((err) => {
         console.error("Lead status update failed:", err);
         void hydrateLeadsFromApi(); // reconcile from the server
+        throw err;
       });
   }
   return Promise.resolve();

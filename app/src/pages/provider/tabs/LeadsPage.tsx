@@ -40,6 +40,10 @@ export default function LeadsPage() {
   // and colored differently. Pagination stays driven by leadSearch when both
   // are shown together: real volume here is small (it only accumulates while
   // the company is busy), so a unified cross-source sort isn't worth it.
+  // Because of that, `waitlistSearch`'s own page never advances past 1 in
+  // mixed mode (no Pagination control below is wired to it there) — see the
+  // page-1 guard on `waitlistRows` below, which stops that fixed page-1 slice
+  // from being silently re-merged as duplicate rows into every later lead page.
   const waitlistSearch = useServerSearch<WaitlistEntry>(
     "/provider/waitlist",
     leadQuery,
@@ -51,12 +55,20 @@ export default function LeadsPage() {
     selectedLead, setSelectedLead, selectedWaitlist, setSelectedWaitlist, openRow: handleOpenRow,
     handleLeadStatus, handleWaitlistStatus, handleWaitlistDelete,
   } = useProviderLeadActions({
-    onLeadChanged: () => { if (leadApiMode) leadSearch.refresh(); },
+    // Patch the row in place first — instant feedback instead of waiting on a
+    // full re-fetch — then refresh so filter membership/sort stay correct
+    // (e.g. the row leaving a status-filtered view entirely).
+    onLeadChanged: (id, status) => {
+      if (!leadApiMode) return;
+      leadSearch.patch((l) => l.id === id, (l) => ({ ...l, status }));
+      leadSearch.refresh();
+    },
     // Accepting (status -> CONVERTED) creates a real Lead behind this entry
     // (waitlist.service.ts convertToLead) — refresh the lead list too, so the
     // row tagged "waitlist" reappears immediately as a normal lead instead of
     // only showing up after the next full reload.
-    onWaitlistChanged: (status) => {
+    onWaitlistChanged: (entry, status) => {
+      waitlistSearch.patch((e) => e.id === entry.id, (e) => ({ ...e, status }));
       waitlistSearch.refresh();
       if (status === "CONVERTED" && leadApiMode) leadSearch.refresh();
     },
@@ -79,9 +91,14 @@ export default function LeadsPage() {
   // became) — keep them out of the merged pipeline view so the same customer
   // doesn't appear twice. Still visible, including Converted, from
   // WaitlistManager's own status filter on the Availability tab.
-  const waitlistRows: LeadListRow[] = waitlistList
-    .filter((e) => e.status !== "CONVERTED")
-    .map((data) => ({ kind: "waitlist", data }) as const);
+  // In mixed mode (both sources shown, paginated by leadSearch alone) only fold
+  // the waitlist's page-1 slice in on the leads' own page 1 — otherwise the
+  // same fixed slice would reappear as duplicates on every later lead page.
+  const waitlistRows: LeadListRow[] = showLeads && showWaitlist && leadSearch.page > 1
+    ? []
+    : waitlistList
+        .filter((e) => e.status !== "CONVERTED")
+        .map((data) => ({ kind: "waitlist", data }) as const);
   const mergedRows: LeadListRow[] = showLeads && showWaitlist
     ? [...leadRows, ...waitlistRows].sort((a, b) => b.data.createdAt - a.data.createdAt)
     : showWaitlist ? waitlistRows : leadRows;

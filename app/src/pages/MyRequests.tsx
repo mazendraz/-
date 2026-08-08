@@ -116,7 +116,7 @@ export default function MyRequests() {
             </div>
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12" role="status" aria-live="polite" aria-atomic="true">
             <Icon name="search_off" className="text-outline/50 text-[40px] mb-2 block" />
             <p className="text-label text-outline">{t(locale, "requests_none_match")}</p>
           </div>

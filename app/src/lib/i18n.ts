@@ -457,10 +457,7 @@ const STRINGS = {
     pagination_prev: "Previous page",
     pagination_next: "Next page",
 
-    // ── Phone input (PhoneInput.tsx — country picker + validation) ──
-    phone_select_country_aria: "Select country",
-    phone_search_ph: "Search country or code…",
-    phone_no_match: "No countries match",
+    // ── Phone input (PhoneInput.tsx — validation) ──
     phone_invalid: "Enter a valid phone number",
 
     // ── Catalog error ──
@@ -1862,10 +1859,7 @@ const STRINGS = {
     pagination_prev: "الصفحة السابقة",
     pagination_next: "الصفحة التالية",
 
-    // ── حقل رقم الهاتف (PhoneInput.tsx — اختيار الدولة + التحقق) ──
-    phone_select_country_aria: "اختر الدولة",
-    phone_search_ph: "ابحث عن دولة أو كود…",
-    phone_no_match: "لا توجد دول مطابقة",
+    // ── حقل رقم الهاتف (PhoneInput.tsx — التحقق) ──
     phone_invalid: "أدخل رقم هاتف صحيح",
 
     // ── خطأ تحميل الكتالوج ──

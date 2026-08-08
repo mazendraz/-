@@ -44,7 +44,16 @@ export function useMutation<TArgs>({ mutate, optimisticUpdate, onSuccess, errorM
     } finally {
       setPending(false);
     }
-  }, [showToast]);
+    // `mutate`/`optimisticUpdate`/`onSuccess` are inline closures that capture
+    // per-render state (e.g. the currently-open modal's row) — callers pass a
+    // fresh one every render. Omitting them here used to freeze `run` on its
+    // first render's closures forever (deps was `[showToast]` only), so
+    // `optimisticUpdate` kept reading the state variable's *initial* value
+    // (typically null/not-yet-selected) and silently never fired: the network
+    // write and the list still updated correctly (those go through stable
+    // refs), but the open detail modal never reflected the change until a
+    // manual refresh replaced its `selectedLead`/`selectedWaitlist` entirely.
+  }, [showToast, mutate, optimisticUpdate, onSuccess, errorMessage]);
 
   return { run, pending };
 }

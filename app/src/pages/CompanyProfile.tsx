@@ -577,7 +577,7 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
               </div>
 
               {/* Name + Phone */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "feedback_your_name")}</label>
                   <input className="field-input !py-2 text-label" placeholder={t(locale, "feedback_optional")} value={name} onChange={(e) => setName(e.target.value)} />
@@ -715,7 +715,7 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
               <p className="text-label text-outline leading-relaxed">{t(locale, "waitlist_modal_sub")}</p>
 
               {/* Name + Phone */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_your_name")} <span className="text-error">*</span></label>
                   <input className="field-input !py-2 text-label" value={name} onChange={(e) => { setName(e.target.value); if (error) setError(""); }} />

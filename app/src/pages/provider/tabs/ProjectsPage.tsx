@@ -11,6 +11,7 @@ import { EmptyState } from "../../admin/components/EmptyState";
 import { useLocale } from "../../../context/LocaleContext";
 import { t, type StringKey } from "../../../lib/i18n";
 import { useProvider } from "../context";
+import { useVisualViewport } from "../../../hooks/useVisualViewport";
 
 export default function ProjectsPage() {
   const { company } = useProvider();
@@ -203,10 +204,21 @@ function ProjectEditorModal({ project, onClose, onSaved }: {
   }
 
   const wasApproved = project?.status === "APPROVED";
+  // On mobile, focusing a field opens the on-screen keyboard, which shrinks the
+  // *visual* viewport without shrinking `100vh` (the layout viewport) on iOS
+  // Safari — so the sticky Save footer below, sized off `max-h-screen`, ends up
+  // rendered underneath the keyboard. Cap the panel to the visible height once
+  // the keyboard is open so the footer stays reachable.
+  const { height: vvHeight } = useVisualViewport();
+  const keyboardOpen = typeof window !== "undefined" && window.innerHeight - vvHeight > 60;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto"
+        style={keyboardOpen ? { maxHeight: vvHeight } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-5 border-b border-outline-variant/20 sticky top-0 bg-surface-container-lowest z-10">
           <h2 className="font-bold text-subhead text-on-surface">{t(locale, isNew ? "prov_proj_add" : "prov_proj_edit")}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><Icon name="close" className="text-outline" /></button>

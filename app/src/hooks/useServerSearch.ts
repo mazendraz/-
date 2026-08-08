@@ -37,6 +37,13 @@ export interface ServerSearchResult<T> {
   setPage: (page: number) => void;
   /** Re-run the current query (e.g. after a mutation). */
   refresh: () => void;
+  /** Update matching rows in place, with no round trip — for reflecting a
+   *  mutation's known result the instant it succeeds, instead of waiting on
+   *  `refresh()`'s full re-fetch to come back before the UI shows it. Pair
+   *  with `refresh()` when the change can also affect filter membership or
+   *  sort order (a status edit that no longer matches the active filter);
+   *  the patch covers the instant feedback, the refresh reconciles the list. */
+  patch: (match: (item: T) => boolean, update: (item: T) => T) => void;
 }
 
 export interface ServerSearchOptions {
@@ -138,6 +145,9 @@ export function useServerSearch<T>(
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  const patch = useCallback((match: (item: T) => boolean, update: (item: T) => T) => {
+    setResult((prev) => ({ ...prev, data: prev.data.map((item) => (match(item) ? update(item) : item)) }));
+  }, []);
   const pageCount = useMemo(
     () => Math.max(1, Math.ceil(result.total / pageSize)),
     [result.total, pageSize],
@@ -153,5 +163,6 @@ export function useServerSearch<T>(
     error,
     setPage,
     refresh,
+    patch,
   };
 }

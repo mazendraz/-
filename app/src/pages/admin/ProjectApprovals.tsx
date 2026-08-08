@@ -7,6 +7,7 @@ import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import { useVisualViewport } from "../../hooks/useVisualViewport";
 
 // Moderation queue for provider-submitted portfolio projects. Pending projects
 // are hidden from the public profile until approved here. Also lets the admin
@@ -148,9 +149,18 @@ export function ProjectPreviewModal({ project, busy, onClose, onApprove, onRejec
 }) {
   const { locale } = useLocale();
   const isRejected = project.status === "REJECTED";
+  // See ProjectEditorModal's comment in ProjectsPage.tsx: caps the panel to the
+  // visible height once the on-screen keyboard opens, so the sticky footer
+  // doesn't end up rendered underneath it.
+  const { height: vvHeight } = useVisualViewport();
+  const keyboardOpen = typeof window !== "undefined" && window.innerHeight - vvHeight > 60;
   return (
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-surface-container-lowest w-full max-w-xl sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="bg-surface-container-lowest w-full max-w-xl sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto"
+        style={keyboardOpen ? { maxHeight: vvHeight } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between p-5 border-b border-outline-variant/20 sticky top-0 bg-surface-container-lowest z-10">
           <h2 className="font-bold text-subhead text-on-surface">{t(locale, "admin_pa_modal_title")}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><Icon name="close" className="text-outline" /></button>

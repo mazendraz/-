@@ -57,7 +57,11 @@ export default function Services() {
       <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-stack-xl">
         {SERVICE_CATEGORIES.length === 0 ? (
           <div role="status" aria-live="polite" aria-atomic="true">
-            <EmptyState icon="search_off" msg={`${t(locale, "common_no_results_for")} "${query}".`} />
+            <EmptyState
+              icon="search_off"
+              msg={`${t(locale, "common_no_results_for")} "${query}".`}
+              action={{ label: t(locale, "search_clear"), onClick: () => setQuery("") }}
+            />
           </div>
         ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter">
@@ -106,7 +110,7 @@ export default function Services() {
                     <span className="text-caption font-display text-outline bg-surface-container px-3 py-1 rounded-full">
                       {cat.count} {t(locale, "services_verified_companies")}
                     </span>
-                    <span className="text-primary font-display text-label flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                    <span className="text-primary font-display text-label flex items-center gap-1 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform">
                       {t(locale, "common_explore")} <Icon name="arrow_forward" className="text-body rtl-flip" />
                     </span>
                   </div>
