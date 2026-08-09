@@ -268,7 +268,7 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
             <div>
               <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_type")}</label>
               <Select
-                value={form.kind}
+                value={form.kind ?? "SERVICE"}
                 onChange={(v) => set("kind", v as "SERVICE" | "PRODUCT")}
                 options={[
                   { value: "SERVICE", label: t(locale, "prov_off_kind_service") },

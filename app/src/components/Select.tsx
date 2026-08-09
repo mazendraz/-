@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Icon from "./Icon";
 
 export interface SelectOption {
@@ -48,21 +49,65 @@ export default function Select({
   dataHasError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Anchor rect for the portaled panel below — recomputed each time the
+  // dropdown opens. Rendering the panel through a portal (instead of an
+  // absolutely-positioned child) keeps it from being clipped when the
+  // trigger sits inside a scrolling container, e.g. the admin leads table's
+  // `overflow-x-auto` wrapper, which was cutting the options list off.
+  const [coords, setCoords] = useState<{
+    top?: number; bottom?: number; left?: number; right?: number; width: number; maxHeight: number;
+  } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const btn = triggerRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const isRTL = document.documentElement.dir === "rtl";
+    const gap = 8;
+    const preferredMax = 288; // matches the old max-h-72
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    // Flip to open upward when there isn't enough room below — otherwise a
+    // trigger near the bottom of the screen (last row in a long list, e.g.
+    // the provider's leads cards) pushes the panel past the viewport edge
+    // with no way to scroll it into view, since it's fixed-positioned.
+    const openUp = spaceBelow < 160 && spaceAbove > spaceBelow;
+    setCoords({
+      ...(openUp ? { bottom: window.innerHeight - rect.top + gap } : { top: rect.bottom + gap }),
+      width: rect.width,
+      maxHeight: Math.max(120, Math.min(preferredMax, openUp ? spaceAbove : spaceBelow)),
+      ...(isRTL ? { right: window.innerWidth - rect.right } : { left: rect.left }),
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onDocDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
+    // Capture phase: scroll events don't bubble, so this is the only way to
+    // hear about scrolling inside an ancestor container (the leads table's
+    // horizontal scroll) and not just the window itself.
+    function onScroll() { setOpen(false); }
     document.addEventListener("mousedown", onDocDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
     return () => {
       document.removeEventListener("mousedown", onDocDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
     };
   }, [open]);
 
@@ -75,6 +120,7 @@ export default function Select({
       onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
     >
       <button
+        ref={triggerRef}
         type="button"
         id={id}
         disabled={disabled}
@@ -99,10 +145,15 @@ export default function Select({
         />
       </button>
 
-      {open && (
+      {open && coords && createPortal(
         <div
+          ref={panelRef}
           role="listbox"
-          className={`select-panel-enter absolute z-20 mt-2 min-w-full max-h-72 overflow-y-auto rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
+          style={{
+            top: coords.top, bottom: coords.bottom, left: coords.left, right: coords.right,
+            minWidth: coords.width, maxHeight: coords.maxHeight,
+          }}
+          className={`select-panel-enter fixed z-50 overflow-y-auto rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
         >
           {options.map((o) => {
             const isSelected = o.value === value;
@@ -122,7 +173,8 @@ export default function Select({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
