@@ -110,7 +110,7 @@ export default function CompanyGallery({ images, alt }: { images: string[]; alt:
           <button
             onClick={() => setLightboxIdx(null)}
             aria-label={t(locale, "profile_close_gallery")}
-            className="absolute top-4 right-4 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors"
+            className="absolute top-4 right-4 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
           >
             <Icon name="close" />
           </button>
@@ -120,9 +120,9 @@ export default function CompanyGallery({ images, alt }: { images: string[]; alt:
             <button
               onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx - 1); }}
               aria-label={t(locale, "profile_prev_photo")}
-              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors"
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >
-              <Icon name="arrow_back" className="rtl-flip" />
+              <Icon name="arrow_back" />
             </button>
           )}
 
@@ -153,9 +153,9 @@ export default function CompanyGallery({ images, alt }: { images: string[]; alt:
             <button
               onClick={(e) => { e.stopPropagation(); setLightboxIdx(lightboxIdx + 1); }}
               aria-label={t(locale, "profile_next_photo")}
-              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors"
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-white bg-white/10 rounded-full p-2 hover:bg-white/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
             >
-              <Icon name="arrow_forward" className="rtl-flip" />
+              <Icon name="arrow_forward" />
             </button>
           )}
 

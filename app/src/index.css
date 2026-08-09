@@ -258,7 +258,11 @@
 }
 .fade-up.visible {
   opacity: 1;
-  transform: translateY(0);
+  /* `none`, not `translateY(0)` — a live identity transform still makes this
+     element a containing block for `position: fixed` descendants (e.g. the
+     gallery lightbox), trapping them inside this section's box instead of
+     the viewport. Same gotcha `.page-enter` documents below. */
+  transform: none;
 }
 
 /* ── Slide variants ───────────────────────────────────────────────────── */
@@ -268,7 +272,7 @@
   transition: opacity 0.7s var(--ease-out-expo),
               transform 0.7s var(--ease-out-expo);
 }
-.slide-in-left.visible { opacity: 1; transform: translateX(0); }
+.slide-in-left.visible { opacity: 1; transform: none; }
 
 .slide-in-right {
   opacity: 0;
@@ -276,7 +280,7 @@
   transition: opacity 0.7s var(--ease-out-expo),
               transform 0.7s var(--ease-out-expo);
 }
-.slide-in-right.visible { opacity: 1; transform: translateX(0); }
+.slide-in-right.visible { opacity: 1; transform: none; }
 
 .scale-reveal {
   opacity: 0;
@@ -284,7 +288,7 @@
   transition: opacity 0.6s var(--ease-spring),
               transform 0.6s var(--ease-spring);
 }
-.scale-reveal.visible { opacity: 1; transform: scale(1); }
+.scale-reveal.visible { opacity: 1; transform: none; }
 
 /* ── Page enter (route change) ────────────────────────────────────────── */
 @keyframes pageEnter {
