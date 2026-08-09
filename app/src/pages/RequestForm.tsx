@@ -11,6 +11,7 @@ import { t, type Locale } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import RequestItemPicker from "../components/RequestItemPicker";
+import Select from "../components/Select";
 import { readCart, clearCart, type CartItem } from "../lib/cart";
 import { chatAvailable } from "../lib/chat";
 import { useUnsavedChangesGuard } from "../hooks/useUnsavedChangesGuard";
@@ -309,17 +310,16 @@ export default function RequestForm() {
           ) : company && company.services.length > 0 ? (
             <Field label={t(locale, "form_service_needed")}>
               {(p) => (
-                <select
+                <Select
                   id={p.id}
                   value={form.service}
-                  onChange={(e) => set("service", e.target.value)}
-                  className="field-input"
-                >
-                  <option value="">{t(locale, "form_service_optional")}</option>
-                  {company.services.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  onChange={(v) => set("service", v)}
+                  placeholder={t(locale, "form_service_optional")}
+                  options={[
+                    { value: "", label: t(locale, "form_service_optional") },
+                    ...company.services.map((s) => ({ value: s, label: s })),
+                  ]}
+                />
               )}
             </Field>
           ) : null}

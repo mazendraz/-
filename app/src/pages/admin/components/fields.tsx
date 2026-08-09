@@ -7,9 +7,16 @@ import Icon from "../../../components/Icon";
 export function TagField({ label, tags, onChange, placeholder }: { label: string; tags: string[]; onChange: (t: string[]) => void; placeholder?: string }) {
   const { locale } = useLocale();
   const [val, setVal] = useState("");
+  // Splits on commas (Arabic or Latin), newlines, and periods — an admin
+  // pasting/typing "A، B، C" or "A. B. C." in one go used to land as a
+  // single giant tag (e.g. a run-on services list), which then broke the
+  // layout everywhere that tag was rendered (option lists, chips, ...).
   function add() {
-    const t = val.trim();
-    if (t && !tags.includes(t)) onChange([...tags, t]);
+    const parts = val.split(/[،,.\n]+/).map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) { setVal(""); return; }
+    const next = [...tags];
+    for (const p of parts) if (!next.includes(p)) next.push(p);
+    onChange(next);
     setVal("");
   }
   return (

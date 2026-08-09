@@ -312,6 +312,15 @@
   animation: toastEnter 0.3s var(--ease-out-expo) backwards;
 }
 
+/* ── Custom select panel entrance ─────────────────────────────────────── */
+@keyframes selectPanelEnter {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.select-panel-enter {
+  animation: selectPanelEnter 0.15s var(--ease-out-expo) backwards;
+}
+
 /* ── Skeleton shimmer ─────────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
