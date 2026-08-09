@@ -24,6 +24,7 @@ import { captchaConfigured } from "../lib/captcha";
 import PhoneInput from "../components/PhoneInput";
 import { isValidE164 } from "../lib/phone";
 import Icon from "../components/Icon";
+import Select from "../components/Select";
 
 export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
@@ -730,10 +731,13 @@ function WaitlistModal({ companySlug, companyName, services, onClose, locale }: 
               <div>
                 <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_service")}</label>
                 {services.length > 0 ? (
-                  <select className="field-input !py-2 text-label" value={service} onChange={(e) => setService(e.target.value)}>
-                    <option value="">—</option>
-                    {services.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <Select
+                    triggerClassName="field-input !py-2 text-label flex items-center justify-between gap-2 text-start touch-press"
+                    value={service}
+                    onChange={setService}
+                    placeholder="—"
+                    options={[{ value: "", label: "—" }, ...services.map((s) => ({ value: s, label: s }))]}
+                  />
                 ) : (
                   <input className="field-input !py-2 text-label" value={service} onChange={(e) => setService(e.target.value)} />
                 )}

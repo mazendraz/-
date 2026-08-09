@@ -14,6 +14,7 @@ import MobileChatOverlay from "../../components/MobileChatOverlay";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import Select from "../../components/Select";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  CONVERSATIONS — admin oversight
@@ -130,17 +131,17 @@ export function ChatTab() {
         <div className="flex-1">
           <SearchInput value={query} onChange={setQuery} placeholder={t(locale, "admin_chat_search")} />
         </div>
-        <select
+        <Select
+          className="!w-auto sm:!min-w-[12rem]"
+          triggerClassName="field-input !w-auto !py-2 !min-h-[44px] w-full flex items-center justify-between gap-2 text-start touch-press"
           value={companyId}
-          onChange={(e) => setCompanyId(e.target.value)}
-          className="field-input !w-auto !py-2 !min-h-[44px] sm:!min-w-[12rem]"
-          aria-label={t(locale, "admin_chat_filter_company")}
-        >
-          <option value="">{t(locale, "admin_chat_filter_all_companies")}</option>
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
+          onChange={setCompanyId}
+          ariaLabel={t(locale, "admin_chat_filter_company")}
+          options={[
+            { value: "", label: t(locale, "admin_chat_filter_all_companies") },
+            ...companies.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </div>
 
       {errorText && (

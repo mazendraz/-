@@ -10,6 +10,7 @@ import { t } from "../lib/i18n";
 import { formatDate } from "../lib/format";
 import { formatPhoneDisplay } from "../lib/phone";
 import Icon from "./Icon";
+import Select from "./Select";
 
 const FILTERS: (WaitlistStatus | "All")[] = ["All", ...WAITLIST_STATUSES];
 
@@ -124,15 +125,15 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
                   <div className="flex items-center gap-2">
                     {/* DM-06b: unnamed select, same class as the one fixed in
                         LeadRows.tsx — missed here on the first pass. */}
-                    <select
+                    <Select
+                      className="!w-auto"
+                      triggerClassName="border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface flex items-center gap-1.5 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-60"
                       value={e.status}
-                      aria-label={`${t(locale, "admin_lead_status")} — ${e.name}`}
+                      ariaLabel={`${t(locale, "admin_lead_status")} — ${e.name}`}
                       disabled={busyId === e.id}
-                      onChange={(ev) => changeStatus(e.id, ev.target.value as WaitlistStatus)}
-                      className="border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none disabled:opacity-60"
-                    >
-                      {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
-                    </select>
+                      onChange={(v) => changeStatus(e.id, v as WaitlistStatus)}
+                      options={WAITLIST_STATUSES.map((s) => ({ value: s, label: t(locale, WAITLIST_STATUS_KEYS[s]) }))}
+                    />
                     <button onClick={() => remove(e.id)} disabled={busyId === e.id} title={t(locale, "prov_wl_remove")}
                       aria-label={`${t(locale, "prov_wl_remove")} — ${e.name}`}
                       className="w-11 h-11 flex items-center justify-center rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">

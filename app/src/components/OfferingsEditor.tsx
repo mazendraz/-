@@ -11,6 +11,7 @@ import { isApiConfigured } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import Icon from "./Icon";
+import Select from "./Select";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 
 /**
@@ -382,18 +383,22 @@ function OfferingModal({ offering, onClose, onSaved }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_type")}</label>
-              <select className="field-input" value={form.kind} onChange={(e) => set("kind", e.target.value as "SERVICE" | "PRODUCT")}>
-                <option value="SERVICE">{t(locale, "prov_off_kind_service")}</option>
-                <option value="PRODUCT">{t(locale, "prov_off_kind_product")}</option>
-              </select>
+              <Select
+                value={form.kind}
+                onChange={(v) => set("kind", v as "SERVICE" | "PRODUCT")}
+                options={[
+                  { value: "SERVICE", label: t(locale, "prov_off_kind_service") },
+                  { value: "PRODUCT", label: t(locale, "prov_off_kind_product") },
+                ]}
+              />
             </div>
             <div>
               <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_pricing")}</label>
-              <select className="field-input" value={model} onChange={(e) => set("pricingModel", e.target.value as PricingModel)}>
-                {MODELS.map((m) => (
-                  <option key={m} value={m}>{PRICING_MODEL_LABELS[m][locale]}</option>
-                ))}
-              </select>
+              <Select
+                value={model}
+                onChange={(v) => set("pricingModel", v as PricingModel)}
+                options={MODELS.map((m) => ({ value: m, label: PRICING_MODEL_LABELS[m][locale] }))}
+              />
             </div>
           </div>
 
@@ -426,15 +431,15 @@ function OfferingModal({ offering, onClose, onSaved }: {
               {model === "PER_UNIT" && (
                 <div>
                   <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_unit")} *</label>
-                  <select
-                    className="field-input" value={form.unit ?? ""}
-                    onChange={(e) => set("unit", (e.target.value || null) as PriceUnit | null)}
-                  >
-                    <option value="">{t(locale, "prov_off_choose")}</option>
-                    {PRICE_UNITS.map((u) => (
-                      <option key={u} value={u}>{unitLabel(u, locale)}</option>
-                    ))}
-                  </select>
+                  <Select
+                    value={form.unit ?? ""}
+                    onChange={(v) => set("unit", (v || null) as PriceUnit | null)}
+                    placeholder={t(locale, "prov_off_choose")}
+                    options={[
+                      { value: "", label: t(locale, "prov_off_choose") },
+                      ...PRICE_UNITS.map((u) => ({ value: u, label: unitLabel(u, locale) })),
+                    ]}
+                  />
                 </div>
               )}
             </div>

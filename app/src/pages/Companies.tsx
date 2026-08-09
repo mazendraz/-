@@ -17,6 +17,9 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, tCount, type StringKey, type Locale } from "../lib/i18n";
 import Icon from "../components/Icon";
+import Select from "../components/Select";
+
+const PILL_TRIGGER = "field-input !w-auto !py-2 !rounded-full text-label font-bold cursor-pointer flex items-center justify-between gap-1.5 touch-press";
 
 // ── Sort + rating options ──────────────────────────────────────────────────
 type SortKey = "recommended" | "rating" | "projects" | "reviews" | "name";
@@ -166,17 +169,17 @@ export default function Companies() {
           <div className="hidden lg:flex items-center gap-3 flex-wrap">
             {/* Category — single dropdown instead of a chip row (was wrapping
                 into multiple lines once the category count grew). */}
-            <select
+            <Select
+              className="!w-auto"
+              triggerClassName={PILL_TRIGGER}
               value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label={t(locale, "companies_all")}
-              className="field-input !w-auto !py-2 !rounded-full text-label font-bold cursor-pointer"
-            >
-              <option value="all">{t(locale, "companies_all")}</option>
-              {SERVICE_CATEGORIES.map((cat) => (
-                <option key={cat.slug} value={cat.slug}>{cat.label}</option>
-              ))}
-            </select>
+              onChange={setCategory}
+              ariaLabel={t(locale, "companies_all")}
+              options={[
+                { value: "all", label: t(locale, "companies_all") },
+                ...SERVICE_CATEGORIES.map((cat) => ({ value: cat.slug, label: cat.label })),
+              ]}
+            />
             <div className="flex-1" />
             {/* Available now — was mobile-sheet-only (UX-04); the desktop bar had
                 no way to reach it at all, only the filter count badge on mobile
@@ -195,23 +198,23 @@ export default function Companies() {
               {t(locale, "companies_available_now")}
             </button>
             {/* Rating */}
-            <select
-              value={minRating}
-              onChange={(e) => setMinRating(Number(e.target.value))}
-              aria-label={t(locale, "companies_min_rating")}
-              className="field-input !w-auto !py-2 !rounded-full text-label font-bold cursor-pointer"
-            >
-              {RATINGS.map((r) => <option key={r.value} value={r.value}>{ratingLabel(locale, r)}</option>)}
-            </select>
+            <Select
+              className="!w-auto"
+              triggerClassName={PILL_TRIGGER}
+              value={String(minRating)}
+              onChange={(v) => setMinRating(Number(v))}
+              ariaLabel={t(locale, "companies_min_rating")}
+              options={RATINGS.map((r) => ({ value: String(r.value), label: ratingLabel(locale, r) }))}
+            />
             {/* Sort */}
-            <select
+            <Select
+              className="!w-auto"
+              triggerClassName={PILL_TRIGGER}
               value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              aria-label={t(locale, "sort_prefix")}
-              className="field-input !w-auto !py-2 !rounded-full text-label font-bold cursor-pointer"
-            >
-              {SORTS.map((s) => <option key={s.key} value={s.key}>{`${t(locale, "sort_prefix")} ${t(locale, s.labelKey)}`}</option>)}
-            </select>
+              onChange={(v) => setSort(v as SortKey)}
+              ariaLabel={t(locale, "sort_prefix")}
+              options={SORTS.map((s) => ({ value: s.key, label: `${t(locale, "sort_prefix")} ${t(locale, s.labelKey)}` }))}
+            />
           </div>
 
           {/* Mobile + tablet: category scroll + filter button (sheet) */}

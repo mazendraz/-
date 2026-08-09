@@ -19,6 +19,7 @@ import { EmptyState } from "../components/EmptyState";
 import { Loading } from "../components/Loading";
 import { useLocale } from "../../../context/LocaleContext";
 import { t, tCount } from "../../../lib/i18n";
+import Select from "../../../components/Select";
 
 export default function LeadsPage() {
   const { locale } = useLocale();
@@ -188,15 +189,29 @@ export default function LeadsPage() {
         {/* Found while closing out Phase 5: unnamed to a screen reader — no
             visible label, no aria-label, same class of bug as DM-06b's lead
             row selects, just on the filter row above them instead. */}
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as LeadStatus | "All" | "Waitlist")} aria-label={t(locale, "admin_lead_status")} className="field-input !w-auto !py-2 !min-h-[44px]">
-          <option value="All">{t(locale, "admin_all_statuses")}</option>
-          {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
-          <option value="Waitlist">{t(locale, "requests_filter_waitlist")}</option>
-        </select>
-        <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} aria-label={t(locale, "admin_chat_filter_company")} className="field-input !w-auto !py-2 !min-h-[44px]">
-          <option value="all">{t(locale, "admin_all_companies")}</option>
-          {companies.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-        </select>
+        <Select
+          className="!w-auto"
+          triggerClassName="field-input !w-auto !py-2 !min-h-[44px] flex items-center justify-between gap-2 text-start touch-press"
+          value={filterStatus}
+          onChange={(v) => setFilterStatus(v as LeadStatus | "All" | "Waitlist")}
+          ariaLabel={t(locale, "admin_lead_status")}
+          options={[
+            { value: "All", label: t(locale, "admin_all_statuses") },
+            ...LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) })),
+            { value: "Waitlist", label: t(locale, "requests_filter_waitlist") },
+          ]}
+        />
+        <Select
+          className="!w-auto"
+          triggerClassName="field-input !w-auto !py-2 !min-h-[44px] flex items-center justify-between gap-2 text-start touch-press"
+          value={filterCompany}
+          onChange={setFilterCompany}
+          ariaLabel={t(locale, "admin_chat_filter_company")}
+          options={[
+            { value: "all", label: t(locale, "admin_all_companies") },
+            ...companies.map((c) => ({ value: c.slug, label: c.name })),
+          ]}
+        />
         <span className="text-label font-bold text-outline ms-auto" role="status" aria-live="polite" aria-atomic="true">{displayedTotal} {tCount(locale, "noun_lead", displayedTotal)}</span>
       </div>
       {leadApiMode && (leadSearch.error || waitlistSearch.error) && (

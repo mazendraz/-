@@ -9,6 +9,7 @@ import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
 import { formatDate, formatDateTime } from "../../lib/format";
 import Icon from "../../components/Icon";
+import Select from "../../components/Select";
 
 // Column order is the table's; the trailing empty header is the actions column.
 const LEAD_COLUMNS: (StringKey | null)[] = [
@@ -112,10 +113,14 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
               <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap max-w-[140px] truncate">{row.data.service ?? "—"}</td>
               <td className="px-4 py-3 text-outline whitespace-nowrap">—</td>
               <td className="px-4 py-3">
-                <select value={row.data.status} onChange={(e) => onWaitlistStatusChange(row.data, e.target.value as WaitlistStatus)} onClick={(e) => e.stopPropagation()}
-                  className={`rounded-full px-2.5 py-1 text-caption font-bold border-none focus:outline-none cursor-pointer ${WAITLIST_STATUS_COLORS[row.data.status]}`}>
-                  {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
-                </select>
+                <Select
+                  className="!w-auto"
+                  stopPropagation
+                  triggerClassName={`rounded-full px-2.5 py-1 text-caption font-bold border-none cursor-pointer flex items-center gap-1 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${WAITLIST_STATUS_COLORS[row.data.status]}`}
+                  value={row.data.status}
+                  onChange={(v) => onWaitlistStatusChange(row.data, v as WaitlistStatus)}
+                  options={WAITLIST_STATUSES.map((s) => ({ value: s, label: t(locale, WAITLIST_STATUS_KEYS[s]) }))}
+                />
               </td>
               <td className="px-4 py-3 text-outline text-caption whitespace-nowrap">{formatDate(row.data.createdAt, locale)}</td>
               <td className="px-4 py-3"><button onClick={() => onOpen(row)} className="text-primary text-caption font-bold hover:underline whitespace-nowrap">{t(locale, "admin_lead_details")}</button></td>
@@ -128,10 +133,14 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
               <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap max-w-[140px] truncate">{row.data.service}</td>
               <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{row.data.district}</td>
               <td className="px-4 py-3">
-                <select value={row.data.status} onChange={(e) => onLeadStatusChange(row.data.id, e.target.value as LeadStatus)} onClick={(e) => e.stopPropagation()}
-                  className={`rounded-full px-2.5 py-1 text-caption font-bold border-none focus:outline-none cursor-pointer ${STATUS_COLORS[row.data.status]}`}>
-                  {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
-                </select>
+                <Select
+                  className="!w-auto"
+                  stopPropagation
+                  triggerClassName={`rounded-full px-2.5 py-1 text-caption font-bold border-none cursor-pointer flex items-center gap-1 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${STATUS_COLORS[row.data.status]}`}
+                  value={row.data.status}
+                  onChange={(v) => onLeadStatusChange(row.data.id, v as LeadStatus)}
+                  options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
+                />
               </td>
               <td className="px-4 py-3 text-outline text-caption whitespace-nowrap">{formatDate(row.data.createdAt, locale)}</td>
               <td className="px-4 py-3"><button onClick={() => onOpen(row)} className="text-primary text-caption font-bold hover:underline whitespace-nowrap">{t(locale, "admin_lead_details")}</button></td>
@@ -159,9 +168,11 @@ export function LeadModal({ lead, onClose, onStatusChange, onDelete }: {
       <div className="space-y-5">
         <div>
           <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "admin_lead_status")}</label>
-          <select value={lead.status} onChange={(e) => onStatusChange(lead.id, e.target.value as LeadStatus)} className="field-input">
-            {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
-          </select>
+          <Select
+            value={lead.status}
+            onChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+            options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
+          />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={lead.name} /><InfoField label={t(locale, "admin_lead_phone")} val={lead.phone} />
@@ -208,9 +219,11 @@ export function WaitlistDetailModal({ entry, onClose, onStatusChange, onDelete }
       <div className="space-y-5">
         <div>
           <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "admin_lead_status")}</label>
-          <select value={entry.status} onChange={(e) => onStatusChange(entry.id, e.target.value as WaitlistStatus)} className="field-input">
-            {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
-          </select>
+          <Select
+            value={entry.status}
+            onChange={(v) => onStatusChange(entry.id, v as WaitlistStatus)}
+            options={WAITLIST_STATUSES.map((s) => ({ value: s, label: t(locale, WAITLIST_STATUS_KEYS[s]) }))}
+          />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={entry.name} /><InfoField label={t(locale, "admin_lead_phone")} val={entry.phone} />

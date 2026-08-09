@@ -14,6 +14,7 @@ import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
 import { t, tCount, type StringKey } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import Select from "../../components/Select";
 
 // Role is an API value; only its label is translated.
 const ROLE_BADGE_KEYS: Record<Role, StringKey> = {
@@ -237,16 +238,25 @@ export function UserEditor({ user, initialCompanyId, companies, onClose, onSaved
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <LField label={t(locale, "admin_user_role")}>
-            <select className="field-input" value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="PROVIDER">{t(locale, "admin_role_provider")}</option>
-              <option value="ADMIN">{t(locale, "admin_role_admin")}</option>
-            </select>
+            <Select
+              value={role}
+              onChange={(v) => setRole(v as Role)}
+              options={[
+                { value: "PROVIDER", label: t(locale, "admin_role_provider") },
+                { value: "ADMIN", label: t(locale, "admin_role_admin") },
+              ]}
+            />
           </LField>
           <LField label={t(locale, "admin_user_company")}>
-            <select className="field-input" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-              <option value="">{t(locale, "admin_user_company_none")}</option>
-              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            <Select
+              value={companyId}
+              onChange={setCompanyId}
+              placeholder={t(locale, "admin_user_company_none")}
+              options={[
+                { value: "", label: t(locale, "admin_user_company_none") },
+                ...companies.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
           </LField>
         </div>
         {role === "PROVIDER" && !companyId && (

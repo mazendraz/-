@@ -14,18 +14,38 @@ export interface SelectOption {
  * the popup with no way to wrap or truncate it. This version owns the whole
  * panel, so long labels just wrap onto a second line instead of blowing out
  * the layout.
+ *
+ * `triggerClassName` fully replaces the default field-input look (rather
+ * than appending to it) — every call site in the app needs one of three
+ * shapes (full-width form field, compact filter pill, colored status badge)
+ * and none of them are additive to each other.
  */
 export default function Select({
-  id, value, onChange, options, placeholder, ariaInvalid, describedById, className = "",
+  id, value, onChange, options, placeholder, ariaLabel, ariaInvalid, describedById,
+  disabled, className = "", triggerClassName, panelClassName = "", stopPropagation, dataHasError,
 }: {
   id?: string;
   value: string;
   onChange: (v: string) => void;
   options: SelectOption[];
   placeholder?: string;
+  ariaLabel?: string;
   ariaInvalid?: boolean;
   describedById?: string;
+  disabled?: boolean;
+  /** Wrapper div width/layout, e.g. "w-full" or "!w-auto". */
   className?: string;
+  /** Full override of the trigger button's classes (default: field-input). */
+  triggerClassName?: string;
+  /** Extra classes appended to the options panel. */
+  panelClassName?: string;
+  /** Table-row selects sit inside a clickable row — stops the click from
+   *  reaching the row's own onClick, same as the native selects did with
+   *  their own onClick={(e) => e.stopPropagation()}. */
+  stopPropagation?: boolean;
+  /** Mirrors this codebase's `data-has-error` convention (see RequestForm.tsx)
+   *  — scroll-to-first-error on submit finds the trigger button by this. */
+  dataHasError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -49,30 +69,40 @@ export default function Select({
   const selected = options.find((o) => o.value === value);
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div
+      ref={rootRef}
+      className={`relative ${className}`}
+      onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
+    >
       <button
         type="button"
         id={id}
+        disabled={disabled}
+        data-has-error={dataHasError}
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={ariaLabel}
         aria-invalid={ariaInvalid}
         aria-describedby={describedById}
         onClick={() => setOpen((o) => !o)}
-        className={`field-input flex items-center justify-between gap-2 text-start touch-press ${ariaInvalid ? "error" : ""}`}
+        className={
+          triggerClassName ??
+          `field-input flex items-center justify-between gap-2 text-start touch-press disabled:opacity-60 ${ariaInvalid ? "error" : ""}`
+        }
       >
-        <span className={`truncate ${selected?.label ? "text-on-surface" : "text-outline"}`}>
+        <span className={`truncate ${selected?.label ? "" : "text-outline"}`}>
           {selected?.label || placeholder}
         </span>
         <Icon
           name="expand_more"
-          className={`flex-shrink-0 text-outline transition-transform duration-base ${open ? "rotate-180" : ""}`}
+          className={`flex-shrink-0 transition-transform duration-base ${open ? "rotate-180" : ""}`}
         />
       </button>
 
       {open && (
         <div
           role="listbox"
-          className="select-panel-enter absolute z-20 mt-2 w-full max-h-72 overflow-y-auto rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5"
+          className={`select-panel-enter absolute z-20 mt-2 min-w-full max-h-72 overflow-y-auto rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
         >
           {options.map((o) => {
             const isSelected = o.value === value;

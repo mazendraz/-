@@ -11,6 +11,7 @@ import DashboardRefreshButton from "../../components/DashboardRefreshButton";
 import SidebarNav from "../../components/SidebarNav";
 import Logo from "../../components/Logo";
 import Icon from "../../components/Icon";
+import Select from "../../components/Select";
 import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
 import { PROVIDER_TABS, type ProviderTab, isProviderTab } from "./nav";
@@ -245,11 +246,12 @@ function ProviderSidebarBody({
           </div>
         </div>
         {companies.length > 1 && (
-          <select value={selectedSlug} onChange={(e) => setSelectedSlug(e.target.value)}
-            aria-label={t(locale, "prov_portal_label")}
-            className="w-full border border-outline-variant rounded-lg px-2.5 py-2 min-h-[44px] text-label text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none">
-            {companies.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-          </select>
+          <Select
+            value={selectedSlug}
+            onChange={setSelectedSlug}
+            ariaLabel={t(locale, "prov_portal_label")}
+            options={companies.map((c) => ({ value: c.slug, label: c.name }))}
+          />
         )}
       </div>
 

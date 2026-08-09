@@ -326,18 +326,19 @@ export default function RequestForm() {
 
           <Field label={t(locale, "form_district")} required error={errors.district}>
             {(p) => (
-              <select
+              <Select
                 id={p.id}
-                aria-invalid={p.invalid}
-                aria-describedby={p.describedById}
+                ariaInvalid={p.invalid}
+                describedById={p.describedById}
                 value={form.district}
-                onChange={(e) => set("district", e.target.value)}
-                className={`field-input ${errors.district ? "error" : ""}`}
-                data-has-error={!!errors.district}
-              >
-                <option value="">{t(locale, "form_district_ph")}</option>
-                {districts.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+                onChange={(v) => set("district", v)}
+                placeholder={t(locale, "form_district_ph")}
+                dataHasError={!!errors.district}
+                options={[
+                  { value: "", label: t(locale, "form_district_ph") },
+                  ...districts.map((d) => ({ value: d, label: d })),
+                ]}
+              />
             )}
           </Field>
 

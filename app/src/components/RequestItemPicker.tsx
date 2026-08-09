@@ -4,6 +4,7 @@ import { formatPrice, formatQtyRange, calculateRequest, formatEstimate } from ".
 import type { Offering, BundleRule } from "../lib/offerings";
 import { type CartItem } from "../lib/cart";
 import Icon from "./Icon";
+import Select from "./Select";
 
 /**
  * Multi-item selection for the request form: checkbox + quantity + tier per
@@ -146,19 +147,19 @@ export default function RequestItemPicker({ offerings, bundleRules, value, onCha
                       <span className="text-caption font-bold text-outline">
                         {t(locale, "offer_option")}
                       </span>
-                      <select
+                      <Select
+                        className="!w-auto"
+                        triggerClassName="field-input !w-auto !py-1.5 text-label flex items-center justify-between gap-2 text-start touch-press"
                         value={item.tierId ?? ""}
-                        onChange={(e) => patch(offering.id, { tierId: e.target.value || null })}
-                        className="field-input !w-auto !py-1.5 text-label"
-                      >
-                        <option value="">{t(locale, "offer_standard_price")}</option>
-                        {offering.tiers.map((tier) => (
-                          <option key={tier.id} value={tier.id}>
-                            {tier.label}
-                            {formatQtyRange(tier, locale) ? ` (${formatQtyRange(tier, locale)})` : ""}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => patch(offering.id, { tierId: v || null })}
+                        options={[
+                          { value: "", label: t(locale, "offer_standard_price") },
+                          ...offering.tiers.map((tier) => ({
+                            value: tier.id,
+                            label: `${tier.label}${formatQtyRange(tier, locale) ? ` (${formatQtyRange(tier, locale)})` : ""}`,
+                          })),
+                        ]}
+                      />
                     </label>
                   )}
                 </div>

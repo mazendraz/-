@@ -7,7 +7,10 @@ import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
 import { formatDate } from "../../lib/format";
 import Icon from "../../components/Icon";
+import Select from "../../components/Select";
 import type { LeadListRow } from "../admin/LeadsTab";
+
+const ROW_SELECT_TRIGGER = "border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface flex items-center gap-1.5 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
 
 /**
  * The provider's DESKTOP lead row — status select and date inline beside the
@@ -49,14 +52,14 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
                   reported `select-name` (critical) ×13 on one page. Naming it
                   after the person it belongs to is what makes a list of them
                   navigable by screen reader. DM-06: was 35px tall. */}
-              <select
+              <Select
+                className="!w-auto"
+                triggerClassName={ROW_SELECT_TRIGGER}
                 value={row.data.status}
-                aria-label={`${t(locale, "admin_lead_status")} — ${row.data.name}`}
-                onChange={(e) => onWaitlistStatusChange(row.data, e.target.value as WaitlistStatus)}
-                className="border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
-              >
-                {WAITLIST_STATUSES.map((s) => <option key={s} value={s}>{t(locale, WAITLIST_STATUS_KEYS[s])}</option>)}
-              </select>
+                ariaLabel={`${t(locale, "admin_lead_status")} — ${row.data.name}`}
+                onChange={(v) => onWaitlistStatusChange(row.data, v as WaitlistStatus)}
+                options={WAITLIST_STATUSES.map((s) => ({ value: s, label: t(locale, WAITLIST_STATUS_KEYS[s]) }))}
+              />
               {/* DM-06: was 36×42. */}
               <button onClick={() => onWaitlistDelete(row.data)} title={t(locale, "prov_wl_remove")}
                 aria-label={`${t(locale, "prov_wl_remove")} — ${row.data.name}`}
@@ -84,14 +87,14 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
           </div>
           <div className="flex flex-col items-end gap-2 flex-shrink-0">
             {/* DM-06b + DM-06 — see the waitlist select above. */}
-            <select
+            <Select
+              className="!w-auto"
+              triggerClassName={ROW_SELECT_TRIGGER}
               value={row.data.status}
-              aria-label={`${t(locale, "admin_lead_status")} — ${row.data.refNumber}`}
-              onChange={(e) => onLeadStatusChange(row.data.id, e.target.value as LeadStatus)}
-              className="border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface focus:ring-2 focus:ring-primary/30 focus:outline-none"
-            >
-              {LEAD_STATUSES.map((s) => <option key={s} value={s}>{t(locale, LEAD_STATUS_KEYS[s])}</option>)}
-            </select>
+              ariaLabel={`${t(locale, "admin_lead_status")} — ${row.data.refNumber}`}
+              onChange={(v) => onLeadStatusChange(row.data.id, v as LeadStatus)}
+              options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
+            />
             <span className="text-caption text-outline">{formatDate(row.data.createdAt, locale)}</span>
           </div>
         </div>
