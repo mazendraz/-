@@ -9,6 +9,7 @@ import { EmptyState } from "../../admin/components/EmptyState";
 import { Loading } from "../../admin/components/Loading";
 import { useLocale } from "../../../context/LocaleContext";
 import { t, tCount } from "../../../lib/i18n";
+import { formatRating } from "../../../lib/format";
 import { useProvider } from "../context";
 
 export default function ReviewsPage() {
@@ -41,7 +42,7 @@ export default function ReviewsPage() {
   return (
             <div>
               <div className="flex items-center gap-4 mb-5">
-                <div className="text-3xl font-bold text-primary">{company.rating}</div>
+                <div className="text-3xl font-bold text-primary">{formatRating(locale, company.rating)}</div>
                 <div>
                   <div className="flex items-center gap-0.5 mb-0.5">
                     {[1,2,3,4,5].map((i) => (

@@ -1,4 +1,6 @@
 import { useEffect, useRef } from "react";
+import { useScrollLock } from "./useScrollLock";
+import { hasOpenTransientOverlay } from "../lib/transientOverlays";
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
@@ -42,7 +44,11 @@ function inertOutside(dialogBoundary: HTMLElement): () => void {
  *   - Makes the rest of the document inert while open
  *   - Locks background scroll while open
  *   - Traps Tab/Shift+Tab within the container
- *   - Closes on Escape
+ *   - Closes on Escape, unless `closeOnEscape: false` — for a dialog holding a
+ *     half-filled form (the offering/project editors), where a stray Escape
+ *     would silently discard typed input and an uploaded image. Those still get
+ *     the trap, the inerting and the scroll lock; they're dismissed by their own
+ *     Cancel/× button instead.
  *   - Returns focus to the previously focused element on close
  *
  * Usage:
@@ -52,8 +58,14 @@ function inertOutside(dialogBoundary: HTMLElement): () => void {
  * The ref must land on the element carrying (or nested inside) role="dialog" —
  * inertOutside() looks for the closest one to find the dialog's boundary.
  */
-export function useDialogA11y(open: boolean, onClose: () => void) {
+export function useDialogA11y(
+  open: boolean,
+  onClose: () => void,
+  { closeOnEscape = true }: { closeOnEscape?: boolean } = {},
+) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useScrollLock(open);
 
   useEffect(() => {
     if (!open) return;
@@ -71,25 +83,28 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     const boundary = (panel?.closest('[role="dialog"]') as HTMLElement | null) ?? panel;
     const restoreInert = boundary ? inertOutside(boundary) : () => {};
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     return () => {
       restoreInert();
-      document.body.style.overflow = prevOverflow;
       prev?.focus();
     };
   }, [open]);
 
   // Escape to close (capture phase so it beats any inner Esc handlers)
   useEffect(() => {
-    if (!open) return;
+    if (!open || !closeOnEscape) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); }
+      if (e.key !== "Escape") return;
+      // ...except an open dropdown inside this dialog, which owns Escape until
+      // it closes — otherwise dismissing a dropdown took the whole dialog with
+      // it. Left unconsumed here so the dropdown's own handler still sees it.
+      if (hasOpenTransientOverlay()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
-  }, [open, onClose]);
+  }, [open, onClose, closeOnEscape]);
 
   function trapTab(e: React.KeyboardEvent) {
     if (e.key !== "Tab") return;

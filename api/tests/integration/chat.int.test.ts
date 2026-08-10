@@ -388,17 +388,36 @@ describe("provider access", () => {
     expect((await res.json()).sender).toBe("PROVIDER");
   });
 
+  // Returns an ApiPage now. Every request opens a thread eagerly, so this list
+  // grows with total requests ever received — the old bare `take: 100` meant a
+  // busy company simply could not reach its older conversations from any screen.
   it("lists only its own company's threads", async () => {
     const res = await providerListGET(req({ token: providerToken }), undefined as never);
-    const rows = await res.json();
-    expect(rows.every((c: { companyId: string }) => c.companyId === companyId)).toBe(true);
+    const page = await res.json();
+    expect(Array.isArray(page.data)).toBe(true);
+    expect(page.data.every((c: { companyId: string }) => c.companyId === companyId)).toBe(true);
+    // The COUNT must be tenant-scoped too — otherwise the pager would advertise
+    // another company's threads even while never rendering them.
+    expect(page.meta.total).toBe(page.data.length);
+  });
+
+  it("paginates rather than truncating at a hidden ceiling", async () => {
+    const page = await (
+      await providerListGET(
+        req({ token: providerToken, url: "/api/provider/chat?page=1&pageSize=1" }),
+        undefined as never,
+      )
+    ).json();
+    expect(page.data.length).toBeLessThanOrEqual(1);
+    expect(page.meta.pageSize).toBe(1);
+    expect(page.meta.total).toBeGreaterThanOrEqual(page.data.length);
   });
 
   // WhatsApp-style dashboards: the list has to show what was actually said, not
   // just a name and a reference number — that requires the newest message.
   it("carries a preview of the newest message, not just conversation metadata", async () => {
-    const rows = await (await providerListGET(req({ token: providerToken }), undefined as never)).json();
-    const row = rows.find((c: { id: string }) => c.id === conversationId);
+    const page = await (await providerListGET(req({ token: providerToken }), undefined as never)).json();
+    const row = page.data.find((c: { id: string }) => c.id === conversationId);
     expect(row.lastMessagePreview).toBe("We can start Sunday.");
     expect(row.lastMessageSender).toBe("PROVIDER");
   });

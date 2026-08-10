@@ -34,8 +34,26 @@ export function deleteMyProject(id: string): Promise<void> {
 }
 
 // ── Admin moderation ────────────────────────────────────────────────────────
-export function listModerationProjects(status: ProjectStatus = "PENDING"): Promise<ModerationProject[]> {
-  return apiGet<ModerationProject[]>(`/admin/projects?status=${status}`);
+export interface ModerationProjectPage {
+  data: ModerationProject[];
+  meta: { total: number; page: number; pageSize: number };
+}
+
+/**
+ * One page of the project moderation queue.
+ *
+ * Was an unbounded array: every pending project with its company joined, in a
+ * single response. A PENDING project is invisible on the public profile and
+ * surfaced nowhere else, so the queue was both the only view of the backlog and
+ * the thing that got heavier with every submission nobody had reached yet.
+ */
+export function listModerationProjects(
+  status: ProjectStatus = "PENDING",
+  page = 1,
+  pageSize = 50,
+): Promise<ModerationProjectPage> {
+  const sp = new URLSearchParams({ status, page: String(page), pageSize: String(pageSize) });
+  return apiGet<ModerationProjectPage>(`/admin/projects?${sp.toString()}`);
 }
 export function setProjectStatus(id: string, status: ProjectStatus): Promise<Project> {
   return apiPatch<Project>(`/admin/projects/${id}`, { status });

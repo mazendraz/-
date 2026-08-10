@@ -15,6 +15,7 @@ import { usePageMeta } from "../hooks/usePageMeta";
 import Modal from "../components/Modal";
 import { useLocale } from "../context/LocaleContext";
 import { t, tCount } from "../lib/i18n";
+import { formatRating } from "../lib/format";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import { useSettings } from "../lib/settings";
@@ -322,7 +323,7 @@ export default function Home() {
                   <p className="text-caption font-bold text-outline mb-2">{c.categoryLabel}</p>
                   <div className="flex items-center gap-1.5 mb-2">
                     <Stars n={Math.round(c.rating)} />
-                    <span className="font-bold text-label text-on-surface">{c.rating}</span>
+                    <span className="font-bold text-label text-on-surface">{formatRating(locale, c.rating)}</span>
                     <span className="text-outline text-caption">({c.reviewCount})</span>
                   </div>
                   <p className="text-label text-on-surface-variant leading-relaxed line-clamp-2 flex-grow">{c.tagline}</p>
@@ -364,7 +365,11 @@ export default function Home() {
                   height={320}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/72 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 p-6">
+                {/* start-0, not left-0: this caption block is TEXT over an image,
+                  so it belongs on the side the reading starts from. Pinned
+                  physically left, the Arabic homepage put its project titles
+                  hard against the left edge, ragged away from the reader. */}
+              <div className="absolute bottom-0 start-0 p-6">
                   <span className="inline-block px-3 py-1 bg-secondary text-on-secondary rounded-full text-caption font-bold mb-2">{featured[0].category}</span>
                   <h3 className="text-white font-bold text-title mb-1 drop-shadow">{featured[0].title}</h3>
                   <p className="text-white/75 text-label">{featured[0].company}</p>
@@ -381,7 +386,7 @@ export default function Home() {
                   <div className="group relative h-[148px] rounded-2xl overflow-hidden shadow-bloom cursor-default">
                     <LazyImage src={p.img} alt={p.title} wrapperClassName="absolute inset-0" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-slow" width={340} height={148} />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/68 to-transparent" />
-                    <div className="absolute bottom-0 left-0 p-4">
+                    <div className="absolute bottom-0 start-0 p-4">
                       <h3 className="text-white font-bold text-label leading-snug">{p.title}</h3>
                       <p className="text-white/65 text-caption">{p.company}</p>
                     </div>
@@ -395,7 +400,7 @@ export default function Home() {
                 <div className="group relative h-52 rounded-2xl overflow-hidden shadow-bloom cursor-default">
                   <LazyImage src={p.img} alt={p.title} wrapperClassName="absolute inset-0" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-slow" width={340} height={208} />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/68 via-black/10 to-transparent" />
-                  <div className="absolute bottom-0 left-0 p-5">
+                  <div className="absolute bottom-0 start-0 p-5">
                     <span className="inline-block px-2 py-0.5 bg-white/20 backdrop-blur-sm text-white rounded-full text-caption font-bold mb-1.5">{p.category}</span>
                     <h3 className="text-white font-bold text-subhead leading-snug mb-0.5">{p.title}</h3>
                     <p className="text-white/70 text-caption">{p.company}</p>

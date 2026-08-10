@@ -105,7 +105,7 @@ export default function RequestBar({ items, offerings, bundleRules, requestHref 
   if (!summary) return null;
 
   return (
-    <div className="hidden md:block fixed left-0 right-0 z-40 px-4 compare-bar-offset pointer-events-none">
+    <div className="hidden md:block fixed start-0 end-0 z-40 px-4 compare-bar-offset pointer-events-none">
       <div className="max-w-3xl mx-auto pointer-events-auto bg-surface-container-lowest/97 backdrop-blur-xl border border-outline-variant/25 rounded-2xl shadow-bloom px-4 py-3 flex items-center gap-3">
         <RequestBarContent summary={summary} requestHref={requestHref} />
       </div>

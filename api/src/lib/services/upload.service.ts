@@ -78,13 +78,75 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
   }
 }
 
+// ── Video container sniffing ─────────────────────────────────────────────────
+//
+// An image can lie about its type and be caught anyway, because sharp DECODES it
+// and re-encodes to WebP — a file that isn't an image simply fails. Video has no
+// such step (no ffmpeg in this repo), so it was stored byte-for-byte using the
+// Content-Type the CLIENT put on the multipart part. That is not validation; it
+// is a label. Anything at all could be uploaded as `video/mp4` and served back
+// from a public bucket under that type.
+//
+// So the bytes decide. Both accepted families announce themselves in their first
+// few bytes, which is enough to tell a real container from a renamed one.
+
+/**
+ * ISO Base Media File Format brands we accept. The brand sits at bytes 8..12,
+ * right after the `ftyp` box type. `qt  ` is QuickTime; the rest are the MP4
+ * family that real cameras, phones and editors emit.
+ */
+const ISO_MP4_BRANDS = new Set([
+  "isom", "iso2", "iso4", "iso5", "iso6", "avc1", "mp41", "mp42",
+  "mmp4", "M4V ", "M4VP", "dash", "msnv", "MSNV", "f4v ", "3gp4", "3gp5",
+]);
+
+/**
+ * The real container type of `buf`, or null when it is not a video we accept.
+ *
+ * Deliberately returns the type it FOUND rather than comparing against what the
+ * client claimed. A phone that uploads a genuine WebM while labelling it
+ * `video/mp4` is a mislabelled real video, not an attack — storing it correctly
+ * is better than rejecting it. Only "these bytes are not a supported video at
+ * all" is a rejection.
+ */
+export function sniffVideoMime(buf: Buffer): string | null {
+  // ISO BMFF: [4-byte size][`ftyp`][4-byte major brand]
+  if (buf.length >= 12 && buf.toString("latin1", 4, 8) === "ftyp") {
+    const brand = buf.toString("latin1", 8, 12);
+    if (brand === "qt  ") return "video/quicktime";
+    if (ISO_MP4_BRANDS.has(brand)) return "video/mp4";
+    return null; // an ISO container, but not a family we serve
+  }
+
+  // EBML (WebM and Matroska share it). The DocType string appears in the header
+  // element within the first few dozen bytes; Matroska is NOT accepted, because
+  // browsers will not play it from a <video> tag and it would be a silent
+  // upload-succeeds-playback-fails.
+  if (buf.length >= 4 && buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) {
+    const header = buf.toString("latin1", 0, Math.min(buf.length, 512));
+    if (header.includes("webm")) return "video/webm";
+    return null;
+  }
+
+  return null;
+}
+
 /**
  * Video has no processing step: nothing in this repo can transcode/resize it
  * (no ffmpeg). Stored exactly as uploaded — see MAX_VIDEO_UPLOAD_BYTES for why
  * that makes the size cap matter more here than for images.
+ *
+ * The stored content type comes from sniffVideoMime, NOT from the caller, so the
+ * bucket can never serve a file under a type its bytes contradict.
  */
-export async function passthroughVideo(input: Buffer, mimeType: string): Promise<ProcessedImage> {
-  return { buffer: input, contentType: mimeType, ext: ALLOWED_VIDEO_MIME[mimeType] };
+export async function passthroughVideo(input: Buffer): Promise<ProcessedImage> {
+  const sniffed = sniffVideoMime(input);
+  if (!sniffed) {
+    throw new ValidationError("Unsupported or corrupted video", {
+      file: ["The file is not a valid MP4, WebM or MOV video"],
+    });
+  }
+  return { buffer: input, contentType: sniffed, ext: ALLOWED_VIDEO_MIME[sniffed] };
 }
 
 function validate(file: File, bucket: string): asserts bucket is UploadBucket {
@@ -187,9 +249,15 @@ export async function upload(
 ): Promise<UploadResult> {
   validate(file, bucket);
   const input = Buffer.from(await file.arrayBuffer());
+
+  // The declared type only chooses WHICH validator runs. Both then decide from
+  // the bytes: sharp by decoding the image, sniffVideoMime by reading the
+  // container signature. Neither trusts the label it was routed by, so a
+  // mislabelled file is caught by whichever path it is sent down.
   const processed = file.type in ALLOWED_VIDEO_MIME
-    ? await passthroughVideo(input, file.type)
+    ? await passthroughVideo(input)
     : await processImage(input);
+
   const url = await uploadToStorage(bucket, processed);
   return { url };
 }

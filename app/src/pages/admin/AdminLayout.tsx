@@ -94,7 +94,9 @@ export default function AdminLayout() {
           within the shell (sidebar + topbar stay put) instead of a blank
           screen while that tab's chunk loads. */}
       <Suspense fallback={<TabFallback />}>
-        <Outlet key={refreshKey} />
+        <div key={`${location.pathname}-${refreshKey}`} className="page-enter">
+          <Outlet />
+        </div>
       </Suspense>
     </DashboardShell>
   );

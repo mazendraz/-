@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { generateRefNumber } from "@/lib/utils/refNumber";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import { generateTrackingToken, safeEqual } from "@/lib/utils/token";
 import { phoneTail } from "@/lib/utils/phone";
 import { leadStatusFromLabel, serializeLead } from "@/lib/utils/serialize";
@@ -54,11 +55,10 @@ function clampPaging(query: { page?: number; pageSize?: number }): {
   page: number;
   pageSize: number;
 } {
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const rawSize =
-    Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
-  return { page, pageSize };
+  return {
+    page: clampPage(query.page),
+    pageSize: clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+  };
 }
 
 async function listWhere(

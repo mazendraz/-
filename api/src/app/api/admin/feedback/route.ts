@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { ok } from "@/lib/utils/response";
 import { adminOnly } from "@/lib/middleware/guards";
 import * as service from "@/lib/services/feedback.service";
+import { cleanParam } from "@/lib/utils/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ function toInt(v: string | null): number | undefined {
 //   bounded ApiPage<ApiFeedback> instead (scale-safe for large datasets).
 export const GET = adminOnly(async (request: NextRequest) => {
   const sp = request.nextUrl.searchParams;
-  const search = sp.get("search")?.trim() || undefined;
+  const search = cleanParam(sp.get("search"));
   const page = toInt(sp.get("page"));
   const pageSize = toInt(sp.get("pageSize"));
   if (page !== undefined || pageSize !== undefined) {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { registerTransientOverlay } from "../lib/transientOverlays";
 import Icon from "./Icon";
 
 export interface SelectOption {
@@ -98,12 +99,25 @@ export default function Select({
     // Capture phase: scroll events don't bubble, so this is the only way to
     // hear about scrolling inside an ancestor container (the leads table's
     // horizontal scroll) and not just the window itself.
-    function onScroll() { setOpen(false); }
+    function onScroll(e: Event) {
+      // ...but that also means scrolling *inside the options list* reaches this
+      // listener (window → document → body → panel on the way down), which was
+      // closing the panel the instant you tried to scroll a long list — e.g.
+      // the company picker in the admin team modal. The panel owns its own
+      // overflow, so its scrolls are never a reason to close it.
+      const target = e.target as Node | null;
+      if (target && panelRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    // Claims Escape for this panel while it's open, so a dialog containing the
+    // Select doesn't close itself out from under an open dropdown.
+    const releaseOverlay = registerTransientOverlay();
     document.addEventListener("mousedown", onDocDown);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onScroll);
     return () => {
+      releaseOverlay();
       document.removeEventListener("mousedown", onDocDown);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onScroll, true);
@@ -153,7 +167,7 @@ export default function Select({
             top: coords.top, bottom: coords.bottom, left: coords.left, right: coords.right,
             minWidth: coords.width, maxHeight: coords.maxHeight,
           }}
-          className={`select-panel-enter fixed z-50 overflow-y-auto rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
+          className={`select-panel-enter fixed z-50 overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
         >
           {options.map((o) => {
             const isSelected = o.value === value;

@@ -17,6 +17,24 @@ out/
 !.env.example
 !.env.test.example
 
+# ── نسخ احتياطية وأرشيفات (قاعدة حرجة) ──
+# في 2026-07-20 اتعمل أرشيف backup جوه _backups/ وكان فيه api/.env بكل الأسرار
+# الحقيقية، و`git add -A` بتاع ship.sh رفعه على GitHub. قواعد الـ .env فوق
+# ماقدرتش تمنعه لأنها بتطابق المسار، والـ .env كان **جوه** ملف tar.
+# عشان كده بنتجاهل الأرشيفات والـ dumps نفسها، مش بس مسارات الـ .env.
+_backups/
+backups/
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.dump
+*.sql
+*.sql.gz
+*.bak
+# استثناء: ملفات الـ migrations لازم تفضل متتبّعة.
+!api/prisma/migrations/**/*.sql
+
 # ── Testing ──
 coverage/
 playwright-report/

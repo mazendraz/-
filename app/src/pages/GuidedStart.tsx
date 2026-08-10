@@ -4,6 +4,7 @@ import { useCompanies, useCategoriesWithCounts } from "../lib/catalog";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, tCount, type StringKey } from "../lib/i18n";
+import { formatRating } from "../lib/format";
 import Icon from "../components/Icon";
 
 type Priority = "rating" | "projects" | "reviews";
@@ -186,7 +187,7 @@ export default function GuidedStart() {
                       <div className="flex items-center gap-2 text-caption">
                         <span className="flex items-center gap-0.5 text-secondary font-bold">
                           <Icon name="star" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} />
-                          {c.rating}
+                          {formatRating(locale, c.rating)}
                         </span>
                         <span className="text-outline">· {c.reviewCount} {t(locale, "common_reviews")}</span>
                         <span className="text-outline">· {c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>

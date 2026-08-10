@@ -20,8 +20,30 @@ export interface AdminReview {
   companySlug: string;
 }
 
-export function listAdminReviews(status?: AdminReviewStatus): Promise<AdminReview[]> {
-  return apiGet<AdminReview[]>(`/admin/reviews${status ? `?status=${status}` : ""}`);
+export interface AdminReviewPage {
+  data: AdminReview[];
+  meta: { total: number; page: number; pageSize: number };
+}
+
+/**
+ * One page of the moderation queue.
+ *
+ * The endpoint used to return a bare array capped at 200 with no total, so a
+ * backlog past that was invisible — to the admin AND to the public, since
+ * unapproved reviews stay hidden. `meta.total` is the number that was actually
+ * missing: it lets the queue say how much work is waiting, not just show a
+ * screenful of it.
+ */
+export function listAdminReviews(
+  status?: AdminReviewStatus,
+  page = 1,
+  pageSize = 50,
+): Promise<AdminReviewPage> {
+  const sp = new URLSearchParams();
+  if (status) sp.set("status", status);
+  sp.set("page", String(page));
+  sp.set("pageSize", String(pageSize));
+  return apiGet<AdminReviewPage>(`/admin/reviews?${sp.toString()}`);
 }
 
 export function approveAdminReview(reviewId: string): Promise<AdminReview> {

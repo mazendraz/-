@@ -21,8 +21,13 @@ const ROW_SELECT_TRIGGER = "border border-outline-variant rounded-lg px-2.5 py-1
  * Lifted out of ProviderDashboard.tsx when the tabs became routes (DM-02) —
  * Overview and Leads are separate chunks now and both need it.
  */
-export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusChange, onWaitlistDelete }: {
+export default function LeadRows({ rows, onOpen, onLeadStatusChange, onWaitlistStatusChange, onWaitlistDelete }: {
   rows: LeadListRow[];
+  /** Opens the full detail modal (LeadModal / WaitlistDetailModal) — the row's
+   *  inline status Select only covers the status field; everything else
+   *  (description, budget, waitlist note) was previously only reachable from
+   *  the mobile card layout, never from this desktop table. */
+  onOpen: (r: LeadListRow) => void;
   onLeadStatusChange: (id: string, s: LeadStatus) => void;
   onWaitlistStatusChange: (entry: WaitlistEntry, s: WaitlistStatus) => void;
   onWaitlistDelete: (entry: WaitlistEntry) => void;
@@ -31,7 +36,7 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
   return (
     <div className="divide-y divide-outline-variant/10">
       {rows.map((row) => row.kind === "waitlist" ? (
-        <div key={`w-${row.data.id}`} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
+        <div key={`w-${row.data.id}`} onClick={() => onOpen(row)} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 cursor-pointer transition-colors flex-wrap">
           <div className="flex-grow min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <span className="flex items-center gap-1 text-caption font-bold text-amber-700">
@@ -54,6 +59,7 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
                   navigable by screen reader. DM-06: was 35px tall. */}
               <Select
                 className="!w-auto"
+                stopPropagation
                 triggerClassName={ROW_SELECT_TRIGGER}
                 value={row.data.status}
                 ariaLabel={`${t(locale, "admin_lead_status")} — ${row.data.name}`}
@@ -61,7 +67,7 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
                 options={WAITLIST_STATUSES.map((s) => ({ value: s, label: t(locale, WAITLIST_STATUS_KEYS[s]) }))}
               />
               {/* DM-06: was 36×42. */}
-              <button onClick={() => onWaitlistDelete(row.data)} title={t(locale, "prov_wl_remove")}
+              <button onClick={(e) => { e.stopPropagation(); onWaitlistDelete(row.data); }} title={t(locale, "prov_wl_remove")}
                 aria-label={`${t(locale, "prov_wl_remove")} — ${row.data.name}`}
                 className="w-11 h-11 flex items-center justify-center rounded-lg text-outline hover:text-error hover:bg-error/5 transition-colors">
                 <Icon name="delete" className="text-subhead" />
@@ -71,7 +77,7 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
           </div>
         </div>
       ) : (
-        <div key={`l-${row.data.id}`} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 transition-colors flex-wrap">
+        <div key={`l-${row.data.id}`} onClick={() => onOpen(row)} className="flex items-start gap-4 px-5 py-4 hover:bg-surface-container/50 cursor-pointer transition-colors flex-wrap">
           <div className="flex-grow min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <span className="font-mono text-caption text-primary">{row.data.refNumber}</span>
@@ -89,6 +95,7 @@ export default function LeadRows({ rows, onLeadStatusChange, onWaitlistStatusCha
             {/* DM-06b + DM-06 — see the waitlist select above. */}
             <Select
               className="!w-auto"
+              stopPropagation
               triggerClassName={ROW_SELECT_TRIGGER}
               value={row.data.status}
               ariaLabel={`${t(locale, "admin_lead_status")} — ${row.data.refNumber}`}

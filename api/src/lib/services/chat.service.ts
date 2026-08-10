@@ -1,5 +1,6 @@
 // One conversation per request. Customer ↔ provider, with admin oversight.
 import { prisma } from "@/lib/prisma";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { AuthUser } from "@/lib/auth";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/utils/errors";
 import type { ApiPage } from "@/lib/apiTypes";
@@ -203,25 +204,46 @@ export async function getThread(
   };
 }
 
-/** Provider: their company's threads, most recently active first. */
-export async function listForCompany(companyId: string): Promise<ApiConversation[]> {
-  const rows = await prisma.conversation.findMany({
-    where: { companyId },
-    // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
-    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
-    // null) jumped to the very top, ahead of ones with real, recent activity.
-    // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
-    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
-    // null) jumped to the very top, ahead of ones with real, recent activity.
-    orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
-    take: MAX_PAGE_SIZE,
-    include: {
-      lead: { select: { refNumber: true, customerName: true } },
-      company: { select: { name: true } },
-      ...LAST_MESSAGE_INCLUDE,
-    },
-  });
-  return rows.map(serializeConversation);
+/**
+ * Provider: their company's threads, most recently active first, PAGED.
+ *
+ * This was a bare `take: MAX_PAGE_SIZE` returning an array. A busy company past
+ * 100 conversations simply could not reach the older ones from any screen —
+ * nothing sent a page, and nothing on the page said there was more. Every
+ * request opens a thread eagerly (see createLeadRecord), so this count tracks
+ * total requests ever received: a company doing five a week crosses it inside a
+ * year, and the customers on the far side of the cut can still write in.
+ *
+ * Same page shape as every other list endpoint, so the UI's Pagination component
+ * works unchanged.
+ */
+export async function listForCompany(
+  companyId: string,
+  query: { page?: number; pageSize?: number } = {},
+): Promise<ApiPage<ApiConversation>> {
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+
+  const [total, rows] = await Promise.all([
+    prisma.conversation.count({ where: { companyId } }),
+    prisma.conversation.findMany({
+      where: { companyId },
+      // Postgres defaults NULLs to sort FIRST on a DESC column — without
+      // `nulls: "last"` a conversation nobody has ever messaged in
+      // (lastMessageAt still null) jumped to the very top, ahead of ones with
+      // real, recent activity.
+      orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        lead: { select: { refNumber: true, customerName: true } },
+        company: { select: { name: true } },
+        ...LAST_MESSAGE_INCLUDE,
+      },
+    }),
+  ]);
+
+  return { data: rows.map(serializeConversation), meta: { total, page, pageSize } };
 }
 
 export interface AdminListQuery {
@@ -243,9 +265,8 @@ export interface AdminListQuery {
 
 /** Admin: every conversation, filterable by company or reference number. */
 export async function listAll(query: AdminListQuery): Promise<ApiPage<ApiConversation>> {
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const rawSize = Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
   const q = query.q?.trim();
   const where = {
@@ -266,13 +287,11 @@ export async function listAll(query: AdminListQuery): Promise<ApiPage<ApiConvers
     prisma.conversation.count({ where }),
     prisma.conversation.findMany({
       where,
-      // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
-    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
-    // null) jumped to the very top, ahead of ones with real, recent activity.
-    // Postgres defaults NULLs to sort FIRST on a DESC column — without `nulls:
-    // "last"` a conversation nobody has ever messaged in (lastMessageAt still
-    // null) jumped to the very top, ahead of ones with real, recent activity.
-    orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+      // Postgres defaults NULLs to sort FIRST on a DESC column — without
+      // `nulls: "last"` a conversation nobody has ever messaged in
+      // (lastMessageAt still null) jumped to the very top, ahead of ones with
+      // real, recent activity.
+      orderBy: [{ lastMessageAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {

@@ -7,6 +7,7 @@ import EmptyState from "../../../components/EmptyState";
 import Icon from "../../../components/Icon";
 import { useLocale } from "../../../context/LocaleContext";
 import { t } from "../../../lib/i18n";
+import { formatRating } from "../../../lib/format";
 import { useProvider } from "../context";
 import { useProviderCharts } from "../useProviderCharts";
 import { useProviderLeadActions } from "../useProviderLeadActions";
@@ -54,10 +55,10 @@ export default function OverviewPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon="inbox" label={t(locale, "prov_kpi_total_leads")} value={stats.total} delta={delta} spark={daily.map((d) => d.value)} tint={CHART_COLORS.primary} />
-        <KpiCard icon="fiber_new" label={t(locale, "prov_kpi_new_leads")} value={stats.new} tint={CHART_COLORS.blue} />
-        <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={stats.total ? `${conversion}%` : "—"} tint={CHART_COLORS.green} />
-        <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={company.rating} tint={CHART_COLORS.secondary} />
+        <KpiCard icon="inbox" label={t(locale, "prov_kpi_total_leads")} value={stats.total} delta={delta} spark={daily.map((d) => d.value)} tint={CHART_COLORS.primary} onClick={() => navigate("/provider/leads")} />
+        <KpiCard icon="fiber_new" label={t(locale, "prov_kpi_new_leads")} value={stats.new} tint={CHART_COLORS.blue} onClick={() => navigate("/provider/leads", { state: { status: "New" } })} />
+        <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={stats.total ? `${conversion}%` : "—"} tint={CHART_COLORS.green} onClick={() => navigate("/provider/analytics")} />
+        <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={formatRating(locale, company.rating)} tint={CHART_COLORS.secondary} onClick={() => navigate("/provider/reviews")} />
       </div>
 
       {/* Trend + status */}
@@ -67,7 +68,12 @@ export default function OverviewPage() {
           <AreaLineChart data={daily} valueLabel={t(locale, "chart_leads")} />
         </ChartCard>
         <ChartCard title={t(locale, "prov_chart_by_status")} subtitle={t(locale, "prov_chart_pipeline")}>
-          <DonutChart data={byStatus} centerValue={stats.total} centerLabel={t(locale, "chart_leads")} />
+          <DonutChart
+            data={byStatus}
+            centerValue={stats.total}
+            centerLabel={t(locale, "chart_leads")}
+            onSegmentClick={(seg) => seg.key && navigate("/provider/leads", { state: { status: seg.key } })}
+          />
         </ChartCard>
       </div>
 
@@ -80,6 +86,7 @@ export default function OverviewPage() {
             <div className="hidden lg:block">
               <LeadRows
                 rows={recentRows}
+                onOpen={openRow}
                 onLeadStatusChange={handleLeadStatus}
                 onWaitlistStatusChange={handleWaitlistStatus}
                 onWaitlistDelete={handleWaitlistDelete}

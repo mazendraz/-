@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { isApiConfigured } from "../../../lib/api";
 import { listMyProjects, createMyProject, updateMyProject, deleteMyProject, type ProjectInput } from "../../../lib/projects";
 import { uploadImage } from "../../../lib/image";
@@ -12,6 +12,7 @@ import { useLocale } from "../../../context/LocaleContext";
 import { t, type StringKey } from "../../../lib/i18n";
 import { useProvider } from "../context";
 import { useVisualViewport } from "../../../hooks/useVisualViewport";
+import { useDialogA11y } from "../../../hooks/useDialogA11y";
 
 export default function ProjectsPage() {
   const { company } = useProvider();
@@ -205,22 +206,35 @@ function ProjectEditorModal({ project, onClose, onSaved }: {
 
   const wasApproved = project?.status === "APPROVED";
   // On mobile, focusing a field opens the on-screen keyboard, which shrinks the
-  // *visual* viewport without shrinking `100vh` (the layout viewport) on iOS
-  // Safari — so the sticky Save footer below, sized off `max-h-screen`, ends up
-  // rendered underneath the keyboard. Cap the panel to the visible height once
-  // the keyboard is open so the footer stays reachable.
+  // *visual* viewport without shrinking `100dvh` (dvh tracks browser chrome,
+  // not the keyboard) on iOS Safari — so the sticky Save footer below, sized
+  // off `modal-max-h`, ends up rendered underneath the keyboard. Cap the panel
+  // to the visible height once the keyboard is open so the footer stays
+  // reachable.
   const { height: vvHeight } = useVisualViewport();
   const keyboardOpen = typeof window !== "undefined" && window.innerHeight - vvHeight > 60;
+  // Predates the shared Modal component, so the dialog wiring is explicit here.
+  // No Escape-to-close: this form carries a title, a description and an already
+  // uploaded image that a stray keypress must not discard. The × button is the
+  // way out. (The backdrop click above is an existing hazard of the same kind —
+  // left alone here because changing it is a product call, not a bug fix.)
+  const titleId = useId();
+  const { containerRef, trapTab } = useDialogA11y(true, onClose, { closeOnEscape: false });
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto"
+        ref={containerRef}
+        onKeyDown={trapTab}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl modal-max-h overflow-y-auto overscroll-contain"
         style={keyboardOpen ? { maxHeight: vvHeight } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 border-b border-outline-variant/20 sticky top-0 bg-surface-container-lowest z-10">
-          <h2 className="font-bold text-subhead text-on-surface">{t(locale, isNew ? "prov_proj_add" : "prov_proj_edit")}</h2>
+          <h2 id={titleId} className="font-bold text-subhead text-on-surface">{t(locale, isNew ? "prov_proj_add" : "prov_proj_edit")}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><Icon name="close" className="text-outline" /></button>
         </div>
         <div className="p-5 space-y-4">
@@ -260,7 +274,7 @@ function ProjectEditorModal({ project, onClose, onSaved }: {
 
           {error && <p className="text-label text-error font-bold">{error}</p>}
         </div>
-        <div className="flex justify-end gap-3 p-5 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-lowest">
+        <div className="flex justify-end gap-3 p-5 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-lowest modal-footer-safe">
           <button onClick={onClose} disabled={saving} className="px-5 py-2.5 rounded-xl border border-outline-variant/40 font-bold text-label text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60">{t(locale, "prov_proj_cancel")}</button>
           <button onClick={save} disabled={saving || uploading}
             className="px-6 py-2.5 rounded-xl bg-primary text-on-primary font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">

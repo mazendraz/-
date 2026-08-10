@@ -2,6 +2,7 @@
 // company's aggregate rating + reviewCount (mirrors addReview in
 // app/src/lib/catalog.ts: rating = round(avg, 1 decimal), 0 when empty).
 import { prisma } from "@/lib/prisma";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { Prisma } from "@/generated/prisma/client";
 import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
 import { serializeReview, serializeReviewAdmin } from "@/lib/utils/serialize";
@@ -48,25 +49,61 @@ export interface AdminReviewItem extends ApiReview {
   companySlug: string;
 }
 
+const ADMIN_REVIEW_DEFAULT_PAGE_SIZE = 50;
+const ADMIN_REVIEW_MAX_PAGE_SIZE = 100;
+
+export interface AdminReviewListQuery {
+  approved?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 /**
- * Admin: recent verified customer reviews across all companies, newest first.
- * Optionally filter by approval state (the moderation queue passes `false`).
+ * Admin: verified customer reviews across all companies, newest first, PAGED.
+ *
+ * This was `take: 200` with no paging and no total. Nothing failed at 201 —
+ * the 201st pending review simply was not in the response, and the screen gave
+ * no sign that it existed. A moderation queue that silently hides work is worse
+ * than a slow one: the reviews are invisible to the admin AND invisible to the
+ * public (unapproved reviews are hidden and excluded from the rating), so they
+ * sit unreviewed forever with nothing anywhere reporting a backlog.
+ *
+ * Paged with a real `total`, so the UI can say how much work is actually
+ * waiting — which is the number that was missing, more than the rows were.
  */
-export async function listAllForAdmin(approved?: boolean): Promise<AdminReviewItem[]> {
+export async function listAllForAdmin(
+  query: AdminReviewListQuery = {},
+): Promise<ApiPage<AdminReviewItem>> {
   const where: Prisma.ReviewWhereInput = { verified: true };
-  if (typeof approved === "boolean") where.approved = approved;
-  const rows = await prisma.review.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 200,
-    include: { company: { select: { id: true, name: true, slug: true } } },
-  });
-  return rows.map((r) => ({
-    ...serializeReviewAdmin(r),
-    companyId: r.company.id,
-    companyName: r.company.name,
-    companySlug: r.company.slug,
-  }));
+  if (typeof query.approved === "boolean") where.approved = query.approved;
+
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(
+    query.pageSize,
+    ADMIN_REVIEW_DEFAULT_PAGE_SIZE,
+    ADMIN_REVIEW_MAX_PAGE_SIZE,
+  );
+
+  const [total, rows] = await Promise.all([
+    prisma.review.count({ where }),
+    prisma.review.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { company: { select: { id: true, name: true, slug: true } } },
+    }),
+  ]);
+
+  return {
+    data: rows.map((r) => ({
+      ...serializeReviewAdmin(r),
+      companyId: r.company.id,
+      companyName: r.company.name,
+      companySlug: r.company.slug,
+    })),
+    meta: { total, page, pageSize },
+  };
 }
 
 /** Admin: approve (or un-approve) a review, then recompute the company aggregate. */
@@ -145,10 +182,11 @@ export async function listByCompanySlug(
     ];
   }
 
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const pageSize = Math.min(
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(
+    query.pageSize,
+    REVIEW_DEFAULT_PAGE_SIZE,
     REVIEW_MAX_PAGE_SIZE,
-    Math.max(1, Math.trunc(query.pageSize ?? REVIEW_DEFAULT_PAGE_SIZE) || REVIEW_DEFAULT_PAGE_SIZE),
   );
 
   const [total, rows] = await Promise.all([

@@ -3,6 +3,8 @@ import type { Point, Segment } from "../lib/analytics";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { CHART_COLORS } from "../lib/chartColors";
+import { useCountUp } from "../hooks/useCountUp";
+import Icon from "./Icon";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  ChartCard — consistent panel wrapper
@@ -30,15 +32,33 @@ export function ChartCard({
 //  KpiCard — stat with optional delta + sparkline
 // ══════════════════════════════════════════════════════════════════════════
 export function KpiCard({
-  icon, label, value, delta, spark, tint = CHART_COLORS.primary,
+  icon, label, value, delta, spark, tint = CHART_COLORS.primary, onClick,
 }: {
   icon: string; label: string; value: string | number;
   delta?: number; spark?: number[]; tint?: string;
+  /** When present, the whole card becomes a button that drills down into the
+   *  metric it's showing (e.g. the leads list filtered to this KPI) — the
+   *  chevron next to the label and the hover/press feedback below only render
+   *  in that case, so a KPI with no real destination stays a plain stat. */
+  onClick?: () => void;
 }) {
-  return (
-    <div className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom flex flex-col">
+  // Only animate genuine counters (a number) — a pre-formatted string value
+  // (percentages, "4.8★", "—") has no numeric target to count up to.
+  const numeric = typeof value === "number" ? value : null;
+  const { ref: countRef, count } = useCountUp(numeric ?? 0);
+  const displayValue = numeric !== null ? count : value;
+
+  const className = `group bg-surface-container-lowest rounded-2xl p-5 shadow-bloom flex flex-col w-full text-start transition-transform duration-base ${
+    onClick ? "card-lift touch-press cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40" : ""
+  }`;
+
+  const body = (
+    <>
       <div className="flex items-start justify-between mb-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${tint}14` }}>
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-base group-hover:scale-110"
+          style={{ backgroundColor: `${tint}14` }}
+        >
           <span className="material-symbols-outlined text-title" style={{ color: tint, fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{icon}</span>
         </div>
         {typeof delta === "number" && (
@@ -49,15 +69,28 @@ export function KpiCard({
           </span>
         )}
       </div>
-      <div className="font-display text-headline font-black text-on-surface leading-none tabular-nums mb-1">{value}</div>
-      <div className="text-caption text-outline font-bold ltr:uppercase ltr:tracking-wide">{label}</div>
+      <div ref={countRef} className="font-display text-headline font-black text-on-surface leading-none tabular-nums mb-1">{displayValue}</div>
+      <div className="flex items-center gap-1">
+        <div className="text-caption text-outline font-bold ltr:uppercase ltr:tracking-wide">{label}</div>
+        {onClick && (
+          <Icon
+            name="chevron_right"
+            className="text-caption text-outline/0 rtl-flip group-hover:text-outline transition-colors duration-base flex-shrink-0"
+          />
+        )}
+      </div>
       {spark && spark.length > 1 && (
         <div className="mt-3">
           <Sparkline data={spark} color={tint} />
         </div>
       )}
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={className}>{body}</button>;
+  }
+  return <div className={className}>{body}</div>;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -97,9 +130,12 @@ export function Sparkline({ data, color = CHART_COLORS.primary, height = 32 }: {
 //  AreaLineChart — with hover tooltip
 // ══════════════════════════════════════════════════════════════════════════
 export function AreaLineChart({
-  data, height = 220, color = CHART_COLORS.primary, valueLabel = "",
+  data, height = 220, color = CHART_COLORS.primary, valueLabel = "", onPointClick,
 }: {
   data: Point[]; height?: number; color?: string; valueLabel?: string;
+  /** When present, clicking the chart drills into whichever point is
+   *  currently under the cursor (the same one the hover tooltip is showing). */
+  onPointClick?: (point: Point, index: number) => void;
 }) {
   const { locale } = useLocale();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -129,7 +165,14 @@ export function AreaLineChart({
   const seriesLabel = data.map((d) => `${d.label}: ${d.value}${valueLabel ? ` ${valueLabel}` : ""}`).join(", ");
 
   return (
-    <div ref={wrapRef} className="relative" onMouseMove={onMove} onMouseLeave={() => setActive(null)}>
+    <div
+      ref={wrapRef}
+      className="relative"
+      onMouseMove={onMove}
+      onMouseLeave={() => setActive(null)}
+      onClick={onPointClick && active !== null && data[active] ? () => onPointClick(data[active], active) : undefined}
+      style={{ cursor: onPointClick ? "pointer" : undefined }}
+    >
       <svg
         viewBox={`0 0 ${VW} ${VH}`}
         className="w-full chart-fade"
@@ -252,23 +295,39 @@ export function BarChart({
 // ══════════════════════════════════════════════════════════════════════════
 //  Horizontal labelled bars (for "by company" etc.)
 // ══════════════════════════════════════════════════════════════════════════
-export function BarList({ data, color = CHART_COLORS.primary, valueSuffix = "" }: { data: Point[]; color?: string; valueSuffix?: string }) {
+export function BarList({
+  data, color = CHART_COLORS.primary, valueSuffix = "", onItemClick,
+}: {
+  data: Point[]; color?: string; valueSuffix?: string;
+  /** When present, each row becomes a button (e.g. drilling into that
+   *  company's/service's own leads). */
+  onItemClick?: (point: Point, index: number) => void;
+}) {
   const { locale } = useLocale();
   const max = Math.max(1, ...data.map((d) => d.value));
   if (data.length === 0) return <p className="text-label text-outline text-center py-6">{t(locale, "chart_no_data")}</p>;
   return (
     <div className="space-y-3">
-      {data.map((d, i) => (
-        <div key={i}>
-          <div className="flex justify-between text-caption mb-1">
-            <span className="font-bold text-on-surface truncate pe-2">{d.label}</span>
-            <span className="text-outline font-bold tabular-nums flex-shrink-0">{d.value}{valueSuffix}</span>
-          </div>
-          <div className="h-2.5 bg-surface-container rounded-full overflow-hidden">
-            <div className="h-full rounded-full chart-bar-h" style={{ width: `${(d.value / max) * 100}%`, backgroundColor: color, animationDelay: `${i * 60}ms` }} />
-          </div>
-        </div>
-      ))}
+      {data.map((d, i) => {
+        const row = (
+          <>
+            <div className="flex justify-between text-caption mb-1">
+              <span className="font-bold text-on-surface truncate pe-2">{d.label}</span>
+              <span className="text-outline font-bold tabular-nums flex-shrink-0">{d.value}{valueSuffix}</span>
+            </div>
+            <div className="h-2.5 bg-surface-container rounded-full overflow-hidden">
+              <div className="h-full rounded-full chart-bar-h" style={{ width: `${(d.value / max) * 100}%`, backgroundColor: color, animationDelay: `${i * 60}ms` }} />
+            </div>
+          </>
+        );
+        return onItemClick ? (
+          <button key={i} type="button" onClick={() => onItemClick(d, i)} className="w-full text-start rounded-lg -mx-1.5 px-1.5 py-1 hover:bg-surface-container/60 transition-colors duration-fast">
+            {row}
+          </button>
+        ) : (
+          <div key={i}>{row}</div>
+        );
+      })}
     </div>
   );
 }
@@ -277,11 +336,18 @@ export function BarList({ data, color = CHART_COLORS.primary, valueSuffix = "" }
 //  DonutChart
 // ══════════════════════════════════════════════════════════════════════════
 export function DonutChart({
-  data, size = 180, thickness = 26, centerValue, centerLabel,
+  data, size = 180, thickness = 26, centerValue, centerLabel, onSegmentClick,
 }: {
   data: Segment[]; size?: number; thickness?: number; centerValue?: string | number; centerLabel?: string;
+  /** When present, both the ring's arcs and its legend rows become clickable
+   *  (e.g. drilling into the leads list filtered to that status) and hovering
+   *  either highlights the matching slice + shows its exact count/share in
+   *  the center — hovering/clicking is synced between the two because they
+   *  share this one index. */
+  onSegmentClick?: (segment: Segment, index: number) => void;
 }) {
   const { locale } = useLocale();
+  const [hovered, setHovered] = useState<number | null>(null);
   const total = data.reduce((s, d) => s + d.value, 0);
   const r = (size - thickness) / 2;
   const c = 2 * Math.PI * r;
@@ -304,6 +370,10 @@ export function DonutChart({
     .map((d, i) => `${i + 1}. ${d.label}: ${d.value} (${Math.round((d.value / total) * 100)}%)`)
     .join(", ");
 
+  const active = hovered !== null ? data[hovered] : null;
+  const shownValue = active ? active.value : centerValue;
+  const shownLabel = active ? `${Math.round((active.value / total) * 100)}%` : centerLabel;
+
   return (
     <div className="flex items-center gap-5 flex-wrap justify-center">
       <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
@@ -312,7 +382,9 @@ export function DonutChart({
           {data.map((d, i) => {
             const frac = d.value / total;
             const dash = frac * c;
-            const seg = (
+            const segOffset = offset;
+            offset += dash;
+            return (
               <circle
                 key={i}
                 cx={cx} cy={cx} r={r}
@@ -320,46 +392,76 @@ export function DonutChart({
                 stroke={d.color}
                 strokeWidth={thickness}
                 strokeDasharray={`${dash} ${c - dash}`}
-                strokeDashoffset={-offset}
+                strokeDashoffset={-segOffset}
                 strokeLinecap="butt"
-                style={{ transition: "stroke-dasharray 0.6s var(--ease-out-expo)" }}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
+                onClick={onSegmentClick ? () => onSegmentClick(d, i) : undefined}
+                style={{
+                  cursor: onSegmentClick ? "pointer" : undefined,
+                  opacity: hovered === null || hovered === i ? 1 : 0.4,
+                  transition: "stroke-dasharray 0.6s var(--ease-out-expo), opacity 0.2s ease",
+                }}
               />
             );
-            offset += dash;
-            return seg;
           })}
         </svg>
-        {(centerValue !== undefined || centerLabel) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {centerValue !== undefined && <span className="text-title font-black text-on-surface leading-none">{centerValue}</span>}
-            {centerLabel && <span className="text-caption text-outline font-bold ltr:uppercase ltr:tracking-wide mt-0.5">{centerLabel}</span>}
+        {(shownValue !== undefined || shownLabel) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            {shownValue !== undefined && <span className="text-title font-black text-on-surface leading-none">{shownValue}</span>}
+            {shownLabel && <span className="text-caption text-outline font-bold ltr:uppercase ltr:tracking-wide mt-0.5">{shownLabel}</span>}
           </div>
         )}
       </div>
-      {/* Legend */}
-      <div className="space-y-2" aria-hidden="true">
-        {data.map((d, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-sm flex-shrink-0 flex items-center justify-center text-caption font-black text-white/90" style={{ backgroundColor: d.color }}>{i + 1}</span>
-            <span className="text-label text-on-surface font-medium">{d.label}</span>
-            <span className="text-label text-outline font-bold ms-auto tabular-nums">{d.value}</span>
-            <span className="text-caption text-outline w-9 text-end">{Math.round((d.value / total) * 100)}%</span>
-          </div>
-        ))}
-      </div>
-      {/* Real table for screen readers — the legend above is aria-hidden since
-          this covers the exact same data with the same 1-based ordering
-          referenced in the SVG's aria-label. */}
-      <table className="sr-only">
-        <thead>
-          <tr><th>{t(locale, "chart_col_label")}</th><th>{t(locale, "chart_col_value")}</th><th>{t(locale, "chart_col_percent")}</th></tr>
-        </thead>
-        <tbody>
+      {/* Legend — interactive (real buttons, synced with arc hover/click) when
+          onSegmentClick is given; otherwise the plain aria-hidden summary it
+          always was, with the sr-only table below as its accessible form. */}
+      {onSegmentClick ? (
+        <div className="space-y-1">
           {data.map((d, i) => (
-            <tr key={i}><td>{d.label}</td><td>{d.value}</td><td>{Math.round((d.value / total) * 100)}%</td></tr>
+            <button
+              key={i}
+              type="button"
+              onClick={() => onSegmentClick(d, i)}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
+              className={`w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-start transition-colors duration-fast ${hovered === i ? "bg-surface-container" : "hover:bg-surface-container/60"}`}
+            >
+              <span className="w-3 h-3 rounded-sm flex-shrink-0 flex items-center justify-center text-caption font-black text-white/90" style={{ backgroundColor: d.color }}>{i + 1}</span>
+              <span className="text-label text-on-surface font-medium">{d.label}</span>
+              <span className="text-label text-outline font-bold ms-auto tabular-nums">{d.value}</span>
+              <span className="text-caption text-outline w-9 text-end">{Math.round((d.value / total) * 100)}%</span>
+            </button>
           ))}
-        </tbody>
-      </table>
+        </div>
+      ) : (
+        <div className="space-y-2" aria-hidden="true">
+          {data.map((d, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm flex-shrink-0 flex items-center justify-center text-caption font-black text-white/90" style={{ backgroundColor: d.color }}>{i + 1}</span>
+              <span className="text-label text-on-surface font-medium">{d.label}</span>
+              <span className="text-label text-outline font-bold ms-auto tabular-nums">{d.value}</span>
+              <span className="text-caption text-outline w-9 text-end">{Math.round((d.value / total) * 100)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Real table for screen readers when the legend itself is aria-hidden
+          (the non-interactive case) — covers the same data, same 1-based
+          ordering as the SVG's aria-label. Omitted when the legend above is
+          itself real, focusable, readable content (would just duplicate it). */}
+      {!onSegmentClick && (
+        <table className="sr-only">
+          <thead>
+            <tr><th>{t(locale, "chart_col_label")}</th><th>{t(locale, "chart_col_value")}</th><th>{t(locale, "chart_col_percent")}</th></tr>
+          </thead>
+          <tbody>
+            {data.map((d, i) => (
+              <tr key={i}><td>{d.label}</td><td>{d.value}</td><td>{Math.round((d.value / total) * 100)}%</td></tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

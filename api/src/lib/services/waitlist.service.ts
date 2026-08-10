@@ -3,6 +3,7 @@
 // Contact is off-platform (phone), matching the lead-generation model — mirrors the
 // structure of feedback.service.ts.
 import { prisma } from "@/lib/prisma";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { Prisma } from "@/generated/prisma/client";
 import { CompanyStatus, WaitlistStatus } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/utils/errors";
@@ -104,11 +105,8 @@ export async function listByCompany(
     ...(query.status ? { status: query.status as WaitlistStatus } : {}),
     ...searchWhere(query.search),
   };
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const pageSize = Math.min(
-    MAX_PAGE_SIZE,
-    Math.max(1, Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE),
-  );
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
   const [total, rows] = await Promise.all([
     prisma.waitlistEntry.count({ where }),
     prisma.waitlistEntry.findMany({
@@ -135,11 +133,8 @@ export async function listAll(
     ...(query.status ? { status: query.status as WaitlistStatus } : {}),
     ...searchWhere(query.search),
   };
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const pageSize = Math.min(
-    MAX_PAGE_SIZE,
-    Math.max(1, Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE),
-  );
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
   const [total, rows] = await Promise.all([
     prisma.waitlistEntry.count({ where }),
     prisma.waitlistEntry.findMany({

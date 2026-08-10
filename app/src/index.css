@@ -96,6 +96,18 @@
   body {
     @apply bg-background text-on-background font-sans antialiased;
     -webkit-tap-highlight-color: rgba(0, 85, 120, 0.08);
+    /* Every string on this site is content someone typed: a company tagline, a
+       service name, an "about" paragraph. Any of them can contain a pasted URL,
+       an email, or a run of repeated characters with no break opportunity — and
+       without this, one such token is wider than the phone and the WHOLE PAGE
+       scrolls sideways. Measured on the company profile at 320px with a
+       110-character URL in the tagline: the paragraph's content was 357px
+       inside a 288px box.
+       `anywhere`, not `break-word`: only `anywhere` also reduces the element's
+       min-content width, which is what stops an unbreakable token from forcing
+       a flex or grid parent wider than its container. Inherited, so setting it
+       here covers every descendant instead of every component remembering. */
+    overflow-wrap: anywhere;
   }
 
   /* Prevent iOS input zoom — keep ≥16px on all inputs */
@@ -144,6 +156,15 @@
   -webkit-font-smoothing: antialiased;
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   user-select: none;
+  /* Belt to index.html's `display=block` braces. `block` only hides the
+     fallback for ~3s; if Google Fonts is unreachable for longer — a blocked
+     network, an offline PWA launch — the ligature NAMES come back as readable
+     words and each one is wider than the fixed-size control holding it.
+     A glyph is exactly 1em wide, so capping the box at 1em and hiding the
+     remainder means a missing icon font degrades to a blank square instead of
+     to a broken navigation bar. */
+  max-width: 1em;
+  overflow: hidden;
 }
 .material-symbols-outlined.fill {
   font-variation-settings: "FILL" 1;
@@ -720,6 +741,50 @@ select.field-input {
 ════════════════════════════════════════════════════════════════════════════ */
 .bottom-nav-safe {
   padding-bottom: var(--safe-bottom);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MODAL VIEWPORT + SAFE AREA
+   Mirrors RESP-03's `.h-hero` fix above: iOS Safari's `100vh`/`92vh` measure
+   the LARGEST viewport (address bar collapsed), so a modal panel capped that
+   way can be taller than what's actually visible — a `sticky bottom-0` footer
+   inside it then sticks to the bottom of an off-screen box instead of the one
+   actually on screen, i.e. unreachable Save/Cancel buttons. `dvh` tracks the
+   viewport that's actually visible. Two declarations per rule, not a single
+   `dvh`-only value, so a browser that can't parse `dvh` keeps the `vh` line
+   instead of dropping the whole rule (same reasoning as `.h-hero`).
+   Also covers the iPhone home-indicator inset for panels/footers that sit
+   flush against the screen edge on mobile widths (`env(safe-area-inset-bottom)`
+   via the existing `--safe-bottom` token). */
+.modal-max-h {
+  max-height: 100vh;
+  max-height: 100dvh;
+}
+@media (min-width: 640px) {
+  .modal-max-h {
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
+}
+.modal-max-h-92 {
+  max-height: 92vh;
+  max-height: 92dvh;
+}
+.modal-max-h-85 {
+  max-height: 85vh;
+  max-height: 85dvh;
+}
+/* Backdrop wrapper padding for modals that keep a margin on every side
+   (Modal.tsx, ConfirmDialog) — adds the home-indicator inset on top of the
+   existing bottom margin without touching top/start/end spacing. */
+.modal-backdrop-safe {
+  padding-bottom: calc(1rem + var(--safe-bottom));
+}
+/* Sticky action footers that sit flush against the bottom edge on mobile
+   (no backdrop margin below them) — adds the inset on top of the footer's
+   own p-5 bottom padding. */
+.modal-footer-safe {
+  padding-bottom: calc(1.25rem + var(--safe-bottom));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

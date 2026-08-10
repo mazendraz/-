@@ -122,8 +122,18 @@ export function cancelChangeRequest(id: string): Promise<void> {
  * Providers MUST use this and not listChangeRequests() — that one hits
  * /admin/change-requests, which is adminOnly and returns 403 for them.
  */
-export function listMyChangeRequests(): Promise<ChangeRequest[]> {
-  return apiGet<ChangeRequest[]>("/provider/change-requests");
+export function listMyChangeRequests(params: {
+  status?: ChangeRequestStatus;
+  entity?: ChangeEntity;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<ChangeRequestPage> {
+  const sp = new URLSearchParams();
+  if (params.status) sp.set("status", params.status);
+  if (params.entity) sp.set("entity", params.entity);
+  sp.set("page", String(params.page ?? 1));
+  sp.set("pageSize", String(params.pageSize ?? 20));
+  return apiGet<ChangeRequestPage>(`/provider/change-requests?${sp.toString()}`);
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────

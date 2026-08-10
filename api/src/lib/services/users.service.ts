@@ -3,8 +3,10 @@
 // never returned. A safety guard prevents removing/demoting/deactivating the
 // LAST active admin, so the site can't be locked out of its own dashboard.
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/auth";
-import { NotFoundError, ValidationError } from "@/lib/utils/errors";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
+import { hashPassword, verifyPasswordSafe } from "@/lib/auth";
+import { isDerivedFromEmail } from "@/lib/validation/password";
+import { NotFoundError, UnauthorizedError, ValidationError } from "@/lib/utils/errors";
 import type { User } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
 import type { CreateUserInput, UpdateUserInput } from "@/lib/validation/users";
@@ -55,10 +57,10 @@ export interface AdminUserListQuery {
 }
 
 function clampPaging(query: AdminUserListQuery): { page: number; pageSize: number } {
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const rawSize = Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
-  return { page, pageSize };
+  return {
+    page: clampPage(query.page),
+    pageSize: clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+  };
 }
 
 /** Admin: list accounts, filterable by role / search (name or email). */
@@ -133,6 +135,51 @@ export async function update(id: string, input: UpdateUserInput): Promise<ApiAdm
     include: userInclude,
   });
   return serialize(user);
+}
+
+/**
+ * Self-service password change — the caller changing their OWN password, proven
+ * by supplying the current one.
+ *
+ * Why this exists: until the 2026-08-10 audit (finding M-07) the only way to set
+ * a password was `PATCH /api/admin/users/:id`, which is admin-only. So an admin
+ * necessarily knew every provider's password at the moment they set it, and the
+ * provider had no way to change it afterwards — a password that is never a secret
+ * between one person and the system is not really a credential.
+ *
+ * Takes the id rather than the AuthUser so it cannot be pointed at anyone else:
+ * the route passes `user.id` from the session, never a body field.
+ */
+export async function changeOwnPassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const existing = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, passwordHash: true, isActive: true },
+  });
+  // getAuthUser already rejected an inactive/absent user, so this is belt-and-
+  // braces for a session that went stale mid-request.
+  if (!existing || !existing.isActive) throw new UnauthorizedError();
+
+  // verifyPasswordSafe, not verifyPassword: same constant-time-ish shape as login,
+  // so this endpoint can't be used to distinguish states by timing either.
+  if (!(await verifyPasswordSafe(currentPassword, existing.passwordHash))) {
+    throw new UnauthorizedError("Your current password is incorrect");
+  }
+
+  // Checked here rather than in the schema because the schema has no email.
+  if (isDerivedFromEmail(newPassword, existing.email)) {
+    throw new ValidationError("Password is too weak", {
+      newPassword: ["Don't build your password out of your email address."],
+    });
+  }
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await hashPassword(newPassword) },
+  });
 }
 
 /** Admin: delete an account (guards the last active admin). */

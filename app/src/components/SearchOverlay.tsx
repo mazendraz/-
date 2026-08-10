@@ -11,6 +11,7 @@ import {
 } from "../lib/search";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
+import { useScrollLock } from "../hooks/useScrollLock";
 import Icon from "./Icon";
 
 interface Props {
@@ -41,21 +42,20 @@ export default function SearchOverlay({ open, onClose }: Props) {
   }, [query]);
   const popular = getPopularSearches();
 
-  // Focus input + lock scroll when opened
+  // Shared with every other dialog — it saves and restores the previous value,
+  // where the hand-rolled lock this replaced reset overflow to "" outright and
+  // so would have unlocked the page out from under anything open beneath it.
+  useScrollLock(open);
+
+  // Reset + focus the input when opened
   useEffect(() => {
-    if (open) {
-      setRecent(getRecentSearches());
-      setQuery("");
-      setActiveIndex(0);
-      document.body.style.overflow = "hidden";
-      // Delay focus until after the open animation paints
-      const timer = setTimeout(() => inputRef.current?.focus(), 60);
-      return () => {
-        clearTimeout(timer);
-        document.body.style.overflow = "";
-      };
-    }
-    document.body.style.overflow = "";
+    if (!open) return;
+    setRecent(getRecentSearches());
+    setQuery("");
+    setActiveIndex(0);
+    // Delay focus until after the open animation paints
+    const timer = setTimeout(() => inputRef.current?.focus(), 60);
+    return () => clearTimeout(timer);
   }, [open]);
 
   // Reset active index when results change

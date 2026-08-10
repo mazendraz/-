@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import {
   listModerationProjects, setProjectStatus, deleteProjectAdmin, type ModerationProject,
 } from "../../lib/projects";
@@ -7,7 +7,9 @@ import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import Pagination from "../../components/Pagination";
 import { useVisualViewport } from "../../hooks/useVisualViewport";
+import { useDialogA11y } from "../../hooks/useDialogA11y";
 
 // Moderation queue for provider-submitted portfolio projects. Pending projects
 // are hidden from the public profile until approved here. Also lets the admin
@@ -20,26 +22,54 @@ export function ProjectApprovals() {
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<ModerationProject | null>(null);
+  // Paged. `total` is the backlog size — the number an admin needs and the one
+  // an unbounded array could not express.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 50;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // PENDING and REJECTED are different queues — start each at its beginning.
+  useEffect(() => { setPage(1); }, [status]);
 
   const reload = useCallback(async () => {
     setLoading(true); setError("");
-    try { setItems(await listModerationProjects(status)); }
-    catch { setError(t(locale, "admin_pa_load_error")); }
+    try {
+      const res = await listModerationProjects(status, page, PAGE_SIZE);
+      setItems(res.data);
+      setTotal(res.meta.total);
+    } catch { setError(t(locale, "admin_pa_load_error")); }
     finally { setLoading(false); }
-  }, [status]);
+  }, [status, page]);
   useEffect(() => { void reload(); }, [reload]);
+
+  // Acting on the last row of the last page leaves `page` past the end. Step
+  // back rather than showing "queue empty" over a queue that still has work.
+  useEffect(() => {
+    if (loading) return;
+    const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (page > lastPage) setPage(lastPage);
+  }, [total, page, loading]);
+
+  // Removing a row shrinks the page and the backlog count together, so the
+  // number stays honest without waiting on a refetch.
+  function removeLocally(id: string) {
+    setItems((cur) => cur.filter((x) => x.id !== id));
+    setTotal((n) => Math.max(0, n - 1));
+    setPreview(null);
+  }
 
   async function act(p: ModerationProject, next: ProjectStatus) {
     if (!p.id) return;
     setBusyId(p.id); setError("");
-    try { await setProjectStatus(p.id, next); setItems((cur) => cur.filter((x) => x.id !== p.id)); setPreview(null); }
+    try { await setProjectStatus(p.id, next); removeLocally(p.id); }
     catch { setError(t(locale, "admin_pa_action_failed")); }
     finally { setBusyId(null); }
   }
   async function remove(p: ModerationProject) {
     if (!p.id) return;
     setBusyId(p.id); setError("");
-    try { await deleteProjectAdmin(p.id); setItems((cur) => cur.filter((x) => x.id !== p.id)); setPreview(null); }
+    try { await deleteProjectAdmin(p.id); removeLocally(p.id); }
     catch { setError(t(locale, "admin_pa_delete_error")); }
     finally { setBusyId(null); }
   }
@@ -123,6 +153,16 @@ export function ProjectApprovals() {
         </div>
       )}
 
+      {/* Reachable paging — the queue no longer returns everything at once. */}
+      <Pagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPage={setPage}
+        nounKey="noun_project"
+      />
+
       {preview && (
         <ProjectPreviewModal
           project={preview}
@@ -154,15 +194,25 @@ export function ProjectPreviewModal({ project, busy, onClose, onApprove, onRejec
   // doesn't end up rendered underneath it.
   const { height: vvHeight } = useVisualViewport();
   const keyboardOpen = typeof window !== "undefined" && window.innerHeight - vvHeight > 60;
+  // Predates the shared Modal component, so the dialog wiring is explicit here.
+  // Safe to close on Escape unlike the editor modals: nothing is typed in, the
+  // approve/reject decisions are all one-click buttons.
+  const titleId = useId();
+  const { containerRef, trapTab } = useDialogA11y(true, onClose);
   return (
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-surface-container-lowest w-full max-w-xl sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto"
+        ref={containerRef}
+        onKeyDown={trapTab}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-surface-container-lowest w-full max-w-xl sm:rounded-2xl shadow-2xl modal-max-h overflow-y-auto overscroll-contain"
         style={keyboardOpen ? { maxHeight: vvHeight } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-5 border-b border-outline-variant/20 sticky top-0 bg-surface-container-lowest z-10">
-          <h2 className="font-bold text-subhead text-on-surface">{t(locale, "admin_pa_modal_title")}</h2>
+          <h2 id={titleId} className="font-bold text-subhead text-on-surface">{t(locale, "admin_pa_modal_title")}</h2>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-surface-container transition-colors"><Icon name="close" className="text-outline" /></button>
         </div>
         <div className="p-5 space-y-4">
@@ -179,7 +229,7 @@ export function ProjectPreviewModal({ project, busy, onClose, onApprove, onRejec
             ? <p className="text-label text-on-surface-variant leading-relaxed whitespace-pre-wrap">{project.description}</p>
             : <p className="text-label text-outline italic">{t(locale, "admin_pa_no_description")}</p>}
         </div>
-        <div className="flex flex-wrap justify-end gap-2.5 p-5 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-lowest">
+        <div className="flex flex-wrap justify-end gap-2.5 p-5 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-lowest modal-footer-safe">
           <button onClick={onDelete} disabled={busy}
             className="me-auto flex items-center gap-1 text-outline px-3 py-2.5 rounded-xl text-label font-bold hover:text-error hover:bg-error/5 transition-colors disabled:opacity-60">
             <Icon name="delete" className="text-body" /> {t(locale, "admin_delete")}

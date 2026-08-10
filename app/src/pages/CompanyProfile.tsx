@@ -19,6 +19,7 @@ import { isBusy, formatReopenDate, joinWaitlist, rememberMyWaitlistEntry, availa
 import Modal from "../components/Modal";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
+import { formatRating } from "../lib/format";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import PhoneInput from "../components/PhoneInput";
@@ -136,7 +137,7 @@ export default function CompanyProfile() {
           drops the blur (this already reads as solid at 96% opacity, so the
           blur was pure repaint cost with no visible difference). */}
       <div
-        className="md:hidden fixed left-0 right-0 z-30 px-4 pt-2.5 pb-2.5 bg-white border-t border-outline-variant/25 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.08)] flex items-center gap-2.5"
+        className="md:hidden fixed start-0 end-0 z-30 px-4 pt-2.5 pb-2.5 bg-white border-t border-outline-variant/25 shadow-[0_-8px_24px_-6px_rgba(0,0,0,0.08)] flex items-center gap-2.5"
         style={{ bottom: "calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px))" }}
       >
         <SaveButton slug={company.slug} className="!w-12 !h-12 flex-shrink-0 border border-outline-variant/30" />
@@ -211,9 +212,16 @@ export default function CompanyProfile() {
                 <LazyImage src={company.logo} alt={`${company.name} logo`} className="w-full h-full object-cover" width={80} height={80} />
               </div>
 
-              <div className="flex-grow">
+              {/* min-w-0: a flex item's min-width defaults to `auto`, i.e. its
+                  CONTENT width, so this column refused to shrink below the
+                  company name and pushed the action buttons beside it clean off
+                  the viewport. Measured with a 500-character name at 768px: the
+                  page scrolled to 825px and "Request a Service" sat outside it.
+                  break-words then lets a name with no spaces wrap instead of
+                  setting that content width in the first place. */}
+              <div className="flex-grow min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <h1 className="text-headline md:text-display font-display text-on-surface">{company.name}</h1>
+                  <h1 className="text-headline md:text-display font-display text-on-surface break-words min-w-0">{company.name}</h1>
                   {company.verified && (
                     <span className="flex items-center gap-1 bg-primary/10 text-primary px-2 py-0.5 rounded-full text-caption font-display">
                       <Icon name="verified" className="text-label" style={{ fontVariationSettings: "'FILL' 1" }} /> {t(locale, "common_verified")}
@@ -226,7 +234,7 @@ export default function CompanyProfile() {
                 <p className="text-label font-display text-outline mb-2">{company.categoryLabel}</p>
                 <div className="flex items-center gap-3 flex-wrap">
                   <Stars n={Math.round(company.rating)} size="text-body" />
-                  <span className="font-display text-label text-on-surface">{company.rating}</span>
+                  <span className="font-display text-label text-on-surface">{formatRating(locale, company.rating)}</span>
                   <span className="text-outline text-caption">({company.reviewCount} {t(locale, "common_reviews")})</span>
                   <span className="text-outline">·</span>
                   <span className="text-outline text-caption">{company.completedProjects} {t(locale, "profile_completed_projects")}</span>
@@ -330,6 +338,7 @@ export default function CompanyProfile() {
             offerings={company.offerings ?? []}
             services={company.services}
             companySlug={company.slug}
+            requestHref={requestHref}
           />
           {/* The escape hatch for a request that isn't one of the priced
               cards above — a light-weight text link, not a button, so it

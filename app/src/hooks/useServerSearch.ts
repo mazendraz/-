@@ -144,6 +144,25 @@ export function useServerSearch<T>(
   // Abort any in-flight request on unmount.
   useEffect(() => () => abortRef.current?.abort(), []);
 
+  // Step back when the current page falls off the end of a SHRUNKEN result set.
+  //
+  // Nothing else moves `page` after a mutation: deleting the only row on the
+  // last page (or approving the last item in a filtered queue) calls refresh(),
+  // the server correctly answers "page 9 of a 8-page result is empty", and the
+  // list renders its "nothing found" empty state on top of a dataset that is not
+  // empty — while the pager reads "161–160 of 160". The row count says there is
+  // data and the table says there is none; only Prev gets the user out, and
+  // nothing on screen suggests that is what went wrong.
+  //
+  // Guarded on `!loading` so it reads a settled total, never the previous
+  // query's, and it converges: the clamped page re-fetches once and any total
+  // >= 0 leaves `page <= lastPage` true, so there is no ping-pong.
+  useEffect(() => {
+    if (loading) return;
+    const lastPage = Math.max(1, Math.ceil(result.total / pageSize));
+    if (page > lastPage) setPage(lastPage);
+  }, [result.total, pageSize, page, loading]);
+
   const refresh = useCallback(() => setTick((t) => t + 1), []);
   const patch = useCallback((match: (item: T) => boolean, update: (item: T) => T) => {
     setResult((prev) => ({ ...prev, data: prev.data.map((item) => (match(item) ? update(item) : item)) }));

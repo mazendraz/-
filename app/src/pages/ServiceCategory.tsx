@@ -13,6 +13,7 @@ import { useServerSearch } from "../hooks/useServerSearch";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, tCount, type Locale } from "../lib/i18n";
+import { formatRating } from "../lib/format";
 import Icon from "../components/Icon";
 
 export default function ServiceCategoryPage() {
@@ -177,14 +178,20 @@ function CompanyRow({ company: c, delay, locale }: { company: Company; delay: nu
                 <h2 className="font-display text-title text-on-surface group-hover:text-primary transition-colors mb-1">{c.name}</h2>
                 <p className="text-label font-display text-outline mb-2">{c.categoryLabel}</p>
               </div>
-              <span className="text-label font-display text-primary flex items-center gap-1 whitespace-nowrap group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform hidden sm:flex">
+              {/* `flex` and `hidden` both set `display`, so which one applied
+                  depended on the order Tailwind happened to emit them in, not
+                  on anything written here. The leading `flex` was dead — the
+                  intent is "hidden on phones, flex from sm up" — so it is gone
+                  rather than left as a coin-toss the next Tailwind upgrade
+                  could flip. */}
+              <span className="text-label font-display text-primary items-center gap-1 whitespace-nowrap group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform hidden sm:flex">
                 {t(locale, "common_view_profile")} <Icon name="arrow_forward" className="text-subhead rtl-flip" />
               </span>
             </div>
 
             <div className="flex items-center gap-3 mb-3 flex-wrap">
               <Stars n={Math.round(c.rating)} />
-              <span className="font-display text-label text-on-surface">{c.rating}</span>
+              <span className="font-display text-label text-on-surface">{formatRating(locale, c.rating)}</span>
               <span className="text-outline text-caption">({c.reviewCount} {t(locale, "common_reviews")})</span>
               <span className="text-outline text-caption">·</span>
               <span className="text-outline text-caption">{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>

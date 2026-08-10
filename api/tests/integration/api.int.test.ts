@@ -129,7 +129,12 @@ function leadBody(
     companyName,
     service: "Design",
     name: "Customer One",
-    phone: "01012345678",
+    // E.164, not the local "010…" form. createLeadSchema validates new
+    // submissions with libphonenumber and no default region (the frontend's
+    // PhoneInput normalizes before sending) — see validation/leads.test.ts,
+    // which asserts the local form is rejected. This fixture predated that
+    // change and turned every lead POST in this file into a 400.
+    phone: "+201012345678",
     district: "R7",
     budget: "EGP 100k",
     description: "I need a full fit-out for my apartment please.",
@@ -171,7 +176,7 @@ describe("POST /leads", () => {
   it("rejects an identical re-submit within the de-dup window (409)", async () => {
     // Distinct phone/service/IP so it's independent of the other tests' leads and
     // the per-IP rate limit. Same body twice → first 201, second 409.
-    const body = leadBody(activeSlug, "X", { phone: "01099000011", service: "Dedup Job" });
+    const body = leadBody(activeSlug, "X", { phone: "+201099000011", service: "Dedup Job" });
     const first = await leadsPOST(req("/api/leads", { method: "POST", body, ip: "10.0.50.1" }));
     expect(first.status).toBe(201);
     const second = await leadsPOST(req("/api/leads", { method: "POST", body, ip: "10.0.50.2" }));
@@ -262,7 +267,7 @@ describe("admin catalog rules", () => {
 describe("lead tracking (token replaces phone as the secret)", () => {
   it("tracks by the issued token; the phone no longer works once a token exists", async () => {
     const createRes = await leadsPOST(
-      req("/api/leads", { method: "POST", body: leadBody(activeSlug, "X", { service: "Token Job", phone: "01077000022" }), ip: "10.0.77.1" }),
+      req("/api/leads", { method: "POST", body: leadBody(activeSlug, "X", { service: "Token Job", phone: "+201077000022" }), ip: "10.0.77.1" }),
     );
     expect(createRes.status).toBe(201);
     const created = await createRes.json();

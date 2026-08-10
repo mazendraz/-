@@ -30,14 +30,28 @@ const baseCompanySchema = z.object({
   about: sanitizedOptionalText(5000),
   logo: imageRef,
   cover: imageRef,
-  services: z.array(z.string().trim().min(1)).default([]),
-  gallery: z.array(imageRef).default([]),
-  badges: z.array(z.string().trim().min(1)).default([]),
-  phone: z.string().trim().min(8),
-  location: z.string().trim().min(1),
-  yearsExperience: z.number().int().min(0),
-  responseTime: z.string().trim().min(1),
-  verifiedSince: z.string().trim().min(1),
+  // ── Bounded on purpose ──────────────────────────────────────────────────
+  // These were `min(1)` / `min(8)` with NO upper bound and no array cap, while
+  // every neighbouring field (name 150, tagline 200, about 5000, categories 5)
+  // was capped. That gap is not only a layout risk — `services` and `badges`
+  // are part of the CARD payload (see serialize.ts companyScalars), so they are
+  // returned for every company on every page of the PUBLIC /api/companies list.
+  // One company with a multi-megabyte services array therefore inflates a
+  // public, cached, unauthenticated response for everyone, and the admin write
+  // path that creates it reads the body with a bare request.json() — no size
+  // limit at all (unlike the public endpoints, which go through readJsonObject).
+  //
+  // The caps are deliberately far above real data (seeded companies carry ~6
+  // services, ~3 badges, ~6 gallery items), so no existing record can fail to
+  // round-trip through the admin editor — they only stop the absurd.
+  services: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
+  gallery: z.array(imageRef).max(60).default([]),
+  badges: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  phone: z.string().trim().min(8).max(32),
+  location: z.string().trim().min(1).max(200),
+  yearsExperience: z.number().int().min(0).max(200),
+  responseTime: z.string().trim().min(1).max(80),
+  verifiedSince: z.string().trim().min(1).max(20),
   completedProjects: z.number().int().min(0).default(0),
   featured: z.boolean().default(true),
   verified: z.boolean().default(false),
@@ -48,10 +62,12 @@ const baseCompanySchema = z.object({
   ratingOverridden: z.boolean().optional(),
   metaTitle: sanitizedOptionalText(120).optional(),
   metaDescription: sanitizedOptionalText(320).optional(),
-  email: z.string().email().optional(),
-  whatsapp: z.string().trim().optional(),
+  email: z.string().email().max(254).optional(),
+  whatsapp: z.string().trim().max(32).optional(),
   // Optional nested projects — when present, replace the company's project list.
-  projects: z.array(companyProjectSchema).optional(),
+  // Capped for the same reason as the arrays above: this is a replace-all write,
+  // so an uncapped array is an uncapped INSERT in one transaction.
+  projects: z.array(companyProjectSchema).max(200).optional(),
 });
 
 // Shared by both schemas below — Zod drops .refine()'s effect across .partial(),

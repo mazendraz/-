@@ -34,6 +34,31 @@ export function formatNumber(locale: Locale, n: number, options?: Intl.NumberFor
   return new Intl.NumberFormat(intlLocale(locale), options).format(n);
 }
 
+/**
+ * A star rating, for display. ONE decimal, always.
+ *
+ * Stored precision and displayed precision are different things, and conflating
+ * them is what put `★ 4.666666666666667` on a company card. `Company.rating` is a
+ * Float: the review recompute rounds it to one decimal, but an admin's manual
+ * override wrote whatever number it was given, and every render site printed the
+ * raw value with `{c.rating}`.
+ *
+ * Fixing only the write path would leave existing rows broken; fixing only the
+ * read path would let new ones drift. Both are fixed — this is the read half, and
+ * it is the one that guarantees no rating can ever render long, whatever is in
+ * the column.
+ *
+ * Trailing zeros are kept (4.0, not 4) so a column of ratings stays aligned.
+ */
+export function formatRating(locale: Locale, rating: number): string {
+  if (!Number.isFinite(rating)) return "—";
+  const clamped = Math.min(5, Math.max(0, rating));
+  return new Intl.NumberFormat(intlLocale(locale), {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(clamped);
+}
+
 /** Short date: "29 Jul 2026" / "٢٩ يوليو ٢٠٢٦" (Latin digits). */
 export function formatDate(epochMs: number, locale: Locale): string {
   return new Date(epochMs).toLocaleDateString(intlLocale(locale), {

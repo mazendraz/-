@@ -35,7 +35,12 @@ export default function Pagination({
   const { locale } = useLocale();
   if (total === 0) return null;
 
-  const from = (page - 1) * pageSize + 1;
+  // Clamped, not computed raw. For the frame between a mutation shrinking
+  // `total` and useServerSearch clamping `page` back into range, the raw maths
+  // renders "161–160 of 160" — a range that runs backwards. Clamping keeps the
+  // label truthful under any (page, total) pair a caller can hand us, including
+  // callers that don't page through useServerSearch at all.
+  const from = Math.min(total, (page - 1) * pageSize + 1);
   const to = Math.min(total, page * pageSize);
   const plural = tCount(locale, nounKey, total);
 

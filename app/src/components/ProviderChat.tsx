@@ -9,6 +9,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import ChatThread from "./ChatThread";
 import ConversationListItem from "./ConversationListItem";
+import Pagination from "./Pagination";
 import MobileChatOverlay from "./MobileChatOverlay";
 import Icon from "./Icon";
 
@@ -26,6 +27,13 @@ export default function ProviderChat() {
   const navigate = useNavigate();
   const [items, setItems] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  // The thread list is paged. Every request opens a thread eagerly, so this list
+  // grows with total requests ever received — it was previously capped at 100
+  // server-side with no way to ask for more and nothing on screen saying so.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 20;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   // Either a server message (already a string) or a translation KEY resolved at
   // render. Calling t() inside the callback froze the language it was built with.
   const [error, setError] = useState<{ text?: string; key?: StringKey } | null>(null);
@@ -51,13 +59,13 @@ export default function ProviderChat() {
 
   const load = useCallback(() => {
     if (!isApiConfigured()) { setLoading(false); return; }
-    listProviderConversations()
-      .then((rows) => { setItems(rows); setError(null); })
+    listProviderConversations(page, PAGE_SIZE)
+      .then((res) => { setItems(res.data); setTotal(res.meta.total); setError(null); })
       .catch((e) => setError(
         e instanceof Error ? { text: e.message } : { key: "prov_chat_err_load" },
       ))
       .finally(() => setLoading(false));
-  }, []);
+  }, [page]);
   useEffect(load, [load]);
 
   // Stable identity so ChatThread's effects don't re-run every render.
@@ -126,6 +134,20 @@ export default function ProviderChat() {
                   onClick={() => selectConversation(c)}
                 />
               ))}
+            </div>
+          )}
+          {/* Reachable paging. Sits OUTSIDE the scrolling list so it stays
+              visible without hunting for it at the bottom of an inner scroll. */}
+          {pageCount > 1 && (
+            <div className="px-4 py-3 border-t border-outline-variant/15">
+              <Pagination
+                page={page}
+                pageCount={pageCount}
+                total={total}
+                pageSize={PAGE_SIZE}
+                onPage={setPage}
+                nounKey="noun_conversation"
+              />
             </div>
           )}
         </div>

@@ -7,6 +7,7 @@ import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { loginSchema } from "@/lib/validation/auth";
 import { signToken, verifyPasswordSafe, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import * as audit from "@/lib/services/audit.service";
 import type { ApiAuthResponse } from "@/lib/apiTypes";
 
 export const dynamic = "force-dynamic";
@@ -27,9 +28,19 @@ const ACCOUNT_FAILURE_LIMIT = {
 
 // POST /api/auth/login → { token, user }. Token is returned in the body.
 export const POST = withErrors(async (request: NextRequest) => {
-  const rl = await rateLimit(`login:${clientIp(request)}`, LOGIN_RATE_LIMIT);
+  const ip = clientIp(request);
+
+  const rl = await rateLimit(`login:${ip}`, LOGIN_RATE_LIMIT);
   if (!rl.ok) {
     const seconds = Math.ceil(rl.retryAfterMs / 1000);
+    // Logged before the body is parsed, so there is no email yet — the IP is the
+    // subject of this event anyway.
+    await audit.recordAuth({
+      action: "auth.login.throttled",
+      email: "-",
+      ip,
+      meta: { scope: "ip" },
+    });
     throw new RateLimitError(`Too many attempts. Try again in ${seconds}s.`);
   }
 
@@ -47,8 +58,24 @@ export const POST = withErrors(async (request: NextRequest) => {
     const acct = await rateLimit(`login:acct:${email}`, ACCOUNT_FAILURE_LIMIT);
     if (!acct.ok) {
       const seconds = Math.ceil(acct.retryAfterMs / 1000);
+      await audit.recordAuth({
+        action: "auth.login.throttled",
+        email,
+        ip,
+        meta: { scope: "account" },
+      });
       throw new RateLimitError(`Too many failed attempts. Try again in ${seconds}s.`);
     }
+    // `known` distinguishes "wrong password" from "no such account" IN THE LOG
+    // ONLY. The RESPONSE stays generic below — that distinction is exactly what
+    // an attacker enumerating accounts wants, and exactly what you need when
+    // reading the log afterwards.
+    await audit.recordAuth({
+      action: "auth.login.failure",
+      email,
+      ip,
+      meta: { known: Boolean(user), active: user?.isActive ?? null },
+    });
     // Generic message — never reveal whether the email exists.
     throw new UnauthorizedError("Invalid email or password");
   }
@@ -56,6 +83,14 @@ export const POST = withErrors(async (request: NextRequest) => {
   // A truthy verifyPasswordSafe guarantees an active user matched (activeHash was
   // non-null); this only narrows the type for the compiler — it's never reached.
   if (!user) throw new UnauthorizedError("Invalid email or password");
+
+  await audit.recordAuth({
+    action: "auth.login.success",
+    email: user.email,
+    userId: user.id,
+    ip,
+    meta: { role: user.role },
+  });
 
   const token = await signToken({
     sub: user.id,

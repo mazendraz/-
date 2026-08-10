@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { okCached } from "@/lib/utils/response";
 import * as reviewsService from "@/lib/services/reviews.service";
+import { cleanParam } from "@/lib/utils/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export const GET = withErrors(
       return Number.isFinite(n) ? n : undefined;
     };
     const result = await reviewsService.listByCompanySlug(slug, {
-      search: sp.get("search")?.trim() || undefined,
+      search: cleanParam(sp.get("search")),
       rating: toInt(sp.get("rating")),
       page: toInt(sp.get("page")),
       pageSize: toInt(sp.get("pageSize")),

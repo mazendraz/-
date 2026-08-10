@@ -4,6 +4,7 @@
 // service and the same admin review screen instead of growing a second approval
 // system. Only COMPANY is wired up in this phase; see ENTITY_DISPATCH.
 import { isDeepStrictEqual } from "node:util";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import { prisma } from "@/lib/prisma";
 import type { AuthUser } from "@/lib/auth";
 import type { ApiPage } from "@/lib/apiTypes";
@@ -15,6 +16,12 @@ import type {
 } from "@/generated/prisma/enums";
 import type { InputJsonValue } from "@/generated/prisma/internal/prismaNamespace";
 import * as audit from "@/lib/services/audit.service";
+import { updateCompanySchema } from "@/lib/validation/companies";
+import {
+  updateOfferingSchema,
+  updateTierSchema,
+  updateBundleRuleSchema,
+} from "@/lib/validation/offerings";
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 100;
@@ -111,6 +118,74 @@ export function assertEditableFields(entity: ChangeEntity, changes: Record<strin
   if (Object.keys(changes).length === 0) {
     throw new ValidationError("No changes were submitted.");
   }
+}
+
+// ── Field VALUE validation ───────────────────────────────────────────────────
+// EDITABLE_FIELDS above answers "which fields", and that was only half the check.
+// The values themselves arrived as `z.record(z.string(), z.unknown())` from the
+// route and went straight into `prisma[entity].update({ data: changes })` on
+// approval — so the same columns that the direct admin path guards with
+// sanitizedOptionalText, imageRef and length caps had NO guard at all when they
+// came through here.
+//
+// Three things that bought, all reachable by an ordinary provider account:
+//   • `{ yearsExperience: "abc" }` submits fine and only fails at APPROVE time,
+//     as a driver error withErrors can report only as a generic 500 — the admin
+//     sees "Something went wrong", cannot tell which field, and the request is
+//     wedged in the queue for good.
+//   • `about`/`tagline` skipped stripHtml entirely, so markup persisted in
+//     columns whose whole contract is that it does not.
+//   • `gallery`/`badges` skipped their array caps — and both are returned in the
+//     PUBLIC, CDN-cacheable /api/companies card payload (serialize.ts
+//     companyScalars), so one oversized row inflates a response served to
+//     everyone.
+//
+// These are the PARTIAL schemas: a change request is a patch, and a provider
+// editing one field must not be forced to resend the rest.
+const ENTITY_VALUE_SCHEMAS = {
+  COMPANY: updateCompanySchema,
+  OFFERING: updateOfferingSchema,
+  OFFERING_TIER: updateTierSchema,
+  BUNDLE_RULE: updateBundleRuleSchema,
+} as const satisfies Record<ChangeEntity, unknown>;
+
+/**
+ * Validate change VALUES against the entity's own schema and return the parsed
+ * result — which is the sanitized form, not the input. Callers must use the
+ * return value: dropping it would validate and then write the raw text anyway,
+ * losing the stripHtml/trim transforms that are half the point.
+ *
+ * Called at BOTH submit and approve, for the same reason assertEditableFields is
+ * (see its comment): a request can sit in the queue for days, and if a rule
+ * tightens in between, a stored request must not be a way around the current one.
+ *
+ * Throws ZodError, which withErrors already serializes to a 400 with per-field
+ * details — so the provider is told which field is wrong at SUBMIT time, instead
+ * of the admin meeting a 500 days later.
+ */
+export function validateChangeValues(
+  entity: ChangeEntity,
+  changes: Record<string, unknown>,
+): Record<string, unknown> {
+  const schema = ENTITY_VALUE_SCHEMAS[entity] as { parse: (v: unknown) => unknown };
+  const parsed = schema.parse(changes) as Record<string, unknown>;
+
+  // Return ONLY the keys the provider actually sent.
+  //
+  // Not defensive padding — this is load-bearing. baseCompanySchema carries
+  // `.default([])` on services/gallery/badges and `.default(...)` on
+  // featured/verified/completedProjects, and whether `.partial()` suppresses a
+  // default is a Zod implementation detail that has changed between majors. If it
+  // ever doesn't, parsing `{ tagline: "x" }` yields an object that ALSO says
+  // `gallery: []` — and this request would then blank a company's gallery on
+  // approval because someone edited its tagline. Data loss wearing validation's
+  // clothes.
+  //
+  // Rebuilding from the input's own keys makes that impossible regardless, while
+  // still taking the SANITIZED value for each key that was sent.
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(changes)) out[key] = parsed[key];
+  return out;
 }
 
 // ── Serialization ────────────────────────────────────────────────────────────
@@ -286,9 +361,15 @@ export async function submit(
 
   // PUBLISH and DELETE carry no field data — the row already holds its content,
   // and the request is about its lifecycle, not its values.
+  //
+  // `changes` is REASSIGNED from the validator's output, not just checked against
+  // it: the entity schemas carry stripHtml/trim transforms, so using the raw input
+  // after validating would store the unsanitized text anyway.
+  let changes = input.changes;
   if (operation === "UPDATE") {
-    assertEditableFields(input.entity, input.changes);
-  } else if (Object.keys(input.changes).length > 0) {
+    assertEditableFields(input.entity, changes); // which fields
+    changes = validateChangeValues(input.entity, changes); // which values
+  } else if (Object.keys(changes).length > 0) {
     throw new ValidationError(`A ${operation} request must not carry field changes.`);
   }
 
@@ -302,8 +383,8 @@ export async function submit(
       // inserting before cancelling would raise a unique violation on every
       // follow-up edit and the merge path would never work at all.
       const merged = existing
-        ? { ...asRecord(existing.changes), ...input.changes }
-        : input.changes;
+        ? { ...asRecord(existing.changes), ...changes }
+        : changes;
 
       if (existing) {
         await tx.changeRequest.update({
@@ -410,9 +491,8 @@ export interface ListQuery {
 }
 
 export async function list(query: ListQuery): Promise<ApiPage<ApiChangeRequest>> {
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const rawSize = Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
   const where = {
     ...(query.entity ? { entity: query.entity } : {}),
@@ -459,14 +539,52 @@ export async function getById(id: string): Promise<ApiChangeRequest> {
   return result;
 }
 
-/** Provider view: their company's pending requests. */
-export async function listForCompany(companyId: string): Promise<ApiChangeRequest[]> {
-  const rows = await prisma.changeRequest.findMany({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-  return rows.map(serialize);
+/**
+ * Provider view: their company's change requests, newest first, PAGED.
+ *
+ * Was a bare `take: 20`. This list is a provider's only record of what they
+ * submitted and how an admin ruled on it — a rejection carries the reviewer's
+ * note explaining WHY. At 21 requests the oldest silently left the screen, so
+ * the answer to "what did they say about my price change last month" simply
+ * stopped being reachable, with nothing indicating there was more.
+ */
+export async function listForCompany(
+  companyId: string,
+  query: {
+    page?: number;
+    pageSize?: number;
+    status?: ApiChangeRequest["status"];
+    entity?: ApiChangeRequest["entity"];
+  } = {},
+): Promise<ApiPage<ApiChangeRequest>> {
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+
+  // Filtered in the DATABASE, not by the caller.
+  //
+  // The offerings editor wants "my pending offering requests" and used to get
+  // that by fetching the capped list and filtering it in the browser. Once the
+  // list is paged, a client-side filter over page one silently stops seeing
+  // pending items that sort past it — the filter would look like it worked while
+  // quietly under-reporting. Pushing both predicates into the query is what makes
+  // paging safe here, and it is the correct shape regardless.
+  const where = {
+    companyId,
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.entity ? { entity: query.entity } : {}),
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.changeRequest.count({ where }),
+    prisma.changeRequest.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  return { data: rows.map(serialize), meta: { total, page, pageSize } };
 }
 
 // ── Admin: approve / reject ──────────────────────────────────────────────────
@@ -617,13 +735,17 @@ export async function review(
 
   const applied = selected;
   const skipped = Object.keys(changes).filter((k) => !selected.includes(k));
-  const data: Record<string, unknown> = {};
-  for (const f of applied) data[f] = changes[f];
+  const narrowed: Record<string, unknown> = {};
+  for (const f of applied) narrowed[f] = changes[f];
   // Re-check the narrowed payload: `fields` comes from the request body too.
-  assertEditableFields(row.entity, data);
+  assertEditableFields(row.entity, narrowed);
+  // …and re-check its VALUES, for the same reason: this row may predate the
+  // current schema, and a partial approval is a payload the admin composed.
+  const data = validateChangeValues(row.entity, narrowed);
 
   // A price edit refreshes priceUpdatedAt, which drives the "prices last updated
-  // N days ago" nudge on the public profile.
+  // N days ago" nudge on the public profile. Set AFTER validation — it is a
+  // server-side field, so a schema that doesn't declare it would strip it.
   if (row.entity === "OFFERING" && PRICE_FIELDS.some((f) => f in data)) {
     data.priceUpdatedAt = new Date();
   }

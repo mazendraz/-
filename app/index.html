@@ -41,8 +41,17 @@
       href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;600;700;800&family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
+    <!-- display=BLOCK, not swap — and the difference is not cosmetic.
+         `swap` renders the fallback font immediately, which is right for the
+         text faces above. This is a LIGATURE font: with the fallback showing,
+         every icon renders as its own name in plain words — "favorite",
+         "search", "receipt_long" — which is both wrong to look at and wider
+         than the fixed-size button holding it. Measured with the font
+         unavailable: the bottom nav overflowed a 320px phone by 53px and icon
+         buttons overflowed their own 40px box by 17px.
+         `block` keeps the glyph slot invisible until the real font arrives. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
       rel="stylesheet"
     />
   </head>

@@ -106,8 +106,20 @@ export function fetchCustomerSummaries(claims: LeadClaim[]): Promise<ThreadSumma
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-export function listProviderConversations(): Promise<Conversation[]> {
-  return apiGet<Conversation[]>("/provider/chat");
+/**
+ * One page of this company's threads.
+ *
+ * Was a bare array capped server-side at 100 with no total. Every request opens
+ * a thread eagerly, so that ceiling is "total requests ever received" — a
+ * company doing five a week crosses it inside a year, and the customers past the
+ * cut can still write in with nobody able to reach them.
+ */
+export function listProviderConversations(
+  page = 1,
+  pageSize = 20,
+): Promise<ConversationPage> {
+  const sp = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return apiGet<ConversationPage>(`/provider/chat?${sp.toString()}`);
 }
 
 export function fetchProviderThread(conversationId: string, after?: number): Promise<Thread> {

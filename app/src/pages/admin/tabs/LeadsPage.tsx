@@ -34,7 +34,12 @@ export default function LeadsPage() {
     () => (location.state as { lead?: Lead } | null)?.lead ?? null,
   );
   const [selectedWaitlist, setSelectedWaitlist] = useState<WaitlistEntry | null>(null);
-  const [filterStatus, setFilterStatus] = useState<LeadStatus | "All" | "Waitlist">("All");
+  // The Overview KPI/donut drill-downs hand a status over via navigate state
+  // (same idiom as `lead` above, for onOpenLead) instead of a URL param — one
+  // less thing for useServerSearch's own query-string building to collide with.
+  const [filterStatus, setFilterStatus] = useState<LeadStatus | "All" | "Waitlist">(
+    () => (location.state as { status?: LeadStatus } | null)?.status ?? "All",
+  );
   const [filterCompany, setFilterCompany] = useState("all");
   const [leadQuery, setLeadQuery] = useState("");
 

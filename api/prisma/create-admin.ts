@@ -14,6 +14,9 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { createPgAdapter } from "../src/lib/dbAdapter";
+// Same rule the API enforces — a bootstrap path that accepts a weaker password
+// than the endpoints do is just the weak-password hole with an extra step.
+import { MIN_PASSWORD_LENGTH, isCommonPassword } from "../src/lib/validation/password";
 
 // Keep in sync with BCRYPT_ROUNDS in src/lib/auth.ts.
 const BCRYPT_ROUNDS = 12;
@@ -36,8 +39,15 @@ async function main() {
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     throw new Error("A valid ADMIN_EMAIL (or --email) is required.");
   }
-  if (password.length < 8) {
-    throw new Error("ADMIN_PASSWORD (or --password) must be at least 8 characters.");
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(
+      `ADMIN_PASSWORD (or --password) must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+  if (isCommonPassword(password)) {
+    throw new Error(
+      "ADMIN_PASSWORD is too common — this account owns the whole dashboard. Pick something harder to guess.",
+    );
   }
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);

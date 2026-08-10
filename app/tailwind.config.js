@@ -30,7 +30,16 @@ export default {
         "inverse-primary": "#84cfff",
         "surface-container-lowest": "#ffffff",
         "on-error": "#ffffff",
-        outline: "#70787f",
+        // Darkened from #70787f to clear WCAG AA (4.5:1) for normal text.
+        //
+        // `text-outline` is the product's secondary text colour — result counts,
+        // captions, metadata, timestamps, empty-state copy — so it is on nearly
+        // every screen. Measured: #70787f gave 4.26:1 on `surface` (#f7f9fd) and
+        // 4.49:1 on `surface-container-lowest` (#ffffff). The second number is
+        // why nobody caught it: failing by one hundredth of a point looks like
+        // passing. #6b7278 measures 4.63:1 and 4.88:1 — comfortably over on both
+        // grounds, and five units darker is not a visible change in hierarchy.
+        outline: "#6b7278",
         "tertiary-fixed-dim": "#ffb962",
         "surface-container-low": "#f1f4f8",
         error: "#ba1a1a",

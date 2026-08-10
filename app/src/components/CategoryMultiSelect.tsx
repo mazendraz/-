@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import type { ServiceCategory } from "../lib/catalog";
+import { registerTransientOverlay } from "../lib/transientOverlays";
 import Icon from "./Icon";
 
 export interface CategorySelection {
@@ -33,6 +34,27 @@ export default function CategoryMultiSelect({ categories, selected, onChange, ma
   const { locale } = useLocale();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Closed by an outside mousedown rather than the input's own blur (the same
+  // approach as Select.tsx). Blur fires for any focus loss, including a
+  // mousedown on the results panel's own scrollbar — so dragging the scrollbar
+  // of a long match list closed the list mid-drag. Scoping the check to
+  // "outside the whole widget" leaves the panel's own scrollbar alone.
+  useEffect(() => {
+    if (!open) return;
+    function onDocDown(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    // Claims Escape while open, so the dialog around this widget (the company
+    // editor) doesn't close itself instead of just the results list.
+    const releaseOverlay = registerTransientOverlay();
+    document.addEventListener("mousedown", onDocDown);
+    return () => {
+      releaseOverlay();
+      document.removeEventListener("mousedown", onDocDown);
+    };
+  }, [open]);
 
   const selectedSlugs = useMemo(() => new Set(selected.map((s) => s.slug)), [selected]);
   const atMax = typeof max === "number" && selected.length >= max;
@@ -100,7 +122,7 @@ export default function CategoryMultiSelect({ categories, selected, onChange, ma
       )}
 
       {!disabled && (
-        <div className="relative">
+        <div ref={rootRef} className="relative">
           <div className="relative">
             <Icon name="search" className="absolute start-3 top-1/2 -translate-y-1/2 text-outline text-label pointer-events-none" />
             <input
@@ -108,13 +130,29 @@ export default function CategoryMultiSelect({ categories, selected, onChange, ma
               value={query}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
               onFocus={() => setOpen(true)}
-              onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+              // Escape closes just the list. The surrounding dialog stands down
+              // for this (see lib/transientOverlays), so stop the event here or
+              // a second Escape-driven close would be one keypress away.
+              onKeyDown={(e) => {
+                if (e.key !== "Escape" || !open) return;
+                e.stopPropagation();
+                setOpen(false);
+              }}
+              // Keyboard-only close: Tab moves focus to a real element, so
+              // relatedTarget is set. A scrollbar drag (or a click on any
+              // non-focusable spot) reports null instead — those are left to
+              // the outside-mousedown effect above, which knows to ignore
+              // mousedowns landing inside the widget.
+              onBlur={(e) => {
+                const next = e.relatedTarget as Node | null;
+                if (next && !rootRef.current?.contains(next)) setOpen(false);
+              }}
               placeholder={atMax ? t(locale, "admin_ce_categories_max_reached") : t(locale, "admin_ce_categories_search_ph")}
               disabled={atMax}
             />
           </div>
           {open && !atMax && (
-            <div className="absolute z-10 mt-1 w-full max-h-56 overflow-auto rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-bloom">
+            <div className="absolute z-10 mt-1 w-full max-h-56 overflow-auto overscroll-contain rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-bloom">
               {matches.length === 0 ? (
                 <p className="px-3 py-2 text-caption text-outline">{t(locale, "admin_ce_categories_no_match")}</p>
               ) : (

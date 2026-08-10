@@ -177,7 +177,9 @@ export default function ProviderLayout() {
           within the shell (sidebar + topbar stay put) instead of a blank
           screen while that tab's chunk loads. */}
       <Suspense fallback={<TabFallback />}>
-        <Outlet key={refreshKey} context={context} />
+        <div key={`${location.pathname}-${refreshKey}`} className="page-enter">
+          <Outlet context={context} />
+        </div>
       </Suspense>
     </DashboardShell>
   );

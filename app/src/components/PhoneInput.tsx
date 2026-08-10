@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
-import { DEFAULT_COUNTRY, formatAsYouType, isValidE164, parseExisting, toE164 } from "../lib/phone";
+import { DEFAULT_COUNTRY, DEFAULT_DIAL_CODE, formatAsYouType, isValidE164, parseExisting, toE164 } from "../lib/phone";
 
 interface PhoneInputProps {
   id?: string;
@@ -86,7 +86,7 @@ export default function PhoneInput({
           className="border-e border-outline-variant/40 pe-2 text-label font-bold text-on-surface select-none"
           aria-hidden="true"
         >
-          +20
+          {DEFAULT_DIAL_CODE}
         </span>
 
         <input

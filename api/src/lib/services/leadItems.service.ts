@@ -40,6 +40,18 @@ const MAX_ITEMS = 25;
 const MAX_QTY = 10_000;
 
 /**
+ * Every money column this resolves into (Lead.estimatedMin/Max,
+ * LeadItem.lineMin/Max) is a Postgres INTEGER. The per-unit cap is 100,000,000
+ * and the quantity cap is 10,000, so a single line can arithmetically reach
+ * 10^12 — roughly 465x what int4 holds. Writing that produced a driver-level
+ * numeric overflow, which withErrors could only report as a generic 500 on a
+ * PUBLIC endpoint: the customer saw "Something went wrong" with no idea which
+ * part of their basket caused it, and Sentry filled with an error that was
+ * really a validation problem.
+ */
+const MAX_INT4 = 2_147_483_647;
+
+/**
  * Resolve requested items against the company's live catalogue and price them.
  *
  * Only PUBLISHED + ACTIVE offerings belonging to this company are accepted: a
@@ -56,6 +68,22 @@ export async function resolveItems(
   }
 
   const ids = [...new Set(requested.map((r) => r.offeringId))];
+  // A basket naming the same offering twice is rejected, not merged.
+  //
+  // This is not cosmetic. `calculateRequest` takes the bundle threshold from
+  // items.length, so two lines for one offering is a second "item" the customer
+  // never picked — enough on its own to trip a `minItems: 2` rule and put an
+  // unearned discount onto the estimate that gets SNAPSHOTTED on the lead and
+  // shown to the provider as the agreed number. The request form can't build
+  // this (RequestItemPicker keys its selection by offeringId, so choosing a
+  // different tier patches the existing line), which is exactly why it has to be
+  // enforced here: the only way to send it is by hand, and the only reason to
+  // send it is to move the total.
+  if (ids.length !== requested.length) {
+    throw new ValidationError(
+      "The same service appears more than once in this request. Please review your selection.",
+    );
+  }
   const offerings = await prisma.offering.findMany({
     where: { id: { in: ids }, companyId, isPublished: true, isActive: true },
     // Published tiers ONLY. A tier price replaces the offering's for its line
@@ -119,6 +147,21 @@ export async function resolveItems(
     lines[i].lineMin = computed.lineMin;
     lines[i].lineMax = computed.lineMax;
   });
+
+  // Refuse a basket whose maths doesn't fit the columns it has to be stored in
+  // (see MAX_INT4). Checked here rather than inside calculateRequest so the
+  // shared calculator stays a pure arithmetic function that agrees with its
+  // frontend mirror case-for-case — this is a storage constraint, and it belongs
+  // with the code that does the storing.
+  const overflows = [
+    result.totalMin, result.totalMax,
+    ...result.lines.flatMap((l) => [l.lineMin, l.lineMax]),
+  ].some((v) => v != null && v > MAX_INT4);
+  if (overflows) {
+    throw new ValidationError(
+      "This request is too large to price automatically. Please reduce the quantities or contact the company directly.",
+    );
+  }
 
   return {
     lines,

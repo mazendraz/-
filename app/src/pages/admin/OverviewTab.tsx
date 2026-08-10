@@ -1,4 +1,4 @@
-import { type Lead, STATUS_COLORS } from "../../lib/requests";
+import { type Lead, type LeadStatus, STATUS_COLORS } from "../../lib/requests";
 import { type Company } from "../../lib/catalog";
 import {
   leadsPerDay, leadsByStatus, conversionFunnel, leadsByCompany,
@@ -23,6 +23,7 @@ import { CHART_COLORS } from "../../lib/chartColors";
 // ══════════════════════════════════════════════════════════════════════════
 export function AdminOverview({
   leads, companies, categoriesCount, onOpenLead, onViewAllLeads, onGoSettings,
+  onFilterLeads, onGoCompanies, onOpenCompany,
 }: {
   leads: Lead[];
   companies: Company[];
@@ -30,6 +31,13 @@ export function AdminOverview({
   onOpenLead: (l: Lead) => void;
   onViewAllLeads: () => void;
   onGoSettings: () => void;
+  /** Drill into the Leads list filtered to one status (the "new leads" KPI,
+   *  and each status-chart segment). */
+  onFilterLeads: (status: LeadStatus) => void;
+  onGoCompanies: () => void;
+  /** Drill into the Companies list, pre-searched for one company (leaderboard
+   *  rows, top-companies bars). */
+  onOpenCompany: (companyName: string) => void;
 }) {
   const { locale } = useLocale();
   const apiMode = isApiConfigured();
@@ -100,10 +108,10 @@ export function AdminOverview({
     <div className="space-y-5">
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon="inbox" label={t(locale, "admin_ov_kpi_total")} value={total} delta={delta} spark={spark} tint={CHART_COLORS.primary} />
-        <KpiCard icon="fiber_new" label={t(locale, "admin_ov_kpi_new")} value={newCount} tint={CHART_COLORS.blue} />
+        <KpiCard icon="inbox" label={t(locale, "admin_ov_kpi_total")} value={total} delta={delta} spark={spark} tint={CHART_COLORS.primary} onClick={onViewAllLeads} />
+        <KpiCard icon="fiber_new" label={t(locale, "admin_ov_kpi_new")} value={newCount} tint={CHART_COLORS.blue} onClick={() => onFilterLeads("New")} />
         <KpiCard icon="trending_up" label={t(locale, "admin_ov_kpi_conversion")} value={`${conversion}%`} tint={CHART_COLORS.green} />
-        <KpiCard icon="business" label={t(locale, "admin_ov_kpi_companies")} value={companyTotal} tint={CHART_COLORS.secondary} />
+        <KpiCard icon="business" label={t(locale, "admin_ov_kpi_companies")} value={companyTotal} tint={CHART_COLORS.secondary} onClick={onGoCompanies} />
       </div>
 
       {/* Trend + status */}
@@ -112,7 +120,12 @@ export function AdminOverview({
           <AreaLineChart data={daily} valueLabel={t(locale, "chart_leads")} />
         </ChartCard>
         <ChartCard title={t(locale, "admin_ov_by_status")} subtitle={t(locale, "admin_ov_pipeline")}>
-          <DonutChart data={byStatus} centerValue={total} centerLabel={t(locale, "chart_leads")} />
+          <DonutChart
+            data={byStatus}
+            centerValue={total}
+            centerLabel={t(locale, "chart_leads")}
+            onSegmentClick={(seg) => seg.key && onFilterLeads(seg.key as LeadStatus)}
+          />
         </ChartCard>
       </div>
 
@@ -122,7 +135,7 @@ export function AdminOverview({
           <FunnelChart stages={funnel} />
         </ChartCard>
         <ChartCard title={t(locale, "admin_ov_top_companies")}>
-          <BarList data={topCompanies} valueSuffix={` ${t(locale, "chart_leads")}`} />
+          <BarList data={topCompanies} valueSuffix={` ${t(locale, "chart_leads")}`} onItemClick={(d) => onOpenCompany(d.label)} />
         </ChartCard>
       </div>
 
@@ -131,7 +144,12 @@ export function AdminOverview({
         <ChartCard title={t(locale, "admin_ov_leaderboard")} subtitle={t(locale, "admin_ov_leaderboard_sub")}>
           <div className="space-y-1">
             {leaderboard.slice(0, 5).map((p, i) => (
-              <div key={p.companyId} className="flex items-center gap-3 py-2 border-b border-outline-variant/10 last:border-0">
+              <button
+                key={p.companyId}
+                type="button"
+                onClick={() => onOpenCompany(p.companyName)}
+                className="w-full flex items-center gap-3 py-2 border-b border-outline-variant/10 last:border-0 text-start hover:bg-surface-container/40 rounded-lg px-1 transition-colors"
+              >
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-caption font-black flex-shrink-0
                   ${i === 0 ? "bg-secondary text-on-secondary" : "bg-surface-container text-outline"}`}>{i + 1}</span>
                 <img src={p.logo} alt="" className="w-8 h-8 rounded-lg object-cover flex-shrink-0" loading="lazy" width={32} height={32} />
@@ -140,7 +158,7 @@ export function AdminOverview({
                   <p className="text-caption text-outline">★ {p.rating} · {p.conversion}% {t(locale, "admin_ov_conversion_suffix")}</p>
                 </div>
                 <span className="font-black text-body text-on-surface tabular-nums flex-shrink-0">{p.leads}</span>
-              </div>
+              </button>
             ))}
           </div>
         </ChartCard>

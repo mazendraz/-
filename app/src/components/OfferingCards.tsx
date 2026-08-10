@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { formatPrice, formatQtyRange, isQuoteOnly, isPriceStale, priceAgeDays } from "../lib/pricing";
@@ -13,28 +14,53 @@ import Icon from "./Icon";
  * backfill hasn't reached and for demo mode, so dropping the fallback would
  * empty those profiles — the column stays until this has been live a while.
  */
-export default function OfferingCards({ offerings, services, companySlug }: {
+export default function OfferingCards({ offerings, services, companySlug, requestHref }: {
   offerings: Offering[];
   services: string[];
   /** Omit to render read-only cards (no "add to request" buttons). */
   companySlug?: string;
+  /** Lets each legacy service pill link straight to the request form with
+   *  that service pre-selected, instead of being a dead-end label. */
+  requestHref?: string;
 }) {
   const { locale } = useLocale();
 
   if (offerings.length === 0) {
     if (services.length === 0) return null;
+    const clickable = companySlug && requestHref;
     return (
       <section>
         <h2 className=" text-title text-on-surface mb-4">
           {t(locale, "profile_services_offered")}
         </h2>
         <div className="flex flex-wrap gap-3">
-          {services.map((s) => (
-            <div key={s} className="flex items-center gap-2 bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 shadow-sm">
-              <Icon name="check_circle" className="text-primary text-subhead" style={{ fontVariationSettings: "'FILL' 1" }} />
-              <span className="text-label text-on-surface">{s}</span>
-            </div>
-          ))}
+          {services.map((s) => {
+            const inner = (
+              <>
+                <Icon name="check_circle" className="text-primary text-subhead flex-shrink-0" style={{ fontVariationSettings: "'FILL' 1" }} />
+                {/* min-w-0 + break-words: a service name is free text an admin
+                    types, and a long one made this pill wider than the phone.
+                    Measured at 320px with a 60-character Arabic service: the
+                    page scrolled to 399px. `flex-wrap` on the row above wraps
+                    whole pills — it cannot shrink one that is already too wide. */}
+                <span className="text-label text-on-surface min-w-0 break-words">{s}</span>
+                {clickable && <Icon name="arrow_forward" className="text-label text-outline rtl-flip flex-shrink-0" />}
+              </>
+            );
+            return clickable ? (
+              <Link
+                key={s}
+                to={`${requestHref}&service=${encodeURIComponent(s)}`}
+                className="flex items-center gap-2 max-w-full min-w-0 bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 shadow-sm hover:border-primary/40 hover:bg-primary/5 transition-colors touch-press"
+              >
+                {inner}
+              </Link>
+            ) : (
+              <div key={s} className="flex items-center gap-2 max-w-full min-w-0 bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-2.5 shadow-sm">
+                {inner}
+              </div>
+            );
+          })}
         </div>
       </section>
     );

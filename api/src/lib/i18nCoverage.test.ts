@@ -172,8 +172,22 @@ const COPY_PROPS = new Set([
   "noun", "nounPlural",
 ]);
 
+/**
+ * The body of a JSX string literal.
+ *
+ * `[^"{}\n]` and NOT `[^"]`, and the difference is the whole reason this guard
+ * used to report things nobody wrote. `[^"]+` is constrained against quotes
+ * only, so it happily runs across braces and newlines — which lets the scanner
+ * pair the CLOSING quote of one attribute with the OPENING quote of a different
+ * one further down the file, and report the code between them as untranslated
+ * copy. A real JSX string literal contains neither a raw newline nor a brace it
+ * did not open, so excluding both keeps every genuine literal and removes the
+ * cross-attribute pairing entirely.
+ */
+const STR_BODY = `[^"{}\\n]`;
+
 const COPY_ATTRS = new RegExp(
-  `\\b(${[...COPY_PROPS].join("|")})=\\{?"([^"]+)"\\}?`,
+  `\\b(${[...COPY_PROPS].join("|")})=\\{?"(${STR_BODY}+)"\\}?`,
   "g",
 );
 
@@ -196,11 +210,25 @@ function literalAttrs(src: string): string[] {
   // condition, and its literals are sentinels being compared against
   // (`status === "PENDING"`, `filter !== "All"`), not text anyone reads. Scanning
   // the whole expression flagged those and buried the real hits.
-  for (const m of text.matchAll(/\b([a-zA-Z-]+)=\{([^{}]*"[^"]+"[^{}]*)\}/g)) {
+  //
+  // The expression is bounded to ONE attribute: no braces in the body (so a
+  // nested object or a second prop ends it) and no newline inside a literal
+  // (see STR_BODY — with `[^"]+` here the match ran past this attribute's `}`
+  // and reported the code between two unrelated props as copy).
+  const propExpr = new RegExp(
+    `\\b([a-zA-Z-]+)=\\{([^{}]*"${STR_BODY}+"[^{}]*)\\}`,
+    "g",
+  );
+  for (const m of text.matchAll(propExpr)) {
     if (!COPY_PROPS.has(m[1])) continue;
     const q = m[2].indexOf("?");
     const values = q === -1 ? m[2] : m[2].slice(q + 1);
-    for (const lit of values.matchAll(/"([^"]+)"/g)) {
+    // `*` not `+`: an EMPTY literal is still a literal, and skipping it shifts
+    // every following quote by one — so `{ value: "", label: "Real copy" }`
+    // paired the empty string's closing quote with the next opening one and
+    // reported `, label: ` instead of `Real copy`. Empty strings are then
+    // dropped by looksLikeCopy, which is where that decision belongs.
+    for (const lit of values.matchAll(/"([^"]*)"/g)) {
       const value = lit[1].trim();
       if (!looksLikeCopy(value)) continue;
       // Inside an expression a bare word is almost always an identifier, a

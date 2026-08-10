@@ -38,7 +38,7 @@ export function ConfirmDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-on-background/45 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center pt-4 px-4 modal-backdrop-safe bg-on-background/45 backdrop-blur-sm"
       onClick={onCancel}
     >
       <div
@@ -48,11 +48,15 @@ export function ConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-surface-container-lowest w-full max-w-sm rounded-2xl shadow-2xl p-5"
+        className="bg-surface-container-lowest w-full max-w-sm rounded-2xl shadow-2xl p-5 modal-max-h-85 flex flex-col"
       >
-        <h2 id={titleId} className="font-bold text-body text-on-surface mb-1.5">{title}</h2>
-        <p className="text-label text-on-surface-variant mb-5">{message}</p>
-        <div className="flex items-center justify-end gap-2">
+        {/* The message is the only part allowed to scroll: on a short viewport
+            (a phone in landscape) a fixed-height panel with no overflow left
+            the Cancel/confirm row rendered off-screen, i.e. no way out of a
+            dialog about a destructive action. */}
+        <h2 id={titleId} className="font-bold text-body text-on-surface mb-1.5 flex-shrink-0">{title}</h2>
+        <p className="text-label text-on-surface-variant mb-5 overflow-y-auto overscroll-contain">{message}</p>
+        <div className="flex items-center justify-end gap-2 flex-shrink-0">
           <button ref={cancelRef} onClick={onCancel} disabled={busy} className="px-4 py-2.5 rounded-xl font-bold text-label text-on-surface bg-surface-container hover:bg-surface-container-high transition-colors disabled:opacity-60">
             {t(locale, "admin_confirm_cancel")}
           </button>

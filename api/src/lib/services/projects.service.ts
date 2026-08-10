@@ -8,7 +8,8 @@ import { NotFoundError } from "@/lib/utils/errors";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import { notifyAdminsProjectSubmitted } from "@/lib/services/notifications.service";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
-import type { ApiFeaturedProject, ApiProject, ApiProjectStatus } from "@/lib/apiTypes";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
+import type { ApiFeaturedProject, ApiPage, ApiProject, ApiProjectStatus } from "@/lib/apiTypes";
 
 /**
  * Alert admins that a project needs review — Web Push (instant device alert) plus
@@ -181,21 +182,53 @@ export interface ModerationProject extends ApiProject {
   companySlug: string;
 }
 
-/** Admin: projects for the moderation queue (defaults to PENDING), with company info. */
+const MODERATION_DEFAULT_PAGE_SIZE = 50;
+const MODERATION_MAX_PAGE_SIZE = 100;
+
+/**
+ * Admin: projects for the moderation queue (defaults to PENDING), PAGED.
+ *
+ * This had no limit at all — every pending project, with its company joined,
+ * in one response. Provider submissions land here and stay PENDING until an
+ * admin acts, and a project that is not APPROVED is invisible on the public
+ * profile, so nothing else in the product surfaces the backlog. The queue grew
+ * without bound and the page got heavier with every submission nobody had got
+ * to yet.
+ *
+ * Paged with a real `total` for the same reason the review queue is: the size
+ * of the backlog is the number an admin actually needs.
+ */
 export async function listForModeration(
   status: ProjectStatus = ProjectStatus.PENDING,
-): Promise<ModerationProject[]> {
-  const rows = await prisma.project.findMany({
-    where: { status },
-    orderBy: { createdAt: "desc" },
-    include: { company: { select: { id: true, name: true, slug: true } } },
-  });
-  return rows.map((r) => ({
-    ...serializeProjectAdmin(r),
-    companyId: r.company.id,
-    companyName: r.company.name,
-    companySlug: r.company.slug,
-  }));
+  query: { page?: number; pageSize?: number } = {},
+): Promise<ApiPage<ModerationProject>> {
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(
+    query.pageSize,
+    MODERATION_DEFAULT_PAGE_SIZE,
+    MODERATION_MAX_PAGE_SIZE,
+  );
+
+  const [total, rows] = await Promise.all([
+    prisma.project.count({ where: { status } }),
+    prisma.project.findMany({
+      where: { status },
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { company: { select: { id: true, name: true, slug: true } } },
+    }),
+  ]);
+
+  return {
+    data: rows.map((r) => ({
+      ...serializeProjectAdmin(r),
+      companyId: r.company.id,
+      companyName: r.company.name,
+      companySlug: r.company.slug,
+    })),
+    meta: { total, page, pageSize },
+  };
 }
 
 /** Admin: set a project's moderation status (approve / reject). */

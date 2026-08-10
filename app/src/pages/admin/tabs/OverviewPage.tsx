@@ -17,6 +17,9 @@ export default function OverviewPage() {
       onOpenLead={(lead) => navigate("/admin/leads", { state: { lead } })}
       onViewAllLeads={() => navigate("/admin/leads")}
       onGoSettings={() => navigate("/admin/settings")}
+      onFilterLeads={(status) => navigate("/admin/leads", { state: { status } })}
+      onGoCompanies={() => navigate("/admin/companies")}
+      onOpenCompany={(companyName) => navigate("/admin/companies", { state: { companyQuery: companyName } })}
     />
   );
 }

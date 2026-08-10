@@ -8,8 +8,15 @@ const update = vi.fn();
 const userFindMany = vi.fn();
 const userFindUnique = vi.fn();
 const userUpdate = vi.fn();
+// Phone→company matching moved from `company.findMany` (load every row, match in
+// JS) to a bounded `$queryRaw` that normalizes and compares in Postgres — see
+// linkProviderByPhone. The mock has to offer what the code actually calls, and
+// the assertions below moved with it: asserting "findMany was not called" would
+// now pass trivially, proving nothing.
+const queryRaw = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    $queryRaw: (...a: unknown[]) => queryRaw(...a),
     company: {
       findMany: (...a: unknown[]) => findMany(...a),
       findUnique: (...a: unknown[]) => findUnique(...a),
@@ -98,6 +105,7 @@ describe("handleTelegramUpdate contact ownership", () => {
   beforeEach(() => {
     delete process.env.TELEGRAM_BOT_TOKEN;
     findMany.mockClear();
+    queryRaw.mockReset();
     update.mockClear();
   });
 
@@ -105,14 +113,14 @@ describe("handleTelegramUpdate contact ownership", () => {
     await handleTelegramUpdate({
       message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 999 } },
     });
-    expect(findMany).not.toHaveBeenCalled();
+    // The ownership check must short-circuit BEFORE the database is touched —
+    // asserted against the query the code really issues.
+    expect(queryRaw).not.toHaveBeenCalled();
     expect(update).not.toHaveBeenCalled();
   });
 
   it("links the company when the sender shares their own contact", async () => {
-    findMany.mockResolvedValue([
-      { id: "c1", name: "Aura Interiors", phone: "01012345678", whatsapp: null },
-    ]);
+    queryRaw.mockResolvedValue([{ id: "c1", name: "Aura Interiors" }]);
     await handleTelegramUpdate({
       message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
     });
@@ -120,6 +128,41 @@ describe("handleTelegramUpdate contact ownership", () => {
       where: { id: "c1" },
       data: { telegramChatId: "555" },
     });
+  });
+
+  it("matches in the DATABASE rather than loading every company into memory", async () => {
+    // The regression this guards: the previous implementation called
+    // `company.findMany({ select })` with no where clause and matched in JS,
+    // under a comment assuming "a handful of companies". That is a full table
+    // load per webhook once the directory is real.
+    queryRaw.mockResolvedValue([{ id: "c1", name: "Aura Interiors" }]);
+    await handleTelegramUpdate({
+      message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
+    });
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses to link when two companies share the same phone tail", async () => {
+    // Ambiguity is a data error, and picking whichever row came back first would
+    // wire one company's Telegram — and therefore its customers' messages — to a
+    // different company's account.
+    queryRaw.mockResolvedValue([
+      { id: "c1", name: "Aura Interiors" },
+      { id: "c2", name: "Someone Else" },
+    ]);
+    await handleTelegramUpdate({
+      message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when no company matches", async () => {
+    queryRaw.mockResolvedValue([]);
+    await handleTelegramUpdate({
+      message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
+    });
+    expect(update).not.toHaveBeenCalled();
   });
 });
 

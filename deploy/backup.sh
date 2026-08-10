@@ -39,7 +39,17 @@ RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 HEALTHCHECK_URL="${BACKUP_HEALTHCHECK_URL:-}"
 # Where to KEEP dumps ON the VPS (retained + pruned). This is your SECOND copy:
 # it lives on the server's disk so Hostinger's own auto-backup captures it too.
-LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/www/alassema/backups}"
+#
+# ── MUST live OUTSIDE the repo working tree ──────────────────────────────────
+# This used to default to /var/www/alassema/backups — which is INSIDE the git
+# checkout (deploy.sh's ROOT is /var/www/alassema). Nightly pg_dump output was
+# therefore sitting in a git repo, one `git add -A` away from being pushed. That
+# is exactly how api/.env reached GitHub on 2026-07-20, except a dump is the
+# whole customer database rather than the keys to it.
+#
+# /var/backups is the FHS location for this and is still captured by Hostinger's
+# disk snapshot. If you override it, keep it outside /var/www/alassema.
+LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR:-/var/backups/alassema}"
 
 # ── Load DATABASE_URL from the app env ────────────────────────────────────────
 if [[ ! -f "$ENV_FILE" ]]; then

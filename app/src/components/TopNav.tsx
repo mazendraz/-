@@ -112,7 +112,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       {/* ── Desktop nav ─────────────────────────────────────────────────────── */}
       <nav
         ref={desktopNavRef}
-        className={`nav-glass fixed top-0 left-0 w-full z-50 hidden md:flex items-center px-8 lg:px-12 ${solidBg ? "nav-glass--solid" : ""}`}
+        className={`nav-glass fixed top-0 start-0 w-full z-50 hidden md:flex items-center px-8 lg:px-12${solidBg ? "nav-glass--solid" : ""}`}
         style={{ height: "76px" }}
       >
         {/* Left column — nav links */}
@@ -158,8 +158,12 @@ export default function TopNav({ onOpenSearch }: Props) {
             aria-label={t(locale, "nav_saved")}
           >
             <Icon name="favorite" className="text-title" style={{ fontVariationSettings: pathname === "/saved" ? "'FILL' 1" : "'FILL' 0" }} />
+            {/* -end-0.5, not -right-0.5: this badge pins to the OUTER corner of
+                the icon, which is the LEFT corner in Arabic. Pinned physically
+                right, it stayed on the right in RTL — overlapping the
+                neighbouring control instead of sitting in the free space. */}
             {savedCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
                 {savedCount}
               </span>
             )}
@@ -194,7 +198,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       {/* ── Mobile top bar ──────────────────────────────────────────────────── */}
       <nav
         ref={mobileNavRef}
-        className={`nav-glass fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 md:hidden ${solidBg ? "nav-glass--solid" : ""}`}
+        className={`nav-glass fixed top-0 start-0 w-full z-50 flex items-center justify-between px-4 md:hidden${solidBg ? "nav-glass--solid" : ""}`}
         style={{ height: "64px" }}
       >
         {/* Hamburger */}
@@ -238,8 +242,9 @@ export default function TopNav({ onOpenSearch }: Props) {
               ${solidBg ? "text-on-surface-variant hover:text-error hover:bg-error/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
           >
             <Icon name="favorite" className="text-title" style={{ fontVariationSettings: pathname === "/saved" ? "'FILL' 1" : "'FILL' 0" }} />
+            {/* See the desktop badge above — logical inset so it flips in RTL. */}
             {savedCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
+              <span className="absolute -top-0.5 -end-0.5 min-w-[16px] h-[16px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
                 {savedCount}
               </span>
             )}

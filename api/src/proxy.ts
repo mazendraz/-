@@ -36,6 +36,26 @@ function originHeaders(allowOrigin: string): Record<string, string> {
   return h;
 }
 
+// ── Global request-body ceiling ──────────────────────────────────────────────
+// The public submit endpoints read their bodies through readJsonObject (64KB cap,
+// see middleware/bodyLimit.ts). Every AUTHENTICATED route used a bare
+// request.json() instead, so the only ceiling on them was the transport's —
+// Caddy's 55MB and proxyClientMaxBodySize, both sized for VIDEO UPLOADS. That let
+// any provider account POST a 55MB JSON body to e.g. /api/provider/change-requests
+// and have it buffered, parsed and persisted into a jsonb column, repeatedly,
+// against a single PM2 fork with a 1GB restart threshold.
+//
+// Checking it here catches every /api/* route at once, including ones added
+// later. It is the OUTER layer, not the authoritative one: Content-Length is
+// absent on chunked requests and can understate the real body, so routes that
+// handle untrusted input should still read through readJsonObject, which measures
+// the actual bytes.
+const MAX_JSON_BODY_BYTES = 1024 * 1024; // 1MB — far above any JSON this API takes
+
+// The only routes that legitimately carry a large body: multipart uploads, capped
+// separately and by content (5MB images / 50MB gallery video — upload.service.ts).
+const LARGE_BODY_PATHS = new Set(["/api/admin/upload", "/api/provider/upload"]);
+
 // Constant-time equality for the shared API key. proxy runs on the Edge runtime,
 // which has no node:crypto.timingSafeEqual — so we compare SHA-256 digests via Web
 // Crypto instead. Digests are fixed-length and unpredictable, so the byte-wise
@@ -76,6 +96,23 @@ export async function proxy(request: NextRequest) {
     const headers: Record<string, string> = { ...corsHeaders };
     if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
     return new NextResponse(null, { status: 204, headers });
+  }
+
+  // Shed an oversized body before it reaches a route handler (see the constants
+  // above). Declared length only — a body that lies about its size is caught by
+  // readJsonObject's authoritative byte check further in.
+  const declaredLength = Number(request.headers.get("content-length") ?? "0");
+  if (
+    Number.isFinite(declaredLength) &&
+    declaredLength > MAX_JSON_BODY_BYTES &&
+    !LARGE_BODY_PATHS.has(request.nextUrl.pathname)
+  ) {
+    const headers: Record<string, string> = { ...corsHeaders };
+    if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
+    return NextResponse.json(
+      { code: "PAYLOAD_TOO_LARGE", message: "Request body too large" },
+      { status: 413, headers },
+    );
   }
 
   // Optional public gate: when API_KEY is set, every /api request (except the

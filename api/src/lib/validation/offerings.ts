@@ -122,23 +122,34 @@ export const visibilitySchema = z
     message: "Provide isActive or sortOrder",
   });
 
-export const tierSchema = z
-  .object({
-    label: text(80).pipe(z.string().min(1, "Label is required")),
-    qtyMin: z.number().int().positive().max(1_000_000).nullish(),
-    qtyMax: z.number().int().positive().max(1_000_000).nullish(),
-    priceMin: price.nullish(),
-    priceMax: price.nullish(),
-    sortOrder: z.number().int().min(0).max(10_000).optional(),
-  })
-  .superRefine((t, ctx) => {
-    if (t.qtyMin != null && t.qtyMax != null && t.qtyMin > t.qtyMax) {
-      ctx.addIssue({ code: "custom", path: ["qtyMax"], message: "Maximum quantity can't be lower than the minimum." });
-    }
-    if (t.priceMin != null && t.priceMax != null && t.priceMin > t.priceMax) {
-      ctx.addIssue({ code: "custom", path: ["priceMax"], message: "Maximum price can't be lower than the minimum." });
-    }
-  });
+// Extracted so the partial (change-request) variant below can reuse the shape.
+// Keeping the object and its cross-field rules separate is what lets both the
+// full and the patch form share one definition instead of drifting apart.
+const tierBase = z.object({
+  label: text(80).pipe(z.string().min(1, "Label is required")),
+  qtyMin: z.number().int().positive().max(1_000_000).nullish(),
+  qtyMax: z.number().int().positive().max(1_000_000).nullish(),
+  priceMin: price.nullish(),
+  priceMax: price.nullish(),
+  sortOrder: z.number().int().min(0).max(10_000).optional(),
+});
+
+type TierShape = z.infer<typeof tierBase>;
+
+/** Min/max ordering rules, shared by the full and partial tier schemas. */
+function refineTier(t: Partial<TierShape>, ctx: z.RefinementCtx): void {
+  if (t.qtyMin != null && t.qtyMax != null && t.qtyMin > t.qtyMax) {
+    ctx.addIssue({ code: "custom", path: ["qtyMax"], message: "Maximum quantity can't be lower than the minimum." });
+  }
+  if (t.priceMin != null && t.priceMax != null && t.priceMin > t.priceMax) {
+    ctx.addIssue({ code: "custom", path: ["priceMax"], message: "Maximum price can't be lower than the minimum." });
+  }
+}
+
+export const tierSchema = tierBase.superRefine(refineTier);
+
+/** Patch form — used by the change-request queue, where a provider edits one field. */
+export const updateTierSchema = tierBase.partial().superRefine(refineTier);
 
 export const bundleRuleSchema = z.object({
   label: text(80).nullish(),
@@ -148,6 +159,9 @@ export const bundleRuleSchema = z.object({
   // and it would be published straight onto a customer's total.
   discountPercent: z.number().int().min(1).max(50),
 });
+
+/** Patch form — same reasoning as updateTierSchema. */
+export const updateBundleRuleSchema = bundleRuleSchema.partial();
 
 export type CreateOfferingInput = z.infer<typeof createOfferingSchema>;
 export type UpdateOfferingInput = z.infer<typeof updateOfferingSchema>;

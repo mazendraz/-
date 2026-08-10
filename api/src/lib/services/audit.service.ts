@@ -2,6 +2,7 @@
 // a logging failure must never break or fail the action it audits. list() backs
 // the admin read endpoint.
 import { prisma } from "@/lib/prisma";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { AuthUser } from "@/lib/auth";
 import type { ApiAuditLog, ApiPage } from "@/lib/apiTypes";
 
@@ -30,6 +31,68 @@ export async function record(actor: AuthUser, entry: AuditEntry): Promise<void> 
     });
   } catch (err) {
     console.error(`[audit] failed to record ${entry.action} (${entry.entityId}):`, err);
+  }
+}
+
+/**
+ * Stand-in actor id for an event that happened with no authenticated user.
+ * AuditLog.actorId is non-null, and a failed login has an attempted email and
+ * nothing else — there is no id to record because that is the whole point.
+ */
+export const ANONYMOUS_ACTOR = "anonymous";
+
+/** Authentication events worth a permanent record. */
+export type AuthAuditAction =
+  | "auth.login.success"
+  | "auth.login.failure"
+  | "auth.login.throttled";
+
+/**
+ * Record an AUTHENTICATION event.
+ *
+ * Separate from record() because that takes an AuthUser, and the events that
+ * matter most here are exactly the ones where there isn't one.
+ *
+ * Why this exists: before the 2026-08-10 audit (finding M-06) the audit trail
+ * covered admin CRUD thoroughly but held nothing at all about authentication —
+ * no successful login, no failed one, no throttle trip. So the first question
+ * incident response asks, "did anyone sign in as an admin that we can't account
+ * for?", had no answer anywhere in the system.
+ *
+ * NEVER records the password, or any part of it. The email is the attempted
+ * identifier and the IP is the source; both are standard security-log content and
+ * both are needed to tell a typo from a spray.
+ *
+ * Same fail-open contract as record(): a logging failure must never turn a
+ * successful login into an error, or a failed one into a 500.
+ *
+ * Volume note: a spray is bounded by the per-IP login limit (10/min), so this
+ * cannot be used to inflate the table faster than that — and rows describing a
+ * spray are the rows you want.
+ */
+export async function recordAuth(entry: {
+  action: AuthAuditAction;
+  /** The email that was ATTEMPTED — not necessarily one that exists. */
+  email: string;
+  /** Set only on success, where a real user was resolved. */
+  userId?: string | null;
+  ip?: string;
+  meta?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const actorId = entry.userId ?? ANONYMOUS_ACTOR;
+    await prisma.auditLog.create({
+      data: {
+        actorId,
+        actorEmail: entry.email,
+        action: entry.action,
+        entity: "Auth",
+        entityId: actorId,
+        meta: JSON.stringify({ ip: entry.ip ?? null, ...(entry.meta ?? {}) }),
+      },
+    });
+  } catch (err) {
+    console.error(`[audit] failed to record ${entry.action}:`, err);
   }
 }
 
@@ -74,9 +137,8 @@ export interface AuditListQuery {
 
 /** Admin: paginated audit log, newest first. */
 export async function list(query: AuditListQuery): Promise<ApiPage<ApiAuditLog>> {
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const rawSize = Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
 
   const where = {
     ...(query.entity ? { entity: query.entity } : {}),

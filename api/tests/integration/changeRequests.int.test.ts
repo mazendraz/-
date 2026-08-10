@@ -290,13 +290,46 @@ describe("provider cancels", () => {
     expect(status).toBe(201);
   });
 
+  // The endpoint returns an ApiPage now, not a bare array — it used to be capped
+  // at 20 with no total, so a provider past that lost the record of what they had
+  // submitted and how it was ruled on, with nothing saying anything was missing.
   it("returns the provider's own requests only", async () => {
     const res = await providerListGET(
       req("/api/provider/change-requests", { token: providerToken }),
       undefined as never,
     );
     const body = await res.json();
-    expect(body.every((r: { companyId: string }) => r.companyId === companyId)).toBe(true);
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body.data.every((r: { companyId: string }) => r.companyId === companyId)).toBe(true);
+    // Tenant isolation is the point of this test: the COUNT must be scoped too,
+    // or the page total would report another company's rows.
+    expect(body.meta.total).toBe(body.data.length);
+  });
+
+  it("filters by status in the DATABASE, not in the caller", async () => {
+    // The offerings editor and the profile route both need "my pending requests"
+    // exactly. Filtering a paged response client-side would silently miss any
+    // that sort past page one.
+    const res = await providerListGET(
+      req("/api/provider/change-requests?status=PENDING", { token: providerToken }),
+      undefined as never,
+    );
+    const body = await res.json();
+    expect(body.data.every((r: { status: string }) => r.status === "PENDING")).toBe(true);
+  });
+
+  it("paginates rather than truncating", async () => {
+    const first = await (
+      await providerListGET(
+        req("/api/provider/change-requests?page=1&pageSize=1", { token: providerToken }),
+        undefined as never,
+      )
+    ).json();
+    expect(first.data.length).toBeLessThanOrEqual(1);
+    expect(first.meta.pageSize).toBe(1);
+    // A total larger than the page proves more is reachable, which is exactly
+    // what the old fixed `take: 20` could not express.
+    expect(first.meta.total).toBeGreaterThanOrEqual(first.data.length);
   });
 });
 

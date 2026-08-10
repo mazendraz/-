@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   useOfferings, createOffering, updateOffering, deleteOffering,
   requestPublish, setOfferingVisibility, addTier, removeTier,
@@ -13,6 +13,7 @@ import { t, type StringKey } from "../lib/i18n";
 import Icon from "./Icon";
 import Select from "./Select";
 import { useVisualViewport } from "../hooks/useVisualViewport";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 /**
  * The provider's "Services & Pricing" screen.
@@ -46,8 +47,10 @@ export default function OfferingsEditor() {
     if (!isApiConfigured()) return;
     // The provider-scoped endpoint — /admin/change-requests is adminOnly and
     // would 403 here.
-    listMyChangeRequests()
-      .then((rows) => setPending(rows.filter((r) => r.status === "PENDING" && r.entity === "OFFERING")))
+    // Both predicates go to the SERVER. Filtering a paged response in the
+    // browser would quietly miss pending requests that sort past page one.
+    listMyChangeRequests({ status: "PENDING", entity: "OFFERING", pageSize: 100 })
+      .then((res) => setPending(res.data))
       .catch(() => setPending([]));
   };
   useEffect(loadPending, []);
@@ -341,15 +344,25 @@ function OfferingModal({ offering, onClose, onSaved }: {
   // doesn't end up rendered underneath it.
   const { height: vvHeight } = useVisualViewport();
   const keyboardOpen = typeof window !== "undefined" && window.innerHeight - vvHeight > 60;
+  // Predates the shared Modal component, so the dialog wiring is explicit here.
+  // No Escape-to-close: this form carries typed prices and tier rows that a
+  // stray keypress must not discard. The × button is the way out.
+  const titleId = useId();
+  const { containerRef, trapTab } = useDialogA11y(true, onClose, { closeOnEscape: false });
 
   return (
     <div className="fixed inset-0 z-[80] flex items-start sm:items-center justify-center p-0 sm:p-4 bg-on-background/45 backdrop-blur-sm">
       <div
-        className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl max-h-screen sm:max-h-[92vh] overflow-y-auto"
+        ref={containerRef}
+        onKeyDown={trapTab}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-surface-container-lowest w-full max-w-lg sm:rounded-2xl shadow-2xl modal-max-h overflow-y-auto overscroll-contain"
         style={keyboardOpen ? { maxHeight: vvHeight } : undefined}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-outline-variant/15 sticky top-0 bg-surface-container-lowest z-10">
-          <h3 className="font-bold text-body text-on-surface">
+          <h3 id={titleId} className="font-bold text-body text-on-surface">
             {t(locale, offering ? "prov_off_modal_edit" : "prov_off_modal_new")}
           </h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-container" aria-label={t(locale, "common_close")}>
@@ -511,18 +524,23 @@ function OfferingModal({ offering, onClose, onSaved }: {
             </div>
           )}
 
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={() => void save()} disabled={busy || !form.name.trim()}
-              className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
-            >
-              <Icon name="save" className="text-subhead" />
-              {busy ? t(locale, "prov_off_saving") : t(locale, offering?.isPublished ? "prov_off_send_review" : "prov_off_save")}
-            </button>
-            <button onClick={onClose} className="text-label font-bold text-outline hover:text-on-surface transition-colors">
-              {t(locale, "prov_off_cancel")}
-            </button>
-          </div>
+        </div>
+
+        {/* Separate sticky footer (not part of the scrolling body above) so
+            Save/Cancel stay reachable at the bottom of the viewport instead of
+            requiring a scroll past the rest of the form (incl. tiers) to reach
+            them. */}
+        <div className="flex items-center gap-3 p-5 border-t border-outline-variant/15 sticky bottom-0 bg-surface-container-lowest modal-footer-safe">
+          <button
+            onClick={() => void save()} disabled={busy || !form.name.trim()}
+            className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
+          >
+            <Icon name="save" className="text-subhead" />
+            {busy ? t(locale, "prov_off_saving") : t(locale, offering?.isPublished ? "prov_off_send_review" : "prov_off_save")}
+          </button>
+          <button onClick={onClose} className="text-label font-bold text-outline hover:text-on-surface transition-colors">
+            {t(locale, "prov_off_cancel")}
+          </button>
         </div>
       </div>
     </div>

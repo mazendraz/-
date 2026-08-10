@@ -101,7 +101,7 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
         </thead>
         <tbody>
           {rows.map((row) => row.kind === "waitlist" ? (
-            <tr key={`w-${row.data.id}`} className="border-b border-outline-variant/10 hover:bg-surface-container/50 transition-colors">
+            <tr key={`w-${row.data.id}`} onClick={() => onOpen(row)} className="border-b border-outline-variant/10 hover:bg-surface-container/50 cursor-pointer transition-colors">
               <td className="px-4 py-3">
                 <span className="flex items-center gap-1 text-caption font-bold text-amber-700 whitespace-nowrap">
                   <Icon name="hourglass_top" className="text-body" style={{ fontVariationSettings: "'FILL' 1" }} />
@@ -126,7 +126,7 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
               <td className="px-4 py-3"><button onClick={() => onOpen(row)} className="text-primary text-caption font-bold hover:underline whitespace-nowrap">{t(locale, "admin_lead_details")}</button></td>
             </tr>
           ) : (
-            <tr key={`l-${row.data.id}`} className="border-b border-outline-variant/10 hover:bg-surface-container/50 transition-colors">
+            <tr key={`l-${row.data.id}`} onClick={() => onOpen(row)} className="border-b border-outline-variant/10 hover:bg-surface-container/50 cursor-pointer transition-colors">
               <td className="px-4 py-3 font-mono text-caption text-primary whitespace-nowrap">{row.data.refNumber}</td>
               <td className="px-4 py-3"><div className="font-bold text-on-surface">{row.data.name}</div><div className="text-outline text-caption">{row.data.phone}</div></td>
               <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{row.data.companyName}</td>

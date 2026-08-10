@@ -14,7 +14,7 @@ export const STATUS_HEX: Record<LeadStatus, string> = {
 };
 
 export type Point = { label: string; value: number; key?: string };
-export type Segment = { label: string; value: number; color: string };
+export type Segment = { label: string; value: number; color: string; key?: string };
 
 // ── Date helpers ────────────────────────────────────────────────────────────
 function startOfDay(d: Date): Date {
@@ -79,6 +79,7 @@ export function leadsByStatus(leads: Lead[], locale: Locale = "en"): Segment[] {
       label: t(locale, LEAD_STATUS_KEYS[status]),
       value: leads.filter((l) => l.status === status).length,
       color: STATUS_HEX[status],
+      key: status,
     }))
     .filter((s) => s.value > 0);
 }
@@ -190,6 +191,7 @@ export function statsByStatus(stats: ApiLeadStats, locale: Locale): Segment[] {
       label: t(locale, LEAD_STATUS_KEYS[status]),
       value: stats.byStatus[status] ?? 0,
       color: STATUS_HEX[status],
+      key: status,
     }))
     .filter((s) => s.value > 0);
 }

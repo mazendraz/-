@@ -16,6 +16,7 @@ import { useServerSearch } from "../hooks/useServerSearch";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, tCount, type StringKey, type Locale } from "../lib/i18n";
+import { formatRating } from "../lib/format";
 import Icon from "../components/Icon";
 import Select from "../components/Select";
 
@@ -282,12 +283,44 @@ export default function Companies() {
           <CatalogError />
         ) : visibleList.length === 0 ? (
           <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
-            <EmptyState
-              icon="search_off"
-              title={t(locale, "companies_none_title")}
-              msg={t(locale, "companies_none_sub")}
-              action={{ label: t(locale, "companies_reset_filters"), onClick: clearAll }}
-            />
+            {/* Three different situations, told apart rather than blurred into
+                one message.
+
+                The third is the one that was actively misleading: "Available
+                now" is applied per-row in the browser (availability is derived
+                at read time, so the list query cannot filter on it), and when it
+                hid every card on the page the screen said "no companies match
+                these filters" directly underneath a count reading 300. The
+                filters DID match — the visitor just could not see it, and the
+                offered action (reset everything) threw away their category and
+                search too. */}
+            {availableOnly && total > 0 ? (
+              <EmptyState
+                icon="event_busy"
+                title={t(locale, "companies_none_available_title")}
+                msg={t(locale, "companies_none_available_sub")}
+                action={{
+                  label: t(locale, "companies_show_busy"),
+                  onClick: () => setAvailableOnly(false),
+                }}
+              />
+            ) : activeCount > 0 ? (
+              <EmptyState
+                icon="search_off"
+                title={t(locale, "companies_none_title")}
+                msg={t(locale, "companies_none_sub")}
+                action={{ label: t(locale, "companies_reset_filters"), onClick: clearAll }}
+              />
+            ) : (
+              // Nothing filtered and still nothing to show: the catalogue itself
+              // is empty. Offering "reset filters" here asks the visitor to undo
+              // something they never did.
+              <EmptyState
+                icon="storefront"
+                title={t(locale, "companies_none_at_all_title")}
+                msg={t(locale, "companies_none_at_all_sub")}
+              />
+            )}
           </div>
         ) : (
           <>
@@ -450,7 +483,7 @@ function CompanyCard({ company: c, delay }: { company: Company; delay: number })
           <p className="text-label font-bold text-outline mb-2">{c.categoryLabel}</p>
           <div className="flex items-center gap-2 mb-3">
             <Stars n={Math.round(c.rating)} />
-            <span className="font-bold text-label text-on-surface">{c.rating}</span>
+            <span className="font-bold text-label text-on-surface">{formatRating(locale, c.rating)}</span>
             <span className="text-outline text-caption">({c.reviewCount})</span>
           </div>
           <p className="text-label text-on-surface-variant line-clamp-2 flex-grow leading-relaxed">{c.tagline}</p>

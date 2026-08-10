@@ -38,6 +38,16 @@ export default defineConfig({
       dependencies: ["setup"],
       testMatch: /ui-audit(-modals)?\.spec\.ts/,
     },
+    // The extreme-data matrix gets its OWN project, with no dependency on
+    // "setup". It intercepts every API read rather than measuring the seeded
+    // database, so it needs neither a session nor fixtures — and making it wait
+    // on a login it never uses would mean a broken seed could hide a real
+    // layout regression behind an unrelated red.
+    {
+      name: "stress",
+      use: { ...devices["Desktop Chrome"] },
+      testMatch: /ui-audit-stress\.spec\.ts/,
+    },
     // NO "standalone" project here, deliberately. DM-04 (safe-area insets)
     // would ideally be verified with non-zero insets, but Chromium cannot
     // emulate them: `--force-display-mode-standalone` and `--safe-area-insets`

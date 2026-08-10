@@ -72,7 +72,7 @@ export default function Modal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex p-4 bg-on-background/45 backdrop-blur-sm ${
+      className={`fixed inset-0 z-50 flex pt-4 px-4 modal-backdrop-safe bg-on-background/45 backdrop-blur-sm ${
         isSheet ? "items-end justify-center" : "items-end sm:items-center justify-center"
       }`}
       onClick={onClose}
@@ -85,10 +85,10 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : ariaLabel}
-        className={`bg-surface-container-lowest w-full shadow-2xl overflow-y-auto ${
+        className={`bg-surface-container-lowest w-full shadow-2xl overflow-y-auto overscroll-contain ${
           isSheet
-            ? "max-w-lg rounded-t-3xl max-h-[85vh]"
-            : `${wide ? "max-w-2xl" : "max-w-md"} rounded-t-2xl sm:rounded-2xl max-h-[92vh]`
+            ? "max-w-lg rounded-t-3xl modal-max-h-85"
+            : `${wide ? "max-w-2xl" : "max-w-md"} rounded-t-2xl sm:rounded-2xl modal-max-h-92`
         } ${panelClassName}`}
       >
         {/* Deliberately no "drag handle" bar here (CMP-09): the classic

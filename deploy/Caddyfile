@@ -42,26 +42,66 @@ your-domain.com {
 	handle {
 		root * /var/www/alassema/dist
 
-		# Content-Security-Policy — the main defense against XSS stealing the
-		# localStorage auth token. Shipped in REPORT-ONLY first: violations are
-		# reported to the browser console but nothing is blocked, so you can verify
-		# the whole site (home, category, company, request form, admin, provider)
-		# with DevTools open and fix any violation before enforcing.
+		# ── Security headers ─────────────────────────────────────────────────
+		# These cover the origin the BROWSER actually loads: the HTML document,
+		# the JS bundle, the service worker, and the origin the session cookie
+		# belongs to. next.config.ts sets an equivalent set, but Next only serves
+		# /api/* here — so without this block the whole frontend shipped bare.
 		#
-		# TO ENFORCE (after a few quiet days): rename the header below from
-		# `Content-Security-Policy-Report-Only` to `Content-Security-Policy`.
+		# HSTS applies per-ORIGIN, so setting it here also covers /api/* on this
+		# same host. Caddy v2 does NOT add it automatically (it only does the
+		# HTTP→HTTPS redirect), which is why it has to be explicit.
+		header {
+			# 2 years. Remove `preload` if you are not certain about every
+			# subdomain — submitting to the preload list is hard to undo.
+			Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+			# Stop the browser guessing a type an uploaded file did not declare.
+			X-Content-Type-Options "nosniff"
+			# Clickjacking on the admin/provider dashboards. Modern browsers use
+			# frame-ancestors in the CSP below; this covers the older ones.
+			X-Frame-Options "DENY"
+			# The lead tracking page carries ?ref= and ?token= in its URL. Without
+			# this, both leak in the Referer header to every external resource the
+			# page loads (Google Fonts today, anything added tomorrow).
+			Referrer-Policy "no-referrer"
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Cross-Origin-Opener-Policy "same-origin"
+			Cross-Origin-Resource-Policy "same-origin"
+			# Don't advertise the server product/version.
+			-Server
+		}
+
+		# ── Content-Security-Policy (ENFORCED) ───────────────────────────────
+		# Was Content-Security-Policy-Report-Only from the day it was written,
+		# which blocks nothing. Enforced as of the 2026-08-10 security audit
+		# (finding M-01).
 		#
-		# Notes on this policy (same-origin deploy, so connect-src 'self' covers the API):
-		#   • script-src 'self' — NO 'unsafe-inline' (the locale-init script is now an
-		#     external /locale-init.js), so injected inline <script> is blocked.
-		#   • style-src allows 'unsafe-inline' — React sets inline style="" attributes;
-		#     style injection is low-risk. Google Fonts CSS is fetched from googleapis.
-		#   • img-src allows Supabase Storage (uploaded images) + data: URIs.
-		#   • media-src mirrors img-src — gallery videos are served from the same
-		#     Supabase Storage bucket as images.
-		#   • frame-src/…cloudflare.com is only needed when Turnstile CAPTCHA is on;
-		#     remove it otherwise.
-		header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; media-src 'self' https://*.supabase.co; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+		# Verified safe to enforce before flipping it: the BUILT app/dist/index.html
+		# contains exactly two scripts, both external (/locale-init.js and the
+		# hashed /assets bundle) — no inline <script>, so `script-src 'self'` with
+		# no 'unsafe-inline' holds.
+		#
+		# Notes (same-origin deploy, so connect-src 'self' covers the API):
+		#   • script-src 'self' — no 'unsafe-inline', so injected inline <script>
+		#     is actually blocked. This is the line that does the work.
+		#   • style-src allows 'unsafe-inline' — React sets inline style=""
+		#     attributes; style injection is low-risk. Fonts CSS from googleapis.
+		#   • img-src / media-src allow Supabase Storage + data: URIs.
+		#   • worker-src / manifest-src fall back to default-src 'self', which
+		#     covers /sw.js and /manifest.webmanifest.
+		#   • frame-src/…cloudflare.com is only needed when Turnstile is on.
+		#
+		# ⚠ IF IMAGES DISAPPEAR after enforcing: a company logo/cover/gallery URL
+		# points at a host outside 'self' and *.supabase.co. The admin validator
+		# (validation/shared.ts imageRef) historically accepted ANY https URL. Find
+		# them, don't widen the policy:
+		#   SELECT slug, logo, cover FROM "Company"
+		#   WHERE logo  !~ '^(/|https://[a-z0-9-]+\.supabase\.co)'
+		#      OR cover !~ '^(/|https://[a-z0-9-]+\.supabase\.co)';
+		#
+		# ROLLBACK (one word): rename the header below back to
+		# `Content-Security-Policy-Report-Only` and `systemctl reload caddy`.
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; media-src 'self' https://*.supabase.co; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
 
 		try_files {path} /index.html
 		file_server

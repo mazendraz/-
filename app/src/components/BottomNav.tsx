@@ -35,7 +35,7 @@ export default function BottomNav({ items, ariaLabel }: BottomNavProps) {
       // PERF-04: this already read as solid at 97% opacity — backdrop-blur-xl
       // was pure repaint cost on a fixed, full-width element with zero visible
       // effect. Plain white removes that cost entirely.
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-outline-variant/20 bottom-nav-safe"
+      className="md:hidden fixed bottom-0 start-0 end-0 z-40 bg-white border-t border-outline-variant/20 bottom-nav-safe"
     >
       <div className="flex h-[var(--bottom-nav-h)]">
         {items.map(({ to, label, icon, end, badge }) => (

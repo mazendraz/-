@@ -10,7 +10,18 @@ const STATUSES = new Set<string>(["PENDING", "APPROVED", "REJECTED"]);
 
 // GET /api/admin/projects?status=PENDING → moderation queue (defaults to PENDING).
 export const GET = adminOnly(async (request: NextRequest) => {
-  const raw = request.nextUrl.searchParams.get("status");
+  const sp = request.nextUrl.searchParams;
+  const raw = sp.get("status");
   const status = (raw && STATUSES.has(raw) ? raw : "PENDING") as ProjectStatus;
-  return ok(await projectsService.listForModeration(status));
+  const toInt = (v: string | null): number | undefined => {
+    if (v == null) return undefined;
+    const n = Number.parseInt(v, 10);
+    return Number.isFinite(n) ? n : undefined;
+  };
+  return ok(
+    await projectsService.listForModeration(status, {
+      page: toInt(sp.get("page")),
+      pageSize: toInt(sp.get("pageSize")),
+    }),
+  );
 });

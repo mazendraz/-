@@ -12,6 +12,7 @@ import {
   type AdminReview, type AdminReviewStatus,
 } from "../../lib/adminReviews";
 import Modal from "../../components/Modal";
+import Pagination from "../../components/Pagination";
 import { EmptyState } from "./components/EmptyState";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
@@ -33,26 +34,55 @@ export function AdminCustomerReviews() {
   const [errorKey, setErrorKey] = useState<StringKey | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const error = errorKey ? t(locale, errorKey) : "";
+  // The queue is paged now. `total` is the point of it: an admin needs to know
+  // the size of the backlog, not just see one screenful of it — the endpoint
+  // used to stop at 200 with no indication anything was missing.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 50;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Switching pending/approved is a different list — start at its beginning.
+  useEffect(() => { setPage(1); }, [status]);
 
   const reload = useCallback(async () => {
     setLoading(true); setErrorKey(null);
-    try { setItems(await listAdminReviews(status)); }
-    catch { setErrorKey("admin_rev_load_error"); }
+    try {
+      const res = await listAdminReviews(status, page, PAGE_SIZE);
+      setItems(res.data);
+      setTotal(res.meta.total);
+    } catch { setErrorKey("admin_rev_load_error"); }
     finally { setLoading(false); }
-  }, [status]);
+  }, [status, page]);
   useEffect(() => { void reload(); }, [reload]);
+
+  // Approving or deleting the last row on the last page leaves `page` pointing
+  // past the end — the same defect the public lists had. Step back instead of
+  // rendering "nothing pending" over a queue that still has work in it.
+  useEffect(() => {
+    if (loading) return;
+    const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (page > lastPage) setPage(lastPage);
+  }, [total, page, loading]);
+
+  // Removing a row shrinks the CURRENT page and the total together, so the
+  // count above the list stays honest without a refetch.
+  function removeLocally(id: string) {
+    setItems((cur) => cur.filter((x) => x.id !== id));
+    setTotal((n) => Math.max(0, n - 1));
+  }
 
   async function approve(r: AdminReview) {
     if (!r.id) return;
     setBusyId(r.id); setErrorKey(null);
-    try { await approveAdminReview(r.id); setItems((cur) => cur.filter((x) => x.id !== r.id)); }
+    try { await approveAdminReview(r.id); removeLocally(r.id); }
     catch { setErrorKey("admin_rev_approve_error"); }
     finally { setBusyId(null); }
   }
   async function del(r: AdminReview) {
     if (!r.id) return;
     setBusyId(r.id); setErrorKey(null);
-    try { await deleteAdminReview(r.id); setItems((cur) => cur.filter((x) => x.id !== r.id)); }
+    try { await deleteAdminReview(r.id); removeLocally(r.id); }
     catch { setErrorKey("admin_rev_delete_error"); }
     finally { setBusyId(null); }
   }
@@ -61,7 +91,15 @@ export function AdminCustomerReviews() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="font-bold text-body text-on-surface">{t(locale, "admin_rev_customer_title")}</h2>
+          <h2 className="font-bold text-body text-on-surface">
+            {t(locale, "admin_rev_customer_title")}
+            {/* The backlog size, which the old capped endpoint could not report. */}
+            {total > 0 && (
+              <span className="ms-2 align-middle text-caption font-black text-primary bg-primary/10 rounded-full px-2 py-0.5 tabular-nums">
+                {total}
+              </span>
+            )}
+          </h2>
           <p className="text-caption text-outline mt-0.5">{t(locale, "admin_rev_customer_sub")}</p>
         </div>
         <div className="flex bg-surface-container rounded-xl p-0.5">
@@ -117,6 +155,16 @@ export function AdminCustomerReviews() {
           ))}
         </div>
       )}
+
+      {/* Reachable paging — the queue no longer ends at a hidden ceiling. */}
+      <Pagination
+        page={page}
+        pageCount={pageCount}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPage={setPage}
+        nounKey="noun_review"
+      />
     </div>
   );
 }

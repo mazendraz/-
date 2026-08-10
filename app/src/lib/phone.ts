@@ -1,10 +1,19 @@
 import {
-  AsYouType, parsePhoneNumberFromString, isValidPhoneNumber, type CountryCode,
+  AsYouType, getCountryCallingCode, parsePhoneNumberFromString, isValidPhoneNumber, type CountryCode,
 } from "libphonenumber-js/min";
 
 export type { CountryCode };
 
 export const DEFAULT_COUNTRY: CountryCode = "EG";
+
+/**
+ * The dial prefix PhoneInput shows beside the field, derived from
+ * DEFAULT_COUNTRY rather than typed out next to it. It was the literal "+20" in
+ * the JSX while the formatter read DEFAULT_COUNTRY — two copies of one fact, so
+ * changing the country would have left the input formatting for one country and
+ * labelled with another's code.
+ */
+export const DEFAULT_DIAL_CODE = `+${getCountryCallingCode(DEFAULT_COUNTRY)}`;
 
 /** Full E.164 validity — what the backend now requires on new submissions. */
 export function isValidE164(value: string): boolean {

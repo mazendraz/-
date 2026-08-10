@@ -173,8 +173,11 @@ export function UserEditor({ user, initialCompanyId, companies, onClose, onSaved
     setError("");
     if (name.trim().length < 2) { setError(t(locale, "admin_user_name_min")); return; }
     if (isNew && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) { setError(t(locale, "admin_user_email_invalid")); return; }
-    if (isNew && password.length < 8) { setError(t(locale, "admin_user_password_min")); return; }
-    if (!isNew && password && password.length < 8) { setError(t(locale, "admin_user_password_min")); return; }
+    // Mirrors MIN_PASSWORD_LENGTH in api/src/lib/validation/password.ts. This is a
+    // UX pre-check only — the server rejects short AND common passwords, and its
+    // answer is the one that counts.
+    if (isNew && password.length < 12) { setError(t(locale, "admin_user_password_min")); return; }
+    if (!isNew && password && password.length < 12) { setError(t(locale, "admin_user_password_min")); return; }
 
     setBusy(true);
     try {

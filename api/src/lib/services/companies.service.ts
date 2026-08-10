@@ -5,6 +5,7 @@ import { CompanyStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { serializeCompany, serializeCompanyAdmin, serializeCompanyCard } from "@/lib/utils/serialize";
 import { uniqueSlug } from "@/lib/utils/slug";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import { recomputeAggregate } from "@/lib/services/reviews.service";
 import { NotFoundError } from "@/lib/utils/errors";
 import type { ApiCompany, ApiPage } from "@/lib/apiTypes";
@@ -15,6 +16,25 @@ const MAX_PAGE_SIZE = 100;
 // can't produce an unbounded payload. Most-recent first; the count badge still
 // shows the true total (company.reviewCount).
 const MAX_PROFILE_REVIEWS = 50;
+
+/**
+ * The same guard, for the two relations that never got one.
+ *
+ * Reviews were capped; projects and offerings were not, and both are embedded in
+ * the company payload rather than fetched separately. Measured against a seeded
+ * company: 3,000 projects produced a 1.41 MB response on the PUBLIC profile and
+ * 1.42 MB on the admin company list (which embeds them for every company on the
+ * page), and 2,000 offerings produced 1.29 MB. On a phone that is the whole page
+ * budget spent on rows nobody scrolls to.
+ *
+ * Deliberately generous — a real portfolio is dozens of projects, not hundreds —
+ * so this bounds the pathological case without truncating any plausible company.
+ * If a genuine need for deeper access appears, the answer is a paginated endpoint
+ * (as reviews already have at /companies/:slug/reviews), not a bigger number
+ * here.
+ */
+const MAX_PROFILE_PROJECTS = 200;
+const MAX_PROFILE_OFFERINGS = 200;
 
 export type CompanySort =
   | "recommended"
@@ -58,7 +78,7 @@ const companyCategoriesInclude = {
 const companyInclude = {
   categories: companyCategoriesInclude,
   busyWindows: relevantBusyWindows,
-  projects: { orderBy: { sortOrder: "asc" } },
+  projects: { orderBy: { sortOrder: "asc" }, take: MAX_PROFILE_PROJECTS },
   reviews: { orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
   // Exact lead count per row. The admin company cards used to derive this by
   // filtering the browser's hydrated lead list — one capped page — so every
@@ -77,7 +97,7 @@ const publicTierInclude = {
 const publicCompanyInclude = {
   categories: companyCategoriesInclude,
   busyWindows: relevantBusyWindows,
-  projects: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } },
+  projects: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" }, take: MAX_PROFILE_PROJECTS },
   reviews: { where: { approved: true }, orderBy: { createdAt: "desc" }, take: MAX_PROFILE_REVIEWS },
   // Published AND active only. `isPublished` is the approval gate (a draft has
   // never been reviewed); `isActive` is the provider's immediate on/off switch.
@@ -85,6 +105,7 @@ const publicCompanyInclude = {
   offerings: {
     where: { isPublished: true, isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    take: MAX_PROFILE_OFFERINGS,
     // Tiers are filtered too, not just the offering. A tier added to an
     // already-published offering starts as a draft awaiting its own approval,
     // and a tier price OVERRIDES the offering's for the line it matches — so an
@@ -155,11 +176,20 @@ function buildWhere(
   return where;
 }
 
+/**
+ * One decimal, 0..5 — the same shape recompute() writes, applied to the manual
+ * override path so both producers of this column agree on its precision.
+ */
+export function roundRating(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(Math.min(5, Math.max(0, value)) * 10) / 10;
+}
+
 function clampPaging(query: CompanyListQuery): { page: number; pageSize: number } {
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const rawSize = Math.trunc(query.pageSize ?? DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE;
-  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, rawSize));
-  return { page, pageSize };
+  return {
+    page: clampPage(query.page),
+    pageSize: clampPageSize(query.pageSize, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE),
+  };
 }
 
 async function listActiveWhere(
@@ -356,8 +386,12 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
       // Manual rating override on create (e.g. seeding a curated company that has
       // no real reviews yet). Without it, rating/reviewCount stay 0 until reviews.
       ratingOverridden: input.ratingOverridden ?? false,
+      // Rounded on the way IN, to the same one decimal the review recompute
+      // produces (see reviews.service). Without this, the override path was the
+      // one way an unrounded float could enter the column — and every display
+      // site printed the raw value.
       ...(input.ratingOverridden
-        ? { rating: input.rating ?? 0, reviewCount: input.reviewCount ?? 0 }
+        ? { rating: roundRating(input.rating ?? 0), reviewCount: input.reviewCount ?? 0 }
         : {}),
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
@@ -408,7 +442,10 @@ export async function update(
     // Only write rating/reviewCount when the override is being turned ON; otherwise
     // they're owned by the review recompute (and cleared back to it below).
     ...(input.ratingOverridden === true
-      ? { rating: input.rating ?? undefined, reviewCount: input.reviewCount ?? undefined }
+      ? {
+          rating: input.rating === undefined ? undefined : roundRating(input.rating),
+          reviewCount: input.reviewCount ?? undefined,
+        }
       : {}),
     metaTitle: input.metaTitle === undefined ? undefined : input.metaTitle,
     metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,

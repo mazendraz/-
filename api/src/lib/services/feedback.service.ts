@@ -3,6 +3,7 @@
 // Mirrors siteReviews.service.ts, plus enum mapping (Prisma UPPERCASE ↔ API label)
 // and company slug/name resolved from the relation.
 import { prisma } from "@/lib/prisma";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { Prisma } from "@/generated/prisma/client";
 import { CompanyStatus, FeedbackType } from "@/generated/prisma/enums";
 import { NotFoundError } from "@/lib/utils/errors";
@@ -118,10 +119,11 @@ export async function listAll(query: FeedbackListQuery = {}): Promise<ApiFeedbac
 /** Admin: paginated feedback (newest first), filterable by `search`. */
 export async function listPage(query: FeedbackListQuery): Promise<ApiPage<ApiFeedback>> {
   const where = feedbackSearchWhere(query.search);
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const pageSize = Math.min(
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(
+    query.pageSize,
+    FEEDBACK_DEFAULT_PAGE_SIZE,
     FEEDBACK_MAX_PAGE_SIZE,
-    Math.max(1, Math.trunc(query.pageSize ?? FEEDBACK_DEFAULT_PAGE_SIZE) || FEEDBACK_DEFAULT_PAGE_SIZE),
   );
   const [total, rows] = await Promise.all([
     prisma.feedback.count({ where }),

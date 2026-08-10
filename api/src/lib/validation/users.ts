@@ -2,9 +2,10 @@
 // createUserSchema covers POST /admin/users; updateUserSchema is the partial for
 // PATCH /admin/users/:id. Passwords are validated here but hashed in the service.
 import { z } from "zod";
+// One shared rule (min length + common-password rejection) so this endpoint,
+// self-service password change, and create-admin.ts cannot drift apart.
+import { passwordSchema as password } from "@/lib/validation/password";
 
-// Min 8 chars matches create-admin.ts and bcrypt's practical input ceiling (72).
-const password = z.string().min(8).max(72);
 const role = z.enum(["ADMIN", "PROVIDER"]);
 // A uuid (link to a company) or null (unlink). Optional = "leave unchanged".
 const companyId = z.string().uuid().nullable();

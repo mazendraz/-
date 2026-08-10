@@ -42,13 +42,25 @@ seed اتشغّل "لوكال" ومسح كل داتا العملاء الحقي�
 
 1. `api/.env` (المحلي) لازم يفضل على `postgresql://postgres:postgres@localhost:5433/alassema`.
    شغّل قاعدة البيانات المحلية بـ: `docker compose -f api/docker-compose.dev.yml up -d`.
-2. بيانات الإنتاج في `api/.env.production` (متجاهَل من git) وعلى السيرفر — **متنقلهاش**
-   للـ `.env` الافتراضي أبدًا.
+2. بيانات الإنتاج **ممنوع** تتحط في ملف اسمه `.env.production` أو `.env.production.local`.
+   مش كفاية إنها مش في `.env` — **Next.js بيحمّل `.env.production` لوحده** وبأولوية
+   **أعلى** من `.env` أول ما `NODE_ENV=production`، و`next build` و`next start`
+   الاتنين بيحطّوا `NODE_ENV=production`. يعني `npm start` جوه `api/` على جهاز
+   المطوّر كان بيوصّل السيرفر المحلي بقاعدة بيانات **الإنتاج** من غير ما حد يطلب
+   ده. (اتأكد عمليًا في تدقيق 2026-08-09: السيرفر قام والاستعلامات راحت على
+   `aws-0-eu-west-1.pooler.supabase.com`.)
+   عشان كده الملف اتسمّى `api/.env.production.reference` — نفس المحتوى، بس Next
+   مش بيحمّله. فيه اختبار `src/lib/envSafety.test.ts` بيفشل لو رجع بالاسم القديم.
+   السيرفر المنشور مش متأثر: بيقرا من `api/.env` (شوف `api/ecosystem.config.cjs`).
 3. أوامر مدمّرة (`seed`, `db:setup`, `prisma migrate reset`) تتشغّل على اللوكال بس.
    سكربت الـ seed محصّن دلوقتي: بيرفض لو `DATABASE_URL` فيه host الإنتاج
    (`pooler.supabase.com` / `supabase.co`) إلا بـ `SEED_I_KNOW=1`، وبيرفض لو فيه
    users/companies موجودين إلا بـ `--force`.
 4. لو محتاج demo data، استخدمها على اللوكال: `npm run db:seed` والـ `.env` على اللوكال.
+
+> **الدرس:** تحصين سكربت الـ seed وحده مكانش كفاية. الكارثة الأصلية كانت عن طريق
+> `seed`، فاتحصّن `seed` — لكن **السيرفر نفسه** كان بيقرا نفس بيانات الإنتاج من
+> باب تاني خالص مفيش حد كان لازم يفتحه بإيده.
 
 ---
 

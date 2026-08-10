@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useLeads } from "../../../lib/requests";
 import { useCompanies, useCategoriesWithCounts, type Company } from "../../../lib/catalog";
 import { isApiConfigured } from "../../../lib/api";
@@ -15,17 +15,25 @@ import { EmptyState } from "../components/EmptyState";
 import { Loading } from "../components/Loading";
 import { useLocale } from "../../../context/LocaleContext";
 import { t, tCount } from "../../../lib/i18n";
+import { formatRating } from "../../../lib/format";
 import Icon from "../../../components/Icon";
 
 export default function CompaniesPage() {
   const { locale } = useLocale();
   const navigate = useNavigate();
+  const location = useLocation();
   const leads = useLeads();
   const companies = useCompanies();
   const categories = useCategoriesWithCounts();
 
   const { showToast } = useToast();
-  const [companyQuery, setCompanyQuery] = useState("");
+  // Overview's leaderboard/top-companies rows hand a company name over via
+  // navigate state (same idiom as LeadsPage's `status`/`lead`) so "drilling
+  // into" a company from the dashboard reuses this page's own search instead
+  // of a separate id-based route.
+  const [companyQuery, setCompanyQuery] = useState(
+    () => (location.state as { companyQuery?: string } | null)?.companyQuery ?? "",
+  );
   const [editingCompany, setEditingCompany] = useState<{ company: Company | null } | null>(null);
   const [busyToggleId, setBusyToggleId] = useState<string | null>(null); // company row availability quick-toggle in flight
   const [busyError, setBusyError] = useState<string | null>(null); // company id whose toggle just failed
@@ -116,7 +124,11 @@ export default function CompaniesPage() {
             // logo + text + a 4-button vertical action column (~190px tall
             // regardless of content) left ~128px for the name, category and
             // stats line at 390px. Column below sm:, the original row above it.
-            <div key={c.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div
+              key={c.id}
+              onClick={() => setEditingCompany({ company: c })}
+              className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom flex flex-col sm:flex-row items-start sm:items-center gap-4 cursor-pointer hover:bg-surface-container-low transition-colors"
+            >
               <img src={c.logo} alt="" className="w-14 h-14 rounded-xl object-cover border border-outline-variant/20 flex-shrink-0" loading="lazy" width={56} height={56} />
               <div className="flex-1 min-w-0 w-full">
                 <div className="flex items-center gap-1.5">
@@ -141,12 +153,12 @@ export default function CompaniesPage() {
                 {/* flex-wrap: DM-08 — the row stayed on one line before and
                     could get clipped in a narrow column layout. */}
                 <div className="flex flex-wrap items-center gap-2 text-caption text-outline mt-0.5">
-                  <span>★ {c.rating}</span><span>·</span><span>{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span><span>·</span><span>{cLeads} {tCount(locale, "noun_lead", cLeads)}</span>
+                  <span>★ {formatRating(locale, c.rating)}</span><span>·</span><span>{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span><span>·</span><span>{cLeads} {tCount(locale, "noun_lead", cLeads)}</span>
                 </div>
               </div>
               {/* DM-08: row of buttons on mobile (wraps if needed) instead of
                   a fixed vertical stack that ate most of the card's width. */}
-              <div className="flex flex-row flex-wrap sm:flex-col gap-1.5 flex-shrink-0 w-full sm:w-auto">
+              <div onClick={(e) => e.stopPropagation()} className="flex flex-row flex-wrap sm:flex-col gap-1.5 flex-shrink-0 w-full sm:w-auto">
                 <button onClick={() => setEditingCompany({ company: c })} className="flex items-center gap-1 bg-surface-container px-3 py-1.5 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors">
                   <Icon name="edit" className="text-label" /> {t(locale, "admin_edit")}
                 </button>

@@ -3,6 +3,7 @@ import { CHART_COLORS } from "../../../lib/chartColors";
 import Icon from "../../../components/Icon";
 import { useLocale } from "../../../context/LocaleContext";
 import { t } from "../../../lib/i18n";
+import { formatRating } from "../../../lib/format";
 import { useProvider } from "../context";
 import { useProviderCharts } from "../useProviderCharts";
 
@@ -25,7 +26,7 @@ export default function AnalyticsPage() {
                 {/* KPIs */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <KpiCard icon="trending_up" label={t(locale, "prov_kpi_conversion")} value={`${conversion}%`} tint={CHART_COLORS.green} />
-                  <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={`${company.rating}★`} tint={CHART_COLORS.secondary} />
+                  <KpiCard icon="grade" label={t(locale, "prov_kpi_rating")} value={`${formatRating(locale, company.rating)}★`} tint={CHART_COLORS.secondary} />
                   <KpiCard icon="reviews" label={t(locale, "prov_kpi_reviews")} value={company.reviewCount} tint={CHART_COLORS.primary} />
                   <KpiCard icon="construction" label={t(locale, "prov_kpi_projects")} value={company.completedProjects} tint={CHART_COLORS.primaryContainer} />
                 </div>

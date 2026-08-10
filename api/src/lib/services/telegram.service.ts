@@ -404,15 +404,39 @@ export async function linkProviderByPhone(
   const tail = phoneTail(phone);
   if (tail.length < 8) return null; // implausibly short — ignore
 
-  // Small dataset (a handful of companies): fetch the candidates and match in JS so
-  // local vs. country-code storage differences never cause a miss.
-  const companies = await prisma.company.findMany({
-    select: { id: true, name: true, phone: true, whatsapp: true },
-  });
-  const match = companies.find(
-    (c) => phoneTail(c.phone) === tail || (c.whatsapp && phoneTail(c.whatsapp) === tail),
-  );
-  if (!match) return null;
+  // Matched in SQL, not in memory.
+  //
+  // This used to be `findMany({ select: … })` with NO where clause, matching in
+  // JS — every company row transferred into Node on every link attempt, under a
+  // comment reading "small dataset (a handful of companies)". That was true when
+  // it was written. It is a full table load at ten thousand.
+  //
+  // The JS matching existed because phone numbers are stored inconsistently
+  // (local `010…`, country-code `2010…`, E.164 `+2010…`), so equality on the raw
+  // column misses. Postgres can normalize exactly the way phoneTail does —
+  // strip non-digits, keep the last 10 — so the same comparison runs in the
+  // database and returns at most two rows instead of the table.
+  //
+  // LIMIT 2, not 1, so an AMBIGUOUS match is detectable. Two companies sharing a
+  // phone tail is a data error, and picking whichever row the planner returned
+  // first would connect one company's Telegram — and therefore its customers'
+  // messages — to another company's account. Refusing is the only safe reading.
+  const matches = await prisma.$queryRaw<{ id: string; name: string }[]>`
+    SELECT id, name
+    FROM "Company"
+    WHERE right(regexp_replace(COALESCE(phone, ''), '\D', '', 'g'), 10) = ${tail}
+       OR right(regexp_replace(COALESCE(whatsapp, ''), '\D', '', 'g'), 10) = ${tail}
+    LIMIT 2
+  `;
+  if (matches.length !== 1) {
+    if (matches.length > 1) {
+      console.warn(
+        `[telegram] refusing to link: ${matches.length} companies share the phone ending ${tail}`,
+      );
+    }
+    return null;
+  }
+  const match = matches[0];
 
   await prisma.company.update({
     where: { id: match.id },

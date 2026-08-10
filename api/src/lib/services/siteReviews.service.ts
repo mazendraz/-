@@ -1,6 +1,7 @@
 // Site-review (platform testimonial) business logic. Visitor submissions are held
 // for moderation (visible=false); admins toggle visibility and open/close intake.
 import { prisma } from "@/lib/prisma";
+import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { Prisma } from "@/generated/prisma/client";
 import { NotFoundError } from "@/lib/utils/errors";
 import type { ApiPage, ApiSiteReview, ApiSiteReviewPayload } from "@/lib/apiTypes";
@@ -31,11 +32,25 @@ function serialize(r: SiteReviewRow): ApiSiteReview {
   };
 }
 
+/**
+ * Cap on the homepage testimonial strip.
+ *
+ * The strip is a horizontally-scrolling carousel: nobody scrolls past a couple
+ * of dozen, and the ones beyond that are simply weight on every homepage load.
+ * This query had NO limit at all — visitor-submitted testimonials accumulate
+ * forever once approved, so the homepage payload grew monotonically with no
+ * mechanism to stop it. A cap is the right answer here specifically because
+ * there is no "page 2" for a carousel to reach; the alternative is not
+ * pagination, it is an ever-heavier landing page.
+ */
+const MAX_HOMEPAGE_REVIEWS = 30;
+
 /** Public: visible reviews, newest first (homepage). */
 export async function listPublic(): Promise<ApiSiteReview[]> {
   const rows = await prisma.siteReview.findMany({
     where: { visible: true },
     orderBy: { createdAt: "desc" },
+    take: MAX_HOMEPAGE_REVIEWS,
   });
   return rows.map(serialize);
 }
@@ -78,10 +93,11 @@ export async function listAll(query: SiteReviewListQuery = {}): Promise<ApiSiteR
 /** Admin: paginated reviews (newest first), filterable by `search`. */
 export async function listPage(query: SiteReviewListQuery): Promise<ApiPage<ApiSiteReview>> {
   const where = siteReviewSearchWhere(query.search);
-  const page = Math.max(1, Math.trunc(query.page ?? 1) || 1);
-  const pageSize = Math.min(
+  const page = clampPage(query.page);
+  const pageSize = clampPageSize(
+    query.pageSize,
+    SITE_REVIEW_DEFAULT_PAGE_SIZE,
     SITE_REVIEW_MAX_PAGE_SIZE,
-    Math.max(1, Math.trunc(query.pageSize ?? SITE_REVIEW_DEFAULT_PAGE_SIZE) || SITE_REVIEW_DEFAULT_PAGE_SIZE),
   );
   const [total, rows] = await Promise.all([
     prisma.siteReview.count({ where }),

@@ -12,6 +12,10 @@ import type { AdminUserListQuery } from "@/lib/services/users.service";
 import type { StatsQuery } from "@/lib/services/stats.service";
 import type { WaitlistListQuery } from "@/lib/services/waitlist.service";
 import type { ApiLeadStatus, ApiUserRole, ApiWaitlistStatus } from "@/lib/apiTypes";
+// Every free-text param goes through cleanParam, not a bare `.trim()`. A NUL
+// byte survives the URL, JSON and Zod untouched and is only rejected by Postgres
+// at the driver — i.e. as a 500. See sanitize.ts for the measured blast radius.
+import { cleanParam } from "@/lib/utils/sanitize";
 
 const SORTS: readonly CompanySort[] = [
   "recommended",
@@ -44,8 +48,8 @@ export function parseCompanyListQuery(
   return {
     page: toInt(searchParams.get("page")),
     pageSize: toInt(searchParams.get("pageSize")),
-    category: searchParams.get("category")?.trim() || undefined,
-    search: searchParams.get("search")?.trim() || undefined,
+    category: cleanParam(searchParams.get("category")),
+    search: cleanParam(searchParams.get("search")),
     minRating: toFloat(searchParams.get("minRating")),
     sort,
   };
@@ -79,7 +83,7 @@ export function parseLeadListQuery(
     page: toInt(searchParams.get("page")),
     pageSize: toInt(searchParams.get("pageSize")),
     status: parseLeadStatus(searchParams.get("status")),
-    search: searchParams.get("search")?.trim() || undefined,
+    search: cleanParam(searchParams.get("search")),
   };
 }
 
@@ -88,7 +92,7 @@ export function parseAdminLeadListQuery(
 ): AdminLeadListQuery {
   return {
     ...parseLeadListQuery(searchParams),
-    companyId: searchParams.get("companyId")?.trim() || undefined,
+    companyId: cleanParam(searchParams.get("companyId")),
     from: toDate(searchParams.get("from")),
     to: toDate(searchParams.get("to")),
   };
@@ -123,7 +127,7 @@ export function parseWaitlistListQuery(
     page: toInt(searchParams.get("page")),
     pageSize: toInt(searchParams.get("pageSize")),
     status,
-    search: searchParams.get("search")?.trim() || undefined,
+    search: cleanParam(searchParams.get("search")),
   };
 }
 
@@ -134,7 +138,7 @@ export function parseAdminWaitlistListQuery(
 ): WaitlistListQuery {
   return {
     ...parseWaitlistListQuery(searchParams),
-    companyId: searchParams.get("companyId")?.trim() || undefined,
+    companyId: cleanParam(searchParams.get("companyId")),
   };
 }
 
@@ -151,6 +155,6 @@ export function parseAdminUserListQuery(
     page: toInt(searchParams.get("page")),
     pageSize: toInt(searchParams.get("pageSize")),
     role,
-    search: searchParams.get("search")?.trim() || undefined,
+    search: cleanParam(searchParams.get("search")),
   };
 }

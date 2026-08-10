@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { page } from "@/lib/utils/response";
 import { adminOnly } from "@/lib/middleware/guards";
 import * as chat from "@/lib/services/chat.service";
+import { cleanParam } from "@/lib/utils/sanitize";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,8 @@ export const GET = adminOnly(async (request: NextRequest) => {
   const url = new URL(request.url);
   const size = Number(url.searchParams.get("pageSize")) || undefined;
   const result = await chat.listAll({
-    companyId: url.searchParams.get("companyId") ?? undefined,
-    q: url.searchParams.get("q") ?? undefined,
+    companyId: cleanParam(url.searchParams.get("companyId")),
+    q: cleanParam(url.searchParams.get("q")),
     page: Number(url.searchParams.get("page")) || undefined,
     pageSize: size,
     unreadOnly: url.searchParams.get("unread") === "1",

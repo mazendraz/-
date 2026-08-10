@@ -20,8 +20,12 @@ let categoryId = "";
 let companyId = "";
 let slug = "";
 let fixedId = "";
+let fixed2Id = "";
+let fixed3Id = "";
 let rangeId = "";
 let inspectId = "";
+let inspect2Id = "";
+let hugeId = "";
 let tierId = "";
 let draftTierId = "";
 
@@ -29,7 +33,12 @@ const base = {
   companyName: "Items Co",
   service: "placeholder",
   name: "Test Customer",
-  phone: "01012345678",
+  // E.164, not the local "01012345678" form. createLeadSchema validates new
+  // submissions with libphonenumber's isValidPhoneNumber and no default region
+  // (the frontend's PhoneInput normalizes before sending), so a bare local
+  // number is rejected — see validation/leads.test.ts, which asserts exactly
+  // that. This fixture predated that change and made every submit() here a 400.
+  phone: "+201012345678",
   district: "R7",
   budget: "100k",
   description: "A description long enough to pass validation.",
@@ -59,6 +68,17 @@ beforeAll(async () => {
   fixedId = (await mk({ name: "Fixed item", pricingModel: "FIXED", priceMin: 10000 })).id;
   rangeId = (await mk({ name: "Range item", pricingModel: "RANGE", priceMin: 5000, priceMax: 9000 })).id;
   inspectId = (await mk({ name: "Inspect item", pricingModel: "ON_INSPECTION" })).id;
+  // Distinct twins of the two above. The bundle-threshold tests used to reach a
+  // 3-item basket by naming the SAME offering three times — which is now
+  // rejected outright (a basket can't list one service twice; see
+  // leadItems.service), and was never something the request form could produce.
+  // Same prices, so those tests keep their exact expected totals.
+  fixed2Id = (await mk({ name: "Fixed item II", pricingModel: "FIXED", priceMin: 10000 })).id;
+  fixed3Id = (await mk({ name: "Fixed item III", pricingModel: "FIXED", priceMin: 10000 })).id;
+  inspect2Id = (await mk({ name: "Inspect item II", pricingModel: "ON_INSPECTION" })).id;
+  // Priced at the schema's per-unit ceiling so a max-quantity line overflows
+  // int4 — the column type every money field on Lead/LeadItem actually uses.
+  hugeId = (await mk({ name: "Huge item", pricingModel: "FIXED", priceMin: 100_000_000 })).id;
 
   // isPublished explicit, like the offerings above: this fixture represents a
   // LIVE quotable band. Tiers default to draft now, because one added to an
@@ -95,8 +115,9 @@ afterAll(async () => {
 let phoneSeq = 0;
 function nextPhone(): string {
   phoneSeq += 1;
-  // 010 + 8 digits, matching the Egyptian mobile pattern the API validates.
-  return `010${10000000 + phoneSeq}`;
+  // E.164: +20 then a 10-digit Egyptian mobile starting 10 — the only form
+  // createLeadSchema accepts (see `base.phone` above).
+  return `+2010${10000000 + phoneSeq}`;
 }
 
 async function submit(items: unknown[], overrides: Record<string, unknown> = {}, ip?: string) {
@@ -201,7 +222,7 @@ describe("bundle discount", () => {
     const { body } = await submit([
       { offeringId: fixedId, qty: 1 },
       { offeringId: rangeId, qty: 1 },
-      { offeringId: fixedId, qty: 1 },
+      { offeringId: fixed2Id, qty: 1 },
     ], {}, "10.9.8.1");
     // subtotal 10000 + (5000..9000) + 10000 = 25000..29000, less 15%
     expect(body.discountPercent).toBe(15);
@@ -212,7 +233,7 @@ describe("bundle discount", () => {
     const { body } = await submit([
       { offeringId: fixedId, qty: 1 },
       { offeringId: inspectId, qty: 1 },
-      { offeringId: inspectId, qty: 1 },
+      { offeringId: inspect2Id, qty: 1 },
     ], {}, "10.9.8.2");
     expect(body.discountPercent).toBe(15);
     expect(body.estimatedMin).toBe(8500); // 15% off the one priced item
@@ -222,12 +243,74 @@ describe("bundle discount", () => {
     await prisma.bundleRule.updateMany({ where: { companyId }, data: { isPublished: false } });
     const { body } = await submit([
       { offeringId: fixedId, qty: 1 },
-      { offeringId: fixedId, qty: 1 },
-      { offeringId: fixedId, qty: 1 },
+      { offeringId: fixed2Id, qty: 1 },
+      { offeringId: fixed3Id, qty: 1 },
     ], {}, "10.9.8.3");
     expect(body.discountPercent).toBe(0);
     expect(body.estimatedMin).toBe(30000);
     await prisma.bundleRule.updateMany({ where: { companyId }, data: { isPublished: true } });
+  });
+});
+
+// Both of these are reachable ONLY by hand-writing the payload — the request
+// form cannot build either — which is exactly why they are enforced server-side.
+// "The UI can't do that" is not a control; it is an assumption about the client.
+describe("adversarial baskets", () => {
+  it("rejects a basket that names the same offering twice", async () => {
+    const { status, body } = await submit([
+      { offeringId: fixedId, qty: 1 },
+      { offeringId: fixedId, qty: 1 },
+    ], {}, "10.9.6.1");
+    expect(status).toBe(400);
+    expect(body.message).toMatch(/more than once/i);
+  });
+
+  // The reason the rule above exists. calculateRequest takes the bundle
+  // threshold from items.length, so a repeated line is a second "item" nobody
+  // picked — enough on its own to trip a minItems:2 rule and write an unearned
+  // discount onto the lead, which is what the provider then sees as the agreed
+  // estimate.
+  it("does not let a repeated line buy a bundle discount", async () => {
+    const rule = await prisma.bundleRule.create({
+      data: { companyId, minItems: 2, discountPercent: 50, isPublished: true, isActive: true },
+    });
+    try {
+      const dup = await submit([
+        { offeringId: fixedId, qty: 1 },
+        { offeringId: fixedId, qty: 1 },
+      ], {}, "10.9.6.2");
+      expect(dup.status).toBe(400);
+
+      // The same customer genuinely picking two DIFFERENT services still earns it.
+      const real = await submit([
+        { offeringId: fixedId, qty: 1 },
+        { offeringId: fixed2Id, qty: 1 },
+      ], {}, "10.9.6.3");
+      expect(real.status).toBe(201);
+      expect(real.body.discountPercent).toBe(50);
+    } finally {
+      await prisma.bundleRule.delete({ where: { id: rule.id } });
+    }
+  });
+
+  // Lead.estimatedMin/Max and LeadItem.lineMin/Max are all Postgres INTEGER.
+  // The per-unit cap (100,000,000) times the quantity cap (10,000) is ~465x
+  // what int4 holds, so this used to reach the driver as a numeric overflow and
+  // come back to a customer as a bare 500 on a public endpoint.
+  it("rejects a basket whose total cannot fit an int4 column, with a 400 not a 500", async () => {
+    const { status, body } = await submit(
+      [{ offeringId: hugeId, qty: 10_000 }], {}, "10.9.6.4",
+    );
+    expect(status).toBe(400);
+    expect(body.message).toMatch(/too large/i);
+  });
+
+  it("still accepts a large-but-storable basket", async () => {
+    const { status, body } = await submit(
+      [{ offeringId: hugeId, qty: 20 }], {}, "10.9.6.5",
+    );
+    expect(status).toBe(201);
+    expect(body.estimatedMin).toBe(2_000_000_000); // just under int4's ceiling
   });
 });
 

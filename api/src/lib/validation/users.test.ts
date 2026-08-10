@@ -4,7 +4,9 @@ import { createUserSchema, updateUserSchema } from "@/lib/validation/users";
 const base = {
   name: "Provider One",
   email: "Provider@Example.com",
-  password: "strongpass1",
+  // ≥ MIN_PASSWORD_LENGTH (12) and not in the common-password set — see
+  // validation/password.ts.
+  password: "quiet-harbour-41",
 };
 
 describe("createUserSchema", () => {
@@ -20,6 +22,11 @@ describe("createUserSchema", () => {
 
   it("rejects a short password", () => {
     expect(createUserSchema.safeParse({ ...base, password: "short" }).success).toBe(false);
+  });
+
+  it("rejects a password that is long enough but common", () => {
+    // 12 chars, so length alone would have let it through.
+    expect(createUserSchema.safeParse({ ...base, password: "Password123!" }).success).toBe(false);
   });
 
   it("rejects an invalid email", () => {
