@@ -112,7 +112,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       {/* ── Desktop nav ─────────────────────────────────────────────────────── */}
       <nav
         ref={desktopNavRef}
-        className={`nav-glass fixed top-0 start-0 w-full z-50 hidden md:flex items-center px-8 lg:px-12${solidBg ? "nav-glass--solid" : ""}`}
+        className={`nav-glass fixed top-0 start-0 w-full z-50 hidden md:flex items-center px-8 lg:px-12 ${solidBg ? "nav-glass--solid" : ""}`}
         style={{ height: "76px" }}
       >
         {/* Left column — nav links */}
@@ -198,7 +198,7 @@ export default function TopNav({ onOpenSearch }: Props) {
       {/* ── Mobile top bar ──────────────────────────────────────────────────── */}
       <nav
         ref={mobileNavRef}
-        className={`nav-glass fixed top-0 start-0 w-full z-50 flex items-center justify-between px-4 md:hidden${solidBg ? "nav-glass--solid" : ""}`}
+        className={`nav-glass fixed top-0 start-0 w-full z-50 flex items-center justify-between px-4 md:hidden ${solidBg ? "nav-glass--solid" : ""}`}
         style={{ height: "64px" }}
       >
         {/* Hamburger */}
