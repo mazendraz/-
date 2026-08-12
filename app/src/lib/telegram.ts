@@ -12,9 +12,23 @@ import { apiGet, apiPost, apiDelete } from "./api";
 
 export type TelegramScope = "provider" | "admin";
 
+/** One linked Telegram account. Provider scope only — an admin links just themselves. */
+export interface TelegramChat {
+  id: string;
+  label: string | null;
+  linkedAt: string;
+}
+
 export interface TelegramStatus {
   configured: boolean; // server has a bot token + username
-  linked: boolean; // this company/admin has a Telegram chat bound
+  linked: boolean; // this company/admin has at least one Telegram chat bound
+  /**
+   * Provider scope: every linked account, so they can be listed and removed one by
+   * one. Absent on the admin endpoint, which is single-account by design.
+   */
+  chats?: TelegramChat[];
+  /** Provider scope: how many accounts one company may link. */
+  max?: number;
 }
 
 function basePath(scope: TelegramScope): string {
@@ -35,8 +49,16 @@ export async function createTelegramLink(scope: TelegramScope = "provider"): Pro
   return url;
 }
 
-/** Disconnect Telegram for the caller; resolves to the new status. */
-export async function disconnectTelegram(scope: TelegramScope = "provider"): Promise<TelegramStatus> {
-  await apiDelete(basePath(scope));
-  return { configured: true, linked: false };
+/**
+ * Disconnect Telegram for the caller. With `chatId` (a row id from status.chats)
+ * only that one account is removed; without it, all of them. Re-reads the status
+ * afterwards rather than assuming the result — with several accounts, removing one
+ * usually leaves the company still linked.
+ */
+export async function disconnectTelegram(
+  scope: TelegramScope = "provider",
+  chatId?: string,
+): Promise<TelegramStatus> {
+  await apiDelete(`${basePath(scope)}${chatId ? `?id=${encodeURIComponent(chatId)}` : ""}`);
+  return getTelegramStatus(scope);
 }

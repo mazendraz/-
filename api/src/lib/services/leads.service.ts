@@ -48,7 +48,6 @@ interface LeadCompanyRef {
   name: string;
   email: string | null;
   whatsapp: string | null;
-  telegramChatId: string | null;
 }
 
 function clampPaging(query: { page?: number; pageSize?: number }): {
@@ -187,11 +186,11 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
             tag: `lead-${serialized.id}`,
           }),
           // Telegram (free) — instant chat message to the owner/admin chat
-          // (TELEGRAM_ADMIN_CHAT_ID) and to the provider once they've linked the
-          // bot (Company.telegramChatId). Same fail-open contract: skipped silently
-          // when the bot token / chat id isn't set.
+          // (TELEGRAM_ADMIN_CHAT_ID) and to every Telegram account the provider has
+          // linked (CompanyTelegramChat). Same fail-open contract: skipped silently
+          // when the bot token isn't set or nobody's linked.
           notifyAdminTelegram(serialized, company.name),
-          notifyProviderTelegram(serialized, company.telegramChatId, company.name),
+          notifyProviderTelegram(serialized, company.id, company.name),
         ]);
       });
 
@@ -214,7 +213,7 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
 export async function create(payload: CreateLeadInput): Promise<ApiLead> {
   const company = await prisma.company.findFirst({
     where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
-    select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
+    select: { id: true, name: true, email: true, whatsapp: true },
   });
   // 404 for both missing and non-ACTIVE — don't reveal suspended companies.
   if (!company) throw new NotFoundError("Company");

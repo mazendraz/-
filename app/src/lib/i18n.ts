@@ -533,7 +533,6 @@ const STRINGS = {
     // ══ Provider dashboard (7B) ══════════════════════════════════════════════
 
     // ── Push notifications ──
-    prov_push_unsupported: "This browser doesn't support push notifications. On iPhone, add Al Assema to your Home Screen first, then enable notifications.",
     prov_push_title: "Push notifications on this device",
     prov_push_on_desc: "You'll get an alert here for every new lead, even when the dashboard is closed.",
     prov_push_off_desc: "Get an instant alert for every new lead — even when the dashboard is closed.",
@@ -551,6 +550,14 @@ const STRINGS = {
     prov_tg_waiting_before: "Waiting for you to press",
     prov_tg_waiting_start: "Start",
     prov_tg_waiting_after: "in Telegram… you can leave this page open. The link expires in 15 minutes.",
+    prov_tg_open_manual: "Open Telegram",
+    prov_tg_open_manual_hint: "Your browser blocked the pop-up — tap here to open Telegram.",
+    prov_tg_add: "Add account",
+    prov_tg_remove: "Remove",
+    prov_tg_remove_all: "Remove all",
+    prov_tg_unnamed: "Telegram account",
+    prov_tg_multi_desc: "Every linked account receives every new lead.",
+    prov_tg_max_note: "You've reached the maximum number of accounts. Remove one to add another.",
     prov_tg_err_create: "Couldn't create the link. Please try again.",
     prov_tg_err_disconnect: "Couldn't disconnect. Please try again.",
 
@@ -1940,7 +1947,6 @@ const STRINGS = {
     // ══ لوحة مقدّم الخدمة (7B) ═══════════════════════════════════════════════
 
     // ── إشعارات المتصفح ──
-    prov_push_unsupported: "المتصفح ده مابيدعمش إشعارات المتصفح. لو على آيفون، ضيف العاصمة للشاشة الرئيسية الأول وبعدين فعّل الإشعارات.",
     prov_push_title: "إشعارات على الجهاز ده",
     prov_push_on_desc: "هيوصلك تنبيه هنا مع كل طلب جديد، حتى لو اللوحة مقفولة.",
     prov_push_off_desc: "خد تنبيه فوري مع كل طلب جديد — حتى لو اللوحة مقفولة.",
@@ -1958,6 +1964,14 @@ const STRINGS = {
     prov_tg_waiting_before: "مستنيين تضغط",
     prov_tg_waiting_start: "Start",
     prov_tg_waiting_after: "في تليجرام… تقدر تسيب الصفحة مفتوحة. الرابط بينتهي خلال ١٥ دقيقة.",
+    prov_tg_open_manual: "افتح تليجرام",
+    prov_tg_open_manual_hint: "المتصفح منع الصفحة من الفتح — اضغط هنا عشان تفتح تليجرام.",
+    prov_tg_add: "اضف حساب",
+    prov_tg_remove: "إزالة",
+    prov_tg_remove_all: "احذف الكل",
+    prov_tg_unnamed: "حساب تليجرام",
+    prov_tg_multi_desc: "كل حساب مربوط بيوصله كل طلب جديد.",
+    prov_tg_max_note: "وصلت للحد الأقصى من الحسابات. احذف واحد عشان تضيف غيره.",
     prov_tg_err_create: "تعذّر إنشاء الرابط. جرّب تاني.",
     prov_tg_err_disconnect: "تعذّر قطع الاتصال. جرّب تاني.",
 

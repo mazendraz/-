@@ -169,9 +169,11 @@ model Company {
   // internal contact fields for notifications — NOT returned in the public payload
   email               String?
   whatsapp            String?
-  // Telegram chat id for the provider, captured when they link the bot (see
-  // telegram.service). Null → provider not linked, so Telegram lead alerts are
-  // skipped for them (Web Push still applies).
+  // DEPRECATED — superseded by the telegramChats relation below, which lets one
+  // company have several linked Telegram accounts (owner + staff) instead of a
+  // single one that each new link silently overwrote. Kept on the model for one
+  // release so a rollback has its data; nothing reads it any more. Drop it in a
+  // follow-up migration once telegramChats is proven in production.
   telegramChatId      String?
   // Single-use deep-link token behind the dashboard's "Connect Telegram" button.
   // The provider opens t.me/<bot>?start=<token>, so the link is proven by the
@@ -198,10 +200,40 @@ model Company {
   bundleRules    BundleRule[]
   busyWindows    BusyWindow[]
   conversations  Conversation[]
+  telegramChats  CompanyTelegramChat[]
 
   @@index([slug])
   @@index([status])
   @@index([featured])
+}
+
+// One Telegram account receiving a company's alerts. A company may link several
+// (owner plus staff) — every row here gets every lead and chat notification.
+//
+// This replaces the old single Company.telegramChatId, where linking a second
+// phone silently overwrote the first and the person who had been getting alerts
+// simply stopped, with nothing in the UI to explain why.
+//
+// chatId is unique per company, not globally: one Telegram account legitimately
+// belongs to two companies (an owner running two businesses), but linking the
+// same account to the same company twice would just double every message.
+model CompanyTelegramChat {
+  id        String   @id @default(uuid())
+  companyId String
+  // Telegram's numeric chat id, stored as text (it exceeds 32 bits and we only
+  // ever pass it back to the Bot API verbatim).
+  chatId    String
+  // Display label so the dashboard can show WHICH account is linked — otherwise
+  // a provider looking at three rows of digits can't tell which one to remove.
+  // Filled from the Telegram profile at link time; may be null for rows migrated
+  // from the old column, where we never captured a name.
+  label     String?
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, chatId])
+  @@index([companyId])
 }
 
 // A customer who joined a company's waiting list while it was busy. Stores only

@@ -14,6 +14,13 @@ const userUpdate = vi.fn();
 // the assertions below moved with it: asserting "findMany was not called" would
 // now pass trivially, proving nothing.
 const queryRaw = vi.fn();
+// CompanyTelegramChat — a company may link several Telegram accounts, so linking
+// creates a ROW here rather than overwriting a column on Company.
+const tgFindUnique = vi.fn();
+const tgFindMany = vi.fn();
+const tgCount = vi.fn();
+const tgCreate = vi.fn();
+const tgDeleteMany = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     $queryRaw: (...a: unknown[]) => queryRaw(...a),
@@ -21,6 +28,13 @@ vi.mock("@/lib/prisma", () => ({
       findMany: (...a: unknown[]) => findMany(...a),
       findUnique: (...a: unknown[]) => findUnique(...a),
       update: (...a: unknown[]) => update(...a),
+    },
+    companyTelegramChat: {
+      findUnique: (...a: unknown[]) => tgFindUnique(...a),
+      findMany: (...a: unknown[]) => tgFindMany(...a),
+      count: (...a: unknown[]) => tgCount(...a),
+      create: (...a: unknown[]) => tgCreate(...a),
+      deleteMany: (...a: unknown[]) => tgDeleteMany(...a),
     },
     user: {
       findMany: (...a: unknown[]) => userFindMany(...a),
@@ -33,11 +47,19 @@ vi.mock("@/lib/prisma", () => ({
 const {
   buildLeadTelegramMessage,
   handleTelegramUpdate,
-  linkProviderByToken,
+  addProviderChatByToken,
   linkAdminByToken,
   notifyAdminTelegram,
   notifyAdminChatTelegram,
+  MAX_COMPANY_TELEGRAM_CHATS,
 } = await import("@/lib/services/telegram.service");
+
+/** No existing row, room to spare — the happy path for every link test. */
+function tgRoomAvailable() {
+  tgFindUnique.mockResolvedValue(null);
+  tgCount.mockResolvedValue(0);
+  tgCreate.mockResolvedValue({ id: "row-1" });
+}
 
 const lead: ApiLead = {
   id: "lead-1",
@@ -107,6 +129,10 @@ describe("handleTelegramUpdate contact ownership", () => {
     findMany.mockClear();
     queryRaw.mockReset();
     update.mockClear();
+    tgFindUnique.mockReset();
+    tgCount.mockReset();
+    tgCreate.mockReset();
+    tgRoomAvailable();
   });
 
   it("ignores a forwarded contact card belonging to someone else", async () => {
@@ -116,7 +142,7 @@ describe("handleTelegramUpdate contact ownership", () => {
     // The ownership check must short-circuit BEFORE the database is touched —
     // asserted against the query the code really issues.
     expect(queryRaw).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalled();
+    expect(tgCreate).not.toHaveBeenCalled();
   });
 
   it("links the company when the sender shares their own contact", async () => {
@@ -124,10 +150,40 @@ describe("handleTelegramUpdate contact ownership", () => {
     await handleTelegramUpdate({
       message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
     });
-    expect(update).toHaveBeenCalledWith({
-      where: { id: "c1" },
-      data: { telegramChatId: "555" },
+    expect(tgCreate).toHaveBeenCalledWith({
+      data: { companyId: "c1", chatId: "555", label: null },
     });
+  });
+
+  it("adds a SECOND account instead of replacing the first", async () => {
+    // The bug this guards: the old single telegramChatId column meant the second
+    // person to link silently knocked the first one off the alerts.
+    queryRaw.mockResolvedValue([{ id: "c1", name: "Aura Interiors" }]);
+    tgCount.mockResolvedValue(1); // one account already linked
+    await handleTelegramUpdate({
+      message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
+    });
+    expect(tgCreate).toHaveBeenCalledWith({
+      data: { companyId: "c1", chatId: "555", label: null },
+    });
+  });
+
+  it("refuses a link past the per-company cap", async () => {
+    queryRaw.mockResolvedValue([{ id: "c1", name: "Aura Interiors" }]);
+    tgCount.mockResolvedValue(MAX_COMPANY_TELEGRAM_CHATS);
+    await handleTelegramUpdate({
+      message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
+    });
+    expect(tgCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not duplicate an account that is already linked", async () => {
+    queryRaw.mockResolvedValue([{ id: "c1", name: "Aura Interiors" }]);
+    tgFindUnique.mockResolvedValue({ id: "row-existing" });
+    await handleTelegramUpdate({
+      message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
+    });
+    expect(tgCreate).not.toHaveBeenCalled();
   });
 
   it("matches in the DATABASE rather than loading every company into memory", async () => {
@@ -154,7 +210,7 @@ describe("handleTelegramUpdate contact ownership", () => {
     await handleTelegramUpdate({
       message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(tgCreate).not.toHaveBeenCalled();
   });
 
   it("does nothing when no company matches", async () => {
@@ -162,70 +218,125 @@ describe("handleTelegramUpdate contact ownership", () => {
     await handleTelegramUpdate({
       message: { chat: { id: 555 }, contact: { phone_number: "+201012345678", user_id: 555 } },
     });
-    expect(update).not.toHaveBeenCalled();
+    expect(tgCreate).not.toHaveBeenCalled();
   });
 });
 
-describe("linkProviderByToken", () => {
+describe("addProviderChatByToken", () => {
+  const liveToken = () => ({
+    id: "c1",
+    name: "Aura Interiors",
+    telegramLinkExpires: new Date(Date.now() + 60_000),
+  });
+
   beforeEach(() => {
     delete process.env.TELEGRAM_BOT_TOKEN;
     findUnique.mockReset();
     update.mockReset();
+    tgFindUnique.mockReset();
+    tgCount.mockReset();
+    tgCreate.mockReset();
+    tgRoomAvailable();
   });
 
-  it("binds the chat and burns the token when the token is valid", async () => {
-    findUnique.mockResolvedValue({
-      id: "c1",
-      name: "Aura Interiors",
-      telegramLinkExpires: new Date(Date.now() + 60_000),
+  it("adds the chat and burns the token when the token is valid", async () => {
+    findUnique.mockResolvedValue(liveToken());
+    await expect(addProviderChatByToken("tok", 777)).resolves.toEqual({
+      status: "linked",
+      companyName: "Aura Interiors",
     });
-    await expect(linkProviderByToken("tok", 777)).resolves.toBe("Aura Interiors");
-    expect(update).toHaveBeenCalledWith({
-      where: { id: "c1" },
-      data: { telegramChatId: "777", telegramLinkToken: null, telegramLinkExpires: null },
+    expect(tgCreate).toHaveBeenCalledWith({
+      data: { companyId: "c1", chatId: "777", label: null },
     });
-  });
-
-  it("refuses an expired token and does not bind a chat", async () => {
-    findUnique.mockResolvedValue({
-      id: "c1",
-      name: "Aura Interiors",
-      telegramLinkExpires: new Date(Date.now() - 60_000),
-    });
-    await expect(linkProviderByToken("tok", 777)).resolves.toBeNull();
     expect(update).toHaveBeenCalledWith({
       where: { id: "c1" },
       data: { telegramLinkToken: null, telegramLinkExpires: null },
     });
   });
 
-  it("refuses an unknown token", async () => {
-    findUnique.mockResolvedValue(null);
-    await expect(linkProviderByToken("nope", 777)).resolves.toBeNull();
-    expect(update).not.toHaveBeenCalled();
+  it("keeps the accounts already linked — a new link ADDS, never replaces", async () => {
+    findUnique.mockResolvedValue(liveToken());
+    tgCount.mockResolvedValue(2);
+    await addProviderChatByToken("tok", 777);
+    // Nothing deletes or overwrites the existing rows; only an insert happens.
+    expect(tgDeleteMany).not.toHaveBeenCalled();
+    expect(tgCreate).toHaveBeenCalledTimes(1);
   });
 
-  it("redeems a /start <token> deep link end to end", async () => {
+  it("reports the cap instead of silently dropping the link", async () => {
+    findUnique.mockResolvedValue(liveToken());
+    tgCount.mockResolvedValue(MAX_COMPANY_TELEGRAM_CHATS);
+    await expect(addProviderChatByToken("tok", 777)).resolves.toEqual({
+      status: "limit",
+      companyName: "Aura Interiors",
+    });
+    expect(tgCreate).not.toHaveBeenCalled();
+  });
+
+  it("burns the token even when the cap refuses the link", async () => {
+    // Otherwise a live credential stays sitting in the provider's chat history.
+    findUnique.mockResolvedValue(liveToken());
+    tgCount.mockResolvedValue(MAX_COMPANY_TELEGRAM_CHATS);
+    await addProviderChatByToken("tok", 777);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "c1" },
+      data: { telegramLinkToken: null, telegramLinkExpires: null },
+    });
+  });
+
+  it("treats re-linking an already-linked account as success, not a duplicate", async () => {
+    findUnique.mockResolvedValue(liveToken());
+    tgFindUnique.mockResolvedValue({ id: "row-existing" });
+    await expect(addProviderChatByToken("tok", 777)).resolves.toEqual({
+      status: "already",
+      companyName: "Aura Interiors",
+    });
+    expect(tgCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an expired token and does not add a chat", async () => {
     findUnique.mockResolvedValue({
       id: "c1",
       name: "Aura Interiors",
-      telegramLinkExpires: new Date(Date.now() + 60_000),
+      telegramLinkExpires: new Date(Date.now() - 60_000),
     });
-    await handleTelegramUpdate({ message: { chat: { id: 777 }, text: "/start abc123" } });
+    await expect(addProviderChatByToken("tok", 777)).resolves.toEqual({ status: "invalid" });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: "c1" },
+      data: { telegramLinkToken: null, telegramLinkExpires: null },
+    });
+    expect(tgCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unknown token", async () => {
+    findUnique.mockResolvedValue(null);
+    await expect(addProviderChatByToken("nope", 777)).resolves.toEqual({ status: "invalid" });
+    expect(update).not.toHaveBeenCalled();
+    expect(tgCreate).not.toHaveBeenCalled();
+  });
+
+  it("redeems a /start <token> deep link end to end, labelling the row", async () => {
+    findUnique.mockResolvedValue(liveToken());
+    await handleTelegramUpdate({
+      message: {
+        chat: { id: 777 },
+        text: "/start abc123",
+        from: { first_name: "Mazen", username: "mazen" },
+      },
+    });
     expect(findUnique).toHaveBeenCalledWith({
       where: { telegramLinkToken: "abc123" },
       select: { id: true, name: true, telegramLinkExpires: true },
     });
-    expect(update).toHaveBeenCalledWith({
-      where: { id: "c1" },
-      data: { telegramChatId: "777", telegramLinkToken: null, telegramLinkExpires: null },
+    expect(tgCreate).toHaveBeenCalledWith({
+      data: { companyId: "c1", chatId: "777", label: "Mazen (@mazen)" },
     });
   });
 
   it("falls through to the phone prompt on a bare /start", async () => {
     await handleTelegramUpdate({ message: { chat: { id: 777 }, text: "/start" } });
     expect(findUnique).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalled();
+    expect(tgCreate).not.toHaveBeenCalled();
   });
 });
 

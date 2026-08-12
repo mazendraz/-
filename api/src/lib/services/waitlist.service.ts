@@ -184,7 +184,7 @@ export async function convertToLead(companyId: string, entryId: string): Promise
 
   const company = await prisma.company.findUniqueOrThrow({
     where: { id: companyId },
-    select: { id: true, name: true, email: true, whatsapp: true, telegramChatId: true },
+    select: { id: true, name: true, email: true, whatsapp: true },
   });
 
   const lead = await leadsService.createLeadRecord({

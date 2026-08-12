@@ -146,19 +146,48 @@ export async function notifyAdminTelegram(
   }
 }
 
+/** How many Telegram accounts one company may link. */
+export const MAX_COMPANY_TELEGRAM_CHATS = 5;
+
 /**
- * Notify a provider of a new lead over Telegram, to their linked chat id. Never
- * throws. Returns true if dispatched, false if skipped (not configured / provider
- * hasn't linked Telegram).
+ * Every chat id linked to a company. A company may have several (owner + staff);
+ * all of them receive every alert.
+ */
+export async function companyChatIds(companyId: string): Promise<string[]> {
+  const rows = await prisma.companyTelegramChat.findMany({
+    where: { companyId },
+    select: { chatId: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map((r) => r.chatId);
+}
+
+/**
+ * Notify a provider of a new lead over Telegram, on every account they've linked.
+ * Never throws, and one dead chat never blocks the others — the same fail-open
+ * contract as notifyAdminTelegram. Returns true if at least one was dispatched.
  */
 export async function notifyProviderTelegram(
   lead: ApiLead,
-  chatId: string | null | undefined,
+  companyId: string,
   companyName: string,
 ): Promise<boolean> {
   try {
-    if (!isTelegramConfigured() || !chatId) return false;
-    return await sendViaTelegram(chatId, buildLeadTelegramMessage(lead, companyName, false));
+    if (!isTelegramConfigured()) return false;
+    const chatIds = await companyChatIds(companyId);
+    if (chatIds.length === 0) return false;
+
+    const text = buildLeadTelegramMessage(lead, companyName, false);
+    const results = await Promise.allSettled(chatIds.map((id) => sendViaTelegram(id, text)));
+    results.forEach((r, i) => {
+      if (r.status === "rejected") {
+        console.error(
+          `[telegram] provider send failed for lead ${lead.refNumber} (chat ${chatIds[i]}):`,
+          r.reason,
+        );
+      }
+    });
+    return results.some((r) => r.status === "fulfilled" && r.value);
   } catch (err) {
     console.error(`[telegram] provider send failed for lead ${lead.refNumber}:`, err);
     return false;
@@ -201,14 +230,17 @@ export async function notifyAdminChatTelegram(text: string): Promise<boolean> {
   }
 }
 
-/** Notify a provider's linked chat of a new chat message. Never throws. */
+/** Notify every chat a company has linked of a new chat message. Never throws. */
 export async function notifyProviderChatTelegram(
-  chatId: string | null | undefined,
+  companyId: string,
   text: string,
 ): Promise<boolean> {
   try {
-    if (!isTelegramConfigured() || !chatId) return false;
-    return await sendViaTelegram(chatId, text);
+    if (!isTelegramConfigured()) return false;
+    const chatIds = await companyChatIds(companyId);
+    if (chatIds.length === 0) return false;
+    const results = await Promise.allSettled(chatIds.map((id) => sendViaTelegram(id, text)));
+    return results.some((r) => r.status === "fulfilled" && r.value);
   } catch (err) {
     console.error("[telegram] provider chat send failed:", err);
     return false;
@@ -226,12 +258,30 @@ export async function notifyProviderChatTelegram(
 //      and we match it against Company.phone/whatsapp. Kept as a fallback.
 
 /** Minimal shapes of the Telegram Update fields we consume. */
+/** The Telegram profile of whoever sent the update. Used only to label the row. */
+export interface TelegramSender {
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+}
+
 export interface TelegramUpdate {
   message?: {
     chat?: { id: number };
     text?: string;
     contact?: { phone_number: string; user_id?: number };
+    // Used only to label the stored row, so the dashboard can show a name next to
+    // each linked account instead of a bare chat id.
+    from?: TelegramSender;
   };
+}
+
+/** Human-readable label for a linked account, from the Telegram profile. */
+function senderLabel(from: TelegramSender | undefined): string | null {
+  if (!from) return null;
+  const name = [from.first_name, from.last_name].filter(Boolean).join(" ").trim();
+  if (name) return from.username ? `${name} (@${from.username})` : name;
+  return from.username ? `@${from.username}` : null;
 }
 
 /** The bot's @username, needed to build t.me deep links. */
@@ -278,19 +328,36 @@ export async function createProviderLinkUrl(companyId: string): Promise<string |
 }
 
 /**
- * Redeem a deep-link token: bind `chatId` to the company that owns it and burn the
- * token so it can't be replayed. Returns the company name, or null when the token is
- * unknown, already used, or expired.
+ * Outcome of redeeming a provider deep link. Distinguished rather than collapsed to
+ * null because the bot's reply differs meaningfully: "wrong link" and "your company
+ * already has 5 accounts" send the provider to two very different places.
  */
-export async function linkProviderByToken(
+export type ProviderLinkResult =
+  | { status: "linked"; companyName: string }
+  | { status: "already"; companyName: string }
+  | { status: "limit"; companyName: string }
+  | { status: "invalid" };
+
+/**
+ * Redeem a deep-link token: ADD `chatId` to the company that owns it and burn the
+ * token so it can't be replayed.
+ *
+ * Adds rather than replaces — that's the whole point of the multi-chat table. A
+ * company links the owner's phone and their staff's, and everyone gets the alerts.
+ * Re-linking an account that's already on the company is a no-op success, not a
+ * duplicate: it's what happens when someone taps an old link twice, and it should
+ * look like it worked, because from their side it did.
+ */
+export async function addProviderChatByToken(
   token: string,
   chatId: number | string,
-): Promise<string | null> {
+  label?: string | null,
+): Promise<ProviderLinkResult> {
   const company = await prisma.company.findUnique({
     where: { telegramLinkToken: token },
     select: { id: true, name: true, telegramLinkExpires: true },
   });
-  if (!company) return null;
+  if (!company) return { status: "invalid" };
 
   // Expired: clear it so a stale token can't linger, and refuse.
   if (!company.telegramLinkExpires || company.telegramLinkExpires.getTime() < Date.now()) {
@@ -298,22 +365,44 @@ export async function linkProviderByToken(
       where: { id: company.id },
       data: { telegramLinkToken: null, telegramLinkExpires: null },
     });
-    return null;
+    return { status: "invalid" };
   }
 
+  // Burn the token first, and unconditionally. Whatever happens next — success,
+  // limit, a crash — the token must not stay redeemable, or refusing it for the
+  // limit would leave a live credential in someone's chat history.
   await prisma.company.update({
     where: { id: company.id },
-    data: {
-      telegramChatId: String(chatId),
-      telegramLinkToken: null,
-      telegramLinkExpires: null,
-    },
+    data: { telegramLinkToken: null, telegramLinkExpires: null },
   });
-  return company.name;
+
+  const existing = await prisma.companyTelegramChat.findUnique({
+    where: { companyId_chatId: { companyId: company.id, chatId: String(chatId) } },
+    select: { id: true },
+  });
+  if (existing) return { status: "already", companyName: company.name };
+
+  const count = await prisma.companyTelegramChat.count({ where: { companyId: company.id } });
+  if (count >= MAX_COMPANY_TELEGRAM_CHATS) {
+    return { status: "limit", companyName: company.name };
+  }
+
+  await prisma.companyTelegramChat.create({
+    data: { companyId: company.id, chatId: String(chatId), label: label ?? null },
+  });
+  return { status: "linked", companyName: company.name };
 }
 
-/** Disconnect a company's Telegram, stopping its lead alerts on that channel. */
+/** Remove one linked Telegram account from a company. */
+export async function removeProviderChat(companyId: string, chatRowId: string): Promise<void> {
+  // Scoped by companyId as well as id, so a provider can't delete another
+  // company's row by guessing its uuid.
+  await prisma.companyTelegramChat.deleteMany({ where: { id: chatRowId, companyId } });
+}
+
+/** Disconnect ALL of a company's Telegram accounts, stopping its alerts on that channel. */
 export async function unlinkProvider(companyId: string): Promise<void> {
+  await prisma.companyTelegramChat.deleteMany({ where: { companyId } });
   await prisma.company.update({
     where: { id: companyId },
     data: { telegramChatId: null, telegramLinkToken: null, telegramLinkExpires: null },
@@ -400,6 +489,7 @@ export async function unlinkAdmin(userId: string): Promise<void> {
 export async function linkProviderByPhone(
   phone: string,
   chatId: number | string,
+  label?: string | null,
 ): Promise<string | null> {
   const tail = phoneTail(phone);
   if (tail.length < 8) return null; // implausibly short — ignore
@@ -438,9 +528,20 @@ export async function linkProviderByPhone(
   }
   const match = matches[0];
 
-  await prisma.company.update({
-    where: { id: match.id },
-    data: { telegramChatId: String(chatId) },
+  // Same add-don't-replace semantics as the deep link, including the cap. Silently
+  // treating an over-limit phone link as success would be a lie: they'd wait for
+  // alerts that never come.
+  const existing = await prisma.companyTelegramChat.findUnique({
+    where: { companyId_chatId: { companyId: match.id, chatId: String(chatId) } },
+    select: { id: true },
+  });
+  if (existing) return match.name;
+
+  const count = await prisma.companyTelegramChat.count({ where: { companyId: match.id } });
+  if (count >= MAX_COMPANY_TELEGRAM_CHATS) return null;
+
+  await prisma.companyTelegramChat.create({
+    data: { companyId: match.id, chatId: String(chatId), label: label ?? null },
   });
   return match.name;
 }
@@ -462,15 +563,29 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     // identifies the company (provider) or the user (admin), so we never touch the
     // phone number. Tokens are unique per table, so trying company then admin is
     // unambiguous — at most one of the two lookups can ever match.
+    const label = senderLabel(msg?.from);
     const startPayload = msg.text?.match(/^\/start\s+(\S+)$/)?.[1];
     if (startPayload) {
-      const companyName = await linkProviderByToken(startPayload, chatId);
-      const adminName = companyName ? null : await linkAdminByToken(startPayload, chatId);
-      const confirmation = companyName
-        ? `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(companyName)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`
-        : adminName
-          ? `✅ اتربطت يا <b>${escapeHtml(adminName)}</b>! هتوصلك هنا كل تنبيهات الإدارة فوراً.`
-          : `⚠️ الرابط ده منتهي أو مستخدم قبل كده. ادخل على لوحة التحكم واضغط «ربط تليجرام» من تاني عشان تجيب رابط جديد.`;
+      const provider = await addProviderChatByToken(startPayload, chatId, label);
+      const adminName =
+        provider.status === "invalid" ? await linkAdminByToken(startPayload, chatId) : null;
+
+      let confirmation: string;
+      switch (provider.status) {
+        case "linked":
+          confirmation = `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(provider.companyName)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`;
+          break;
+        case "already":
+          confirmation = `✅ حسابك مربوط بالفعل مع <b>${escapeHtml(provider.companyName)}</b>. الإشعارات شغالة عادي.`;
+          break;
+        case "limit":
+          confirmation = `⚠️ <b>${escapeHtml(provider.companyName)}</b> وصلت للحد الأقصى (${MAX_COMPANY_TELEGRAM_CHATS} حسابات تليجرام).\nادخل على لوحة التحكم واحذف حساب قديم الأول.`;
+          break;
+        default:
+          confirmation = adminName
+            ? `✅ اتربطت يا <b>${escapeHtml(adminName)}</b>! هتوصلك هنا كل تنبيهات الإدارة فوراً.`
+            : `⚠️ الرابط ده منتهي أو مستخدم قبل كده. ادخل على لوحة التحكم واضغط «ربط تليجرام» من تاني عشان تجيب رابط جديد.`;
+      }
       await sendViaTelegram(chatId, confirmation, { reply_markup: { remove_keyboard: true } });
       return;
     }
@@ -490,12 +605,12 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         );
         return;
       }
-      const name = await linkProviderByPhone(msg.contact.phone_number, chatId);
+      const name = await linkProviderByPhone(msg.contact.phone_number, chatId, label);
       await sendViaTelegram(
         chatId,
         name
           ? `✅ تم ربط حسابك بنجاح مع <b>${escapeHtml(name)}</b>.\nهيوصلك هنا كل أوردر جديد فوراً.`
-          : `⚠️ الرقم ده مش متسجّل عندنا كمزوّد خدمة. اتأكد إنك بتشارك نفس الرقم المسجّل في حسابك، أو كلّم الإدارة.`,
+          : `⚠️ الرقم ده مش متسجّل عندنا كمزوّد خدمة، أو الشركة وصلت للحد الأقصى (${MAX_COMPANY_TELEGRAM_CHATS} حسابات). اتأكد إنك بتشارك نفس الرقم المسجّل في حسابك، أو كلّم الإدارة.`,
         { reply_markup: { remove_keyboard: true } },
       );
       return;

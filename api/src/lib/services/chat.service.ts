@@ -329,7 +329,7 @@ export async function postMessage(params: {
     select: {
       id: true,
       closed: true,
-      company: { select: { id: true, name: true, telegramChatId: true } },
+      company: { select: { id: true, name: true } },
       lead: { select: { refNumber: true, customerName: true } },
     },
   });
@@ -380,7 +380,7 @@ export async function postMessage(params: {
 function notifyNewMessage(
   conversation: {
     id: string;
-    company: { id: string; name: string; telegramChatId: string | null };
+    company: { id: string; name: string };
     lead: { refNumber: string; customerName: string } | null;
   },
   sender: MessageSenderValue,
@@ -409,7 +409,7 @@ function notifyNewMessage(
         url: "/provider?tab=messages",
         tag: `chat-${conversation.id}`,
       }),
-      notifyProviderChatTelegram(conversation.company.telegramChatId, text),
+      notifyProviderChatTelegram(conversation.company.id, text),
       ...(notifyAdmin
         ? [
             pushAdmins({

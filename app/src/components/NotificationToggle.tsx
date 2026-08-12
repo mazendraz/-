@@ -33,13 +33,16 @@ export default function NotificationToggle() {
 
   if (state === "loading") return null;
 
-  if (state === "unsupported") {
-    return (
-      <p className="font-body-sm text-body-sm text-on-surface-variant">
-        {t(locale, "prov_push_unsupported")}
-      </p>
-    );
-  }
+  // Unsupported browser → render nothing, same as unconfigured.
+  //
+  // This used to print "this browser doesn't support push notifications; on iPhone
+  // add Al Assema to your Home Screen first". It sat at the TOP of the notification
+  // preferences card, above the Telegram and email rows, and providers read it as a
+  // verdict on the whole card — they stopped reading at "notifications don't work
+  // here" and never connected Telegram, which works fine on any browser. A note
+  // nobody can act on, placed where it discredits the options that do work, is
+  // worse than no note.
+  if (state === "unsupported") return null;
 
   if (state === "unconfigured") return null; // server has no VAPID keys → hide entirely
 
