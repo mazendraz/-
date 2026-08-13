@@ -15,6 +15,7 @@ import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import Icon from "../components/Icon";
 import EmptyState from "../components/EmptyState";
+import StarRatingInput from "../components/StarRatingInput";
 
 const STATUS_STYLE: Record<LeadStatus, { bg: string; text: string; icon: string; labelKey: StringKey }> = {
   New: { bg: "bg-blue-100", text: "text-blue-700", icon: "schedule", labelKey: "requests_status_received" },
@@ -340,7 +341,6 @@ function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: 
 
 function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar"; onClose: () => void }) {
   const [rating, setRating] = useState(0);
-  const [hover, setHover] = useState(0);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -389,13 +389,8 @@ function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar
             <p className="text-label text-on-surface-variant mb-5">{t(locale, "lead_review_sub")}</p>
 
             <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "lead_review_rating")}</label>
-            <div className="flex items-center gap-1 mb-5" onMouseLeave={() => setHover(0)}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <button key={i} type="button" onClick={() => setRating(i)} onMouseEnter={() => setHover(i)}
-                  className="p-0.5 touch-press" aria-label={`${i} star${i > 1 ? "s" : ""}`}>
-                  <Icon name="star" className="text-secondary text-headline" style={{ fontVariationSettings: i <= (hover || rating) ? "'FILL' 1" : "'FILL' 0" }} />
-                </button>
-              ))}
+            <div className="mb-5">
+              <StarRatingInput value={rating} onChange={setRating} />
             </div>
 
             <label className="block text-label font-bold text-on-surface mb-1.5">{t(locale, "lead_review_text_label")}</label>

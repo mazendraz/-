@@ -1,9 +1,27 @@
 import { useEffect, useState } from "react";
-import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
+import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 import type { StringKey } from "./i18n";
 
 export type LeadStatus = "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled";
+
+export type VerificationStatus = "PENDING" | "CONFIRMED" | "DISCREPANCY";
+
+/** Provider's "mark as completed" record — present on Lead.completion once the
+ *  provider has submitted it (absent until then). */
+export interface LeadCompletion {
+  providerAmount: number;
+  additionalWorkDescription: string | null;
+  additionalWorkAmount: number | null;
+  notes: string | null;
+  attachments: string[];
+  finalTotal: number;
+  submittedAt: number;
+  verificationStatus: VerificationStatus;
+  clientAmount: number | null;
+  discrepancyNote: string | null;
+  verifiedAt: number | null;
+}
 
 export interface Lead {
   // Feature C — snapshots taken at submission; never recomputed on read.
@@ -29,6 +47,8 @@ export interface Lead {
   // gate status tracking + the review (replaces sending the phone as the secret).
   trackingToken?: string;
   createdAt: number;
+  // Absent until the provider marks the service completed. See LeadCompletion.
+  completion?: LeadCompletion;
 }
 
 export const LEAD_STATUSES: LeadStatus[] = [
@@ -126,8 +146,23 @@ function write(list: Lead[]) {
 // customer's own chat and review access then failed with "Conversation not
 // found" — a 404 that looked like a chat bug but was actually this cache getting
 // silently clobbered by an unrelated dashboard load in the background.
+// Shared across every concurrent caller — see the dedupe note in the function.
+let hydrationInFlight: Promise<void> | null = null;
+
 export async function hydrateLeadsFromApi(): Promise<void> {
   if (!isApiConfigured() || !isAuthenticated()) return;
+  // Every component that calls useLeads() fires this on mount, and a dashboard
+  // page mounts several at once (AdminLayout + the tab body, at minimum) — so
+  // one page load issued N identical pageSize=100 requests, doubled again by
+  // StrictMode in dev. Measured on /admin: 4 per navigation. Callers now share
+  // the first one's promise, the same way useMyLeads already guards its own
+  // hydration with a module-level flag.
+  if (hydrationInFlight) return hydrationInFlight;
+  hydrationInFlight = doHydrateLeads().finally(() => { hydrationInFlight = null; });
+  return hydrationInFlight;
+}
+
+async function doHydrateLeads(): Promise<void> {
   const user = getCurrentUser();
   const endpoint =
     user?.role === "ADMIN"
@@ -146,7 +181,7 @@ export async function hydrateLeadsFromApi(): Promise<void> {
     localStorage.setItem(KEY, JSON.stringify(merged));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch (err) {
-    console.error("Leads hydration from API failed:", err);
+    reportHydrationFailure("Leads hydration from API", err);
   }
 }
 
@@ -157,6 +192,22 @@ export async function hydrateLeadsFromApi(): Promise<void> {
 // Requests" view in sync with the provider/admin pipeline instead of frozen at
 // "New" forever. Runs once per session (statuses change on a human timescale).
 let myLeadsHydrated = false;
+
+// Lets RootLayout's mandatory price-verification gate (see useMyLeadsHydrated
+// below) hold the FIRST paint until the server has actually been asked whether
+// this device has a pending verification — otherwise a refresh briefly renders
+// from the stale pre-verification localStorage snapshot before the async
+// refreshMyLeadsFromApi() call resolves, which is a real (if narrow) way to
+// glimpse/navigate the site before the block reasserts itself. The whole point
+// of "the block must persist after refresh" is that the server, not whatever
+// this device cached last time, decides.
+let myLeadsHydrationSettled = false;
+const myLeadsHydrationListeners = new Set<() => void>();
+
+function markMyLeadsHydrationSettled() {
+  myLeadsHydrationSettled = true;
+  myLeadsHydrationListeners.forEach((fn) => fn());
+}
 
 async function trackLead(
   refNumber: string,
@@ -306,6 +357,50 @@ export function updateLeadStatus(id: string, status: LeadStatus): Promise<void> 
   return Promise.resolve();
 }
 
+// ── Service completion + final price verification ──────────────────────────────
+
+export interface LeadCompletionPayload {
+  providerAmount: number;
+  additionalWork: { description: string; amount: number } | null;
+  notes?: string;
+  attachments?: string[];
+}
+
+/** Provider: mark `leadId` (their own company's) completed with the final amount. */
+export async function submitLeadCompletion(leadId: string, payload: LeadCompletionPayload): Promise<Lead> {
+  const updated = await apiPost<Lead>(`/provider/leads/${leadId}/complete`, payload);
+  // Same trackingToken-preservation as hydrateLeadsFromApi/refreshMyLeadsFromApi:
+  // an admin/provider payload never carries it, so a blind overwrite would wipe
+  // it on the rare device that is both this lead's provider AND its customer.
+  write(read().map((l) =>
+    l.id === leadId ? { ...updated, trackingToken: updated.trackingToken ?? l.trackingToken } : l,
+  ));
+  return updated;
+}
+
+export interface LeadVerificationPayload {
+  ref: string;
+  token?: string;
+  phone?: string;
+  decision: "confirmed" | "discrepancy";
+  clientAmount?: number;
+  note?: string;
+}
+
+/**
+ * Public: the client confirms or disputes the provider's reported final amount
+ * for their own lead. Same ref+token trust model as submitReview.
+ */
+export async function verifyLeadAmount(payload: LeadVerificationPayload): Promise<Lead> {
+  const updated = await apiPost<Lead>("/leads/verify", payload);
+  // trackingToken is never resent by the server (see hydrateLeadsFromApi's
+  // comment) — carry this device's copy forward so chat/review access survives.
+  write(read().map((l) =>
+    l.refNumber === updated.refNumber ? { ...updated, trackingToken: updated.trackingToken ?? l.trackingToken } : l,
+  ));
+  return updated;
+}
+
 export function deleteLead(id: string): Promise<void> {
   write(read().filter((l) => l.id !== id)); // optimistic
   if (isApiConfigured() && isAuthenticated()) {
@@ -397,7 +492,7 @@ export function useMyLeads(): Lead[] {
     // Pull live status for this device's submissions (once per session).
     if (!myLeadsHydrated) {
       myLeadsHydrated = true;
-      void refreshMyLeadsFromApi();
+      void refreshMyLeadsFromApi().finally(markMyLeadsHydrationSettled);
     }
     return () => {
       window.removeEventListener(EVENT, refresh);
@@ -405,4 +500,24 @@ export function useMyLeads(): Lead[] {
     };
   }, []);
   return all.filter((l) => mineIds.has(l.id));
+}
+
+/**
+ * True once this device's one-time server hydration (see useMyLeads above) has
+ * settled — i.e. once we can actually trust `useMyLeads()` to reflect the
+ * server's view rather than whatever was cached before the last visit.
+ * RootLayout holds first paint on this so the price-verification gate can
+ * never render "no pending verification" just because the network call hasn't
+ * come back yet. Must be used alongside a mounted useMyLeads() (or another
+ * caller of refreshMyLeadsFromApi) — this hook only listens, it doesn't trigger.
+ */
+export function useMyLeadsHydrated(): boolean {
+  const [settled, setSettled] = useState(myLeadsHydrationSettled);
+  useEffect(() => {
+    if (settled) return;
+    const listener = () => setSettled(true);
+    myLeadsHydrationListeners.add(listener);
+    return () => { myLeadsHydrationListeners.delete(listener); };
+  }, [settled]);
+  return settled;
 }

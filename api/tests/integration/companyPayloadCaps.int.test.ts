@@ -109,6 +109,9 @@ describe("company payload is bounded on every embedded relation", () => {
   it("caps them on the ADMIN company list, where they ride along per row", async () => {
     const res = await adminCompaniesGET(
       req(`/api/admin/companies?search=${encodeURIComponent("Caps Co")}&pageSize=12`, adminToken),
+      // Route handlers take (request, context); this one ignores the context,
+      // but the type is not optional — same as api.int.test.ts's call site.
+      undefined as never,
     );
     expect(res.status).toBe(200);
     const page = await res.json();

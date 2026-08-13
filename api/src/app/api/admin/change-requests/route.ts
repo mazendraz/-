@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { ok, page } from "@/lib/utils/response";
+import { page } from "@/lib/utils/response";
 import { adminOnly } from "@/lib/middleware/guards";
 import { changeRequestListQuerySchema } from "@/lib/validation/changeRequests";
 import * as changeRequests from "@/lib/services/changeRequests.service";

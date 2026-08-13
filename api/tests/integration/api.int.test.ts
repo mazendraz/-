@@ -92,7 +92,9 @@ beforeAll(async () => {
   activeSlug = `${tag}-active`;
   suspendedSlug = `${tag}-susp`;
   const active = await prisma.company.create({ data: companyData(activeSlug, "ACTIVE", categoryId) });
-  const suspended = await prisma.company.create({ data: companyData(suspendedSlug, "SUSPENDED", categoryId) });
+  // Created for its side effect only — the suspended company must EXIST for the
+  // public-listing tests to prove it is filtered out; its id is never needed.
+  await prisma.company.create({ data: companyData(suspendedSlug, "SUSPENDED", categoryId) });
   const other = await prisma.company.create({ data: companyData(`${tag}-other`, "ACTIVE", categoryId) });
   activeId = active.id;
   otherId = other.id;
@@ -297,7 +299,8 @@ describe("lead tracking (token replaces phone as the secret)", () => {
 
 describe("company contact fields (admin-only)", () => {
   it("returns email/whatsapp to admins but never in the public payload", async () => {
-    const company = await prisma.company.create({
+    // Looked up by slug below, not by id — the fixture only needs to exist.
+    await prisma.company.create({
       data: {
         ...companyData(`${tag}-contact`, "ACTIVE", categoryId),
         email: "owner@contact.test",

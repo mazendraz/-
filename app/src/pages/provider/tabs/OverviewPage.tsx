@@ -90,6 +90,7 @@ export default function OverviewPage() {
                 onLeadStatusChange={handleLeadStatus}
                 onWaitlistStatusChange={handleWaitlistStatus}
                 onWaitlistDelete={handleWaitlistDelete}
+                onComplete={(lead) => navigate(`/provider/leads/${lead.id}/complete`, { state: { lead } })}
               />
             </div>
             {/* One column even at sm: this sits inside a ChartCard that is
@@ -110,6 +111,7 @@ export default function OverviewPage() {
         lead={selectedLead}
         onClose={() => setSelectedLead(null)}
         onStatusChange={handleLeadStatus}
+        onComplete={() => navigate(`/provider/leads/${selectedLead.id}/complete`, { state: { lead: selectedLead } })}
         // No onDelete: a provider can't delete a lead. That was true of the
         // desktop rows too — layout changed, capabilities did not.
       />

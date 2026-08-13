@@ -112,7 +112,11 @@ export default function ReviewsPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-body text-on-surface-variant leading-relaxed flex-grow mb-4">"{r.text}"</p>
+                    {r.text.trim()
+                      ? <p className="text-body text-on-surface-variant leading-relaxed flex-grow mb-4">"{r.text}"</p>
+                      // A star-only review is a valid submission — don't render
+                      // it as an empty pair of quote marks.
+                      : <p className="text-body text-outline italic leading-relaxed flex-grow mb-4">{t(locale, "review_rating_only")}</p>}
                     <div className="flex items-center gap-3 pt-3 border-t border-outline-variant/20">
                       <div className="w-9 h-9 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-sm">{r.avatar}</div>
                       <div>

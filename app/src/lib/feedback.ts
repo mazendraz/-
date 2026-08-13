@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
+import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 import type { StringKey } from "./i18n";
 
@@ -98,7 +98,7 @@ export async function hydrateFeedbackFromApi(): Promise<void> {
     localStorage.setItem(KEY, JSON.stringify(rows.map(fromApi)));
     window.dispatchEvent(new CustomEvent(EVENT));
   } catch (err) {
-    console.error("Feedback hydration from API failed:", err);
+    reportHydrationFailure("Feedback hydration from API", err);
   }
 }
 

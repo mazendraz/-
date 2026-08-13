@@ -159,6 +159,10 @@ export default function Select({
         />
       </button>
 
+      {/* z-[110]: must outrank every modal wrapper in the app (several use
+          z-[80]/z-[100] for their own opaque backdrop) or the panel paints
+          behind an opaque modal despite being open — invisible, not missing.
+          Below the z-[200] toast layer, which must always stay on top. */}
       {open && coords && createPortal(
         <div
           ref={panelRef}
@@ -167,7 +171,7 @@ export default function Select({
             top: coords.top, bottom: coords.bottom, left: coords.left, right: coords.right,
             minWidth: coords.width, maxHeight: coords.maxHeight,
           }}
-          className={`select-panel-enter fixed z-50 overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
+          className={`select-panel-enter fixed z-[110] overflow-y-auto overscroll-contain rounded-2xl border border-outline-variant/25 bg-surface-container-lowest shadow-bloom p-1.5 ${panelClassName}`}
         >
           {options.map((o) => {
             const isSelected = o.value === value;

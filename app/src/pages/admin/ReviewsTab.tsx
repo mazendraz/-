@@ -135,7 +135,9 @@ export function AdminCustomerReviews() {
                   {"★".repeat(r.rating)}<span className="text-outline/30">{"★".repeat(Math.max(0, 5 - r.rating))}</span>
                 </span>
               </div>
-              <p className="text-label text-on-surface-variant leading-relaxed mt-2 flex-grow">{r.text}</p>
+              {r.text.trim()
+                ? <p className="text-label text-on-surface-variant leading-relaxed mt-2 flex-grow">{r.text}</p>
+                : <p className="text-label text-outline italic leading-relaxed mt-2 flex-grow">{t(locale, "review_rating_only")}</p>}
               <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-outline-variant/15">
                 <span className="text-caption text-outline">{r.district} · {r.date}</span>
                 <div className="flex gap-2">
@@ -289,7 +291,11 @@ export function ReviewCard({ review: r }: { review: SiteReview }) {
           </button>
         </div>
       </div>
-      <p className="text-label text-on-surface-variant leading-relaxed flex-grow">"{r.text}"</p>
+      {r.text.trim()
+        ? <p className="text-label text-on-surface-variant leading-relaxed flex-grow">"{r.text}"</p>
+        // Rating-only submissions are valid, so say so rather than print the
+        // empty quotes an unconditional render produced.
+        : <p className="text-label text-outline italic leading-relaxed flex-grow">{t(locale, "review_rating_only")}</p>}
       <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/15">
         <div className="w-7 h-7 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-caption flex-shrink-0">
           {r.name.charAt(0)}

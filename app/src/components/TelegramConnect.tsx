@@ -209,7 +209,7 @@ export default function TelegramConnect({ scope = "provider" }: { scope?: Telegr
                 aria-hidden="true"
                 translate="no"
               >
-                person
+                {"person"}
               </span>
               <span className="flex-1 font-body-sm text-body-sm text-on-surface">
                 {c.label || t(locale, "prov_tg_unnamed")}

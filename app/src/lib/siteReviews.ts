@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { HOME_REVIEWS } from "./data";
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete, isApiConfigured } from "./api";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type SiteReview = {
@@ -86,7 +86,7 @@ export async function hydrateSiteReviewsFromApi(): Promise<void> {
       /* settings is best-effort; keep last known value */
     }
   } catch (err) {
-    console.error("Site reviews hydration from API failed:", err);
+    reportHydrationFailure("Site reviews hydration from API", err);
   }
 }
 

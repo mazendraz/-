@@ -10,11 +10,13 @@ import BottomNav from "./components/BottomNav";
 import { LocaleProvider, useLocale } from "./context/LocaleContext";
 import { ToastProvider } from "./context/ToastContext";
 import StatusScreen from "./components/StatusScreen";
+import PriceVerificationGate from "./components/priceVerification/PriceVerificationGate";
 import { useMaintenance } from "./lib/settings";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { useHashScroll } from "./hooks/useHashScroll";
 import { useSaved } from "./hooks/useSaved";
 import { getCurrentUser } from "./lib/auth";
+import { useMyLeads, useMyLeadsHydrated } from "./lib/requests";
 import { hasFullBleedHero } from "./lib/heroRoutes";
 import { t } from "./lib/i18n";
 
@@ -34,6 +36,36 @@ export default function RootLayout() {
   useHashScroll();
   const { status: maintenance, loading: maintenanceLoading } = useMaintenance();
   const backendOffline = useBackendHealth();
+
+  // ── Mandatory final-price verification gate ──────────────────────────────
+  // A client (no account — see lib/requests.ts) with a PENDING completion on
+  // any of their own leads must resolve it before doing anything else on the
+  // site: every route under RootLayout hits this same check, so there's no
+  // URL to type or link to click that skips it (see PriceVerificationGate).
+  //
+  // `gatedLeadId` LATCHES onto the lead once found, rather than re-deriving
+  // "should the gate be showing" from live data on every render: the moment
+  // the client confirms/disputes, myLeads already reflects the resolved
+  // verificationStatus (verifyLeadAmount writes it straight to localStorage),
+  // which would otherwise yank the gate away mid-flow, before the confirmation
+  // panel and the optional review step ever get a chance to render. The gate
+  // only releases when PriceVerificationGate itself calls onResolved (review
+  // submitted or explicitly skipped).
+  const myLeads = useMyLeads();
+  // Closes a real refresh-bypass window: without this, the FIRST render after a
+  // hard refresh paints from whatever this device cached before the provider
+  // ever completed the service (no completion field yet), so livePendingLead
+  // reads as undefined and the normal site flashes for the one network
+  // round-trip refreshMyLeadsFromApi() takes to come back. "The block must
+  // persist after refresh" means the server gets asked BEFORE we decide,
+  // not that we decide first and correct ourselves after — see useMyLeadsHydrated.
+  const leadsHydrated = useMyLeadsHydrated();
+  const [gatedLeadId, setGatedLeadId] = useState<string | null>(null);
+  const livePendingLead = myLeads.find((l) => l.completion?.verificationStatus === "PENDING");
+  useEffect(() => {
+    if (livePendingLead && !gatedLeadId) setGatedLeadId(livePendingLead.id);
+  }, [livePendingLead, gatedLeadId]);
+  const gatedLead = gatedLeadId ? myLeads.find((l) => l.id === gatedLeadId) : undefined;
 
   const openSearch = () => setSearchOpen(true);
 
@@ -124,6 +156,35 @@ export default function RootLayout() {
         <Logo className="h-11 w-11 object-contain" width={44} height={44} />
         <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
       </div>
+    );
+  }
+
+  // Same reasoning as maintenanceLoading above, for the same reason: render
+  // nothing routable until we've actually asked the server whether this device
+  // has a pending price verification, so there is no frame where a stale local
+  // cache gets to decide that for us.
+  if (!leadsHydrated) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <Logo className="h-11 w-11 object-contain" width={44} height={44} />
+        <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+      </div>
+    );
+  }
+
+  // No <TopNav>/<BottomNav> in this branch — that is what makes the block
+  // structural rather than a dismissible modal. It replaces the entire public
+  // shell for every pathname (this component renders regardless of `pathname`),
+  // survives a hard refresh (recomputed from localStorage + the existing
+  // /leads/track hydration on every mount), and never touches /admin or
+  // /provider (separate route trees in main.tsx that never mount RootLayout).
+  if (gatedLead) {
+    return (
+      <LocaleProvider>
+        <ToastProvider>
+          <PriceVerificationGate lead={gatedLead} onResolved={() => setGatedLeadId(null)} />
+        </ToastProvider>
+      </LocaleProvider>
     );
   }
 

@@ -268,6 +268,9 @@ export interface ApiLead {
   discountPercent?: number;
   /** At least one line is quoted on site, so the estimate is not the whole job. */
   hasOnInspection?: boolean;
+  // Absent (not null) when the provider hasn't completed this lead yet — see
+  // ApiLeadCompletion below.
+  completion?: ApiLeadCompletion;
 }
 
 /** One line of a multi-item request. */
@@ -303,6 +306,52 @@ export interface ApiLeadPayload {
 /** PATCH /leads/:id — body shape */
 export interface ApiLeadStatusPatch {
   status: ApiLeadStatus;
+}
+
+// ── Lead completion + final price verification ─────────────────────────────────
+
+export type ApiVerificationStatus = "PENDING" | "CONFIRMED" | "DISCREPANCY";
+
+/**
+ * Provider's "mark as completed" record, riding along on every ApiLead once the
+ * provider has submitted it (see leadInclude in leads.service.ts) — there is no
+ * separate GET endpoint for it. `finalTotal` is derived
+ * (providerAmount + (additionalWorkAmount ?? 0)), never stored.
+ */
+export interface ApiLeadCompletion {
+  providerAmount: number;
+  additionalWorkDescription: string | null;
+  additionalWorkAmount: number | null;
+  notes: string | null;
+  attachments: string[];
+  finalTotal: number;
+  submittedAt: number; // epoch ms
+  verificationStatus: ApiVerificationStatus;
+  clientAmount: number | null;
+  discrepancyNote: string | null;
+  verifiedAt: number | null; // epoch ms, null until the client responds
+}
+
+/** POST /provider/leads/:id/complete — body shape. */
+export interface ApiLeadCompletionPayload {
+  providerAmount: number;
+  additionalWork: { description: string; amount: number } | null;
+  notes?: string;
+  attachments?: string[];
+}
+
+/**
+ * POST /leads/verify — public, ref+token (or phone) gated, same trust model as
+ * /leads/track and /reviews. clientAmount is required when decision is
+ * "discrepancy" (enforced in validation, not just here).
+ */
+export interface ApiLeadVerificationPayload {
+  ref: string;
+  token?: string;
+  phone?: string;
+  decision: "confirmed" | "discrepancy";
+  clientAmount?: number;
+  note?: string;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

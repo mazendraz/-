@@ -136,6 +136,22 @@ export default function ProfileEditor() {
 
   async function save() {
     if (!profile || dirty.length === 0) return;
+
+    // The image pickers clear to "" (ImagePicker's remove ×), but the server's
+    // imageRef refuses an empty string — and it rejects the WHOLE change
+    // request, so a provider who removed their logo intending to upload a new
+    // one lost every other edit in the batch (tagline, badges, gallery) to a
+    // bare "Validation failed" that never said which field was at fault.
+    // Caught here instead, naming the field, before anything is sent.
+    const blankImage = dirty.find(
+      (k) => FIELDS.find((f) => f.key === k)?.type === "url" && !String(form[k] ?? "").trim(),
+    );
+    if (blankImage) {
+      const label = FIELD_LABEL_KEYS[blankImage] ? t(locale, FIELD_LABEL_KEYS[blankImage]) : blankImage;
+      setError(`${label}: ${t(locale, "prov_profile_err_image_required")}`);
+      return;
+    }
+
     setSaving(true);
     setError("");
     setFlash(false);

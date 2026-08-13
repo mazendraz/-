@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useServerSearch } from "../../../hooks/useServerSearch";
 import { isApiConfigured } from "../../../lib/api";
 import { type Lead, type LeadStatus, LEAD_STATUS_KEYS } from "../../../lib/requests";
@@ -20,6 +20,7 @@ const LEAD_FILTERS: (LeadStatus | "All" | "Waitlist")[] = ["All", "New", "Contac
 export default function LeadsPage() {
   const { locale } = useLocale();
   const location = useLocation();
+  const navigate = useNavigate();
   const { leads, stats } = useProvider();
   const leadApiMode = isApiConfigured();
 
@@ -155,7 +156,11 @@ export default function LeadsPage() {
                     className={`hidden lg:block bg-surface-container-lowest rounded-2xl shadow-bloom overflow-hidden transition-opacity ${leadsRefetching ? "opacity-60 pointer-events-none" : ""}`}
                     aria-busy={leadsRefetching}
                   >
-                    <LeadRows rows={mergedRows} onOpen={handleOpenRow} onLeadStatusChange={handleLeadStatus} onWaitlistStatusChange={handleWaitlistStatus} onWaitlistDelete={handleWaitlistDelete} />
+                    <LeadRows
+                      rows={mergedRows} onOpen={handleOpenRow} onLeadStatusChange={handleLeadStatus}
+                      onWaitlistStatusChange={handleWaitlistStatus} onWaitlistDelete={handleWaitlistDelete}
+                      onComplete={(lead) => navigate(`/provider/leads/${lead.id}/complete`, { state: { lead } })}
+                    />
                   </div>
                   <div
                     className={`lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-3 transition-opacity ${leadsRefetching ? "opacity-60 pointer-events-none" : ""}`}
@@ -179,6 +184,7 @@ export default function LeadsPage() {
         lead={selectedLead}
         onClose={() => setSelectedLead(null)}
         onStatusChange={handleLeadStatus}
+        onComplete={() => navigate(`/provider/leads/${selectedLead.id}/complete`, { state: { lead: selectedLead } })}
         // No onDelete: a provider can't delete a lead.
       />
     )}

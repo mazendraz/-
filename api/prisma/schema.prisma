@@ -361,6 +361,9 @@ model Lead {
   // Back-relation for WaitlistEntry.convertedLeadId — the waitlist entry this lead
   // was accepted from, if any. Absent for a lead created the normal way.
   waitlistEntry WaitlistEntry?
+  // Provider's final-price completion + the client's price verification, if the
+  // provider has marked this lead done. See LeadCompletion.
+  completion    LeadCompletion?
 
   @@index([companyId])
   @@index([status])
@@ -368,6 +371,54 @@ model Lead {
   // Serves the provider/admin lead lists: WHERE companyId=? [AND status=?]
   // ORDER BY createdAt DESC — filter + sort from one index.
   @@index([companyId, status, createdAt])
+}
+
+// Client's response to the provider's reported final amount. Only meaningful once
+// a LeadCompletion row exists — its mere existence means "submitted"; this enum
+// tracks what happens next. See LeadCompletion.
+enum LeadVerificationStatus {
+  PENDING // provider submitted, client hasn't responded yet
+  CONFIRMED // client agrees with the provider's amount
+  DISCREPANCY // client reported a different amount
+}
+
+// One-time provider "mark as completed" record for a Lead: the final amount +
+// optional additional work, and (once the client responds) the price
+// verification outcome. Creating this row is paired with flipping Lead.status to
+// COMPLETED (see leadCompletion.service.submitCompletion) — that's the ONE
+// existing status the review flow already gates on (reviews.service
+// submitFromLead), so no new status/state-machine was added to LeadStatus.
+//
+// `leadId @unique` is the DB-level guard against submitting completion twice; the
+// PENDING -> non-PENDING transition (claimed via a conditional updateMany, same
+// pattern as Lead.reviewedAt in reviews.service) is the guard against verifying
+// twice.
+model LeadCompletion {
+  id     String @id @default(uuid())
+  leadId String @unique
+
+  // What the provider reported.
+  providerAmount             Int // base/final service amount, EGP
+  additionalWorkDescription  String? @db.Text
+  additionalWorkAmount       Int?
+  notes                      String? @db.Text
+  // Supabase Storage URLs (provider/upload, "projects" bucket) — optional photos.
+  attachments                String[] @default([])
+  submittedAt                DateTime @default(now())
+
+  // What the client reported back. clientAmount/discrepancyNote/verifiedAt are
+  // only set once verificationStatus leaves PENDING.
+  verificationStatus LeadVerificationStatus @default(PENDING)
+  clientAmount       Int?
+  discrepancyNote    String? @db.Text
+  verifiedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([verificationStatus])
 }
 
 model User {

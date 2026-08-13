@@ -389,7 +389,13 @@ export default function CompanyProfile() {
                 {company.reviews.map((r, i) => (
                   <div key={i} className="bg-surface-container-lowest rounded-2xl p-5 shadow-bloom">
                     <Stars n={r.rating} size="text-label" />
-                    <p className="text-label text-on-surface-variant leading-relaxed mt-3 mb-4">&ldquo;{r.text}&rdquo;</p>
+                    {/* A star-only review is valid — the price-verification
+                        flow's review step labels the comment box "optional" and
+                        submitReviewSchema accepts an empty string. Rendering it
+                        unconditionally printed a bare pair of quote marks. */}
+                    {r.text.trim() && (
+                      <p className="text-label text-on-surface-variant leading-relaxed mt-3 mb-4">&ldquo;{r.text}&rdquo;</p>
+                    )}
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-label flex-shrink-0">
                         {r.avatar}

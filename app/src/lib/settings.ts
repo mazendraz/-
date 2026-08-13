@@ -3,7 +3,7 @@
 // in localStorage, refreshed from the API, merged over defaults so the UI always
 // renders something sensible. In demo mode (no API) the defaults are used.
 import { useEffect, useState } from "react";
-import { apiGet, apiPut, isApiConfigured } from "./api";
+import { apiGet, apiPut, isApiConfigured, reportHydrationFailure } from "./api";
 
 export interface PlatformSettings {
   site_name: string;
@@ -93,7 +93,7 @@ export async function hydrateSettingsFromApi(): Promise<void> {
     write({ ...SETTINGS_DEFAULTS, ...s });
     applyFavicon(s.favicon_url);
   } catch (err) {
-    console.error("Settings hydration from API failed:", err);
+    reportHydrationFailure("Settings hydration from API", err);
   }
 }
 

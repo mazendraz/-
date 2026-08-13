@@ -10,6 +10,8 @@ import { t, type StringKey } from "../../lib/i18n";
 import { formatDate, formatDateTime } from "../../lib/format";
 import Icon from "../../components/Icon";
 import Select from "../../components/Select";
+import FinalPriceSummary from "./components/FinalPriceSummary";
+import VerificationBadge from "../../components/VerificationBadge";
 
 // Column order is the table's; the trailing empty header is the actions column.
 const LEAD_COLUMNS: (StringKey | null)[] = [
@@ -61,9 +63,12 @@ export function LeadMobileCard({ row, onOpen }: { row: LeadListRow; onOpen: (r: 
   const lead = row.data;
   return (
     <button onClick={() => onOpen(row)} className="w-full text-start bg-surface-container-lowest rounded-2xl shadow-bloom p-4 active:scale-[0.99] transition-transform">
-      <div className="flex items-center justify-between gap-2 mb-2.5">
+      <div className="flex items-center justify-between gap-2 mb-2.5 flex-wrap">
         <span className="font-mono text-caption text-primary font-bold">{lead.refNumber}</span>
-        <span className={`text-caption font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[lead.status]}`}>{t(locale, LEAD_STATUS_KEYS[lead.status])}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`text-caption font-bold px-2.5 py-1 rounded-full ${STATUS_COLORS[lead.status]}`}>{t(locale, LEAD_STATUS_KEYS[lead.status])}</span>
+          {lead.completion && <VerificationBadge status={lead.completion.verificationStatus} locale={locale} />}
+        </div>
       </div>
       <p className="font-bold text-body text-on-surface leading-tight">{lead.name}</p>
       <p className="text-label text-outline mb-2.5">{lead.phone}</p>
@@ -133,14 +138,17 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
               <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap max-w-[140px] truncate">{row.data.service}</td>
               <td className="px-4 py-3 text-on-surface-variant whitespace-nowrap">{row.data.district}</td>
               <td className="px-4 py-3">
-                <Select
-                  className="!w-auto"
-                  stopPropagation
-                  triggerClassName={`rounded-full px-2.5 py-1 text-caption font-bold border-none cursor-pointer flex items-center gap-1 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${STATUS_COLORS[row.data.status]}`}
-                  value={row.data.status}
-                  onChange={(v) => onLeadStatusChange(row.data.id, v as LeadStatus)}
-                  options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
-                />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Select
+                    className="!w-auto"
+                    stopPropagation
+                    triggerClassName={`rounded-full px-2.5 py-1 text-caption font-bold border-none cursor-pointer flex items-center gap-1 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${STATUS_COLORS[row.data.status]}`}
+                    value={row.data.status}
+                    onChange={(v) => onLeadStatusChange(row.data.id, v as LeadStatus)}
+                    options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
+                  />
+                  {row.data.completion && <VerificationBadge status={row.data.completion.verificationStatus} locale={locale} />}
+                </div>
               </td>
               <td className="px-4 py-3 text-outline text-caption whitespace-nowrap">{formatDate(row.data.createdAt, locale)}</td>
               <td className="px-4 py-3"><button onClick={() => onOpen(row)} className="text-primary text-caption font-bold hover:underline whitespace-nowrap">{t(locale, "admin_lead_details")}</button></td>
@@ -152,16 +160,38 @@ export function LeadTable({ rows, onOpen, onLeadStatusChange, onWaitlistStatusCh
   );
 }
 
-export function LeadModal({ lead, onClose, onStatusChange, onDelete }: {
+export function LeadModal({ lead, onClose, onStatusChange, onDelete, onComplete }: {
   lead: Lead; onClose: () => void; onStatusChange: (id: string, s: LeadStatus) => void;
   /** Omit to hide the delete affordance entirely. The provider dashboard
    * (DM-03) reuses this modal but has no lead-delete capability — deleting
    * another party's lead is an admin action, and rendering a dead button (or
    * quietly granting the permission) would both be wrong. */
   onDelete?: (id: string) => void;
+  /** Provider-only: opens the service-completion flow (Final Price
+   * Verification feature). Never passed from the admin usage of this modal —
+   * an admin never completes an order on a provider's behalf. */
+  onComplete?: () => void;
 }) {
   const { locale } = useLocale();
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Provider-only guard: the status dropdown is a generic status-setter that
+  // predates the completion flow, and "Completed" is still one of its options
+  // — without this, a provider could drag the lead straight to Completed from
+  // here, skipping the final-amount/additional-work capture entirely (no
+  // LeadCompletion row, no client verification ever triggered). Selecting
+  // Completed here now opens the same completion flow the button below opens,
+  // instead of PATCHing the status directly. Admin (no onComplete) keeps the
+  // old direct-set behavior — there's no admin-side completion form to send
+  // them to, and this must not change what admins could already do.
+  function handleStatusChange(v: string) {
+    if (v === "Completed" && lead.status !== "Completed" && onComplete) {
+      onComplete();
+      return;
+    }
+    onStatusChange(lead.id, v as LeadStatus);
+  }
+
   return (
     <Modal title={lead.refNumber} onClose={onClose}>
       <div className="p-5">
@@ -170,10 +200,19 @@ export function LeadModal({ lead, onClose, onStatusChange, onDelete }: {
           <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "admin_lead_status")}</label>
           <Select
             value={lead.status}
-            onChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+            onChange={handleStatusChange}
             options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
           />
         </div>
+        {onComplete && !lead.completion && lead.status !== "Cancelled" && (
+          <button
+            onClick={onComplete}
+            className="w-full py-2.5 rounded-xl bg-primary text-on-primary font-bold text-label hover:bg-primary-container transition-colors"
+          >
+            {t(locale, "completion_mark_button")}
+          </button>
+        )}
+        {lead.completion && <FinalPriceSummary completion={lead.completion} locale={locale} />}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={lead.name} /><InfoField label={t(locale, "admin_lead_phone")} val={lead.phone} />
           <InfoField label={t(locale, "admin_lead_company")} val={lead.companyName} /><InfoField label={t(locale, "admin_lead_service")} val={lead.service} />

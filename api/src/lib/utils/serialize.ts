@@ -9,6 +9,7 @@ import type {
   Company,
   BusyWindow,
   Lead,
+  LeadCompletion,
   LeadItem,
   Offering,
   OfferingTier,
@@ -22,6 +23,7 @@ import type {
   ApiCategory,
   ApiCompany,
   ApiLead,
+  ApiLeadCompletion,
   ApiLeadItem,
   ApiLeadStatus,
   ApiProject,
@@ -171,6 +173,10 @@ export type LeadWithCompany = Lead & {
   // Optional so callers predating Feature C still typecheck; a missing value
   // serializes to [] — the classic single-service request.
   items?: LeadItem[];
+  // Optional so callers that don't include the relation still typecheck; a
+  // missing value serializes to no `completion` key at all (see serializeLead) —
+  // "not asked for" must not be confused with "provider hasn't completed this".
+  completion?: LeadCompletion | null;
 };
 
 // ── Entity serializers ────────────────────────────────────────────────────────
@@ -407,6 +413,31 @@ export function serializeLead(l: LeadWithCompany): ApiLead {
     estimatedMax: l.estimatedMax ?? null,
     discountPercent: l.discountPercent ?? 0,
     hasOnInspection: l.hasOnInspection ?? false,
+    // Absent (not null) when the relation wasn't loaded OR the provider hasn't
+    // completed this lead yet — both read as "no completion" to the client,
+    // which is the correct behavior either way.
+    ...(l.completion ? { completion: serializeLeadCompletion(l.completion) } : {}),
+  };
+}
+
+/**
+ * verificationStatus values (PENDING/CONFIRMED/DISCREPANCY) are identical
+ * strings on both sides of the boundary — unlike LeadStatus, no label mapping
+ * table is needed.
+ */
+export function serializeLeadCompletion(c: LeadCompletion): ApiLeadCompletion {
+  return {
+    providerAmount: c.providerAmount,
+    additionalWorkDescription: c.additionalWorkDescription ?? null,
+    additionalWorkAmount: c.additionalWorkAmount ?? null,
+    notes: c.notes ?? null,
+    attachments: c.attachments,
+    finalTotal: c.providerAmount + (c.additionalWorkAmount ?? 0),
+    submittedAt: toEpochMs(c.submittedAt),
+    verificationStatus: c.verificationStatus,
+    clientAmount: c.clientAmount ?? null,
+    discrepancyNote: c.discrepancyNote ?? null,
+    verifiedAt: c.verifiedAt ? toEpochMs(c.verifiedAt) : null,
   };
 }
 

@@ -225,6 +225,43 @@ export interface ApiLeadStatusPatch {
   status: ApiLeadStatus;
 }
 
+// ── Lead completion + final price verification ─────────────────────────────────
+
+export type ApiVerificationStatus = "PENDING" | "CONFIRMED" | "DISCREPANCY";
+
+/** Provider's "mark as completed" record — rides along on ApiLead.completion. */
+export interface ApiLeadCompletion {
+  providerAmount: number;
+  additionalWorkDescription: string | null;
+  additionalWorkAmount: number | null;
+  notes: string | null;
+  attachments: string[];
+  finalTotal: number;
+  submittedAt: number;
+  verificationStatus: ApiVerificationStatus;
+  clientAmount: number | null;
+  discrepancyNote: string | null;
+  verifiedAt: number | null;
+}
+
+/** POST /provider/leads/:id/complete — body shape. */
+export interface ApiLeadCompletionPayload {
+  providerAmount: number;
+  additionalWork: { description: string; amount: number } | null;
+  notes?: string;
+  attachments?: string[];
+}
+
+/** POST /leads/verify — public, ref+token (or phone) gated body shape. */
+export interface ApiLeadVerificationPayload {
+  ref: string;
+  token?: string;
+  phone?: string;
+  decision: "confirmed" | "discrepancy";
+  clientAmount?: number;
+  note?: string;
+}
+
 // ── Offerings (Feature B) ─────────────────────────────────────────────────────
 // These live here, not in offerings.ts, because api/prisma/seed.ts imports
 // data.ts across the package boundary. Anything data.ts references is typechecked

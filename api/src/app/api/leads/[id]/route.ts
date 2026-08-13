@@ -14,11 +14,15 @@ export const PATCH = authed(async (request: NextRequest, ctx: Ctx, user) => {
   const { id } = await ctx.params;
   const { status } = leadStatusSchema.parse(await request.json());
 
-  if (user.role !== "ADMIN") {
+  const isAdmin = user.role === "ADMIN";
+  if (!isAdmin) {
     // 404 if the lead doesn't exist; 403 if it belongs to another company.
     const ownerCompanyId = await leadsService.getOwnerCompanyId(id);
     assertOwnership(user, ownerCompanyId);
   }
 
-  return ok(await leadsService.updateStatus(id, status));
+  // Providers must go through POST /provider/leads/[id]/complete to reach
+  // COMPLETED, so the final amount is captured and the client's verification
+  // gate can fire. Admins keep the direct set — see updateStatus's comment.
+  return ok(await leadsService.updateStatus(id, status, { requireCompletion: !isAdmin }));
 });

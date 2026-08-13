@@ -215,7 +215,13 @@ export default function Home() {
         {/* ═══════════════════════════════════════════════════
             SERVICES
         ═══════════════════════════════════════════════════ */}
-        <section id="services" className="pt-10 md:pt-14 pb-14 md:pb-20">
+        {/* scroll-mt on every #anchor target below: TopNav is `fixed top-0`,
+            so `scrollIntoView({block:"start"})` — what useHashScroll calls, and
+            what the browser does for a `/#reviews` deep link — parks the
+            heading UNDER the nav bar. The Footer's "Customer Reviews" link and
+            the mobile menu's "Reviews" both land here. Same values
+            CompanyProfile.tsx already uses for its own six sections. */}
+        <section id="services" className="scroll-mt-20 md:scroll-mt-24 pt-10 md:pt-14 pb-14 md:pb-20">
           <SectionHeader
             title={t(locale, "home_services_title")}
             sub={t(locale, "home_services_sub")}
@@ -267,7 +273,7 @@ export default function Home() {
         {/* ═══════════════════════════════════════════════════
             COMPANIES
         ═══════════════════════════════════════════════════ */}
-        <section id="companies" className="py-14 md:py-20 border-t border-surface-dim/20 bg-gradient-to-br from-primary/[0.06] via-background to-secondary/[0.04]">
+        <section id="companies" className="scroll-mt-20 md:scroll-mt-24 py-14 md:py-20 border-t border-surface-dim/20 bg-gradient-to-br from-primary/[0.06] via-background to-secondary/[0.04]">
           <SectionHeader
             title={t(locale, "home_companies_title")}
             sub={t(locale, "home_companies_sub")}
@@ -297,20 +303,24 @@ export default function Home() {
                     height={160}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                  {/* Logo */}
-                  <div className="absolute top-4 left-4 z-10 w-12 h-12 rounded-xl overflow-hidden
+                  {/* Logo — mirrored in RTL, matching the same card on
+                      /companies (Companies.tsx) and /services (Services.tsx).
+                      Without the rtl: overrides these three overlays were the
+                      only company card on the site that did NOT flip, so the
+                      homepage read back-to-front in Arabic, the default locale. */}
+                  <div className="absolute top-4 left-4 rtl:left-auto rtl:right-4 z-10 w-12 h-12 rounded-xl overflow-hidden
                                   border-2 border-white shadow-md bg-white">
                     <img src={c.logo} alt="" className="w-full h-full object-cover" loading="lazy" width={48} height={48} />
                   </div>
                   {/* Verified */}
                   {c.verified && (
-                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm">
+                    <div className="absolute top-2.5 right-2.5 rtl:right-auto rtl:left-2.5 flex items-center gap-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full shadow-sm">
                       <Icon name="verified" className="text-primary text-caption" style={{ fontVariationSettings: "'FILL' 1" }} />
                       <span className="text-caption font-bold text-primary">{t(locale, "common_verified")}</span>
                     </div>
                   )}
                   {isBusy(c) && (
-                    <span className="absolute bottom-2.5 left-2.5 z-10 flex items-center gap-1 bg-amber-500 text-white text-caption font-bold px-2 py-0.5 rounded-full shadow-md">
+                    <span className="absolute bottom-2.5 left-2.5 rtl:left-auto rtl:right-2.5 z-10 flex items-center gap-1 bg-amber-500 text-white text-caption font-bold px-2 py-0.5 rounded-full shadow-md">
                       <Icon name="event_busy" className="text-caption" style={{ fontVariationSettings: "'FILL' 1" }} />
                       {t(locale, "busy_badge")}
                     </span>
@@ -350,7 +360,7 @@ export default function Home() {
         {/* ═══════════════════════════════════════════════════
             PROJECTS
         ═══════════════════════════════════════════════════ */}
-        <section id="projects" className="py-14 md:py-20 border-t border-surface-dim/20">
+        <section id="projects" className="scroll-mt-20 md:scroll-mt-24 py-14 md:py-20 border-t border-surface-dim/20">
           <SectionHeader title={t(locale, "home_projects_title")} sub={t(locale, "home_projects_sub")} linkTo="/companies" linkLabel={t(locale, "common_all_companies")} />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Large hero card */}
@@ -414,7 +424,7 @@ export default function Home() {
         {/* ═══════════════════════════════════════════════════
             WHY AL ASSEMA
         ═══════════════════════════════════════════════════ */}
-        <section id="about" className="py-14 md:py-20 border-t border-surface-dim/20">
+        <section id="about" className="scroll-mt-20 md:scroll-mt-24 py-14 md:py-20 border-t border-surface-dim/20">
           <SectionHeader title={t(locale, "home_why_title")} sub={t(locale, "home_why_sub")} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-gutter">
             {[
@@ -440,7 +450,7 @@ export default function Home() {
         {/* ═══════════════════════════════════════════════════
             REVIEWS
         ═══════════════════════════════════════════════════ */}
-        <section id="reviews" className="pt-14 md:pt-20 pb-20 md:pb-28 border-t border-surface-dim/20">
+        <section id="reviews" className="scroll-mt-20 md:scroll-mt-24 pt-14 md:pt-20 pb-20 md:pb-28 border-t border-surface-dim/20">
           <div className="flex items-end justify-between mb-8 gap-4 flex-wrap">
             <SectionHeader
               title={t(locale, "home_reviews_title")}

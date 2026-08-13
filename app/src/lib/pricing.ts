@@ -43,7 +43,16 @@ export function formatAmount(value: number, locale: Locale): string {
   }).format(value);
 }
 
-const CURRENCY = { en: "EGP", ar: "ج" };
+// Exported so screens that build their own amount string (rather than going
+// through formatPrice, e.g. a "12,000 EGP" total that isn't tied to an
+// Offering) still use the same locale-aware symbol instead of a hardcoded "EGP".
+export const CURRENCY = { en: "EGP", ar: "ج" };
+
+/** "12,000 EGP" / "12,000 ج" — a plain amount + currency, for totals that
+ *  aren't tied to an Offering (formatPrice's pricingModel branches don't apply). */
+export function formatEgp(amount: number, locale: Locale): string {
+  return `${formatAmount(amount, locale)} ${CURRENCY[locale]}`;
+}
 
 /**
  * The customer-facing price string for an offering.

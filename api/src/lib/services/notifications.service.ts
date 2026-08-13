@@ -274,6 +274,108 @@ export async function notifyAdminsProjectSubmitted(params: {
   }
 }
 
+// ── Final price verification (Service Completion feature) ──────────────────────
+// The client has no account/notification channel of their own (see
+// leadCompletion.service.verify) — only the PROVIDER is notified here, once the
+// client has responded to the amount the provider reported. Copy is deliberately
+// neutral: a discrepancy is a recorded difference for admin review, never framed
+// as fraud, dishonesty, or an accusation.
+
+function formatEgp(amount: number): string {
+  return `EGP ${amount.toLocaleString("en-US")}`;
+}
+
+export function buildAmountConfirmedEmail(
+  lead: ApiLead,
+  target: LeadNotificationTarget,
+): BuiltEmail | null {
+  if (!target.email) return null;
+  const amount = lead.completion ? formatEgp(lead.completion.finalTotal) : "";
+
+  const subject = `Amount confirmed — ${lead.refNumber}`;
+  const text =
+    `${lead.name} confirmed the final amount of ${amount} for "${lead.service}" ` +
+    `(${lead.refNumber}).\n\nThe order is now closed.`;
+  const html =
+    `<h2>Amount confirmed</h2>` +
+    `<p><strong>${escapeHtml(lead.name)}</strong> confirmed the final amount of ` +
+    `<strong>${escapeHtml(amount)}</strong> for "${escapeHtml(lead.service)}" (${escapeHtml(lead.refNumber)}).</p>` +
+    `<p>The order is now closed.</p>`;
+
+  return { to: target.email, subject, text, html };
+}
+
+export function buildAmountDiscrepancyEmail(
+  lead: ApiLead,
+  target: LeadNotificationTarget,
+): BuiltEmail | null {
+  if (!target.email) return null;
+  const c = lead.completion;
+  const providerAmount = c ? formatEgp(c.finalTotal) : "";
+  const clientAmount = c?.clientAmount != null ? formatEgp(c.clientAmount) : "";
+
+  const subject = `Amount discrepancy reported — ${lead.refNumber}`;
+  const text =
+    `The client reported a different final amount for this service.\n\n` +
+    `Order: ${lead.refNumber} — ${lead.service}\n` +
+    `You reported: ${providerAmount}\n` +
+    `Client reported: ${clientAmount}` +
+    (c?.discrepancyNote ? `\nClient note: ${c.discrepancyNote}` : "") +
+    `\n\nThis has been recorded and is visible to admins. No action has been taken automatically.`;
+  const html =
+    `<h2>Amount discrepancy reported</h2>` +
+    `<p>The client reported a different final amount for this service.</p>` +
+    `<p><strong>Order:</strong> ${escapeHtml(lead.refNumber)} — ${escapeHtml(lead.service)}<br>` +
+    `<strong>You reported:</strong> ${escapeHtml(providerAmount)}<br>` +
+    `<strong>Client reported:</strong> ${escapeHtml(clientAmount)}` +
+    (c?.discrepancyNote ? `<br><strong>Client note:</strong> ${escapeHtml(c.discrepancyNote)}` : "") +
+    `</p><p>This has been recorded and is visible to admins. No action has been taken automatically.</p>`;
+
+  return { to: target.email, subject, text, html };
+}
+
+/** Never throws. Returns true if dispatched, false if skipped (no key / no recipient). */
+export async function notifyProviderAmountConfirmed(
+  lead: ApiLead,
+  target: LeadNotificationTarget,
+): Promise<boolean> {
+  try {
+    const email = buildAmountConfirmedEmail(lead, target);
+    if (!email) return false;
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info(`[notify] RESEND_API_KEY not set — skipping confirmation email for lead ${lead.refNumber}`);
+      return false;
+    }
+    await sendViaResend(apiKey, email);
+    return true;
+  } catch (err) {
+    console.error(`[notify] amount-confirmed email failed for lead ${lead.refNumber}:`, err);
+    return false;
+  }
+}
+
+/** Never throws. Returns true if dispatched, false if skipped (no key / no recipient). */
+export async function notifyProviderAmountDiscrepancy(
+  lead: ApiLead,
+  target: LeadNotificationTarget,
+): Promise<boolean> {
+  try {
+    const email = buildAmountDiscrepancyEmail(lead, target);
+    if (!email) return false;
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.info(`[notify] RESEND_API_KEY not set — skipping discrepancy email for lead ${lead.refNumber}`);
+      return false;
+    }
+    await sendViaResend(apiKey, email);
+    return true;
+  } catch (err) {
+    console.error(`[notify] amount-discrepancy email failed for lead ${lead.refNumber}:`, err);
+    return false;
+  }
+}
+
 /**
  * Notify all admins that a customer left a verified review for a company. One email,
  * multiple recipients. Never throws; returns true if dispatched, false if skipped.

@@ -54,6 +54,32 @@ export function isAbort(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
 }
 
+/**
+ * Report a failed BACKGROUND hydration (the `hydrateXFromApi` family) at the
+ * right volume.
+ *
+ * These all used to `console.error` unconditionally, and the dominant cause is
+ * not a bug: navigating away rejects the in-flight fetch, which on a dashboard
+ * happens every time the user clicks the next tab before the last one settled.
+ * Measured across ten admin tab navigations: 86 console errors, none of them
+ * actionable. That volume is how an error channel stops being read.
+ *
+ *   • abort            → silent. We cancelled it.
+ *   • ApiError status 0 → warn. Unreachability, which apiFetch has ALREADY
+ *                         announced via API_DOWN_EVENT; useBackendHealth owns
+ *                         telling the user, so a second louder report adds
+ *                         nothing.
+ *   • anything else     → error. A real API failure, still worth shouting about.
+ */
+export function reportHydrationFailure(label: string, err: unknown): void {
+  if (isAbort(err)) return;
+  if (err instanceof ApiError && err.status === 0) {
+    console.warn(`${label} skipped — API unreachable:`, err.message);
+    return;
+  }
+  console.error(`${label} failed:`, err);
+}
+
 /** Returns true when VITE_API_URL is set — callers use this to decide whether to hit the API. */
 export function isApiConfigured(): boolean {
   return Boolean(BASE_URL);
@@ -113,7 +139,22 @@ export async function apiFetch<T>(
 
   // 204 No Content — return undefined cast to T
   if (res.status === 204) return undefined as unknown as T;
-  return res.json() as Promise<T>;
+
+  // The body read gets the SAME protection as the fetch above. Headers arriving
+  // does not mean the body will: a connection dropped (or the page navigated
+  // away) mid-response rejects res.json() with a bare TypeError, which escaped
+  // this function unwrapped — breaking the contract every caller is written
+  // against ("throws ApiError"), so `err instanceof ApiError` checks fell
+  // through to their generic branch, and API_DOWN_EVENT was never signalled for
+  // a failure that genuinely was unreachability. Surfaced under parallel load,
+  // where hydration callers logged raw "TypeError: Failed to fetch".
+  try {
+    return (await res.json()) as T;
+  } catch (err) {
+    if (isAbort(err) || options.signal?.aborted) throw err;
+    signal(API_DOWN_EVENT);
+    throw new ApiError(0, err instanceof Error ? err.message : "Failed to read response body");
+  }
 }
 
 // ── Convenience shorthands ───────────────────────────────────────────────────

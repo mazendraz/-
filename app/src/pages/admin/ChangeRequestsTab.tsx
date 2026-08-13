@@ -243,26 +243,38 @@ function ReviewModal({ id, onClose, onReviewed }: {
 
           {request.entity === "OFFERING" && <PriceReferencePanel offeringId={request.entityId} />}
 
-          <div className="space-y-3">
-            {fields.map((field) => (
-              <FieldDiff
-                key={field}
-                field={field}
-                before={request.snapshot[field]}
-                after={request.changes[field]}
-                conflicted={request.conflicts?.includes(field) ?? false}
-                selectable={pending && !request.entityMissing}
-                selected={selected.has(field)}
-                onToggle={() =>
-                  setSelected((s) => {
-                    const next = new Set(s);
-                    if (next.has(field)) next.delete(field); else next.add(field);
-                    return next;
-                  })
-                }
-              />
-            ))}
-          </div>
+          {fields.length > 0 ? (
+            <div className="space-y-3">
+              {fields.map((field) => (
+                <FieldDiff
+                  key={field}
+                  field={field}
+                  before={request.snapshot[field]}
+                  after={request.changes[field]}
+                  conflicted={request.conflicts?.includes(field) ?? false}
+                  selectable={pending && !request.entityMissing}
+                  selected={selected.has(field)}
+                  onToggle={() =>
+                    setSelected((s) => {
+                      const next = new Set(s);
+                      if (next.has(field)) next.delete(field); else next.add(field);
+                      return next;
+                    })
+                  }
+                />
+              ))}
+            </div>
+          ) : request.operation === "PUBLISH" ? (
+            // PUBLISH carries no field diff — changes is empty by design (see
+            // changeRequests.service.ts). What the admin needs to see instead is
+            // the draft's actual content, which the server put in `snapshot`
+            // (the whole editable surface) for exactly this reason.
+            <PublishSnapshot snapshot={request.snapshot} />
+          ) : request.operation === "DELETE" ? (
+            <p className="text-label text-error bg-error/10 border border-error/25 rounded-xl px-4 py-2.5">
+              {t(locale, "admin_cr_delete_notice")}
+            </p>
+          ) : null}
 
           {/* gallery/badges are single fields holding arrays — the API applies a
               field whole, so this is an honest statement of the limit. */}
@@ -288,7 +300,11 @@ function ReviewModal({ id, onClose, onReviewed }: {
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => void act("approve")}
-                  disabled={busy || selected.size === 0 || request.entityMissing}
+                  // PUBLISH/DELETE requests carry no field data by design (see
+                  // changeRequests.service.ts's `submit`) — `fields` is empty and
+                  // there is nothing to select, so only gate on selection for a
+                  // genuine field-edit request.
+                  disabled={busy || (fields.length > 0 && selected.size === 0) || request.entityMissing}
                   className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
                 >
                   <Icon name="check" className="text-subhead" />
@@ -381,6 +397,34 @@ function PriceReferencePanel({ offeringId }: { offeringId: string }) {
         <span className="text-on-surface-variant">{t(locale, "admin_cr_price_low")} <span className="font-bold text-on-surface">{reference.min !== undefined ? formatAmount(reference.min, locale) : ""}</span></span>
         <span className="text-on-surface-variant">{t(locale, "admin_cr_price_median")} <span className="font-bold text-on-surface">{reference.median !== undefined ? formatAmount(reference.median, locale) : ""}</span></span>
         <span className="text-on-surface-variant">{t(locale, "admin_cr_price_high")} <span className="font-bold text-on-surface">{reference.max !== undefined ? formatAmount(reference.max, locale) : ""}</span></span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A PUBLISH request's read-only content — there is no before/after to diff
+ * (the draft has no prior public state), so this renders `snapshot` as a
+ * single-column list instead of reusing FieldDiff's two-column layout.
+ */
+function PublishSnapshot({ snapshot }: { snapshot: Record<string, unknown> }) {
+  const { locale } = useLocale();
+  const entries = Object.entries(snapshot).filter(([, v]) => v !== null && v !== undefined && v !== "");
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <p className="text-caption font-bold text-outline">{t(locale, "admin_cr_publish_content")}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {entries.map(([field, value]) => (
+          <ValueBox
+            key={field}
+            label={FIELD_LABEL_KEYS[field] ? t(locale, FIELD_LABEL_KEYS[field]) : field}
+            value={value}
+            isImage={IMAGE_FIELDS.has(field)}
+            isImageList={IMAGE_LIST_FIELDS.has(field)}
+          />
+        ))}
       </div>
     </div>
   );

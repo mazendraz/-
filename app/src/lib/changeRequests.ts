@@ -87,10 +87,21 @@ export const FIELD_LABEL_KEYS: Record<string, StringKey> = {
   badges: "prov_field_badges",
   metaTitle: "prov_field_metaTitle",
   metaDescription: "prov_field_metaDescription",
+  // OFFERING fields (see EDITABLE_FIELDS.OFFERING on the server) — "name" above
+  // is shared with COMPANY, the rest are offering-only.
+  description: "prov_off_description",
+  kind: "prov_off_type",
+  pricingModel: "prov_off_pricing",
+  priceMin: "prov_off_price_min",
+  priceMax: "prov_off_price_max",
+  unit: "prov_off_unit",
+  minQty: "prov_off_min_qty",
+  image: "prov_off_image",
+  note: "prov_off_note_label",
 };
 
 /** Image-valued fields — the review UI renders thumbnails for these. */
-export const IMAGE_FIELDS = new Set(["logo", "cover"]);
+export const IMAGE_FIELDS = new Set(["logo", "cover", "image"]);
 export const IMAGE_LIST_FIELDS = new Set(["gallery"]);
 
 // ── Provider ─────────────────────────────────────────────────────────────────

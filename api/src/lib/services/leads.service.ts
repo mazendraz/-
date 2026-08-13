@@ -23,7 +23,6 @@ import type { CreateLeadInput } from "@/lib/validation/leads";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type {
   ApiLead,
-  ApiLeadPayload,
   ApiLeadStatus,
   ApiPage,
 } from "@/lib/apiTypes";
@@ -37,9 +36,13 @@ const MAX_PAGE_SIZE = 100;
 // it, which is acceptable for a UX/noise guard.
 const DEDUP_WINDOW_MS = 5 * 60_000;
 
-const leadInclude = {
+// Exported so leadCompletion.service can build its own lead reads (verify,
+// submitCompletion) from the exact same shape every other lead read uses —
+// one definition of "what a lead's payload includes", not two that can drift.
+export const leadInclude = {
   company: { select: { slug: true, name: true } },
   items: { orderBy: { id: "asc" } },
+  completion: true,
 } as const;
 
 // Company fields a lead's notification fan-out needs (see createLeadRecord).
@@ -365,11 +368,42 @@ export async function getOwnerCompanyId(id: string): Promise<string> {
   return lead.companyId;
 }
 
-/** Provider (ownership-checked by caller) / Admin: update a lead's status. */
+/**
+ * Provider (ownership-checked by caller) / Admin: update a lead's status.
+ *
+ * `requireCompletion` is the server-side backstop for the Service Completion
+ * feature. The provider dashboard already intercepts "Completed" in its status
+ * dropdowns and routes to the completion wizard instead (LeadRows.tsx,
+ * LeadsTab.tsx's LeadModal) — but that guard lives entirely in the browser, so
+ * a direct POST to this endpoint moved a lead to COMPLETED with no
+ * LeadCompletion row: no final amount recorded, and the client's mandatory
+ * verification gate (which keys off completion.verificationStatus) never fired.
+ * Confirmed against a running server before this check existed.
+ *
+ * Only the TRANSITION into Completed is blocked. A lead that is already
+ * COMPLETED stays editable — leads completed before this feature shipped have
+ * no completion row and must not become unmanageable. Admins pass the flag as
+ * false: there is no admin-side completion form to send them to, and this must
+ * not remove a capability they already had.
+ */
 export async function updateStatus(
   id: string,
   status: ApiLeadStatus,
+  { requireCompletion = false }: { requireCompletion?: boolean } = {},
 ): Promise<ApiLead> {
+  if (requireCompletion && status === "Completed") {
+    const existing = await prisma.lead.findUnique({
+      where: { id },
+      select: { status: true, completion: { select: { id: true } } },
+    });
+    if (!existing) throw new NotFoundError("Lead");
+    if (existing.status !== LeadStatus.COMPLETED && !existing.completion) {
+      throw new ConflictError(
+        "Mark this lead completed through the completion form so the final amount is recorded.",
+      );
+    }
+  }
+
   const lead = await prisma.lead.update({
     where: { id },
     data: { status: leadStatusFromLabel(status) },

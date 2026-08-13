@@ -12,6 +12,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 import Icon from "./Icon";
 import Select from "./Select";
+import ImagePicker from "../pages/provider/components/ImagePicker";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 
@@ -139,6 +140,15 @@ export default function OfferingsEditor() {
             return (
               <div key={o.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom">
                 <div className="flex items-start justify-between gap-3">
+                  {o.image && (
+                    <img
+                      src={o.image}
+                      alt=""
+                      className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+                      width={56}
+                      height={56}
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-body text-on-surface truncate">{o.name}</p>
@@ -261,6 +271,7 @@ function OfferingModal({ offering, onClose, onSaved }: {
     priceMax: offering?.priceMax ?? null,
     unit: offering?.unit ?? null,
     minQty: offering?.minQty ?? null,
+    image: offering?.image ?? null,
     note: offering?.note ?? "",
   });
   const [busy, setBusy] = useState(false);
@@ -294,14 +305,33 @@ function OfferingModal({ offering, onClose, onSaved }: {
       };
       if (offering) {
         const res = await updateOffering(offering.id, payload);
-        onSaved(t(locale, res.path === "review" ? "prov_off_flash_review" : "prov_off_flash_saved"));
+        if (res.path === "review") {
+          onSaved(t(locale, "prov_off_flash_review"));
+        } else {
+          // Still a draft — hitting Save here is the provider's "I'm done"
+          // signal, so submit it for approval right away instead of leaving a
+          // second, easy-to-miss "نشر" step back on the list.
+          await submitForReview(offering.id);
+        }
       } else {
-        await createOffering(payload);
-        onSaved(t(locale, "prov_off_flash_draft"));
+        const created = await createOffering(payload);
+        await submitForReview(created.id);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : t(locale, "prov_off_err_save"));
       setBusy(false);
+    }
+  }
+
+  async function submitForReview(id: string) {
+    try {
+      await requestPublish(id);
+      onSaved(t(locale, "prov_off_flash_publish"));
+    } catch {
+      // The row itself saved fine — only the follow-up publish request failed
+      // (e.g. a network blip). Don't lose that: close normally, but say what
+      // still needs doing since the list's "نشر" button still works as a fallback.
+      onSaved(t(locale, "prov_off_flash_saved_publish_failed"));
     }
   }
 
@@ -392,6 +422,15 @@ function OfferingModal({ offering, onClose, onSaved }: {
             <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_description")}</label>
             <textarea className="field-input" rows={3} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
           </div>
+
+          <ImagePicker
+            label={t(locale, "prov_off_image")}
+            value={form.image ?? ""}
+            onChange={(v) => set("image", v || null)}
+            shape="cover"
+            bucket="projects"
+            maxDim={1200}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -536,7 +575,7 @@ function OfferingModal({ offering, onClose, onSaved }: {
             className="flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors disabled:opacity-50"
           >
             <Icon name="save" className="text-subhead" />
-            {busy ? t(locale, "prov_off_saving") : t(locale, offering?.isPublished ? "prov_off_send_review" : "prov_off_save")}
+            {busy ? t(locale, "prov_off_saving") : t(locale, "prov_off_send_review")}
           </button>
           <button onClick={onClose} className="text-label font-bold text-outline hover:text-on-surface transition-colors">
             {t(locale, "prov_off_cancel")}

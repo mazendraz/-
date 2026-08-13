@@ -1,4 +1,4 @@
-import { type LeadStatus, LEAD_STATUSES, LEAD_STATUS_KEYS, STATUS_COLORS } from "../../lib/requests";
+import { type Lead, type LeadStatus, LEAD_STATUSES, LEAD_STATUS_KEYS, STATUS_COLORS } from "../../lib/requests";
 import {
   WAITLIST_STATUSES, WAITLIST_STATUS_KEYS, WAITLIST_STATUS_COLORS,
   type WaitlistEntry, type WaitlistStatus,
@@ -9,6 +9,7 @@ import { formatDate } from "../../lib/format";
 import Icon from "../../components/Icon";
 import Select from "../../components/Select";
 import type { LeadListRow } from "../admin/LeadsTab";
+import VerificationBadge from "../../components/VerificationBadge";
 
 const ROW_SELECT_TRIGGER = "border border-outline-variant rounded-lg px-2.5 py-1 min-h-[44px] text-caption text-on-surface bg-surface flex items-center gap-1.5 touch-press focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
 
@@ -21,7 +22,7 @@ const ROW_SELECT_TRIGGER = "border border-outline-variant rounded-lg px-2.5 py-1
  * Lifted out of ProviderDashboard.tsx when the tabs became routes (DM-02) —
  * Overview and Leads are separate chunks now and both need it.
  */
-export default function LeadRows({ rows, onOpen, onLeadStatusChange, onWaitlistStatusChange, onWaitlistDelete }: {
+export default function LeadRows({ rows, onOpen, onLeadStatusChange, onWaitlistStatusChange, onWaitlistDelete, onComplete }: {
   rows: LeadListRow[];
   /** Opens the full detail modal (LeadModal / WaitlistDetailModal) — the row's
    *  inline status Select only covers the status field; everything else
@@ -31,6 +32,9 @@ export default function LeadRows({ rows, onOpen, onLeadStatusChange, onWaitlistS
   onLeadStatusChange: (id: string, s: LeadStatus) => void;
   onWaitlistStatusChange: (entry: WaitlistEntry, s: WaitlistStatus) => void;
   onWaitlistDelete: (entry: WaitlistEntry) => void;
+  /** Opens the completion flow for a lead instead of setting its status
+   *  directly — see the interception in the row's status Select below. */
+  onComplete: (lead: Lead) => void;
 }) {
   const { locale } = useLocale();
   return (
@@ -82,6 +86,7 @@ export default function LeadRows({ rows, onOpen, onLeadStatusChange, onWaitlistS
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <span className="font-mono text-caption text-primary">{row.data.refNumber}</span>
               <span className={`text-caption px-2 py-0.5 rounded-full ${STATUS_COLORS[row.data.status]}`}>{t(locale, LEAD_STATUS_KEYS[row.data.status])}</span>
+              {row.data.completion && <VerificationBadge status={row.data.completion.verificationStatus} locale={locale} />}
             </div>
             <p className=" text-label text-on-surface">{row.data.name} — {row.data.phone}</p>
             <p className="text-caption text-outline">
@@ -99,7 +104,15 @@ export default function LeadRows({ rows, onOpen, onLeadStatusChange, onWaitlistS
               triggerClassName={ROW_SELECT_TRIGGER}
               value={row.data.status}
               ariaLabel={`${t(locale, "admin_lead_status")} — ${row.data.refNumber}`}
-              onChange={(v) => onLeadStatusChange(row.data.id, v as LeadStatus)}
+              onChange={(v) => {
+                // Same guard as LeadModal: "Completed" here must open the
+                // completion flow, not PATCH the status directly and skip it.
+                if (v === "Completed" && row.data.status !== "Completed" && !row.data.completion) {
+                  onComplete(row.data);
+                  return;
+                }
+                onLeadStatusChange(row.data.id, v as LeadStatus);
+              }}
               options={LEAD_STATUSES.map((s) => ({ value: s, label: t(locale, LEAD_STATUS_KEYS[s]) }))}
             />
             <span className="text-caption text-outline">{formatDate(row.data.createdAt, locale)}</span>

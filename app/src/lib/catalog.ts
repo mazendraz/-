@@ -8,7 +8,7 @@ import {
   type Project,
   type Review,
 } from "./data";
-import { apiFetch, apiGet, apiPost, apiPut, apiDelete, isApiConfigured } from "./api";
+import { apiFetch, apiGet, apiPost, apiPut, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 
 export type { Company, ServiceCategory, Project, Review };
@@ -122,7 +122,7 @@ export async function hydrateCatalogFromApi(): Promise<void> {
     hydrated = false; // allow a later retry
     // Keep any stale cache visible; only surface an error when we have nothing.
     setStatus(hasCachedCompanies() ? "ready" : "error");
-    console.error("Catalog hydration from API failed:", err);
+    reportHydrationFailure("Catalog hydration from API", err);
   }
 }
 
@@ -140,7 +140,7 @@ export async function refreshCatalogFromApi(): Promise<void> {
     await fetchCatalog();
   } catch (err) {
     setStatus(hasCachedCompanies() ? "ready" : "error");
-    console.error("Catalog refresh from API failed:", err);
+    reportHydrationFailure("Catalog refresh from API", err);
   }
 }
 
