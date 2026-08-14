@@ -6,6 +6,7 @@ import {
 } from "../../lib/offerings";
 import { formatPrice, PRICING_MODEL_LABELS, PRICE_UNITS, unitLabel } from "../../lib/pricing";
 import { EmptyState } from "./components/EmptyState";
+import { ImageUpload } from "./components/fields";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
 import Icon from "../../components/Icon";
@@ -115,6 +116,15 @@ export function AdminOfferingsPanel({ companyId }: { companyId: string }) {
             return (
               <div key={o.id} className="bg-surface-container-lowest rounded-2xl p-4 shadow-bloom">
                 <div className="flex items-start justify-between gap-3">
+                  {o.image && (
+                    <img
+                      src={o.image}
+                      alt=""
+                      className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+                      width={56}
+                      height={56}
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-body text-on-surface truncate">{o.name}</p>
@@ -192,6 +202,7 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
     priceMax: offering?.priceMax ?? null,
     unit: offering?.unit ?? null,
     minQty: offering?.minQty ?? null,
+    image: offering?.image ?? null,
     note: offering?.note ?? "",
   });
   const [busy, setBusy] = useState(false);
@@ -274,6 +285,15 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
             <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_description")}</label>
             <textarea className="field-input" rows={3} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
           </div>
+
+          <ImageUpload
+            label={t(locale, "prov_off_image")}
+            value={form.image ?? ""}
+            onChange={(v) => set("image", v || null)}
+            shape="wide"
+            maxDim={1200}
+            bucket="projects"
+          />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
