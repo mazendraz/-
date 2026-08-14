@@ -65,6 +65,10 @@ export interface AuthUser {
   email: string;
   role: UserRole;
   companyId: string | null;
+  // Business Control Center (desktop app) permission grants — see
+  // withPermission.ts. Always an array (possibly empty); a PROVIDER never has
+  // any set in practice, but desktopOnly() also checks role, not just this.
+  desktopPermissions: string[];
 }
 
 // ── Passwords ─────────────────────────────────────────────────────────────────
@@ -170,7 +174,15 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser> {
 
   const user = await prisma.user.findUnique({
     where: { id: claims.sub },
-    select: { id: true, name: true, email: true, role: true, companyId: true, isActive: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      companyId: true,
+      isActive: true,
+      desktopPermissions: true,
+    },
   });
   if (!user || !user.isActive) {
     throw new UnauthorizedError("Account is inactive or no longer exists");
@@ -182,6 +194,7 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser> {
     email: user.email,
     role: user.role,
     companyId: user.companyId,
+    desktopPermissions: user.desktopPermissions,
   };
 }
 
@@ -192,5 +205,6 @@ export function toApiUser(user: AuthUser): ApiUser {
     email: user.email,
     role: user.role,
     companyId: user.companyId,
+    desktopPermissions: user.desktopPermissions,
   };
 }

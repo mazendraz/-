@@ -19,6 +19,12 @@ import {
 } from "@/lib/services/notifications.service";
 import { notifyCompanyProviders as pushCompanyProviders } from "@/lib/services/push.service";
 import { notifyProviderChatTelegram } from "@/lib/services/telegram.service";
+// Business Control Center: commission recognizes on client verification (see
+// the delivered architecture doc §6/§9 — decided, not guessed) — recognized
+// atomically alongside the verification claim below, in the SAME db
+// transaction, so a crash between "verified" and "revenue recorded" can never
+// happen.
+import { recognizeCommission } from "@/lib/services/finance.service";
 import type { ApiLead } from "@/lib/apiTypes";
 import type { CompleteLeadInput, VerifyLeadInput } from "@/lib/validation/leadCompletion";
 
@@ -138,11 +144,26 @@ export async function verify(input: VerifyLeadInput): Promise<ApiLead> {
           verifiedAt: new Date(),
         };
 
-  const claimed = await prisma.leadCompletion.updateMany({
-    where: { leadId: lead.id, verificationStatus: LeadVerificationStatus.PENDING },
-    data,
+  // Claim the PENDING -> resolved transition AND recognize the commission in
+  // one db transaction: either both happen or neither does. See the
+  // recognizeCommission import comment above for why this must not be two
+  // separate awaits.
+  const claimedCount = await prisma.$transaction(async (tx) => {
+    const claimed = await tx.leadCompletion.updateMany({
+      where: { leadId: lead.id, verificationStatus: LeadVerificationStatus.PENDING },
+      data,
+    });
+    if (claimed.count > 0) {
+      await recognizeCommission(tx, {
+        leadId: lead.id,
+        companyId: lead.companyId,
+        clientAmount: data.clientAmount,
+        disputed: input.decision === "discrepancy",
+      });
+    }
+    return claimed.count;
   });
-  if (claimed.count === 0) {
+  if (claimedCount === 0) {
     // Lost the race against a concurrent verify — same message as the pre-check.
     throw new ConflictError("This amount has already been verified.");
   }

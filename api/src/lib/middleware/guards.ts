@@ -5,6 +5,7 @@
 import { withErrors } from "@/lib/utils/withErrors";
 import { withAuth, type AuthedHandler } from "@/lib/middleware/withAuth";
 import { withRole } from "@/lib/middleware/withRole";
+import { withPermission, type DesktopPermission } from "@/lib/middleware/withPermission";
 
 type RouteHandler<Ctx> = (
   request: import("next/server").NextRequest,
@@ -22,4 +23,17 @@ export function adminOnly<Ctx>(handler: AuthedHandler<Ctx>): RouteHandler<Ctx> {
 
 export function providerOnly<Ctx>(handler: AuthedHandler<Ctx>): RouteHandler<Ctx> {
   return withErrors(withAuth(withRole("PROVIDER", handler)));
+}
+
+/**
+ * Business Control Center (desktop app) endpoints: requires ADMIN role AND the
+ * specific desktop permission, so a PROVIDER account can never reach these
+ * regardless of what's in desktopPermissions (defense in depth — that field
+ * is meant for admins only, but this doesn't rely on that alone).
+ */
+export function desktopOnly<Ctx>(
+  permission: DesktopPermission,
+  handler: AuthedHandler<Ctx>,
+): RouteHandler<Ctx> {
+  return withErrors(withAuth(withRole("ADMIN", withPermission(permission, handler))));
 }

@@ -512,6 +512,25 @@ export async function remove(id: string): Promise<void> {
   await prisma.company.delete({ where: { id } });
 }
 
+/**
+ * Business Control Center only: set (or clear) this company's commission %
+ * override. A separate, small endpoint rather than folding into the general
+ * update() above — that function already carries a lot of delicate
+ * replace-all logic (projects/categories) and this field has nothing to do
+ * with any of it. null clears the override, falling back to the platform
+ * default (see finance.service.ts resolveCommissionPercent).
+ */
+export async function setCommissionPercent(id: string, percent: number | null): Promise<ApiCompany> {
+  const existing = await prisma.company.findUnique({ where: { id } });
+  if (!existing) throw new NotFoundError("Company");
+  const company = await prisma.company.update({
+    where: { id },
+    data: { commissionPercent: percent },
+    include: companyInclude,
+  });
+  return serializeCompanyAdmin(company);
+}
+
 export interface AvailabilityInput {
   busy: boolean;
   busyUntil?: number | null; // epoch ms; null clears the auto-reopen date

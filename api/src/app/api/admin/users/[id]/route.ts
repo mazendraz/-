@@ -24,6 +24,9 @@ export const PATCH = adminOnly(async (request: NextRequest, ctx: Ctx, user) => {
       fields: Object.keys(input),
       ...(input.role !== undefined ? { role: input.role } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      ...(input.desktopPermissions !== undefined
+        ? { desktopPermissions: input.desktopPermissions }
+        : {}),
       passwordReset: input.password !== undefined,
     },
   });

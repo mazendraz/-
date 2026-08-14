@@ -9,6 +9,7 @@ const admin: AuthUser = {
   email: "a@test",
   role: "ADMIN",
   companyId: null,
+  desktopPermissions: [],
 };
 const provider: AuthUser = {
   id: "p",
@@ -16,6 +17,7 @@ const provider: AuthUser = {
   email: "p@test",
   role: "PROVIDER",
   companyId: "co-1",
+  desktopPermissions: [],
 };
 
 const req = new Request("http://x/test") as never;

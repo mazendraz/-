@@ -185,6 +185,12 @@ model Company {
   // the name/tagline-derived defaults.
   metaTitle           String?
   metaDescription     String?
+  // Al Asima's commission %, business-control-center only. Null = use the
+  // platform default (AppSetting "default_commission_percent") — every
+  // existing row stays null on deploy, zero behavior change, same pattern as
+  // CategoryPricingMode's default. Set only when a specific provider needs a
+  // different rate than the platform default (see finance.service.ts).
+  commissionPercent   Decimal?      @db.Decimal(5, 2)
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -201,6 +207,7 @@ model Company {
   busyWindows    BusyWindow[]
   conversations  Conversation[]
   telegramChats  CompanyTelegramChat[]
+  transactions   Transaction[]
 
   @@index([slug])
   @@index([status])
@@ -351,6 +358,11 @@ model Lead {
   // True when at least one item is quoted after inspection, so the UI can show
   // "+ items quoted on site" instead of implying the estimate is the whole job.
   hasOnInspection Boolean @default(false)
+  // Which internal Client (phone-deduplicated) this lead's customer resolves
+  // to — see the Client model. Nullable + SetNull: a lead must never become
+  // unreadable because its Client row was touched, same non-destructive
+  // pattern as Review.leadId / WaitlistEntry.convertedLeadId.
+  clientId        String?
 
   company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   // companySlug + companyName are returned derived from this relation.
@@ -364,10 +376,13 @@ model Lead {
   // Provider's final-price completion + the client's price verification, if the
   // provider has marked this lead done. See LeadCompletion.
   completion    LeadCompletion?
+  client        Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  transactions  Transaction[]
 
   @@index([companyId])
   @@index([status])
   @@index([createdAt])
+  @@index([clientId])
   // Serves the provider/admin lead lists: WHERE companyId=? [AND status=?]
   // ORDER BY createdAt DESC — filter + sort from one index.
   @@index([companyId, status, createdAt])
@@ -438,6 +453,15 @@ model User {
   telegramChatId      String?
   telegramLinkToken   String?   @unique
   telegramLinkExpires DateTime?
+  // Business Control Center (desktop app) access, additive to `role` — see
+  // withPermission.ts. Empty array = no desktop access at all, regardless of
+  // role. Deliberately NOT folded into UserRole: the desktop app is a second,
+  // more sensitive surface (real financial data) than the web admin
+  // dashboard, so access is opt-in per user rather than implied by ADMIN.
+  // Values are DesktopPermission strings, e.g. "finance:write" — validated in
+  // application code (validation/users.ts), not as a DB enum, so adding a
+  // module later needs no migration.
+  desktopPermissions  String[]  @default([])
 
   company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   pushSubscriptions PushSubscription[]
@@ -812,4 +836,152 @@ model Message {
 
   // Serves the hot poll: WHERE conversationId=? AND createdAt > ? ORDER BY createdAt.
   @@index([conversationId, createdAt])
+}
+
+// ── Business Control Center: Clients, Finance ────────────────────────────────
+// Added for the desktop "AL ASIMA BUSINESS CONTROL CENTER" app. Reuses every
+// existing entity (Lead, Company, LeadCompletion) rather than forking a second
+// pricing/lead system — see the delivered architecture/gap-analysis doc for
+// the full rationale. Decisions baked in here (already confirmed with Mazen):
+//   - Commission recognizes on CLIENT VERIFICATION (LeadCompletion.
+//     verificationStatus leaving PENDING), computed on clientAmount even when
+//     disputed (see TransactionStatus.DISPUTED) — leadCompletion.service.verify.
+//   - One platform-wide default commission % (AppSetting key
+//     "default_commission_percent"), with Company.commissionPercent as a
+//     per-company override for later.
+//   - Client is a lightweight phone-deduplication record, NOT a customer
+//     login/account — the no-login lead/review/verify trust model is untouched.
+
+// A person who has submitted one or more Leads, deduplicated by phone. Purely
+// an internal aggregation record for the desktop "Clients & CRM" screen
+// (retention rate, lifetime value, roster) — customers still have no account
+// and still interact via the existing ref+token/phone-gated flows. Upserted
+// from leads.service.createLeadRecord on every new lead (create-or-refresh by
+// phone); backfilled once for existing leads via a one-time migration script.
+model Client {
+  id          String   @id @default(uuid())
+  // Normalized via the same libphonenumber-js convention already used
+  // elsewhere in the codebase (api/app phone.ts) — NOT the raw user-typed
+  // string, so "01001234567" and "+201001234567" dedupe to one Client.
+  phone       String   @unique
+  // Most-recent Lead.customerName seen for this phone — a display label, not
+  // an identity claim (the same person may type their name differently across
+  // requests; the phone is the actual identity key).
+  name        String
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  leads Lead[]
+
+  @@index([phone])
+  @@index([lastSeenAt])
+}
+
+enum FinancialAccountType {
+  CASH
+  BANK
+  // Conceptual clearing account for money owed to/from providers — not a real
+  // bank account. Optional to use; Transaction.accountId is nullable.
+  PROVIDER_PAYABLE
+}
+
+// A small, admin-managed list of "where the money is" — a bank account, a cash
+// box, etc. Deliberately NOT a bank-feed integration; just a label transactions
+// can be tagged with for the Cash Position / Expenses-by-account views.
+model FinancialAccount {
+  id        String               @id @default(uuid())
+  name      String
+  type      FinancialAccountType
+  isActive  Boolean              @default(true)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  transactions Transaction[]
+
+  @@index([isActive])
+}
+
+enum TransactionType {
+  // Al Asima's recognized commission on a client-verified completed lead.
+  COMMISSION_INCOME
+  EXPENSE
+  // Manual correction (rare) — always audited (see AuditLog), never a way to
+  // route around the COMMISSION_INCOME/EXPENSE distinction.
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  // Recognized but not yet collected — accrual. Drives "Outstanding Revenue".
+  PENDING
+  // Client reported a discrepancy; commission is still recognized on their
+  // reported clientAmount, but marked so Finance doesn't read it as settled.
+  // Moved to PENDING/COLLECTED/VOID once an admin resolves the discrepancy.
+  DISPUTED
+  // Cash actually received/paid.
+  COLLECTED
+  // Reversed. Kept for the audit trail — never hard-deleted, matching the
+  // rest of this schema's soft-flag philosophy (Review.approved, Project.
+  // status, etc. — nothing here is ever actually removed from the table).
+  VOID
+}
+
+// A small, admin-managed taxonomy for expenses/income ("Operations & Cloud",
+// "Personnel", ...) — powers the "Expenses by Category" card. `kind` scopes a
+// category to one TransactionType so the picker only offers relevant options.
+model TransactionCategory {
+  id       String          @id @default(uuid())
+  name     String          @unique
+  kind     TransactionType
+  isActive Boolean         @default(true)
+
+  transactions Transaction[]
+
+  @@index([kind, isActive])
+}
+
+// THE financial ledger. One typed table, not a separate income/expenses/
+// balance-field trio — see the delivered architecture doc §3.3/§6 for why.
+// Balance-type numbers (Outstanding, Collected, Cash Position) are always
+// SUM(amount) WHERE ... computed on read from this table, never stored.
+model Transaction {
+  id          String             @id @default(uuid())
+  type        TransactionType
+  status      TransactionStatus  @default(PENDING)
+  // EGP, whole pounds — matches the existing convention (Lead/Offering prices
+  // are Int, no piastres, no currency column anywhere in this schema).
+  amount      Int
+  accountId   String?
+  categoryId  String?
+  // The business event this transaction is about. Nullable because manual
+  // expenses have no lead.
+  leadId      String?
+  // The provider this transaction is about, if any (set on every
+  // COMMISSION_INCOME row; usually null on EXPENSE).
+  companyId   String?
+  note        String?  @db.Text
+  // Supabase Storage URLs — same pattern as LeadCompletion.attachments.
+  attachments String[] @default([])
+  occurredAt  DateTime @default(now())
+  // Who recorded this — an admin User.id for manual entries, null for
+  // system-generated COMMISSION_INCOME rows (there is no human actor for
+  // those). Deliberately a plain denormalized id with NO Prisma relation, same
+  // convention as AuditLog.actorId — this table must never fail to write
+  // because a User row was deleted.
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account  FinancialAccount?    @relation(fields: [accountId], references: [id])
+  category TransactionCategory? @relation(fields: [categoryId], references: [id])
+  lead     Lead?                @relation(fields: [leadId], references: [id])
+  company  Company?             @relation(fields: [companyId], references: [id])
+
+  @@index([type, status])
+  @@index([leadId])
+  @@index([companyId])
+  @@index([occurredAt])
+  @@index([accountId])
+  @@index([categoryId])
 }

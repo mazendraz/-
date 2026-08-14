@@ -28,6 +28,7 @@ function serialize(u: UserWithCompany): ApiAdminUser {
     companyName: u.company?.name ?? null,
     isActive: u.isActive,
     createdAt: u.createdAt.getTime(),
+    desktopPermissions: u.desktopPermissions,
   };
 }
 
@@ -128,6 +129,10 @@ export async function update(id: string, input: UpdateUserInput): Promise<ApiAdm
   if (input.isActive !== undefined) data.isActive = input.isActive;
   if (input.companyId !== undefined) data.companyId = input.companyId; // null unlinks
   if (input.password !== undefined) data.passwordHash = await hashPassword(input.password);
+  // Business Control Center access — a PROVIDER can technically be granted
+  // these, but desktopOnly() also requires role=ADMIN, so it's a no-op grant
+  // until/unless that role is also changed to ADMIN in the same or a later call.
+  if (input.desktopPermissions !== undefined) data.desktopPermissions = input.desktopPermissions;
 
   const user = await prisma.user.update({
     where: { id },

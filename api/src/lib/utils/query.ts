@@ -11,7 +11,23 @@ import type {
 import type { AdminUserListQuery } from "@/lib/services/users.service";
 import type { StatsQuery } from "@/lib/services/stats.service";
 import type { WaitlistListQuery } from "@/lib/services/waitlist.service";
-import type { ApiLeadStatus, ApiUserRole, ApiWaitlistStatus } from "@/lib/apiTypes";
+import type {
+  ApiCashFlowQuery,
+  ApiClientListQuery,
+  ApiFinanceQuery,
+  ApiLeadStatus,
+  ApiPricingAnalyticsQuery,
+  ApiPricingIntelligenceQuery,
+  ApiProviderPerformanceQuery,
+  ApiReportQuery,
+  ApiReportType,
+  ApiTransactionListQuery,
+  ApiTransactionStatus,
+  ApiTransactionType,
+  ApiUserRole,
+  ApiVerificationStatus,
+  ApiWaitlistStatus,
+} from "@/lib/apiTypes";
 // Every free-text param goes through cleanParam, not a bare `.trim()`. A NUL
 // byte survives the URL, JSON and Zod untouched and is only rejected by Postgres
 // at the driver — i.e. as a 500. See sanitize.ts for the measured blast radius.
@@ -87,6 +103,12 @@ export function parseLeadListQuery(
   };
 }
 
+const VERIFICATION_STATUSES: readonly ApiVerificationStatus[] = ["PENDING", "CONFIRMED", "DISCREPANCY"];
+
+function parseVerificationStatus(value: string | null): ApiVerificationStatus | undefined {
+  return VERIFICATION_STATUSES.includes(value as ApiVerificationStatus) ? (value as ApiVerificationStatus) : undefined;
+}
+
 export function parseAdminLeadListQuery(
   searchParams: URLSearchParams,
 ): AdminLeadListQuery {
@@ -95,6 +117,7 @@ export function parseAdminLeadListQuery(
     companyId: cleanParam(searchParams.get("companyId")),
     from: toDate(searchParams.get("from")),
     to: toDate(searchParams.get("to")),
+    verificationStatus: parseVerificationStatus(searchParams.get("verificationStatus")),
   };
 }
 
@@ -157,4 +180,107 @@ export function parseAdminUserListQuery(
     role,
     search: cleanParam(searchParams.get("search")),
   };
+}
+
+// ── Business Control Center (desktop app) ────────────────────────────────────
+// All date-range params here are epoch ms (matching ApiFinanceQuery.from/to
+// etc.), unlike parseAdminLeadListQuery's `from`/`to` above which also accepts
+// ISO strings — kept consistent with how these new endpoints are documented
+// in apiTypes.ts.
+
+export function parseFinanceQuery(searchParams: URLSearchParams): ApiFinanceQuery {
+  return {
+    from: toInt(searchParams.get("from")),
+    to: toInt(searchParams.get("to")),
+  };
+}
+
+export function parseCashFlowQuery(searchParams: URLSearchParams): ApiCashFlowQuery {
+  return { days: toInt(searchParams.get("days")) };
+}
+
+const TRANSACTION_TYPES: readonly ApiTransactionType[] = ["COMMISSION_INCOME", "EXPENSE", "ADJUSTMENT"];
+const TRANSACTION_STATUSES: readonly ApiTransactionStatus[] = ["PENDING", "DISPUTED", "COLLECTED", "VOID"];
+
+export function parseTransactionListQuery(searchParams: URLSearchParams): ApiTransactionListQuery {
+  const typeParam = searchParams.get("type");
+  const statusParam = searchParams.get("status");
+  return {
+    page: toInt(searchParams.get("page")),
+    pageSize: toInt(searchParams.get("pageSize")),
+    type: TRANSACTION_TYPES.includes(typeParam as ApiTransactionType) ? (typeParam as ApiTransactionType) : undefined,
+    status: TRANSACTION_STATUSES.includes(statusParam as ApiTransactionStatus)
+      ? (statusParam as ApiTransactionStatus)
+      : undefined,
+    categoryId: cleanParam(searchParams.get("categoryId")),
+    companyId: cleanParam(searchParams.get("companyId")),
+    accountId: cleanParam(searchParams.get("accountId")),
+    search: cleanParam(searchParams.get("search")),
+    from: toInt(searchParams.get("from")),
+    to: toInt(searchParams.get("to")),
+  };
+}
+
+export function parsePricingIntelligenceQuery(searchParams: URLSearchParams): ApiPricingIntelligenceQuery {
+  return {
+    page: toInt(searchParams.get("page")),
+    pageSize: toInt(searchParams.get("pageSize")),
+    from: toInt(searchParams.get("from")),
+    to: toInt(searchParams.get("to")),
+    companyId: cleanParam(searchParams.get("companyId")),
+  };
+}
+
+export function parsePricingAnalyticsQuery(searchParams: URLSearchParams): ApiPricingAnalyticsQuery {
+  return { days: toInt(searchParams.get("days")) };
+}
+
+export function parseProviderPerformanceQuery(searchParams: URLSearchParams): ApiProviderPerformanceQuery {
+  return {
+    page: toInt(searchParams.get("page")),
+    pageSize: toInt(searchParams.get("pageSize")),
+    from: toInt(searchParams.get("from")),
+    to: toInt(searchParams.get("to")),
+    category: cleanParam(searchParams.get("category")),
+    search: cleanParam(searchParams.get("search")),
+  };
+}
+
+export function parseClientListQuery(searchParams: URLSearchParams): ApiClientListQuery {
+  return {
+    page: toInt(searchParams.get("page")),
+    pageSize: toInt(searchParams.get("pageSize")),
+    search: cleanParam(searchParams.get("search")),
+  };
+}
+
+export function parseDesktopOverviewQuery(searchParams: URLSearchParams): { days?: number } {
+  return { days: toInt(searchParams.get("days")) };
+}
+
+const REPORT_TYPES: readonly ApiReportType[] = [
+  "business-overview",
+  "revenue",
+  "expenses",
+  "clients",
+  "providers",
+  "pricing",
+  "price-discrepancies",
+  "cash-flow",
+];
+
+/** Returns null when `type` is missing or not one of REPORT_TYPES — the
+ *  route treats that as a 400, not a silent fallback to some default report. */
+export function parseReportQuery(searchParams: URLSearchParams): ApiReportQuery | null {
+  const typeParam = searchParams.get("type");
+  if (!REPORT_TYPES.includes(typeParam as ApiReportType)) return null;
+  return {
+    type: typeParam as ApiReportType,
+    from: toInt(searchParams.get("from")),
+    to: toInt(searchParams.get("to")),
+  };
+}
+
+export function parseClientOverviewQuery(searchParams: URLSearchParams): { deltaDays?: number } {
+  return { deltaDays: toInt(searchParams.get("deltaDays")) };
 }

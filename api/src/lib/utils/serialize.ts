@@ -6,8 +6,10 @@ import { LeadStatus } from "@/generated/prisma/enums";
 import type {
   BundleRule,
   Category,
+  Client,
   Company,
   BusyWindow,
+  FinancialAccount,
   Lead,
   LeadCompletion,
   LeadItem,
@@ -15,19 +17,25 @@ import type {
   OfferingTier,
   Project,
   Review,
+  Transaction,
+  TransactionCategory,
   WaitlistEntry,
 } from "@/generated/prisma/client";
 import { serializeOffering, serializeBundleRule } from "@/lib/services/offerings.service";
 import type {
   ApiAdminCategory,
   ApiCategory,
+  ApiClient,
   ApiCompany,
+  ApiFinancialAccount,
   ApiLead,
   ApiLeadCompletion,
   ApiLeadItem,
   ApiLeadStatus,
   ApiProject,
   ApiReview,
+  ApiTransaction,
+  ApiTransactionCategory,
   ApiWaitlistEntry,
 } from "@/lib/apiTypes";
 
@@ -366,6 +374,9 @@ export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
     ratingOverridden: c.ratingOverridden,
     // Exact, from a COUNT — not derived from whatever lead page the browser has.
     ...(c._count ? { leadCount: c._count.leads } : {}),
+    // Business Control Center only — null means "use the platform default",
+    // see finance.service.ts resolveCommissionPercent.
+    commissionPercent: c.commissionPercent != null ? Number(c.commissionPercent) : null,
   };
 }
 
@@ -453,5 +464,68 @@ function serializeLeadItem(i: LeadItem): ApiLeadItem {
     unitPriceMax: i.unitPriceMax,
     lineMin: i.lineMin,
     lineMax: i.lineMax,
+  };
+}
+
+// ── Business Control Center (desktop app) ────────────────────────────────────
+
+export function serializeClient(
+  c: Client,
+  agg: { totalRequests: number; successfulServices: number; totalValue: number },
+): ApiClient {
+  // 90 days: the same "still relevant" horizon BusyWindow-style features in
+  // this codebase use for "does this still matter" cutoffs — no product
+  // decision has fixed this number, it's a documented v1 default (see
+  // ApiClient.status doc comment) and easy to move to an AppSetting later if
+  // Al Asima wants it configurable without a redeploy.
+  const ACTIVE_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
+  const isActive = Date.now() - c.lastSeenAt.getTime() <= ACTIVE_WINDOW_MS;
+  return {
+    id: c.id,
+    phone: c.phone,
+    name: c.name,
+    firstSeenAt: toEpochMs(c.firstSeenAt),
+    lastSeenAt: toEpochMs(c.lastSeenAt),
+    totalRequests: agg.totalRequests,
+    successfulServices: agg.successfulServices,
+    totalValue: agg.totalValue,
+    status: isActive ? "ACTIVE" : "DORMANT",
+  };
+}
+
+export function serializeFinancialAccount(a: FinancialAccount): ApiFinancialAccount {
+  return { id: a.id, name: a.name, type: a.type, isActive: a.isActive };
+}
+
+export function serializeTransactionCategory(c: TransactionCategory): ApiTransactionCategory {
+  return { id: c.id, name: c.name, kind: c.kind, isActive: c.isActive };
+}
+
+export type TransactionWithRelations = Transaction & {
+  account: Pick<FinancialAccount, "name"> | null;
+  category: Pick<TransactionCategory, "name"> | null;
+  lead: Pick<Lead, "refNumber"> | null;
+  company: Pick<Company, "name"> | null;
+};
+
+export function serializeTransaction(t: TransactionWithRelations): ApiTransaction {
+  return {
+    id: t.id,
+    type: t.type,
+    status: t.status,
+    amount: t.amount,
+    accountId: t.accountId,
+    accountName: t.account?.name ?? null,
+    categoryId: t.categoryId,
+    categoryName: t.category?.name ?? null,
+    leadId: t.leadId,
+    leadRefNumber: t.lead?.refNumber ?? null,
+    companyId: t.companyId,
+    companyName: t.company?.name ?? null,
+    note: t.note ?? null,
+    attachments: t.attachments,
+    occurredAt: toEpochMs(t.occurredAt),
+    createdById: t.createdById,
+    createdAt: toEpochMs(t.createdAt),
   };
 }

@@ -106,6 +106,9 @@ export const POST = withErrors(async (request: NextRequest) => {
       email: user.email,
       role: user.role,
       companyId: user.companyId,
+      // Business Control Center (desktop app) access grants — always present
+      // (possibly empty, e.g. PROVIDER accounts have no desktop access at all).
+      desktopPermissions: user.desktopPermissions,
     },
   };
   // Deliver the token as an httpOnly cookie (primary, same-origin) AND in the body
