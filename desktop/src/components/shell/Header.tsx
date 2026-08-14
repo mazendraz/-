@@ -118,6 +118,7 @@ function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<ApiSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const debouncedQuery = useDebouncedValue(query, 350);
 
   useEffect(() => {
@@ -130,17 +131,24 @@ function GlobalSearch() {
       // flag defensively.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setResults([]);
+      setError(null);
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setError(null);
     apiGet<ApiSearchResponse>(`/admin/search?q=${encodeURIComponent(q)}`)
       .then((res) => {
         if (!cancelled) setResults(res.results);
       })
-      .catch(() => {
-        if (!cancelled) setResults([]);
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setResults([]);
+          // Distinct from a real "no matches" so a network/API failure doesn't
+          // silently read as "we searched and found nothing."
+          setError(err instanceof Error ? err.message : "Search failed.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -177,10 +185,14 @@ function GlobalSearch() {
       {showDropdown && (
         <div className="absolute left-0 top-full z-50 mt-2 max-h-96 w-96 overflow-y-auto rounded-lg border border-outline-variant bg-surface-container-lowest shadow-lift">
           {loading && <div className="p-4 font-body-sm text-body-sm text-on-surface-variant">Searching…</div>}
-          {!loading && results.length === 0 && (
+          {!loading && error && (
+            <div className="p-4 font-body-sm text-body-sm text-error">Search failed — {error}</div>
+          )}
+          {!loading && !error && results.length === 0 && (
             <div className="p-4 font-body-sm text-body-sm text-on-surface-variant">No matches for &quot;{query}&quot;.</div>
           )}
           {!loading &&
+            !error &&
             grouped.map(([category, items]) => (
               <div key={category} className="border-b border-surface-container-high last:border-0">
                 <div className="bg-surface-container-low px-4 py-2 font-label-md text-label-md uppercase tracking-wider text-on-surface-variant">
@@ -254,6 +266,7 @@ function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [seenUntil, setSeenUntil] = useState(() => Number(localStorage.getItem(NOTIFICATIONS_SEEN_KEY) ?? 0));
 
   useEffect(() => {
@@ -261,10 +274,18 @@ function NotificationBell() {
     function load() {
       apiGet<ApiNotificationsResponse>("/admin/notifications")
         .then((res) => {
-          if (!cancelled) setNotifications(res.notifications);
+          if (!cancelled) {
+            setNotifications(res.notifications);
+            setError(null);
+          }
         })
-        .catch(() => {
-          if (!cancelled) setNotifications([]);
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setNotifications([]);
+            // Distinct from "nothing recent" so a poll failure is visible
+            // instead of silently reading as an empty inbox.
+            setError(err instanceof Error ? err.message : "Failed to load notifications.");
+          }
         })
         .finally(() => {
           if (!cancelled) setLoading(false);
@@ -329,10 +350,14 @@ function NotificationBell() {
             )}
           </div>
           {loading && <div className="p-4 font-body-sm text-body-sm text-on-surface-variant">Loading…</div>}
-          {!loading && notifications.length === 0 && (
+          {!loading && error && (
+            <div className="p-4 font-body-sm text-body-sm text-error">Couldn&apos;t load notifications — {error}</div>
+          )}
+          {!loading && !error && notifications.length === 0 && (
             <div className="p-4 font-body-sm text-body-sm text-on-surface-variant">Nothing recent.</div>
           )}
           {!loading &&
+            !error &&
             notifications.map((n) => {
               const unread = n.occurredAt > seenUntil;
               return (
