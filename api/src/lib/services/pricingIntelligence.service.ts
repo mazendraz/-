@@ -85,7 +85,18 @@ export async function pricingIntelligence(
 
   const [total, kpiRows, pageRows] = await Promise.all([
     prisma.leadCompletion.count({ where }),
-    prisma.leadCompletion.findMany({ where, take: MAX_ROWS_FOR_KPIS, select: completionSelect }),
+    // orderBy is required here, not cosmetic: without one, once matching rows
+    // exceed MAX_ROWS_FOR_KPIS the DB doesn't guarantee which rows this
+    // `take` returns, so the same query could silently return a different
+    // 5000-row slice (and different KPI averages) on every call. Ordering by
+    // verifiedAt desc (same as pageRows below) makes it deterministic: always
+    // the most recently verified rows.
+    prisma.leadCompletion.findMany({
+      where,
+      orderBy: { verifiedAt: "desc" },
+      take: MAX_ROWS_FOR_KPIS,
+      select: completionSelect,
+    }),
     prisma.leadCompletion.findMany({
       where,
       orderBy: { verifiedAt: "desc" },

@@ -7,8 +7,10 @@ import * as clientsService from "@/lib/services/clients.service";
 export const dynamic = "force-dynamic";
 
 // GET /api/admin/clients/overview → ApiClientOverview. The Clients & CRM
-// screen's KPI row (Total Clients, Retention Rate, Avg Lifetime Value).
-export const GET = desktopOnly("business:read", async (request: NextRequest) => {
+// screen's KPI row (Total Clients, Retention Rate, Avg Lifetime Value) — also
+// read by the Analytics module's Client Analytics screen, so "analytics:read"
+// is an equally valid grant here (see withPermission.ts's ANY-of comment).
+export const GET = desktopOnly(["business:read", "analytics:read"], async (request: NextRequest) => {
   const query = parseClientOverviewQuery(request.nextUrl.searchParams);
   return ok(await clientsService.overview(query), 200, { "Cache-Control": "no-store" });
 });

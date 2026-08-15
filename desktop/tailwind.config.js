@@ -68,6 +68,15 @@ export default {
         "body-lg": ["18px", { lineHeight: "28px", fontWeight: "400" }],
         "body-md": ["16px", { lineHeight: "24px", fontWeight: "400" }],
         "body-sm": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+        // Was missing entirely — font-label-lg/text-label-lg were already
+        // used in several places (Header.tsx's "Notifications" panel title,
+        // ReportsPage.tsx, PricingIntelligencePage.tsx's "By Category"/"By
+        // Provider" headers) but generated no CSS, silently falling back to
+        // browser-default text styling. Sized one step up from label-md,
+        // matching body-sm's 14px/20px so it reads as a section title
+        // rather than an all-caps eyebrow — these usages are title-case
+        // panel headers, not the uppercase/tracked label-md treatment.
+        "label-lg": ["14px", { lineHeight: "20px", fontWeight: "600" }],
         "label-md": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "600" }],
         "mono-data": ["14px", { lineHeight: "20px", fontWeight: "500" }],
       },

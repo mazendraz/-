@@ -146,7 +146,7 @@ export async function providerPerformance(
  * clientsService.overview already makes for the Clients screen.
  */
 export async function providerPerformanceSummary(): Promise<ApiProviderPerformanceSummary> {
-  const [totalProviders, activeProviders, avgRatingAgg, completedServicesTotal, verifiedCompletions] =
+  const [totalProviders, activeProviders, avgRatingAgg, completedServicesTotal, verifiedCount, discrepancyCount] =
     await Promise.all([
       prisma.company.count(),
       // "Active Now" = live on the marketplace (Company.status), a different
@@ -155,16 +155,15 @@ export async function providerPerformanceSummary(): Promise<ApiProviderPerforman
       prisma.company.count({ where: { status: CompanyStatus.ACTIVE } }),
       prisma.company.aggregate({ _avg: { rating: true } }),
       prisma.lead.count({ where: { status: LeadStatus.COMPLETED } }),
-      prisma.leadCompletion.findMany({
-        where: { verifiedAt: { not: null } },
-        select: { verificationStatus: true },
+      // Two counts instead of fetching every verified completion row into
+      // memory just to .length/.filter() it — avoids an unbounded read that
+      // grows with total platform activity (was prisma.leadCompletion.findMany
+      // with no `take`, no date bound).
+      prisma.leadCompletion.count({ where: { verifiedAt: { not: null } } }),
+      prisma.leadCompletion.count({
+        where: { verifiedAt: { not: null }, verificationStatus: LeadVerificationStatus.DISCREPANCY },
       }),
     ]);
-
-  const verifiedCount = verifiedCompletions.length;
-  const discrepancyCount = verifiedCompletions.filter(
-    (c) => c.verificationStatus === LeadVerificationStatus.DISCREPANCY,
-  ).length;
 
   return {
     totalProviders,

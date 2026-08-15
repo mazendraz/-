@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
 
 // GET /api/admin/providers-performance → ApiPage<ApiProviderPerformance>. The
 // Provider Performance directory (requests/completion rate/service value/
-// discrepancy rate per provider). Zero new schema.
-export const GET = desktopOnly("business:read", async (request: NextRequest) => {
+// discrepancy rate per provider). Zero new schema. Also read by the
+// Analytics module's Provider Analytics screen, so "analytics:read" is an
+// equally valid grant here (see withPermission.ts's ANY-of comment).
+export const GET = desktopOnly(["business:read", "analytics:read"], async (request: NextRequest) => {
   const query = parseProviderPerformanceQuery(request.nextUrl.searchParams);
   const result = await providerPerformance(query);
   return page(result.data, result.meta);

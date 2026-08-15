@@ -306,9 +306,15 @@ function NotificationBell() {
   }
 
   function markAllSeen() {
-    const now = Date.now();
-    localStorage.setItem(NOTIFICATIONS_SEEN_KEY, String(now));
-    setSeenUntil(now);
+    // The latest server-provided occurredAt, not the client's own clock: if
+    // this device's clock lags the server's even slightly, Date.now() could
+    // be earlier than a notification's real occurredAt, so it would stay
+    // "unread" forever immediately after "mark all as read." Falling back to
+    // Date.now() only when there are no notifications yet (nothing to derive
+    // a max from).
+    const latestOccurredAt = notifications.reduce((max, n) => Math.max(max, n.occurredAt), 0) || Date.now();
+    localStorage.setItem(NOTIFICATIONS_SEEN_KEY, String(latestOccurredAt));
+    setSeenUntil(latestOccurredAt);
   }
 
   function goTo(n: ApiNotification) {

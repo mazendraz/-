@@ -31,6 +31,18 @@ export function ProviderAnalyticsPage() {
   const [anchor] = useState(() => Date.now());
   const from = useMemo(() => anchor - days * 86_400_000, [anchor, days]);
 
+  // Switching the shared period tab changes `from` the same way the category
+  // filter changes `category` — without resetting `page`, staying on a later
+  // page after narrowing the window can request a page past the new,
+  // smaller result set and render a false "No providers match this filter."
+  // Adjusting state during render (rather than a useEffect) avoids an extra
+  // cascading render pass — same pattern as FinanceLedgerScreen.tsx.
+  const [prevFrom, setPrevFrom] = useState(from);
+  if (from !== prevFrom) {
+    setPrevFrom(from);
+    setPage(1);
+  }
+
   const summary = useFetch<ApiProviderPerformanceSummary>(
     () => apiGet<ApiProviderPerformanceSummary>("/admin/providers-performance/summary"),
     [],

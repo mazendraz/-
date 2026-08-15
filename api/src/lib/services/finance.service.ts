@@ -388,7 +388,13 @@ export async function financeOverview(query: ApiFinanceQuery): Promise<ApiFinanc
   let trend: ApiFinanceOverview["trend"] = null;
   if (query.from != null) {
     const windowMs = Math.max(0, (query.to ?? Date.now()) - query.from);
-    const previous = await financeAggregates(query.from - windowMs, query.from);
+    // -1ms on the upper bound: financeAggregates/occurredAtWhere treats both
+    // ends as inclusive (gte/lte), and the current window's lower bound is
+    // exactly `query.from` — without this, a transaction occurring at that
+    // exact instant (e.g. a date-only entry defaulting to midnight) would be
+    // summed into BOTH the current and previous window, skewing every
+    // trend.*Percent figure.
+    const previous = await financeAggregates(query.from - windowMs, query.from - 1);
     const prevNetIncome = previous.recognizedRevenue - previous.totalExpenses;
     const prevCashPosition = previous.collectedRevenue - previous.collectedExpenses;
     trend = {

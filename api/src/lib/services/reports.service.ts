@@ -68,11 +68,19 @@ function dayString(ms: number): string {
  *  `=HYPERLINK(...)`). Prefixing with a leading apostrophe is the standard
  *  mitigation (OWASP CSV Injection guidance) — it forces the cell to render
  *  as literal text in every spreadsheet app, and is invisible in plain CSV
- *  viewers/parsers since it's just another leading character. */
+ *  viewers/parsers since it's just another leading character.
+ *
+ *  The apostrophe guard only applies to `string` inputs, never `number`: a
+ *  genuine JS number (e.g. a negative deltaPercent — a job that came in
+ *  under estimate) can never carry attacker-controlled formula text, so
+ *  guarding it too would only corrupt legitimate negative figures into text
+ *  cells (`'-5.2` instead of the number -5.2) without closing any real
+ *  injection vector — the risk is specifically free text that ends up
+ *  starting with one of these characters, not numeric values. */
 function csvField(value: string | number): string {
-  let s = String(value);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const s = String(value);
+  const escaped = typeof value === "string" && /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  return /[",\n]/.test(escaped) ? `"${escaped.replace(/"/g, '""')}"` : escaped;
 }
 
 function toCsv(columns: string[], rows: (string | number)[][]): string {

@@ -33,14 +33,21 @@ export function hasDesktopPermission(user: AuthUser, permission: DesktopPermissi
   return user.desktopPermissions.includes(permission);
 }
 
-/** Require a desktop permission; 403 otherwise. */
+/** Require a desktop permission; 403 otherwise. Accepts one permission, or a
+ *  list of permissions where ANY ONE of them is sufficient — used for routes
+ *  whose data is legitimately reachable from more than one nav module (e.g.
+ *  a route already gated by "business:read" that the Analytics module's
+ *  "analytics:read" screens also read). This only ever ADDS an alternate
+ *  valid permission per route; it never removes the check for callers using
+ *  the original single-permission form, so no existing grant is widened. */
 export function withPermission<Ctx>(
-  permission: DesktopPermission,
+  permission: DesktopPermission | readonly DesktopPermission[],
   handler: AuthedHandler<Ctx>,
 ): AuthedHandler<Ctx> {
+  const allowed = Array.isArray(permission) ? permission : [permission as DesktopPermission];
   return (request, context, user) => {
-    if (!hasDesktopPermission(user, permission)) {
-      throw new ForbiddenError(`Requires the "${permission}" desktop permission`);
+    if (!allowed.some((p) => hasDesktopPermission(user, p))) {
+      throw new ForbiddenError(`Requires one of the desktop permissions: ${allowed.join(", ")}`);
     }
     return handler(request, context, user);
   };

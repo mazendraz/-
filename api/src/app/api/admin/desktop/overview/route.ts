@@ -8,8 +8,10 @@ export const dynamic = "force-dynamic";
 
 // GET /api/admin/desktop/overview → ApiDesktopOverview. The desktop app's
 // Overview screen: KPI row + "Needs Your Attention" cards, composed from the
-// existing lead/finance aggregates (no new source of truth).
-export const GET = desktopOnly("overview:read", async (request: NextRequest) => {
+// existing lead/finance aggregates (no new source of truth). Also read by
+// the Analytics module's Business Performance screen, so "analytics:read"
+// is an equally valid grant here (see withPermission.ts's ANY-of comment).
+export const GET = desktopOnly(["overview:read", "analytics:read"], async (request: NextRequest) => {
   const query = parseDesktopOverviewQuery(request.nextUrl.searchParams);
   return ok(await desktopOverview(query), 200, { "Cache-Control": "no-store" });
 });

@@ -111,6 +111,20 @@ export function FinanceLedgerScreen({
   const [createOpen, setCreateOpen] = useState(false);
   const search = useDebouncedValue(searchInput, 350);
 
+  // Switching the shared period tab (Today/This Week/This Month/Custom)
+  // changes `from` the same way an in-page filter does — without resetting
+  // `page`, staying on e.g. page 3 after narrowing the window can request a
+  // page past the new, smaller result set and render a false "No
+  // transactions match these filters" even though matching rows exist on
+  // page 1. Adjusting state during render (React's documented pattern for
+  // "reset state when a prop/value changes") rather than in a useEffect
+  // avoids an extra cascading render pass.
+  const [prevFrom, setPrevFrom] = useState(from);
+  if (from !== prevFrom) {
+    setPrevFrom(from);
+    setPage(1);
+  }
+
   const accounts = useFetch<ApiFinancialAccount[]>(() => apiGet<ApiFinancialAccount[]>("/admin/finance/accounts"), []);
   const categories = useFetch<ApiTransactionCategory[]>(() => apiGet<ApiTransactionCategory[]>("/admin/finance/categories"), []);
 

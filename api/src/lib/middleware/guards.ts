@@ -32,7 +32,7 @@ export function providerOnly<Ctx>(handler: AuthedHandler<Ctx>): RouteHandler<Ctx
  * is meant for admins only, but this doesn't rely on that alone).
  */
 export function desktopOnly<Ctx>(
-  permission: DesktopPermission,
+  permission: DesktopPermission | readonly DesktopPermission[],
   handler: AuthedHandler<Ctx>,
 ): RouteHandler<Ctx> {
   return withErrors(withAuth(withRole("ADMIN", withPermission(permission, handler))));

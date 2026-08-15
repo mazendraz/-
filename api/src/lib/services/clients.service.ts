@@ -9,6 +9,13 @@ import type { ApiClient, ApiClientListQuery, ApiClientOverview, ApiPage } from "
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+// avgLifetimeValue is a JS-side aggregation (per-client sum, then averaged)
+// because it needs to group by the RELATED Lead.clientId, which Prisma's
+// groupBy can't do across a relation — same tradeoff and cap convention as
+// pricingIntelligence.service.ts's MAX_ROWS_FOR_KPIS. Not needed at today's
+// data volumes; move to a raw grouped SQL query if this ever needs to scale
+// past it (architecture doc §11).
+const MAX_ROWS_FOR_LIFETIME_VALUE = 5000;
 
 /**
  * Upsert the Client row for a just-created (or waitlist-converted) Lead, and
@@ -142,6 +149,8 @@ export async function overview(query: ClientOverviewQuery): Promise<ApiClientOve
       }),
       prisma.leadCompletion.findMany({
         where: { verifiedAt: { not: null } },
+        orderBy: { verifiedAt: "desc" },
+        take: MAX_ROWS_FOR_LIFETIME_VALUE,
         select: { clientAmount: true, lead: { select: { clientId: true } } },
       }),
       // All-time request count tied to a known client — "Requests per Client"
