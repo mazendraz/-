@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import RootLayout from "./RootLayout";
 import Home from "./pages/Home"; // eager — the landing page / LCP, must paint instantly
@@ -37,6 +37,8 @@ const Companies = lazy(() => import("./pages/Companies"));
 const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
 const RequestForm = lazy(() => import("./pages/RequestForm"));
 const MyRequests = lazy(() => import("./pages/MyRequests"));
+const SignIn = lazy(() => import("./pages/SignIn"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Messages = lazy(() => import("./pages/Messages"));
 const GuidedStart = lazy(() => import("./pages/GuidedStart"));
 const Saved = lazy(() => import("./pages/Saved"));
@@ -106,6 +108,35 @@ export const router = createBrowserRouter([
       { path: "/privacy", element: <LegalPage kind="privacy" /> },
       // Catch-all 404 — keeps the shared chrome so users can navigate out
       { path: "*", element: <NotFound /> },
+    ],
+  },
+  // ── Customer sign-in ────────────────────────────────────────────────────────
+  // A SIBLING of RootLayout, not a child, so it renders with no top nav, no
+  // bottom nav and no footer. Those are navigation, and this page has exactly one
+  // job — every other link on screen is an invitation to leave without doing it.
+  // (It also removes the odd loop of a "Sign in" button in the nav OF the sign-in
+  // page.) The card's own "back to site" link is the deliberate way out.
+  //
+  // Not behind RequireAuth: that guard is for the STAFF dashboards and resolves a
+  // different session entirely.
+  //
+  // Carries its own LocaleProvider + ToastProvider for the same reason the
+  // dashboards below do — siblings never see the providers mounted in RootLayout.
+  {
+    element: (
+      <LocaleProvider>
+        <ToastProvider>
+          <Suspense fallback={<DashboardFallback />}><Outlet /></Suspense>
+        </ToastProvider>
+      </LocaleProvider>
+    ),
+    errorElement: <ErrorPage />,
+    children: [
+      { path: "/signin", element: <SignIn /> },
+      // Target of the emailed confirmation link. The path is baked into links
+      // already sent, so it must stay stable — see the URL built in api's
+      // sendCustomerVerificationEmail.
+      { path: "/verify-email", element: <VerifyEmail /> },
     ],
   },
   // Internal dashboards — lazy-loaded, no public nav/footer chrome.

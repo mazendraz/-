@@ -45,7 +45,27 @@ export const ANONYMOUS_ACTOR = "anonymous";
 export type AuthAuditAction =
   | "auth.login.success"
   | "auth.login.failure"
-  | "auth.login.throttled";
+  | "auth.login.throttled"
+  // Customer sign-in through an identity provider (Google / Apple). Kept
+  // distinct from the staff `auth.login.*` events above: they are different
+  // populations against different tables, and reading the trail is much harder
+  // if a customer sign-in and an admin sign-in look alike.
+  //   .created — first sign-in; a new CustomerUser row exists as of this event.
+  //   .linked  — an EXISTING account gained a second provider. Worth its own
+  //              action because it is the one flow that attaches a new way in
+  //              to an account that already has requests attached to it.
+  //   .blocked — verified by the provider, but refused here (see customerAuth).
+  | "auth.customer.success"
+  | "auth.customer.created"
+  | "auth.customer.linked"
+  | "auth.customer.blocked"
+  // Password registrations. `.registered` is not a sign-in — the account is
+  // inert until `.verified` follows it, and a burst of registrations with no
+  // verifications after them is what planting accounts on other people's
+  // addresses looks like from the log.
+  | "auth.customer.registered"
+  | "auth.customer.verified"
+  | "auth.customer.failure";
 
 /**
  * Record an AUTHENTICATION event.

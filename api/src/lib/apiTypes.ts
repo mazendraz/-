@@ -413,6 +413,36 @@ export interface ApiAuthResponse {
   user: ApiUser;
 }
 
+// ── Customer accounts (mobile apps + website) ───────────────────────────────
+// A CUSTOMER, not a staff ApiUser: no role, no companyId, no permissions. The
+// two never appear in the same response and are never interchangeable.
+
+/** The signed-in customer, as returned to the client. */
+export interface ApiCustomer {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  /** The identity provider's assertion, surfaced so the UI can explain a refusal. */
+  emailVerified: boolean;
+}
+
+/** POST /auth/google — response. */
+export interface ApiCustomerAuthResponse {
+  token: string;
+  customer: ApiCustomer;
+  /**
+   * What this sign-in did:
+   *   "created"   — brand-new account, so the app can show onboarding and offer
+   *                 to attach past requests.
+   *   "linked"    — a second provider joined an existing account.
+   *   "returning" — ordinary sign-in.
+   * The app branches its first screen on this rather than guessing from whether
+   * the request list came back empty.
+   */
+  outcome: "created" | "linked" | "returning";
+}
+
 // ── Admin: user management ──────────────────────────────────────────────────
 // Admin-only views/payloads for managing login accounts (ADMIN + PROVIDER).
 // passwordHash is NEVER serialized into any of these shapes.

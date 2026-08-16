@@ -5,6 +5,7 @@ import {
 } from "../../lib/users";
 import { type Company } from "../../lib/catalog";
 import SearchInput from "../../components/SearchInput";
+import PasswordField from "../../components/PasswordField";
 import Pagination from "../../components/Pagination";
 import { useServerSearch } from "../../hooks/useServerSearch";
 import { LField } from "./components/ModalShell";
@@ -233,10 +234,14 @@ export function UserEditor({ user, initialCompanyId, companies, onClose, onSaved
         </LField>
 
         <LField label={t(locale, isNew ? "admin_user_password" : "admin_user_reset_password")} required={isNew}>
-          <input className="field-input" type="password" value={password}
-            onChange={(e) => setPassword(e.target.value)}
+          {/* No `label` — LField above already renders one. */}
+          <PasswordField
+            value={password}
+            onChange={setPassword}
+            required={isNew}
+            autoComplete="new-password"
             placeholder={t(locale, isNew ? "admin_user_password_ph_new" : "admin_user_password_ph_edit")}
-            autoComplete="new-password" />
+          />
         </LField>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

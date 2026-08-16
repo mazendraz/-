@@ -1,7 +1,8 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
-import { RateLimitError, ValidationError } from "@/lib/utils/errors";
+import { RateLimitError, UnauthorizedError, ValidationError } from "@/lib/utils/errors";
+import { getCustomerUser } from "@/lib/auth";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
@@ -71,6 +72,36 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   );
   if (!company.ok) throw tooMany(company.retryAfterMs);
 
-  const lead = await leadsService.create(payload);
+  // Who is submitting, IF anyone is signed in. Optional on purpose:
+  //
+  // The website now gates the send behind sign-in, so real traffic arrives with
+  // a session. Making it REQUIRED here is a separate, one-line decision — and a
+  // dangerous one to take at the same time as shipping the gate. If anything
+  // about the gate is wrong on the day it deploys, an optional attach loses the
+  // account link on some requests; a required one loses the REQUESTS, which for
+  // a lead-generation business is the whole product going dark.
+  //
+  // Flip it once the gate has been seen working in production.
+  const customerId = await optionalCustomerId(request);
+
+  const lead = await leadsService.create(payload, customerId);
   return ok(lead, 201);
 }));
+
+/**
+ * The signed-in customer's id, or null.
+ *
+ * Swallows the 401 deliberately: on this route "not signed in" is a legitimate
+ * state, not a failure. Only an UnauthorizedError is swallowed, so a genuine
+ * fault (the database being down inside getCustomerUser) still surfaces instead
+ * of being silently recorded as an anonymous request.
+ */
+async function optionalCustomerId(request: NextRequest): Promise<string | null> {
+  try {
+    const customer = await getCustomerUser(request);
+    return customer.id;
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return null;
+    throw err;
+  }
+}

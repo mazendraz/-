@@ -414,3 +414,65 @@ export async function notifyAdminsReviewSubmitted(params: {
     return false;
   }
 }
+
+/**
+ * Send a customer their email-verification link.
+ *
+ * Never throws — same fail-open contract as every send in this file. A mail
+ * outage must not surface to the customer as "registration failed", because the
+ * account WAS created; only the link is missing, and they can ask for another.
+ *
+ * Returns true if an email was dispatched, false if it was skipped or failed.
+ * The caller ignores it deliberately: acting on the difference would tell the
+ * browser whether a given address is deliverable.
+ */
+export async function sendCustomerVerificationEmail(
+  to: string,
+  name: string,
+  token: string,
+): Promise<boolean> {
+  try {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      // Loud on purpose. Without a key, registration silently produces accounts
+      // nobody can ever activate — a broken funnel that looks like nothing at
+      // all in the logs unless this line is here.
+      console.warn(
+        "[notify] RESEND_API_KEY not set — customer verification email NOT sent. " +
+          "Password registration cannot be completed until it is configured.",
+      );
+      return false;
+    }
+
+    const site = (process.env.PUBLIC_SITE_URL ?? "").replace(/\/$/, "");
+    // encodeURIComponent even though the token is base64url (URL-safe by
+    // construction): the guarantee belongs at the boundary that builds the URL,
+    // not in an assumption about how the token was generated three files away.
+    const link = `${site}/verify-email?token=${encodeURIComponent(token)}`;
+
+    const subject = "Confirm your email — Al Assema";
+    const text =
+      `Hi ${name},\n\n` +
+      `Confirm your email address to finish setting up your Al Assema account:\n\n` +
+      `${link}\n\n` +
+      `This link expires in 24 hours.\n\n` +
+      `If you didn't create an account, you can ignore this email — nothing will happen ` +
+      `until the link above is used.`;
+    const html =
+      `<h2>Confirm your email</h2>` +
+      `<p>Hi ${escapeHtml(name)},</p>` +
+      `<p>Confirm your email address to finish setting up your Al Assema account.</p>` +
+      `<p><a href="${escapeHtml(link)}" style="display:inline-block;background:#005578;` +
+      `color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold">` +
+      `Confirm email</a></p>` +
+      `<p style="color:#6b7278;font-size:13px">This link expires in 24 hours.</p>` +
+      `<p style="color:#6b7278;font-size:13px">If you didn't create an account, you can ignore ` +
+      `this email — nothing will happen until the link above is used.</p>`;
+
+    await sendViaResend(apiKey, { to, subject, text, html });
+    return true;
+  } catch (err) {
+    console.error("[notify] customer verification email failed:", err);
+    return false;
+  }
+}

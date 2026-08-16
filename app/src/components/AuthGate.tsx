@@ -6,6 +6,7 @@ import Logo from "./Logo";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale, type StringKey } from "../lib/i18n";
 import Icon from "./Icon";
+import PasswordField from "./PasswordField";
 
 const ROLE_LABEL_KEY: Record<Role, StringKey> = {
   ADMIN: "auth_role_admin",
@@ -26,7 +27,6 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
   const { locale } = useLocale();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -80,30 +80,12 @@ function LoginScreen({ requiredRole }: { requiredRole: Role }) {
               placeholder={t(locale, "auth_email_placeholder")}
             />
           </label>
-          <label className="block">
-            <span className="text-caption font-bold text-on-surface-variant mb-1.5 block">{t(locale, "auth_password")}</span>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                required
-                className="field-input pe-11"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={t(locale, showPassword ? "auth_hide_password" : "auth_show_password")}
-                aria-pressed={showPassword}
-                className="absolute inset-y-0 end-0 flex items-center pe-3 text-outline hover:text-on-surface-variant transition-colors focus:outline-none"
-              >
-                <span className="material-symbols-outlined text-title" aria-hidden="true" translate="no">
-                  {showPassword ? "visibility_off" : "visibility"}
-                </span>
-              </button>
-            </div>
-          </label>
+          <PasswordField
+            label="auth_password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+          />
           <button
             type="submit"
             disabled={busy}

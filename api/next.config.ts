@@ -19,6 +19,31 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // ── API versioning for the mobile apps ─────────────────────────────────────
+  // A published app can never be force-updated the way the website can: whatever
+  // contract a build compiled against has to keep answering for as long as that
+  // build is installed on someone's phone. So the apps call /api/v1/* and the
+  // website keeps calling /api/* — both reach the same 124 handlers today.
+  //
+  // An alias, deliberately, rather than moving the route files into an app/api/v1
+  // directory. Moving them would rewrite every import path and every test for
+  // zero behavioural gain, and would have to happen again for v2. When a route
+  // genuinely needs a breaking change, THAT route forks into a real
+  // app/api/v1/<route> file, which — being a real file — wins over this rewrite.
+  //
+  // `afterFiles` (not `beforeFiles`): it runs after real files are checked, so a
+  // forked v1 handler always takes precedence over the alias. Nothing is shadowed.
+  //
+  // NOTE: src/proxy.ts runs BEFORE this rewrite (step 3 vs step 6 of Next's
+  // routing order) and therefore sees the un-rewritten "/api/v1/..." path. See
+  // canonicalApiPath() there — two path allowlists depend on it.
+  async rewrites() {
+    return {
+      beforeFiles: [],
+      afterFiles: [{ source: "/api/v1/:path*", destination: "/api/:path*" }],
+      fallback: [],
+    };
+  },
   experimental: {
     // src/proxy.ts runs on every /api/* request (matcher: "/api/:path*"), so
     // Next buffers the request body to let both proxy and the route handler

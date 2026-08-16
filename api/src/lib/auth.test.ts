@@ -2,6 +2,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   hashPassword,
   signToken,
+  signCustomerToken,
   verifyPassword,
   verifyPasswordSafe,
   ttlToSeconds,
@@ -40,6 +41,33 @@ describe("signToken", () => {
   it("produces a 3-part HS256 JWT", async () => {
     const token = await signToken({ sub: "u1", role: "ADMIN", companyId: null });
     expect(token.split(".")).toHaveLength(3);
+  });
+});
+
+/** Decode a JWT payload without verifying — for asserting on claims. */
+function claimsOf(token: string): Record<string, unknown> {
+  return JSON.parse(Buffer.from(token.split(".")[1]!, "base64url").toString());
+}
+
+describe("token audience claim", () => {
+  it("stamps staff tokens as typ:staff", async () => {
+    const token = await signToken({ sub: "u1", role: "ADMIN", companyId: null });
+    expect(claimsOf(token).typ).toBe("staff");
+  });
+
+  it("stamps customer tokens as typ:customer", async () => {
+    const token = await signCustomerToken({ sub: "c1" });
+    expect(claimsOf(token).typ).toBe("customer");
+  });
+
+  it("gives a customer token no role and no companyId to read", async () => {
+    // Not cosmetic: a staff guard reads `role` off the claims. A customer token
+    // that cannot even express one can't accidentally satisfy such a check if it
+    // ever reaches the wrong code path.
+    const claims = claimsOf(await signCustomerToken({ sub: "c1" }));
+    expect(claims.role).toBeUndefined();
+    expect(claims.companyId).toBeUndefined();
+    expect(claims.sub).toBe("c1");
   });
 });
 

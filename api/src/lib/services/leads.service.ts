@@ -104,6 +104,14 @@ export interface CreateLeadRecordInput {
   budget: string;
   description: string;
   resolved?: Awaited<ReturnType<typeof resolveItems>> | null;
+  /**
+   * The signed-in CustomerUser who owns this request, when there was one.
+   *
+   * Optional so the OTHER entry point into createLeadRecord — an admin
+   * converting a waitlist entry — keeps working unchanged: nobody is signed in
+   * as a customer there, and the request genuinely has no account behind it.
+   */
+  customerId?: string | null;
 }
 
 /**
@@ -116,6 +124,7 @@ export interface CreateLeadRecordInput {
  */
 export async function createLeadRecord(input: CreateLeadRecordInput): Promise<ApiLead> {
   const { company, service, customerName, phone, district, budget, description, resolved } = input;
+  const customerId = input.customerId ?? null;
 
   // Business Control Center: resolve (create-or-refresh) this customer's
   // Client row BEFORE the retry loop below — a refNumber collision retries
@@ -145,6 +154,7 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
           description,
           status: LeadStatus.NEW,
           clientId,
+          customerId,
           // A thread from the start, so the customer can message as soon as the
           // request lands. Leads that predate this are handled lazily by
           // getOrCreateConversation — see chat.service.
@@ -240,7 +250,10 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
  * near-identical re-submit, then hands off to createLeadRecord for the actual
  * write. Returns the full RAW ApiLead.
  */
-export async function create(payload: CreateLeadInput): Promise<ApiLead> {
+export async function create(
+  payload: CreateLeadInput,
+  customerId: string | null = null,
+): Promise<ApiLead> {
   const company = await prisma.company.findFirst({
     where: { slug: payload.companySlug, status: CompanyStatus.ACTIVE },
     select: { id: true, name: true, email: true, whatsapp: true },
@@ -283,6 +296,7 @@ export async function create(payload: CreateLeadInput): Promise<ApiLead> {
     budget: payload.budget,
     description: payload.description,
     resolved,
+    customerId,
   });
 }
 

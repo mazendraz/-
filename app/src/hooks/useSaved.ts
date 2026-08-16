@@ -18,8 +18,16 @@ function write(slugs: string[]) {
 }
 
 /**
- * Saved / shortlisted companies — persisted to localStorage, reactive
- * across the app. No account needed (per the no-login product rule).
+ * Saved / shortlisted companies — persisted to localStorage, reactive across the
+ * app.
+ *
+ * Still DEVICE-LOCAL, and deliberately so for now. The old "no-login product
+ * rule" this used to cite is gone — sending a request requires an account — but
+ * a shortlist is a low-stakes browsing aid that should keep working before
+ * anyone signs in. Moving it server-side is a real change (merging a device list
+ * into an account list on first sign-in has its own rules), not a rename, so it
+ * is deferred rather than half-done. The copy on the Saved page says "on this
+ * device" and must keep matching whatever this does.
  */
 export function useSaved() {
   const [slugs, setSlugs] = useState<string[]>(() => read());

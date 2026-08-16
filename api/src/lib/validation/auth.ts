@@ -23,3 +23,47 @@ export const changePasswordSchema = z
   });
 
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+// Customer sign-in through Google. The ID token is the ENTIRE input — no email,
+// no name, no id. Anything the client could send alongside it would be a claim we
+// would then have to decide whether to trust; taking only the token means every
+// field about this person comes from Google's signature instead.
+//
+// The 4096 ceiling is a sanity bound on a JWT, not a spec limit: a Google ID
+// token runs ~1KB, and the value's real validation is the signature check.
+export const googleSignInSchema = z.object({
+  idToken: z.string().trim().min(1, "Missing Google token.").max(4096),
+});
+
+export type GoogleSignInInput = z.infer<typeof googleSignInSchema>;
+
+// ── Customer password auth ──────────────────────────────────────────────────
+
+export const customerRegisterSchema = z.object({
+  name: z.string().trim().min(2, "Enter your name.").max(80),
+  email: z.string().trim().toLowerCase().email(),
+  // The SAME strength rule as staff accounts. A customer account holds a phone
+  // number, a home address and a message history — there is no version of this
+  // where it deserves a weaker bar than a dashboard login.
+  password: passwordSchema,
+});
+
+export type CustomerRegisterInput = z.infer<typeof customerRegisterSchema>;
+
+export const customerLoginSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+  // Not passwordSchema — same reasoning as loginSchema above: this password is
+  // being CHECKED, not set. Enforcing strength here would reject an older
+  // password before the compare and leak the policy to anyone with a login form.
+  password: z.string().min(1),
+});
+
+export type CustomerLoginInput = z.infer<typeof customerLoginSchema>;
+
+export const verifyEmailSchema = z.object({
+  token: z.string().trim().min(1).max(256),
+});
+
+export const resendVerificationSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});

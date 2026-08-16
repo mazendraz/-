@@ -1,6 +1,8 @@
-import { useState, useId } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useState, useId, useEffect, useRef } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { isApiConfigured } from "../lib/api";
+import { useCustomerAuth } from "../lib/customerAuth";
+import { savePendingRequest, takePendingRequest } from "../lib/pendingRequest";
 import { DISTRICTS, addLead, getMyLeads, type Lead } from "../lib/requests";
 import { useSettings, parseLines } from "../lib/settings";
 import { useCompanyDetail } from "../lib/catalog";
@@ -81,6 +83,31 @@ export default function RequestForm() {
   // unedited fields isn't "unsaved work" yet.
   const [touched, setTouched] = useState(false);
 
+  // ── Sign-in gate ───────────────────────────────────────────────────────────
+  // Enforced only when the API is configured — demo mode (no VITE_API_URL) keeps
+  // the offline flow working, same rule the rest of the app follows.
+  const navigate = useNavigate();
+  const { customer, loading: authLoading } = useCustomerAuth();
+  const gateOn = isApiConfigured();
+  const [restored, setRestored] = useState(false);
+  // Consume the stash exactly once per mount. Under StrictMode the effect runs
+  // twice in development, and the second pass would find an empty store and
+  // wipe the freshly restored form.
+  const restoreDone = useRef(false);
+
+  useEffect(() => {
+    if (restoreDone.current || authLoading || !customer) return;
+    restoreDone.current = true;
+
+    const pending = takePendingRequest();
+    if (!pending) return;
+
+    setForm(pending.form);
+    setItems(pending.items);
+    setTouched(true);
+    setRestored(true);
+  }, [authLoading, customer]);
+
   function clearPrefill() {
     setForm((f) => ({ ...f, name: "", phone: "", district: "" }));
     setPrefilled(false);
@@ -96,6 +123,12 @@ export default function RequestForm() {
   // Above the early returns below: hooks can't be conditional. Nothing left to
   // lose once the request actually sent, so the guard turns off at "success".
   const navBlocker = useUnsavedChangesGuard(touched && step === "form");
+
+  // Drives the submit button's label. Not `!customer` alone: while the session
+  // is still being checked the honest answer is "not yet known", and flashing
+  // "Sign in and send" at a signed-in customer for one frame reads as being
+  // logged out.
+  const needsSignIn = gateOn && !authLoading && !customer;
 
   function validate(): boolean {
     const e: Partial<FormState> = {};
@@ -120,6 +153,25 @@ export default function RequestForm() {
       firstError?.focus();
       return;
     }
+    // ── Sign-in gate ────────────────────────────────────────────────────────
+    // After validation, before the CAPTCHA: sending them to sign in over a form
+    // that was going to be rejected anyway would mean doing the trip twice. By
+    // here the input is known good, so the only thing left is who they are.
+    if (gateOn && !authLoading && !customer) {
+      savePendingRequest({
+        companySlug,
+        companyName,
+        form,
+        items,
+      });
+      // The guard would otherwise throw a "you have unsaved changes" dialog over
+      // a navigation WE initiated to preserve exactly those changes.
+      setTouched(false);
+      const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+      navigate(`/signin?next=${next}`);
+      return;
+    }
+
     // CAPTCHA gate — only when a Turnstile key is configured.
     if (captchaConfigured() && !captchaToken) {
       setSubmitError(t(locale, "form_err_captcha"));
@@ -248,9 +300,9 @@ export default function RequestForm() {
 
         {/* Trust bar */}
         <Notice variant="info" icon="lock" className="mb-7">
-          <p className="font-bold text-label text-on-surface mb-0.5">{t(locale, "form_no_account_title")}</p>
+          <p className="font-bold text-label text-on-surface mb-0.5">{t(locale, "form_signin_note_title")}</p>
           <p className="text-label text-outline leading-relaxed">
-            {t(locale, "form_no_account_sub")}
+            {t(locale, "form_signin_note_sub")}
           </p>
         </Notice>
 
@@ -389,6 +441,15 @@ export default function RequestForm() {
             </Notice>
           )}
 
+          {/* Back from signing in with the form intact. Says so explicitly —
+              seeing your own data still there is the reassurance; leaving it
+              unremarked makes people re-check every field. */}
+          {restored && (
+            <Notice variant="success" icon="check_circle" className="">
+              <p className="text-label font-medium">{t(locale, "form_restored")}</p>
+            </Notice>
+          )}
+
           {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
           <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
@@ -410,13 +471,16 @@ export default function RequestForm() {
               </>
             ) : (
               <>
-                <Icon name="send" className="text-title" />
-                {t(locale, "form_submit")}
+                {/* The button says what the next click actually does. A visitor
+                    who presses "Send" and lands on a sign-in page was misled,
+                    even though the request does go out a moment later. */}
+                <Icon name={needsSignIn ? "login" : "send"} className="text-title" />
+                {t(locale, needsSignIn ? "form_submit_signin" : "form_submit")}
               </>
             )}
           </button>
           <p className="text-center text-caption text-outline">
-            {t(locale, "form_contact_24h")}
+            {t(locale, needsSignIn ? "form_signin_why" : "form_contact_24h")}
           </p>
 
           {/* Honeypot — hidden from real users; bots auto-fill it and the server

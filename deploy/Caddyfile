@@ -91,6 +91,24 @@ your-domain.com {
 		#     covers /sw.js and /manifest.webmanifest.
 		#   • frame-src/…cloudflare.com is only needed when Turnstile is on.
 		#
+		# ── accounts.google.com — customer sign-in (added with the Google flow) ──
+		# Google Identity Services cannot be bundled; it loads from Google's origin
+		# and needs FOUR allowances, and missing any ONE of them breaks sign-in in
+		# a different, confusing way:
+		#   script-src  — the /gsi/client library itself. Without it: nothing at
+		#                 all renders and the console shows a CSP violation.
+		#   frame-src   — GIS puts the account chooser in an iframe. Without it:
+		#                 the button renders, the click does nothing.
+		#   connect-src — GIS's own XHR back to Google. Without it: the button
+		#                 renders, the chooser opens, no credential ever arrives.
+		#   style-src   — GIS injects a stylesheet for the button. Without it: the
+		#                 button appears unstyled and the layout breaks.
+		# img-src also gains *.googleusercontent.com, which is where every Google
+		# profile picture is served from (CustomerUser.avatarUrl).
+		#
+		# NONE of this is verifiable locally: Vite serves no CSP, so sign-in works
+		# perfectly in dev whether these are here or not. Test on staging.
+		#
 		# ⚠ IF IMAGES DISAPPEAR after enforcing: a company logo/cover/gallery URL
 		# points at a host outside 'self' and *.supabase.co. The admin validator
 		# (validation/shared.ts imageRef) historically accepted ANY https URL. Find
@@ -101,7 +119,7 @@ your-domain.com {
 		#
 		# ROLLBACK (one word): rename the header below back to
 		# `Content-Security-Policy-Report-Only` and `systemctl reload caddy`.
-		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co; media-src 'self' https://*.supabase.co; connect-src 'self'; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co https://*.googleusercontent.com; media-src 'self' https://*.supabase.co; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://challenges.cloudflare.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
 
 		try_files {path} /index.html
 		file_server

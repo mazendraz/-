@@ -4,7 +4,7 @@
 // invariants down.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { proxy, resolveAllowedOrigin } from "@/proxy";
+import { canonicalApiPath, proxy, resolveAllowedOrigin } from "@/proxy";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -12,11 +12,19 @@ afterEach(() => {
 
 function req(
   path: string,
-  opts: { method?: string; origin?: string; apiKey?: string } = {},
+  opts: {
+    method?: string;
+    origin?: string;
+    apiKey?: string;
+    contentLength?: number;
+  } = {},
 ): NextRequest {
   const headers = new Headers();
   if (opts.origin) headers.set("origin", opts.origin);
   if (opts.apiKey !== undefined) headers.set("x-api-key", opts.apiKey);
+  if (opts.contentLength !== undefined) {
+    headers.set("content-length", String(opts.contentLength));
+  }
   return new NextRequest(`http://localhost${path}`, {
     method: opts.method ?? "GET",
     headers,
@@ -114,5 +122,70 @@ describe("proxy — API-key gate", () => {
     vi.stubEnv("API_KEY", "");
     const res = await proxy(req("/api/leads"));
     expect(res.status).not.toBe(401);
+  });
+});
+
+// The mobile apps call /api/v1/*, which next.config.ts rewrites to /api/*. That
+// rewrite runs AFTER this proxy, so everything here sees the "/v1" segment the
+// route handler never will. These lock down that the two path-matching gates
+// keep working on the versioned path — a regression in either is silent and
+// only shows up as a 413 on video upload or a 401 on an uptime probe.
+describe("proxy — /api/v1 version prefix", () => {
+  describe("canonicalApiPath", () => {
+    it("strips the version segment", () => {
+      expect(canonicalApiPath("/api/v1/provider/upload")).toBe("/api/provider/upload");
+      expect(canonicalApiPath("/api/v1/health")).toBe("/api/health");
+      expect(canonicalApiPath("/api/v2/companies")).toBe("/api/companies");
+    });
+
+    it("leaves unversioned paths untouched", () => {
+      expect(canonicalApiPath("/api/provider/upload")).toBe("/api/provider/upload");
+      expect(canonicalApiPath("/api/companies")).toBe("/api/companies");
+    });
+
+    it("only strips a whole segment, never a prefix of a longer one", () => {
+      // "/api/v1beta/..." is not version 1 — matching it would silently reroute
+      // a real (if oddly named) route to a different handler.
+      expect(canonicalApiPath("/api/v1beta/companies")).toBe("/api/v1beta/companies");
+      expect(canonicalApiPath("/api/version/companies")).toBe("/api/version/companies");
+    });
+
+    it("handles the bare version root", () => {
+      expect(canonicalApiPath("/api/v1")).toBe("/api");
+    });
+  });
+
+  it("exempts the versioned probes from the API-key gate", async () => {
+    vi.stubEnv("API_KEY", "s3cret-key");
+    for (const p of ["/api/v1/health", "/api/v1/ready", "/api/v1/sitemap"]) {
+      const res = await proxy(req(p));
+      expect(res.status, `${p} should be exempt`).not.toBe(401);
+    }
+  });
+
+  it("still gates a versioned non-probe route", async () => {
+    vi.stubEnv("API_KEY", "s3cret-key");
+    const res = await proxy(req("/api/v1/leads"));
+    expect(res.status).toBe(401);
+  });
+
+  it("lets a versioned upload carry a body above the 1MB JSON ceiling", async () => {
+    // A gallery video is up to 50MB and is capped by content in upload.service,
+    // not here. Before the path was normalized this returned 413 on /api/v1.
+    const res = await proxy(
+      req("/api/v1/provider/upload", { method: "POST", contentLength: 20 * 1024 * 1024 }),
+    );
+    expect(res.status).not.toBe(413);
+  });
+
+  it("still sheds an oversized body on a versioned non-upload route", async () => {
+    const res = await proxy(
+      req("/api/v1/provider/change-requests", {
+        method: "POST",
+        contentLength: 20 * 1024 * 1024,
+      }),
+    );
+    expect(res.status).toBe(413);
+    expect(await res.json()).toMatchObject({ code: "PAYLOAD_TOO_LARGE" });
   });
 });

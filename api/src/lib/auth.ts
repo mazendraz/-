@@ -71,6 +71,19 @@ export interface AuthUser {
   desktopPermissions: string[];
 }
 
+/**
+ * The signed-in CUSTOMER. Intentionally has no `role`, no `companyId` and no
+ * `desktopPermissions` — there is nothing for a staff guard to read off it, so a
+ * customer can't be passed to one by accident and quietly satisfy it.
+ */
+export interface CustomerAuthUser {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  emailVerified: boolean;
+}
+
 // ── Passwords ─────────────────────────────────────────────────────────────────
 
 export function hashPassword(plain: string): Promise<string> {
@@ -124,14 +137,33 @@ function secretKey(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
+// ── Token audience: staff vs. customer ───────────────────────────────────────
+// Two populations now hold tokens signed with the SAME secret: staff (`User` —
+// admin/provider, password login) and customers (`CustomerUser` — Google/Apple,
+// no password). A token minted for one must never authorize the other.
+//
+// Today the tables alone would mostly stop it — getAuthUser looks the subject up
+// in `User`, and a CustomerUser's uuid won't be found there. But "these two uuid
+// spaces happen not to overlap" is an accident of how the lookup is written, not
+// a rule anyone can see. The day someone adds a route that resolves a subject
+// differently, or the two id spaces stop being disjoint, the boundary is gone
+// with nothing failing loudly.
+//
+// So the audience is written into the token and checked on the way back in.
+export type TokenAudience = "staff" | "customer";
+
 export interface TokenClaims {
   sub: string; // user id
   role: UserRole;
   companyId: string | null;
 }
 
+export interface CustomerTokenClaims {
+  sub: string; // CustomerUser id
+}
+
 export function signToken(claims: TokenClaims): Promise<string> {
-  return new SignJWT({ role: claims.role, companyId: claims.companyId })
+  return new SignJWT({ typ: "staff", role: claims.role, companyId: claims.companyId })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)
     .setIssuedAt()
@@ -139,17 +171,58 @@ export function signToken(claims: TokenClaims): Promise<string> {
     .sign(secretKey());
 }
 
-async function verifyToken(token: string): Promise<TokenClaims> {
+/**
+ * Mint a CUSTOMER session token. Carries no role and no companyId — a customer
+ * has neither, and omitting them means a customer token cannot even express the
+ * claims a staff guard reads.
+ */
+export function signCustomerToken(claims: CustomerTokenClaims): Promise<string> {
+  return new SignJWT({ typ: "customer" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(claims.sub)
+    .setIssuedAt()
+    .setExpirationTime(TOKEN_TTL)
+    .sign(secretKey());
+}
+
+/**
+ * Verify signature + expiry, then assert the token was minted for `expected`.
+ *
+ * A token with no `typ` at all is treated as "staff": every token issued before
+ * this claim existed is a staff token, and rejecting them would 401 every signed-
+ * in admin and provider the moment this deploys. The fallback is safe in the only
+ * direction that matters — customer tokens are ALWAYS minted with typ:"customer",
+ * so nothing can reach the customer side by omitting the claim. It can be deleted
+ * once JWT_TTL has elapsed after the deploy that introduced it.
+ */
+async function verifyTokenAs(token: string, expected: TokenAudience) {
+  let payload;
   try {
-    const { payload } = await jwtVerify(token, secretKey());
-    return {
-      sub: String(payload.sub),
-      role: payload.role as UserRole,
-      companyId: (payload.companyId as string | null) ?? null,
-    };
+    ({ payload } = await jwtVerify(token, secretKey()));
   } catch {
     throw new UnauthorizedError("Invalid or expired token");
   }
+  const audience = (payload.typ as TokenAudience | undefined) ?? "staff";
+  if (audience !== expected) {
+    // Deliberately the same message as a bad signature: which audience a token
+    // belongs to is not something an unauthenticated caller should learn.
+    throw new UnauthorizedError("Invalid or expired token");
+  }
+  return payload;
+}
+
+async function verifyToken(token: string): Promise<TokenClaims> {
+  const payload = await verifyTokenAs(token, "staff");
+  return {
+    sub: String(payload.sub),
+    role: payload.role as UserRole,
+    companyId: (payload.companyId as string | null) ?? null,
+  };
+}
+
+async function verifyCustomerToken(token: string): Promise<CustomerTokenClaims> {
+  const payload = await verifyTokenAs(token, "customer");
+  return { sub: String(payload.sub) };
 }
 
 // ── Current user ──────────────────────────────────────────────────────────────
@@ -195,6 +268,40 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser> {
     role: user.role,
     companyId: user.companyId,
     desktopPermissions: user.desktopPermissions,
+  };
+}
+
+/**
+ * Verify a CUSTOMER token (header or cookie) and load the active CustomerUser.
+ *
+ * Mirrors getAuthUser deliberately, including the re-read on every request: that
+ * is what makes `isActive = false` an immediate kill-switch rather than something
+ * that waits out the token's expiry.
+ */
+export async function getCustomerUser(request: NextRequest): Promise<CustomerAuthUser> {
+  const claims = await verifyCustomerToken(resolveToken(request));
+
+  const customer = await prisma.customerUser.findUnique({
+    where: { id: claims.sub },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+      emailVerified: true,
+      isActive: true,
+    },
+  });
+  if (!customer || !customer.isActive) {
+    throw new UnauthorizedError("Account is inactive or no longer exists");
+  }
+
+  return {
+    id: customer.id,
+    name: customer.name,
+    email: customer.email,
+    avatarUrl: customer.avatarUrl,
+    emailVerified: customer.emailVerified,
   };
 }
 

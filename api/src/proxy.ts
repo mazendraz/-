@@ -56,6 +56,32 @@ const MAX_JSON_BODY_BYTES = 1024 * 1024; // 1MB — far above any JSON this API 
 // separately and by content (5MB images / 50MB gallery video — upload.service.ts).
 const LARGE_BODY_PATHS = new Set(["/api/admin/upload", "/api/provider/upload"]);
 
+// ── Version-prefix normalization ─────────────────────────────────────────────
+// The mobile apps call /api/v1/*, which next.config.ts rewrites to /api/*. That
+// rewrite is step 6 of Next's routing order; this proxy is step 3 — so every
+// path seen in here still carries the "/v1" segment the route handler will never
+// see.
+//
+// Two checks below match the path against a fixed set, and BOTH fail open in the
+// wrong direction if the prefix isn't stripped:
+//
+//   • LARGE_BODY_PATHS — "/api/v1/provider/upload" wouldn't match, so the 1MB
+//     JSON ceiling would apply to a 50MB gallery video and reject it as 413.
+//   • probePaths       — "/api/v1/health" wouldn't match, so an uptime monitor
+//     on the versioned path would get 401 once API_KEY is set.
+//
+// Normalizing once here is what keeps those two sets from having to grow a
+// parallel entry per version, forever.
+const VERSION_PREFIX = /^\/api\/v\d+(?=\/|$)/;
+
+/**
+ * Strip an API version segment: "/api/v1/provider/upload" → "/api/provider/upload".
+ * Any path without one is returned unchanged. Exported for unit testing.
+ */
+export function canonicalApiPath(pathname: string): string {
+  return pathname.replace(VERSION_PREFIX, "/api");
+}
+
 // Constant-time equality for the shared API key. proxy runs on the Edge runtime,
 // which has no node:crypto.timingSafeEqual — so we compare SHA-256 digests via Web
 // Crypto instead. Digests are fixed-length and unpredictable, so the byte-wise
@@ -90,6 +116,9 @@ export function resolveAllowedOrigin(origin: string): string | null {
 export async function proxy(request: NextRequest) {
   const origin = request.headers.get("origin") ?? "";
   const allowOrigin = resolveAllowedOrigin(origin);
+  // Version-stripped path — what the route handler will actually be resolved
+  // against. Every path comparison below must use this, never nextUrl.pathname.
+  const path = canonicalApiPath(request.nextUrl.pathname);
 
   // Preflight
   if (request.method === "OPTIONS") {
@@ -105,7 +134,7 @@ export async function proxy(request: NextRequest) {
   if (
     Number.isFinite(declaredLength) &&
     declaredLength > MAX_JSON_BODY_BYTES &&
-    !LARGE_BODY_PATHS.has(request.nextUrl.pathname)
+    !LARGE_BODY_PATHS.has(path)
   ) {
     const headers: Record<string, string> = { ...corsHeaders };
     if (allowOrigin) Object.assign(headers, originHeaders(allowOrigin));
@@ -124,7 +153,7 @@ export async function proxy(request: NextRequest) {
   const probePaths = new Set(["/api/health", "/api/ready", "/api/sitemap"]);
   if (
     apiKey &&
-    !probePaths.has(request.nextUrl.pathname) &&
+    !probePaths.has(path) &&
     !(await timingSafeEqual(request.headers.get("x-api-key") ?? "", apiKey))
   ) {
     const headers: Record<string, string> = { ...corsHeaders };

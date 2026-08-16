@@ -35,6 +35,20 @@ enum UserRole {
   PROVIDER
 }
 
+// Which identity provider a customer signed in through. Deliberately NOT added to
+// UserRole: `User` is a STAFF account (admin / provider) with a password, and
+// CustomerUser is a separate table entirely — see the comment on CustomerUser for
+// why the two are not merged.
+//
+// APPLE is here from day one even though Google ships first: Apple's guideline 4.8
+// makes Sign in with Apple mandatory for any app offering Google sign-in, so it is
+// a certainty rather than a maybe, and having the value present means the second
+// provider needs no migration.
+enum IdentityProvider {
+  GOOGLE
+  APPLE
+}
+
 // Visitor messages submitted from a company page ("Report a problem" / suggestion
 // / general inquiry). Maps (at the API boundary) to the frontend FeedbackType:
 // "problem" | "suggestion" | "inquiry".
@@ -363,8 +377,20 @@ model Lead {
   // unreadable because its Client row was touched, same non-destructive
   // pattern as Review.leadId / WaitlistEntry.convertedLeadId.
   clientId        String?
+  // The signed-in CustomerUser who submitted this, when there was one.
+  //
+  // Nullable and SetNull, like clientId above and for the same reason: every
+  // lead created before accounts existed has none, and a lead must never become
+  // unreadable because the account that owned it was removed. The provider's
+  // copy of the request is business data; the account is a way to reach it.
+  //
+  // Distinct from clientId: `Client` is the phone-deduplicated grouping derived
+  // from what was typed into the form, and it exists whether or not anyone ever
+  // signed in. This is the account that actually owns the request.
+  customerId      String?
 
   company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer     CustomerUser? @relation(fields: [customerId], references: [id], onDelete: SetNull)
   // companySlug + companyName are returned derived from this relation.
   // The (at most one) verified review submitted for this completed lead.
   review       Review?
@@ -383,6 +409,10 @@ model Lead {
   @@index([status])
   @@index([createdAt])
   @@index([clientId])
+  // Serves "my requests" for a signed-in customer: WHERE customerId=?
+  // ORDER BY createdAt DESC — filter + sort from one index, same shape as the
+  // companyId one below.
+  @@index([customerId, createdAt])
   // Serves the provider/admin lead lists: WHERE companyId=? [AND status=?]
   // ORDER BY createdAt DESC — filter + sort from one index.
   @@index([companyId, status, createdAt])
@@ -858,6 +888,110 @@ model Message {
 // and still interact via the existing ref+token/phone-gated flows. Upserted
 // from leads.service.createLeadRecord on every new lead (create-or-refresh by
 // phone); backfilled once for existing leads via a one-time migration script.
+// A CUSTOMER's login account — the person who submits requests. Signed in through
+// Google (and later Apple); there is no password here at all.
+//
+// ── Why a separate table from `User` ─────────────────────────────────────────
+// `User` is a staff account: it has a passwordHash, a UserRole, a companyId, and
+// desktopPermissions, and every existing guard (withAuth → getAuthUser, withRole,
+// withPermission) resolves against it. Folding customers in would mean every one
+// of those guards suddenly sees rows that must never satisfy them, and the
+// protection would rest on a role check being present everywhere rather than on
+// the lookup simply not finding the row. Two tables make "a customer token can
+// never authorize a staff route" a structural fact instead of a policy.
+//
+// ── Why this is NOT the same thing as `Client` ───────────────────────────────
+// `Client` is a phone-deduplicated grouping of leads, derived from what people
+// typed into the request form — it exists whether or not that person ever signs
+// in. CustomerUser is a login identity. One may end up pointing at the other once
+// a customer claims a past request, but they answer different questions and are
+// keyed on different things (phone vs. email).
+model CustomerUser {
+  id String @id @default(uuid())
+  // Display/merge handle, not the login key — see CustomerIdentity.subject for
+  // that. Unique so a second provider can be linked to an existing account when
+  // it asserts the SAME verified address.
+  //
+  // Note this is NOT guaranteed to be a reachable inbox: Apple's "Hide My Email"
+  // returns a per-app relay address. Fine as a key; never assume mail sent here
+  // is read by a human who recognizes it.
+  email         String  @unique
+  name          String
+  avatarUrl     String?
+  // Set only for accounts that registered with a password. NULL means "this
+  // account signs in through a provider only" — and verifyPasswordSafe turns
+  // that into a failed login that still costs one bcrypt compare, so a
+  // Google-only account is indistinguishable from a wrong password by timing.
+  passwordHash  String?
+  // Did the PROVIDER assert this address is verified? Load-bearing for account
+  // linking: auto-attaching a new provider to an existing account on an
+  // unverified address is an account-takeover path (sign up with a provider that
+  // lets you claim any address, inherit the victim's requests). Linking is
+  // allowed only when this is true — see the customerAuth service.
+  emailVerified Boolean @default(false)
+  // ── Email verification for PASSWORD registrations ──────────────────────────
+  // A password account is INERT until this is cleared by a valid verification
+  // click — login refuses an unverified account outright. That is not politeness
+  // about deliverability; it is what closes an account-takeover path:
+  //
+  //   Without it, anyone can register victim@gmail.com with a password they
+  //   choose. When the real owner later signs in with Google, the linking rule
+  //   in customerAuth.service sees a matching address, links the two, and the
+  //   attacker's password now opens the victim's account and every request in it.
+  //
+  // Requiring verification makes the planted account useless on its own, and the
+  // Google path refuses to inherit an unverified one (see claimUnverifiedAccount).
+  //
+  // The token is stored HASHED, for the same reason passwords are: a database
+  // read (backup, log, injected SELECT) otherwise hands over a working key to
+  // every pending account. sha256 rather than bcrypt is right here — the input is
+  // 32 bytes of CSPRNG output, so there is no low-entropy guess to slow down.
+  emailVerifyTokenHash String?   @unique
+  emailVerifyExpires   DateTime?
+  // Same kill-switch semantics as User.isActive: token verification re-checks it
+  // on every request, so flipping it false revokes access without waiting for
+  // the JWT to expire.
+  isActive      Boolean @default(true)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  identities CustomerIdentity[]
+  leads      Lead[]
+  // No @@index([email]) — @unique above already creates one, and a second index
+  // on the same column only costs write throughput. (`User` above carries that
+  // duplication; not worth a migration to undo there, but not worth copying.)
+}
+
+// One row per (provider, provider's user id) pair a CustomerUser can sign in with.
+//
+// A join table rather than `googleSub` / `appleSub` columns on CustomerUser, for
+// three reasons that all showed up in the plan:
+//   1. The SAME person signing in with Google on Android and Apple on iPhone is
+//      the expected duplicate-account case. Linking a second provider to one
+//      account is the mitigation, and it is a row insert here.
+//   2. `subject` — not email — is the stable login key. A Google account's email
+//      can change; the `sub` claim never does. Looking up by (provider, subject)
+//      keeps sign-in correct through an email change.
+//   3. A third provider later is a new enum value, not a schema change here.
+model CustomerIdentity {
+  id         String           @id @default(uuid())
+  customerId String
+  provider   IdentityProvider
+  // The provider's immutable user id: the `sub` claim of the verified ID token.
+  // Opaque — never parse it, never show it.
+  subject    String
+  createdAt  DateTime         @default(now())
+
+  customer CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // THE login lookup, and the guard against one provider identity being attached
+  // to two different accounts.
+  @@unique([provider, subject])
+  @@index([customerId])
+}
+
 model Client {
   id          String   @id @default(uuid())
   // Normalized via the same libphonenumber-js convention already used

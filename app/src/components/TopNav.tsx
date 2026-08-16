@@ -7,6 +7,7 @@ import { t, type StringKey } from "../lib/i18n";
 import { hasFullBleedHero } from "../lib/heroRoutes";
 import Logo from "./Logo";
 import Icon from "./Icon";
+import AccountButton from "./AccountButton";
 
 const NAV_LINKS: { to: string; key: StringKey }[] = [
   { to: "/services", key: "nav_services" },
@@ -178,6 +179,8 @@ export default function TopNav({ onOpenSearch }: Props) {
             {t(locale, "nav_requests")}
           </Link>
 
+          <AccountButton onDark={!solidBg} />
+
           <button
             onClick={() => setLocale(locale === "en" ? "ar" : "en")}
             className={`min-w-[44px] min-h-[44px] flex items-center justify-center text-caption font-bold transition-colors duration-base px-2.5 py-1.5 rounded-lg border
@@ -249,6 +252,7 @@ export default function TopNav({ onOpenSearch }: Props) {
               </span>
             )}
           </Link>
+          <AccountButton onDark={!solidBg} />
         </div>
       </nav>
 
