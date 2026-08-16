@@ -69,7 +69,7 @@ prisma/*.db-journal
 
 # ── مخرجات محلية / مؤقتة ──
 scratchpad/
-# حجر صحي لملفات اتشالت محليًا (أقفال git عالقة من OneDrive، وبقايا desktop/
+# حجر صحي لملفات اتشالت محليًا (أقفال git عالقة، وبقايا desktop/
 # زي node_modules و.env.local). محتاجة تفضل بره git — `git add -A` بتاع
 # scripts/ship.sh كان هيسحبها كلها.
 _to_delete/

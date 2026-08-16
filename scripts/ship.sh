@@ -4,7 +4,7 @@
 #   bash scripts/ship.sh "رسالة الكوميت"
 #   (أو من الجذر:  npm run ship -- "رسالة الكوميت")
 #
-# بيعمل: تنظيف أي قفل عالق من OneDrive → add → commit → push للبرانش الحالي.
+# بيعمل: تنظيف أي قفل git عالق → add → commit → push للبرانش الحالي.
 # آمن لإعادة التشغيل. لو مفيش تعديلات، بيعمل push للموجود بس.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ fi
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
-# OneDrive أحيانًا بيسيب .git/index.lock عالق ويلخبط git — نظّفه
+# VS Code أو الأنتي فيروس أحيانًا بيسيبوا .git/index.lock عالق ويلخبط git — نظّفه
 if [[ -f .git/index.lock ]]; then
   echo "⚠  لقيت .git/index.lock عالق — بشيله."
   rm -f .git/index.lock || true

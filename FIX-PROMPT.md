@@ -24,9 +24,9 @@
    `push --force`، مفيش branches جديدة، مفيش merge — إلا لو مازن طلب صراحةً. برانش واحد ثابت.
 2. **قاعدة البيانات:** ماتشغلش `seed` ولا `db:setup` ولا `prisma migrate reset` نهائيًا في الشغل ده.
    الفيزات دي كلها frontend، مالهاش أي علاقة بالداتا.
-3. **OneDrive:** الريبو متزامن مع OneDrive. لو ظهر `index file corrupt` أو `index.lock`:
-   `rm -f .git/index.lock` ثم `git reset`. بعد أي عملية git اعمل `git status` وتأكد إن النتيجة
-   زي المتوقع قبل ما تكمّل.
+3. **أقفال git:** لو ظهر `index file corrupt` أو `index.lock` (VS Code أو الأنتي فيروس بيسيبوا
+   قفل عالق أحيانًا): `rm -f .git/index.lock` ثم `git reset`. بعد أي عملية git اعمل `git status`
+   وتأكد إن النتيجة زي المتوقع قبل ما تكمّل.
 4. **نطاق الفيز:** نفّذ اللي في الفيز الحالية **بس**. لو لقيت مشكلة تانية، سجّلها في
    `FIX-NOTES.md` وكمّل — ماتصلحهاش دلوقتي.
 5. **ماتغيّرش سلوك شغّال:** ده refactor بصري و a11y. لو تعديل هيغيّر منطق business logic،

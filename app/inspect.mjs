@@ -1,8 +1,11 @@
 import { chromium, devices } from 'playwright-core';
+import fs from 'fs';
 import path from 'path';
 
-const BASE = 'http://localhost:5174';
-const outDir = 'C:\\Users\\ESG\\AppData\\Local\\Temp\\claude\\c--Users-ESG-OneDrive-Desktop--------\\dfcc3fae-6e2e-4b99-badb-80f6cd224238\\scratchpad';
+const BASE = process.env.INSPECT_BASE_URL ?? 'http://localhost:5174';
+// مخرجات محلية — متجاهَلة في .gitignore (scratchpad/). للتغيير: INSPECT_OUT_DIR=... node inspect.mjs
+const outDir = process.env.INSPECT_OUT_DIR ?? path.join(import.meta.dirname, 'scratchpad');
+fs.mkdirSync(outDir, { recursive: true });
 
 const browser = await chromium.launch();
 

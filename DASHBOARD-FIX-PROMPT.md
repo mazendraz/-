@@ -30,7 +30,7 @@
    بالفعل** عشان التستات تسجّل دخول — لو مش موجودة، شغّلها بـ
    `docker compose -f api/docker-compose.dev.yml up -d` وتأكد إن `api/.env` على
    `localhost:5433` قبل أي `db:seed`.
-3. **OneDrive:** الريبو متزامن مع OneDrive. لو ظهر `index file corrupt` أو `index.lock`:
+3. **أقفال git:** لو ظهر `index file corrupt` أو `index.lock` (VS Code أو الأنتي فيروس):
    `rm -f .git/index.lock` ثم `git reset`. بعد أي عملية git اعمل `git status` وتأكد.
 4. **نطاق الفيز:** نفّذ اللي في الفيز الحالية **بس**. لو لقيت مشكلة تانية، سجّلها في
    `DASHBOARD-FIX-NOTES.md` وكمّل — ماتصلحهاش دلوقتي.

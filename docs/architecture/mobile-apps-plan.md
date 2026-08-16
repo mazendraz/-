@@ -8,7 +8,7 @@
 > This doc is written to be pasted as-is into a fresh Claude Code / agent
 > session as a kickoff prompt. It assumes the reader has repo access and has
 > read the root [`CLAUDE.md`](../../CLAUDE.md) — **its rules (shipping via
-> `npm run ship`, local-only DB migrations, OneDrive git caution) apply to
+> `npm run ship`, local-only DB migrations, git lock hygiene) apply to
 > every phase below without exception.**
 
 ---
@@ -145,4 +145,5 @@ Each mobile app is its own Expo project (`npx create-expo-app`), own `package.js
 
 - Any `prisma migrate` / seed / schema change happens against the **local** dev DB (`docker compose -f api/docker-compose.dev.yml up -d`) — never production. Verify `DATABASE_URL` before running anything destructive.
 - Ship with `npm run ship -- "message"` only. No rebase, no force-push, no new branches unless explicitly requested.
-- Watch for OneDrive git lock issues (`index.lock`) per the existing playbook in `CLAUDE.md`.
+- Watch for stale git lock files (`index.lock`) per the playbook in `CLAUDE.md`. The repo now
+  lives at `F:\العاصمة`, outside OneDrive — but VS Code and antivirus can still leave locks.

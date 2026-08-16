@@ -641,9 +641,10 @@ shadow-bloom، إلخ) — ممنوع تخترع ألوان أو مقاسات ج
 ماتعملش rebase ولا push --force ولا branch جديد.
 ```
 
-**لو git اتلخبط (OneDrive):**
+**لو git اتلخبط (قفل عالق):**
 ```
-الريبو جوه OneDrive و git بيتلخبط أحيانًا. اقرأ قسم OneDrive في CLAUDE.md
-واتبعه بالظبط: امسح .git/index.lock وبعدين git reset، وبعدها git status
-عشان تتأكد إن كل حاجة تمام. ماتعملش أي أمر تاني.
+git بيتلخبط أحيانًا من قفل .git/index.lock عالق (VS Code أو الأنتي فيروس).
+اقرأ قسم «مكان الريبو + أقفال git» في CLAUDE.md واتبعه بالظبط: امسح
+.git/index.lock وبعدين git reset، وبعدها git status عشان تتأكد إن كل حاجة
+تمام. ماتعملش أي أمر تاني.
 ```
