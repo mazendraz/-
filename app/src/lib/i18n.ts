@@ -510,6 +510,7 @@ const STRINGS = {
 
     // ── Offerings: cards, picker, request bar ──
     offer_on_inspection: "On inspection",
+    offer_view_photo: "View photo",
     offer_minimum: "Minimum",
     offer_add: "Add",
     offer_added: "Added",
@@ -2034,6 +2035,7 @@ const STRINGS = {
 
     // ── العروض: الكروت والمنتقي وشريط الطلب ──
     offer_on_inspection: "بعد المعاينة",
+    offer_view_photo: "شوف الصورة",
     offer_minimum: "الحد الأدنى",
     offer_add: "أضف للطلب",
     offer_added: "مضاف",

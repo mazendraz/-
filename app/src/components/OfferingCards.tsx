@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { formatPrice, formatQtyRange, isQuoteOnly, isPriceStale, priceAgeDays } from "../lib/pricing";
 import { splitByKind, type Offering } from "../lib/offerings";
 import { addToCart, removeFromCart, useCart } from "../lib/cart";
+import MediaLightbox from "./MediaLightbox";
 import Icon from "./Icon";
 
 /**
@@ -83,17 +85,99 @@ export default function OfferingCards({ offerings, services, companySlug, reques
 function OfferingGroup({ title, items, companySlug }: {
   title: string; items: Offering[]; companySlug?: string;
 }) {
+  const { locale } = useLocale();
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+
+  // One viewer per group, over every card in it that has a photo: the point is
+  // that a customer opens one product photo and then flips through the rest
+  // without going back to the grid between each. Cards without an image are
+  // skipped, so `lightboxIdx` indexes THIS list, not `items`.
+  const withPhoto = items.filter((o) => o.image);
+  const photos = withPhoto.map((o) => ({
+    src: o.image!,
+    caption: `${o.name} · ${formatPrice(o, locale)}`,
+    footer: <PhotoFooter offering={o} companySlug={companySlug} />,
+  }));
+
   return (
     <section>
       <h2 className=" text-title text-on-surface mb-4">{title}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {items.map((o) => <OfferingCard key={o.id} offering={o} companySlug={companySlug} />)}
+        {items.map((o) => (
+          <OfferingCard
+            key={o.id}
+            offering={o}
+            companySlug={companySlug}
+            onOpenPhoto={o.image ? () => setLightboxIdx(withPhoto.indexOf(o)) : undefined}
+          />
+        ))}
       </div>
+
+      {lightboxIdx !== null && (
+        <MediaLightbox
+          items={photos}
+          index={lightboxIdx}
+          onIndex={setLightboxIdx}
+          onClose={() => setLightboxIdx(null)}
+          label={title}
+        />
+      )}
     </section>
   );
 }
 
-function OfferingCard({ offering, companySlug }: { offering: Offering; companySlug?: string }) {
+/**
+ * The bar under the photo in the viewer: name, price, and the same add/remove
+ * control the card has. Without the button a customer who likes what they see
+ * has to close the viewer, find the card again, and only then add it — the
+ * decision happens while the photo is open, so the action belongs there too.
+ */
+function PhotoFooter({ offering, companySlug }: { offering: Offering; companySlug?: string }) {
+  const { locale } = useLocale();
+  const quote = isQuoteOnly(offering);
+  const { items } = useCart(companySlug ?? "");
+  const inCart = items.some((i) => i.offeringId === offering.id);
+
+  return (
+    <div className="flex items-center justify-between gap-4 bg-black/70 backdrop-blur-sm rounded-2xl px-5 py-3.5 shadow-2xl">
+      <div className="min-w-0">
+        <p className="text-white font-bold text-subhead leading-snug break-words">{offering.name}</p>
+        <p className={`font-display font-black leading-tight mt-0.5 ${quote ? "text-label text-white/80" : "text-title text-white"}`}>
+          {formatPrice(offering, locale)}
+        </p>
+        {offering.minQty != null && (
+          <p className="text-caption text-white/60 mt-0.5">
+            {t(locale, "offer_minimum")} {offering.minQty}
+          </p>
+        )}
+      </div>
+
+      {companySlug && (
+        <button
+          onClick={() =>
+            inCart
+              ? removeFromCart(companySlug, offering.id)
+              : addToCart(companySlug, { offeringId: offering.id, qty: offering.minQty ?? 1 })
+          }
+          aria-pressed={inCart}
+          className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-label font-bold transition-colors flex-shrink-0 touch-press btn-press focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
+            inCart ? "bg-white/15 text-white" : "bg-primary text-on-primary hover:bg-primary/90"
+          }`}
+        >
+          <Icon name={inCart ? "check" : "add"} className="text-subhead" />
+          {t(locale, inCart ? "offer_added" : "offer_add")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function OfferingCard({ offering, companySlug, onOpenPhoto }: {
+  offering: Offering;
+  companySlug?: string;
+  /** Opens the group's photo viewer at this card. Omitted when there's no photo. */
+  onOpenPhoto?: () => void;
+}) {
   const { locale } = useLocale();
   const quote = isQuoteOnly(offering);
   const stale = isPriceStale(offering.priceUpdatedAt);
@@ -103,7 +187,27 @@ function OfferingCard({ offering, companySlug }: { offering: Offering; companySl
   return (
     <div className="bg-surface-container-lowest border border-outline-variant/20 rounded-2xl overflow-hidden shadow-sm flex flex-col">
       {offering.image && (
-        <img src={offering.image} alt="" className="w-full h-32 object-cover" loading="lazy" width={320} height={128} />
+        // A real <button>, not a clickable <img>: the photo is the only way to
+        // see the product properly, so it has to be reachable by keyboard and
+        // announced as something you can activate.
+        <button
+          type="button"
+          onClick={onOpenPhoto}
+          aria-label={`${t(locale, "offer_view_photo")} — ${offering.name}`}
+          className="group relative w-full h-32 overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+        >
+          <img
+            src={offering.image}
+            alt=""
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-slow"
+            loading="lazy"
+            width={320}
+            height={128}
+          />
+          <span className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors flex items-center justify-center">
+            <Icon name="zoom_in" className="text-white text-headline opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+          </span>
+        </button>
       )}
       <div className="p-4 flex flex-col gap-2 flex-1">
         <div className="flex items-start justify-between gap-2">

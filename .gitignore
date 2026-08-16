@@ -69,6 +69,13 @@ prisma/*.db-journal
 
 # ── مخرجات محلية / مؤقتة ──
 scratchpad/
+# حجر صحي لملفات اتشالت محليًا (أقفال git عالقة من OneDrive، وبقايا desktop/
+# زي node_modules و.env.local). محتاجة تفضل بره git — `git add -A` بتاع
+# scripts/ship.sh كان هيسحبها كلها.
+_to_delete/
+# desktop/ اتشال من الريبو في 7c22cc1 بناءً على طلب مازن، بس الفولدر لسه موجود
+# على الجهاز. من غير السطر ده `git add -A` بيرجّعه للريبو تاني.
+desktop/
 # ملاحظة: deliverables/ و app/inspect.mjs مش متتبّعين حاليًا.
 # لو عايزهم يتجاهلهم git، شيل التعليق عن السطرين دول:
 # deliverables/
