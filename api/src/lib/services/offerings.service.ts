@@ -91,37 +91,17 @@ export async function assertWritePath(
 
 // ── Serialization ────────────────────────────────────────────────────────────
 
-export interface ApiOfferingTier {
-  id: string;
-  label: string;
-  qtyMin: number | null;
-  qtyMax: number | null;
-  priceMin: number | null;
-  priceMax: number | null;
-  sortOrder: number;
-  /** False = awaiting publish approval. Never false in a public payload. */
-  isPublished: boolean;
-}
-
-export interface ApiOffering {
-  id: string;
-  companyId: string;
-  name: string;
-  description: string | null;
-  kind: "SERVICE" | "PRODUCT";
-  pricingModel: "FIXED" | "RANGE" | "PER_UNIT" | "ON_INSPECTION";
-  priceMin: number | null;
-  priceMax: number | null;
-  unit: string | null;
-  minQty: number | null;
-  image: string | null;
-  note: string | null;
-  sortOrder: number;
-  isActive: boolean;
-  isPublished: boolean;
-  priceUpdatedAt: number | null;
-  tiers: ApiOfferingTier[];
-}
+// These two were a FOURTH hand-written copy of shapes that also existed in
+// api/src/lib/apiTypes.ts, app/src/lib/apiTypes.ts and now @alassema/core. The
+// copies had already diverged — this one typed `unit` as a free-form string
+// where the value comes from a Prisma enum — and nothing connected them, so the
+// serializer only failed to typecheck once core made the other definition
+// authoritative.
+//
+// Re-exported rather than deleted so every `from "@/lib/services/offerings.service"`
+// import keeps working.
+import type { ApiOffering, ApiOfferingTier } from "@/lib/apiTypes";
+export type { ApiOffering, ApiOfferingTier };
 
 export interface ApiBundleRule {
   id: string;
@@ -165,7 +145,10 @@ export function serializeOffering(o: OfferingRow): ApiOffering {
     pricingModel: o.pricingModel as ApiOffering["pricingModel"],
     priceMin: o.priceMin,
     priceMax: o.priceMax,
-    unit: o.unit,
+    // Same cast as kind/pricingModel above, and for the same reason: the row
+    // shape types these as plain strings because Prisma's generated enums are
+    // not imported here, while the contract constrains them to their unions.
+    unit: o.unit as ApiOffering["unit"],
     minQty: o.minQty,
     image: o.image,
     note: o.note,

@@ -17,6 +17,12 @@
     "db:generate": "npm --prefix api run db:generate",
     "db:migrate": "npm --prefix api run db:migrate",
     "db:seed": "npm --prefix api run seed",
-    "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed"
-  }
+    "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed",
+    "typecheck:core": "npm --workspace @alassema/core run typecheck"
+  },
+  "workspaces": [
+    "api",
+    "app",
+    "packages/*"
+  ]
 }

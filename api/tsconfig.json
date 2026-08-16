@@ -19,7 +19,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // The shared contract. Type-only, so nothing resolves this at RUNTIME —
+      // the re-export in src/lib/apiTypes.ts is erased at compile time and no
+      // bundler ever sees the path.
+      "@alassema/core": ["../packages/core/src/index.ts"]
     }
   },
   "include": [
