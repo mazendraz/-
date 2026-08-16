@@ -18,11 +18,11 @@
     "db:migrate": "npm --prefix api run db:migrate",
     "db:seed": "npm --prefix api run seed",
     "db:setup": "npm run db:generate && npm run db:migrate && npm run db:seed",
-    "typecheck:core": "npm --workspace @alassema/core run typecheck"
+    "typecheck:core": "npm --workspace @alassema/core run typecheck",
+    "dev:mobile": "npm --workspace @alassema/mobile-client run start"
   },
   "workspaces": [
-    "api",
-    "app",
-    "packages/*"
+    "packages/*",
+    "mobile/*"
   ]
 }
