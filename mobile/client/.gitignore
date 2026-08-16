@@ -43,3 +43,6 @@ yarn-error.*
 # Build artefacts from the bundle check (npm run bundle:check)
 .expo-check/
 .expo-export-check/
+
+# Local env — see .env.example
+.env

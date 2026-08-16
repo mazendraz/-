@@ -9,3 +9,4 @@ export type { Locale } from "./locale";
 // Runtime — the first real code to live here, and the reason the package is a
 // workspace member rather than a types-only alias.
 export * from "./plural";
+export * from "./theme";
