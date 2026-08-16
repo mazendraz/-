@@ -51,6 +51,9 @@ export default function SignIn() {
   const [resent, setResent] = useState(false);
   // Registration succeeds into a waiting state, not a session.
   const [registered, setRegistered] = useState(false);
+  // Registration succeeded but the email did not go out — a different screen,
+  // because "check your inbox" sends people to wait for nothing.
+  const [mailFailed, setMailFailed] = useState(false);
 
   // Only ever a path on this site. An absolute URL here would turn the sign-in
   // page into an open redirect — the standard way a phishing link borrows a real
@@ -124,7 +127,14 @@ export default function SignIn() {
 
     try {
       if (mode === "register") {
-        await registerWithPassword({ name: name.trim(), email: email.trim(), password });
+        const { verificationSent } = await registerWithPassword({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+        });
+        // The account exists either way, but it is unusable until the link is
+        // clicked — so "check your inbox" would be a lie if nothing was sent.
+        setMailFailed(!verificationSent);
         setRegistered(true);
         return;
       }
@@ -171,17 +181,27 @@ export default function SignIn() {
     return (
       <Shell>
         <div className="text-center">
-          <div className="w-14 h-14 rounded-2xl bg-success-container text-on-success-container flex items-center justify-center mx-auto mb-4">
-            <Icon name="mark_email_unread" className="text-headline" />
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 ${
+            mailFailed
+              ? "bg-error-container text-on-error-container"
+              : "bg-success-container text-on-success-container"
+          }`}>
+            <Icon name={mailFailed ? "error" : "mark_email_unread"} className="text-headline" />
           </div>
           <h1 className="font-display font-bold text-title text-on-surface mb-2">
-            {t(locale, "signin_check_inbox")}
+            {t(locale, mailFailed ? "signin_mail_failed" : "signin_check_inbox")}
           </h1>
           <p className="text-label text-outline leading-relaxed">
-            {t(locale, "signin_check_inbox_body")}{" "}
-            <span className="font-bold text-on-surface-variant" dir="ltr">
-              {email.trim()}
-            </span>
+            {mailFailed ? (
+              t(locale, "signin_mail_failed_body")
+            ) : (
+              <>
+                {t(locale, "signin_check_inbox_body")}{" "}
+                <span className="font-bold text-on-surface-variant" dir="ltr">
+                  {email.trim()}
+                </span>
+              </>
+            )}
           </p>
 
           {resent ? (

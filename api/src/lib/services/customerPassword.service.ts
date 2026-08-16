@@ -56,7 +56,20 @@ export interface RegisterInput {
 }
 
 export interface RegisterResult {
-  /** Always true when no error was thrown — the caller says "check your email". */
+  /**
+   * Whether the verification email actually went out.
+   *
+   * Was hardcoded true, which made "check your inbox" a lie whenever the mail
+   * provider refused the send — and the account is unusable until that link is
+   * clicked, so the customer was left waiting on something that would never
+   * arrive. Found the first time a real key was configured: Resend rejects
+   * every recipient except the account owner until a sending domain is
+   * verified, so EVERY real customer hit that path.
+   *
+   * Surfacing it leaks nothing new: registration already distinguishes a taken
+   * address (409), and a delivery failure in a correctly configured deployment
+   * is a provider outage, not a fact about the address.
+   */
   verificationSent: boolean;
 }
 
@@ -139,11 +152,16 @@ export async function register(input: RegisterInput, ip?: string): Promise<Regis
   });
 
   // Never throws — a mail provider outage must not leave a half-created account
-  // behind an error the customer reads as "registration failed". They can ask
-  // for the link again.
-  await sendCustomerVerificationEmail(email, input.name.trim(), token);
+  // behind an error the customer reads as "registration failed". The account IS
+  // created and the link can be re-requested; only the delivery failed, and the
+  // caller is told so it can say that instead of "check your inbox".
+  const verificationSent = await sendCustomerVerificationEmail(
+    email,
+    input.name.trim(),
+    token,
+  );
 
-  return { verificationSent: true };
+  return { verificationSent };
 }
 
 /**

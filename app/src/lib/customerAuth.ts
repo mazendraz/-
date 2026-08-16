@@ -78,8 +78,8 @@ export async function registerWithPassword(input: {
   name: string;
   email: string;
   password: string;
-}): Promise<void> {
-  await apiPost<{ verificationSent: boolean }>("/auth/customer/register", input);
+}): Promise<{ verificationSent: boolean }> {
+  return apiPost<{ verificationSent: boolean }>("/auth/customer/register", input);
 }
 
 export async function signInWithPassword(
