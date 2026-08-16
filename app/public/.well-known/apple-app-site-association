@@ -1,0 +1,17 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.alassema.client", "TEAMID.com.alassema.business"],
+        "components": [
+          { "/": "/requests*", "comment": "A customer's own requests" },
+          { "/": "/messages*", "comment": "Conversation with a company" },
+          { "/": "/companies/*", "comment": "Company profile" },
+          { "/": "/verify-email*", "comment": "Email confirmation link" },
+          { "/": "/account*", "comment": "Account, devices, deletion" },
+          { "/": "/provider/*", "comment": "Business app — provider dashboard" }
+        ]
+      }
+    ]
+  }
+}

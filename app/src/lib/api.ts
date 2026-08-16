@@ -85,6 +85,18 @@ export function isApiConfigured(): boolean {
   return Boolean(BASE_URL);
 }
 
+/**
+ * Absolute URL for a streaming endpoint.
+ *
+ * EventSource takes a URL, not the (path, options) pair apiFetch works with, so
+ * it needs the base applied here rather than inside the fetch helper. Returns
+ * null when the API isn't configured, which is the demo/offline mode every
+ * other caller also guards on.
+ */
+export function streamUrl(path: string): string | null {
+  return BASE_URL ? `${BASE_URL}${path}` : null;
+}
+
 function buildHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
   if (API_KEY) h["X-Api-Key"] = API_KEY;

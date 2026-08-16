@@ -298,13 +298,16 @@ export default function RequestForm() {
           </Notice>
         )}
 
-        {/* Trust bar */}
-        <Notice variant="info" icon="lock" className="mb-7">
-          <p className="font-bold text-label text-on-surface mb-0.5">{t(locale, "form_signin_note_title")}</p>
-          <p className="text-label text-outline leading-relaxed">
-            {t(locale, "form_signin_note_sub")}
-          </p>
-        </Notice>
+        {/* Trust bar — only relevant while signed out; a signed-in customer is
+            already the person it's reassuring them into becoming. */}
+        {!customer && (
+          <Notice variant="info" icon="lock" className="mb-7">
+            <p className="font-bold text-label text-on-surface mb-0.5">{t(locale, "form_signin_note_title")}</p>
+            <p className="text-label text-outline leading-relaxed">
+              {t(locale, "form_signin_note_sub")}
+            </p>
+          </Notice>
+        )}
 
         {/* Form */}
         <form

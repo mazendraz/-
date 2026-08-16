@@ -495,6 +495,7 @@ model User {
 
   company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   pushSubscriptions PushSubscription[]
+  pushDevices       PushDevice[]
 
   @@index([email])
   @@index([companyId])
@@ -958,6 +959,8 @@ model CustomerUser {
   updatedAt   DateTime  @updatedAt
 
   identities CustomerIdentity[]
+  sessions   CustomerSession[]
+  devices    PushDevice[]
   leads      Lead[]
   // No @@index([email]) — @unique above already creates one, and a second index
   // on the same column only costs write throughput. (`User` above carries that
@@ -989,6 +992,112 @@ model CustomerIdentity {
   // THE login lookup, and the guard against one provider identity being attached
   // to two different accounts.
   @@unique([provider, subject])
+  @@index([customerId])
+}
+
+// A long-lived sign-in on one device, for the MOBILE apps.
+//
+// ── Why this exists ──────────────────────────────────────────────────────────
+// The access token lives for JWT_TTL (a day). On the website that is invisible:
+// the tab is open, the cookie is there, and a re-login now and then costs a
+// password manager click. On a phone it means being signed out every morning,
+// which is the fastest way to get an app deleted.
+//
+// So a device also holds a REFRESH token — long-lived, stored in the platform
+// keystore, exchanged for a fresh access token whenever the old one expires.
+// This table is what makes those revocable, which a stateless JWT never is:
+// "sign out this device" and "sign out everywhere" both become an UPDATE here.
+//
+// ── Web deliberately gets none of this ───────────────────────────────────────
+// A row is created only when a client asks for one (by sending `device` at
+// sign-in). The website doesn't, and shouldn't: it has an httpOnly cookie that
+// JavaScript cannot read, and handing it a refresh token would mean putting a
+// 60-day credential into localStorage where XSS can reach it. Strictly worse
+// than what it already has.
+model CustomerSession {
+  id         String @id @default(uuid())
+  customerId String
+
+  // sha256 of the refresh token — never the token itself. Same reasoning as the
+  // email-verification token: a database read must not yield working keys. sha256
+  // rather than bcrypt because the input is 32 bytes of CSPRNG output, so there
+  // is no low-entropy guess for a slow hash to defend against.
+  tokenHash String @unique
+
+  // ── Rotation, and the retry that naive rotation breaks ─────────────────────
+  // Every refresh issues a NEW token and retires the old one, so a stolen token
+  // is useful only until the real device next refreshes. But mobile networks
+  // drop responses: the server rotates, the reply never arrives, and the app
+  // retries with a token the server has already retired. Rotating without a
+  // grace window signs that user out for a dropped packet.
+  //
+  // So the previous hash is kept. Presented within the grace window it returns
+  // the CURRENT token again (an idempotent retry). Presented AFTER it, the only
+  // explanation left is that someone else kept a copy — see reuse detection in
+  // customerSession.service.
+  previousTokenHash String?   @unique
+  previousUsableTo  DateTime?
+
+  // Shown on the "your devices" screen. Client-supplied and therefore untrusted:
+  // a label for a human, never something authorization reads.
+  deviceName String?
+  platform   String? // "ios" | "android"
+
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  // Set instead of deleting the row: a revoked session is evidence, and a
+  // presented-after-revocation token is worth being able to see in the log.
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  customer CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  // Serves the periodic sweep of dead rows.
+  @@index([expiresAt])
+}
+
+// A NATIVE push target — one install of one of the mobile apps.
+//
+// ── Why not just extend PushSubscription ────────────────────────────────────
+// That table is Web Push: an endpoint URL plus two encryption keys, delivered
+// by signing a VAPID request to the browser's own push service. Expo is a
+// single opaque token posted to Expo's HTTP API, which fans out to APNs and
+// FCM. Different shape, different transport, different failure vocabulary (a
+// dead Web Push endpoint is a 404/410; a dead Expo token is a
+// "DeviceNotRegistered" receipt).
+//
+// Folding both into one table would mean three nullable columns, a kind flag,
+// and every existing query on PushSubscription becoming ambiguous — for a
+// notification path that currently works and that a provider depends on to hear
+// about a new lead. A second table leaves that one untouched.
+//
+// ── Why the owner is two nullable columns ───────────────────────────────────
+// A device belongs to a STAFF user (the Business app) or to a CUSTOMER (the
+// client app) — never both, and the two live in different tables with no shared
+// parent. Exactly one is set; the register routes are what enforce it, since
+// each one can only ever populate its own side.
+model PushDevice {
+  id String @id @default(uuid())
+
+  // Expo push token — "ExponentPushToken[…]". Opaque: never parsed, only sent.
+  token      String  @unique
+  platform   String // "ios" | "android"
+  deviceName String?
+
+  userId     String?
+  customerId String?
+
+  // Bumped on every registration so a token that stops being refreshed can be
+  // swept later. Expo tokens can change on reinstall, and the old one lingers
+  // until its first failed send.
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  user     User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer CustomerUser? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([customerId])
 }
 

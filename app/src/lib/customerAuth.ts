@@ -107,6 +107,47 @@ export async function resendVerification(email: string): Promise<void> {
   await apiPost("/auth/customer/resend-verification", { email });
 }
 
+/** A device that can currently sign in to this account. */
+export interface CustomerSession {
+  id: string;
+  deviceName: string | null;
+  platform: string | null;
+  lastUsedAt: number;
+  createdAt: number;
+}
+
+export function fetchSessions(): Promise<CustomerSession[]> {
+  return apiGet<CustomerSession[]>("/customer/sessions");
+}
+
+/** End one device's session, or every one when `sessionId` is omitted. */
+export async function revokeSessions(sessionId?: string): Promise<number> {
+  const { revoked } = await apiPost<{ revoked: number }>(
+    "/customer/sessions",
+    sessionId ? { sessionId } : {},
+  );
+  return revoked;
+}
+
+export interface DeletionSummary {
+  leadsDetached: number;
+  sessionsRevoked: number;
+}
+
+/**
+ * Delete the account. Irreversible.
+ *
+ * `confirmEmail` must match the account's address exactly — the session already
+ * proves who is asking, and this proves they meant it. Clears the local session
+ * on success, since the account behind it no longer exists.
+ */
+export async function deleteAccount(confirmEmail: string): Promise<DeletionSummary> {
+  const summary = await apiPost<DeletionSummary>("/customer/delete", { confirmEmail });
+  clearGoogleAutoSelect();
+  clearSession();
+  return summary;
+}
+
 export async function customerLogout(): Promise<void> {
   try {
     await apiPost("/auth/logout", {});

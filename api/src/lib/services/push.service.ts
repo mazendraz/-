@@ -8,6 +8,11 @@
 // that call this must not run on the Edge runtime.
 import webpush, { type PushSubscription as WebPushSubscription } from "web-push";
 import { prisma } from "@/lib/prisma";
+import {
+  notifyAdminDevices,
+  notifyCompanyProviderDevices,
+  notifyUserDevices,
+} from "@/lib/services/expoPush.service";
 
 export interface PushPayload {
   title: string;
@@ -94,19 +99,36 @@ async function sendToSubs(subs: StoredSub[], payload: PushPayload): Promise<numb
   return sent;
 }
 
-/** Push to all of a user's devices. Never throws. */
+/**
+ * Push to all of a user's devices — BROWSERS and PHONES. Never throws.
+ *
+ * The two transports are fanned out here rather than at each call site: there
+ * are five services that notify, and "someone added push to the mobile app"
+ * must not become "someone has to remember to add a second call in five
+ * places". A caller asks to notify a person; which devices that person happens
+ * to have is this module's problem.
+ *
+ * Web Push is skipped without VAPID keys, native is not — they are configured
+ * independently, and one being absent must not silence the other.
+ */
 export async function notifyUser(userId: string, payload: PushPayload): Promise<number> {
-  try {
-    if (!isPushConfigured()) return 0;
-    const subs = await prisma.pushSubscription.findMany({
-      where: { userId },
-      select: { endpoint: true, p256dh: true, auth: true },
-    });
-    return await sendToSubs(subs, payload);
-  } catch (err) {
-    console.error(`[push] notifyUser failed for ${userId}:`, err);
-    return 0;
-  }
+  const [web, native] = await Promise.all([
+    (async () => {
+      try {
+        if (!isPushConfigured()) return 0;
+        const subs = await prisma.pushSubscription.findMany({
+          where: { userId },
+          select: { endpoint: true, p256dh: true, auth: true },
+        });
+        return await sendToSubs(subs, payload);
+      } catch (err) {
+        console.error(`[push] notifyUser failed for ${userId}:`, err);
+        return 0;
+      }
+    })(),
+    notifyUserDevices(userId, payload),
+  ]);
+  return web + native;
 }
 
 /** Push to every active provider linked to a company. Never throws. */
@@ -114,30 +136,42 @@ export async function notifyCompanyProviders(
   companyId: string,
   payload: PushPayload,
 ): Promise<number> {
-  try {
-    if (!isPushConfigured()) return 0;
-    const subs = await prisma.pushSubscription.findMany({
-      where: { user: { companyId, isActive: true } },
-      select: { endpoint: true, p256dh: true, auth: true },
-    });
-    return await sendToSubs(subs, payload);
-  } catch (err) {
-    console.error(`[push] notifyCompanyProviders failed for ${companyId}:`, err);
-    return 0;
-  }
+  const [web, native] = await Promise.all([
+    (async () => {
+      try {
+        if (!isPushConfigured()) return 0;
+        const subs = await prisma.pushSubscription.findMany({
+          where: { user: { companyId, isActive: true } },
+          select: { endpoint: true, p256dh: true, auth: true },
+        });
+        return await sendToSubs(subs, payload);
+      } catch (err) {
+        console.error(`[push] notifyCompanyProviders failed for ${companyId}:`, err);
+        return 0;
+      }
+    })(),
+    notifyCompanyProviderDevices(companyId, payload),
+  ]);
+  return web + native;
 }
 
 /** Push to every active admin. Never throws. */
 export async function notifyAdmins(payload: PushPayload): Promise<number> {
-  try {
-    if (!isPushConfigured()) return 0;
-    const subs = await prisma.pushSubscription.findMany({
-      where: { user: { role: "ADMIN", isActive: true } },
-      select: { endpoint: true, p256dh: true, auth: true },
-    });
-    return await sendToSubs(subs, payload);
-  } catch (err) {
-    console.error("[push] notifyAdmins failed:", err);
-    return 0;
-  }
+  const [web, native] = await Promise.all([
+    (async () => {
+      try {
+        if (!isPushConfigured()) return 0;
+        const subs = await prisma.pushSubscription.findMany({
+          where: { user: { role: "ADMIN", isActive: true } },
+          select: { endpoint: true, p256dh: true, auth: true },
+        });
+        return await sendToSubs(subs, payload);
+      } catch (err) {
+        console.error("[push] notifyAdmins failed:", err);
+        return 0;
+      }
+    })(),
+    notifyAdminDevices(payload),
+  ]);
+  return web + native;
 }

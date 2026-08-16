@@ -150,7 +150,16 @@ export async function proxy(request: NextRequest) {
   const apiKey = process.env.API_KEY;
   // Probes + the public sitemap are hit by external tools (monitors, crawlers)
   // that don't send the API key, so they're exempt from the gate.
-  const probePaths = new Set(["/api/health", "/api/ready", "/api/sitemap"]);
+  // /api/app-version joins the probes: it is how a build that can no longer
+  // talk to us finds that out. Gating it behind the API key would mean an app
+  // shipped before the key existed gets a bare 401 with no way to learn there
+  // is an update — the exact dead end the endpoint exists to prevent.
+  const probePaths = new Set([
+    "/api/health",
+    "/api/ready",
+    "/api/sitemap",
+    "/api/app-version",
+  ]);
   if (
     apiKey &&
     !probePaths.has(path) &&

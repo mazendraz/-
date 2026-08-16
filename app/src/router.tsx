@@ -38,6 +38,7 @@ const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
 const RequestForm = lazy(() => import("./pages/RequestForm"));
 const MyRequests = lazy(() => import("./pages/MyRequests"));
 const SignIn = lazy(() => import("./pages/SignIn"));
+const Account = lazy(() => import("./pages/Account"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Messages = lazy(() => import("./pages/Messages"));
 const GuidedStart = lazy(() => import("./pages/GuidedStart"));
@@ -100,6 +101,9 @@ export const router = createBrowserRouter([
       { path: "/start", element: <GuidedStart /> },
       { path: "/saved", element: <Saved /> },
       { path: "/requests", element: <MyRequests /> },
+      // Inside RootLayout, unlike /signin: this is a place you visit while using
+      // the site, not a door you pass through.
+      { path: "/account", element: <Account /> },
       { path: "/messages", element: <Messages /> },
       { path: "/request", element: <RequestForm /> },
       { path: "/about", element: <About /> },

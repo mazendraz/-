@@ -46,7 +46,7 @@ export default function AccountButton({ onDark }: { onDark: boolean }) {
 
   // Reserve the slot while the session is still being checked, so the bar's
   // controls don't jump sideways the moment it resolves.
-  if (loading) return <div className="w-10 h-10" aria-hidden="true" />;
+  if (loading) return <div className="w-11 h-11" aria-hidden="true" />;
 
   if (!customer) {
     // Come back to where they were, not to the home page — signing in is almost
@@ -81,26 +81,46 @@ export default function AccountButton({ onDark }: { onDark: boolean }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t(locale, "account_menu_aria")}
-        className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-base overflow-hidden
-          ${onDark ? "ring-1 ring-white/30 hover:ring-white/60" : "ring-1 ring-outline-variant/50 hover:ring-primary/50"}`}
+        className={`group flex items-center gap-0.5 pe-1.5 rounded-full touch-press transition-colors duration-base
+          ${open ? (onDark ? "bg-white/10" : "bg-on-surface/5") : ""}`}
       >
-        {customer.avatarUrl ? (
-          // referrerPolicy: Google serves avatars only when the referrer isn't
-          // leaked; without it lh3.googleusercontent.com answers 403 and every
-          // avatar on the site is a broken image.
-          <img
-            src={customer.avatarUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover"
-            width={40}
-            height={40}
-          />
-        ) : (
-          <span className="w-full h-full flex items-center justify-center bg-primary text-on-primary font-bold text-label">
-            {initial}
+        {/* Glass halo — a hair of backdrop-blurred tint plus a 1px translucent
+            white ring is what separates the photo from the bar (esp. the blue
+            hero state) instead of the old hard ring sitting flush on the crop. */}
+        <span
+          className={`relative flex items-center justify-center w-11 h-11 rounded-full p-[3px] backdrop-blur-md
+            transition-all duration-[220ms] ease-out group-hover:scale-[1.05] group-hover:brightness-110
+            ${onDark
+              ? "bg-white/10 border border-white/40 shadow-[0_2px_14px_-2px_rgba(0,10,25,0.45)] group-hover:border-white/65 group-hover:shadow-[0_4px_18px_-2px_rgba(0,10,25,0.55)]"
+              : "bg-white/60 border border-white/80 shadow-[0_2px_10px_-2px_rgba(0,60,90,0.18)] group-hover:border-white group-hover:shadow-[0_4px_14px_-2px_rgba(0,60,90,0.24)]"
+            }`}
+        >
+          <span className="w-full h-full rounded-full overflow-hidden">
+            {customer.avatarUrl ? (
+              // referrerPolicy: Google serves avatars only when the referrer isn't
+              // leaked; without it lh3.googleusercontent.com answers 403 and every
+              // avatar on the site is a broken image.
+              <img
+                src={customer.avatarUrl}
+                alt=""
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-cover"
+                width={40}
+                height={40}
+              />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold text-label">
+                {initial}
+              </span>
+            )}
           </span>
-        )}
+        </span>
+
+        <Icon
+          name="expand_more"
+          className={`text-label transition-transform duration-[220ms] ease-out ${open ? "rotate-180" : ""}
+            ${onDark ? "text-white/70 group-hover:text-white" : "text-on-surface-variant/60 group-hover:text-primary"}`}
+        />
       </button>
 
       {open && (
@@ -132,6 +152,17 @@ export default function AccountButton({ onDark }: { onDark: boolean }) {
           >
             <Icon name="favorite" className="text-subhead text-outline" />
             {t(locale, "nav_saved")}
+          </Link>
+          {/* The only route to the devices list and to account deletion — a
+              page nothing links to is a page nobody finds, and Apple's reviewer
+              is one of the people who has to find it. */}
+          <Link
+            to="/account"
+            role="menuitem"
+            className="flex items-center gap-2.5 px-4 py-2.5 text-label text-on-surface-variant hover:bg-surface-container-low transition-colors"
+          >
+            <Icon name="manage_accounts" className="text-subhead text-outline" />
+            {t(locale, "account_title")}
           </Link>
 
           <button

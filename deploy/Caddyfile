@@ -121,6 +121,22 @@ your-domain.com {
 		# `Content-Security-Policy-Report-Only` and `systemctl reload caddy`.
 		header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co https://*.googleusercontent.com; media-src 'self' https://*.supabase.co; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://challenges.cloudflare.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
 
+		# ── Deep-link association files ──────────────────────────────────────
+		# `apple-app-site-association` has NO file extension, so Caddy guesses
+		# application/octet-stream — and iOS silently ignores an association file
+		# that isn't application/json. No error, no log line, no diagnostic:
+		# universal links just quietly open the browser instead of the app.
+		#
+		# The try_files line below would also be fatal on its own: a missing
+		# match falls through to /index.html, so a typo'd path answers 200 with
+		# HTML instead of 404, and iOS reads that as a malformed file. Matching
+		# the exact path first keeps both files out of the SPA fallback.
+		#
+		# See app/public/.well-known/README.md for the placeholders that must be
+		# filled in before either app ships.
+		@aasa path /.well-known/apple-app-site-association
+		header @aasa Content-Type application/json
+
 		try_files {path} /index.html
 		file_server
 	}

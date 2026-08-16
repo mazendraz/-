@@ -430,6 +430,15 @@ export interface ApiCustomer {
 /** POST /auth/google — response. */
 export interface ApiCustomerAuthResponse {
   token: string;
+  /**
+   * Long-lived refresh token — present ONLY when the client sent `device` at
+   * sign-in, i.e. a mobile app. Store it in the platform keystore and exchange
+   * it at /auth/customer/refresh when `token` expires.
+   *
+   * Absent for the website on purpose: it has an httpOnly cookie JavaScript
+   * cannot read, and a 60-day credential in localStorage would be a downgrade.
+   */
+  refreshToken?: string;
   customer: ApiCustomer;
   /**
    * What this sign-in did:

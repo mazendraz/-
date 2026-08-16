@@ -9,6 +9,9 @@ import ChatThread from "../components/ChatThread";
 import ConversationListItem from "../components/ConversationListItem";
 import PersonalTabs from "../components/PersonalTabs";
 import { usePageMeta } from "../hooks/usePageMeta";
+import { useLiveEvents } from "../hooks/useLiveEvents";
+import { useCustomerAuth } from "../lib/customerAuth";
+import { streamUrl } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import Icon from "../components/Icon";
@@ -81,16 +84,33 @@ export default function Messages() {
   }, []);
   const unreadOf = (th: ThreadSummary) => (readLocally.has(th.refNumber) ? 0 : th.unread);
 
+  // ── Live updates ─────────────────────────────────────────────────────────
+  // A held-open stream delivers a reply in under a second. Only available to a
+  // signed-in customer: EventSource cannot send the X-Lead-Token header the
+  // anonymous chat gate requires, and moving that token into the query string
+  // would undo a deliberate decision to keep it out of access logs.
+  const { customer } = useCustomerAuth();
+  const { connected: live } = useLiveEvents(
+    customer ? streamUrl("/customer/stream") : null,
+    reload,
+  );
+
   // Refresh the list while it is the thing on screen. An open thread does its
   // own polling, so this would only duplicate it — and a hidden tab needs
   // neither.
+  //
+  // The timer SURVIVES a live connection rather than being switched off by it,
+  // just slowed right down. A stream that dies quietly would otherwise freeze
+  // the screen with no fallback — a failure nobody sees until someone says a
+  // reply never arrived.
   useEffect(() => {
     if (!chatAvailable() || activeRef) return;
-    const id = setInterval(() => { if (!document.hidden) reload(); }, POLL_IDLE_MS);
+    const every = live ? POLL_IDLE_MS * 10 : POLL_IDLE_MS;
+    const id = setInterval(() => { if (!document.hidden) reload(); }, every);
     const onVisible = () => { if (!document.hidden) reload(); };
     document.addEventListener("visibilitychange", onVisible);
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
-  }, [activeRef, reload]);
+  }, [activeRef, reload, live]);
 
   const load = useMemo(
     () => (after?: number) =>

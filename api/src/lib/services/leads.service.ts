@@ -26,6 +26,11 @@ import {
   notifyAdmins as pushAdmins,
 } from "@/lib/services/push.service";
 import {
+  ADMIN_CHANNEL,
+  channelForCompany,
+  publishAll,
+} from "@/lib/services/realtime.service";
+import {
   notifyAdminTelegram,
   notifyProviderTelegram,
 } from "@/lib/services/telegram.service";
@@ -186,6 +191,16 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
       // Include the token ONLY on the creation response (stored client-side); it's
       // never surfaced in admin/provider list payloads.
       const serialized = { ...serializeLead(lead), trackingToken: lead.trackingToken ?? undefined };
+
+      // Live fan-out, BEFORE runAfterResponse and outside it: publishing is a
+      // synchronous write to an in-memory Set, and a provider watching their
+      // dashboard should see the row appear now rather than after the email and
+      // Telegram calls have settled.
+      publishAll([channelForCompany(company.id), ADMIN_CHANNEL], {
+        type: "lead",
+        leadId: lead.id,
+        companyId: company.id,
+      });
 
       // Notifications run AFTER the response is sent (see runAfterResponse): they
       // never block or fail lead creation, and on a serverless host the function is

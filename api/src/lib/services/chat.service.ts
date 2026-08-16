@@ -8,6 +8,12 @@ import * as audit from "@/lib/services/audit.service";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import { notifyCompanyProviders, notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import {
+  ADMIN_CHANNEL,
+  channelForCompany,
+  channelForCustomer,
+  publishAll,
+} from "@/lib/services/realtime.service";
+import {
   buildChatTelegramMessage,
   notifyAdminChatTelegram,
   notifyProviderChatTelegram,
@@ -330,7 +336,10 @@ export async function postMessage(params: {
       id: true,
       closed: true,
       company: { select: { id: true, name: true } },
-      lead: { select: { refNumber: true, customerName: true } },
+      // customerId + id come along for the live fan-out below: a message has to
+      // reach BOTH sides, and the account that owns the request is the only
+      // handle on the customer half.
+      lead: { select: { id: true, refNumber: true, customerName: true, customerId: true } },
     },
   });
   if (!conversation) throw new NotFoundError("Conversation");
@@ -365,6 +374,27 @@ export async function postMessage(params: {
   // account, so no push subscription and no Telegram link exist for them.
   if (shouldNotify(params.conversationId)) {
     notifyNewMessage(conversation, params.sender, body);
+  }
+
+  // Live fan-out to anyone holding an open stream. Separate from the push /
+  // Telegram path above, and unconditional where that one is throttled: this
+  // costs a function call to an in-memory Set, and it is what makes an open
+  // conversation update in under a second instead of on the next 8-second poll.
+  //
+  // Both sides always, whoever sent it — the sender's own other devices need
+  // the message too, and working out "everyone except this tab" here would be
+  // guesswork the client can do for itself.
+  if (conversation.lead) {
+    publishAll(
+      [
+        channelForCompany(conversation.company.id),
+        ADMIN_CHANNEL,
+        ...(conversation.lead.customerId
+          ? [channelForCustomer(conversation.lead.customerId)]
+          : []),
+      ],
+      { type: "message", leadId: conversation.lead.id, conversationId: conversation.id },
+    );
   }
 
   return serializeMessage(message as MessageRow, params.sender === "ADMIN" ? "admin" : "customer");

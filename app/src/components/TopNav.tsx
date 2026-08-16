@@ -8,6 +8,7 @@ import { hasFullBleedHero } from "../lib/heroRoutes";
 import Logo from "./Logo";
 import Icon from "./Icon";
 import AccountButton from "./AccountButton";
+import { useCustomerAuth } from "../lib/customerAuth";
 
 const NAV_LINKS: { to: string; key: StringKey }[] = [
   { to: "/services", key: "nav_services" },
@@ -49,6 +50,12 @@ export default function TopNav({ onOpenSearch }: Props) {
   const hasHero = hasFullBleedHero(pathname);
   const { count: savedCount } = useSaved();
   const { locale, setLocale } = useLocale();
+  // Signed-in customers already reach Saved/Requests from the account menu
+  // (AccountButton) — showing the same two links again right beside the
+  // avatar was pure duplication. Signed-out visitors have no such menu (just
+  // a "Sign in" link), and both pages work without an account, so they still
+  // need this standalone entry point.
+  const { customer } = useCustomerAuth();
   // PERF-03: both navs (only one visible at a time via md: breakpoint classes,
   // but both mounted) get their scroll-tint from --nav-progress, written
   // straight to the DOM on every scroll frame — never through React state, so
@@ -151,33 +158,37 @@ export default function TopNav({ onOpenSearch }: Props) {
             <Icon name="search" className="text-title" />
           </button>
 
-          <Link
-            to="/saved"
-            className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-base
-              ${solidBg ? "text-on-surface-variant hover:text-error hover:bg-error/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
-            title={t(locale, "nav_saved")}
-            aria-label={t(locale, "nav_saved")}
-          >
-            <Icon name="favorite" className="text-title" style={{ fontVariationSettings: pathname === "/saved" ? "'FILL' 1" : "'FILL' 0" }} />
-            {/* -end-0.5, not -right-0.5: this badge pins to the OUTER corner of
-                the icon, which is the LEFT corner in Arabic. Pinned physically
-                right, it stayed on the right in RTL — overlapping the
-                neighbouring control instead of sitting in the free space. */}
-            {savedCount > 0 && (
-              <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
-                {savedCount}
-              </span>
-            )}
-          </Link>
+          {!customer && (
+            <>
+              <Link
+                to="/saved"
+                className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-base
+                  ${solidBg ? "text-on-surface-variant hover:text-error hover:bg-error/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
+                title={t(locale, "nav_saved")}
+                aria-label={t(locale, "nav_saved")}
+              >
+                <Icon name="favorite" className="text-title" style={{ fontVariationSettings: pathname === "/saved" ? "'FILL' 1" : "'FILL' 0" }} />
+                {/* -end-0.5, not -right-0.5: this badge pins to the OUTER corner of
+                    the icon, which is the LEFT corner in Arabic. Pinned physically
+                    right, it stayed on the right in RTL — overlapping the
+                    neighbouring control instead of sitting in the free space. */}
+                {savedCount > 0 && (
+                  <span className="absolute -top-0.5 -end-0.5 min-w-[18px] h-[18px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
+                    {savedCount}
+                  </span>
+                )}
+              </Link>
 
-          <Link
-            to="/requests"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-label font-semibold transition-colors duration-base
-              ${solidBg ? "text-on-surface-variant hover:text-primary hover:bg-primary/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
-          >
-            <Icon name="receipt_long" className="text-subhead" />
-            {t(locale, "nav_requests")}
-          </Link>
+              <Link
+                to="/requests"
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-label font-semibold transition-colors duration-base
+                  ${solidBg ? "text-on-surface-variant hover:text-primary hover:bg-primary/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
+              >
+                <Icon name="receipt_long" className="text-subhead" />
+                {t(locale, "nav_requests")}
+              </Link>
+            </>
+          )}
 
           <AccountButton onDark={!solidBg} />
 
@@ -238,20 +249,22 @@ export default function TopNav({ onOpenSearch }: Props) {
           >
             <Icon name="search" className="text-title" />
           </button>
-          <Link
-            to="/saved"
-            aria-label={t(locale, "nav_saved")}
-            className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-base
-              ${solidBg ? "text-on-surface-variant hover:text-error hover:bg-error/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
-          >
-            <Icon name="favorite" className="text-title" style={{ fontVariationSettings: pathname === "/saved" ? "'FILL' 1" : "'FILL' 0" }} />
-            {/* See the desktop badge above — logical inset so it flips in RTL. */}
-            {savedCount > 0 && (
-              <span className="absolute -top-0.5 -end-0.5 min-w-[16px] h-[16px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
-                {savedCount}
-              </span>
-            )}
-          </Link>
+          {!customer && (
+            <Link
+              to="/saved"
+              aria-label={t(locale, "nav_saved")}
+              className={`relative flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-base
+                ${solidBg ? "text-on-surface-variant hover:text-error hover:bg-error/8" : "text-white/80 hover:text-white hover:bg-white/12"}`}
+            >
+              <Icon name="favorite" className="text-title" style={{ fontVariationSettings: pathname === "/saved" ? "'FILL' 1" : "'FILL' 0" }} />
+              {/* See the desktop badge above — logical inset so it flips in RTL. */}
+              {savedCount > 0 && (
+                <span className="absolute -top-0.5 -end-0.5 min-w-[16px] h-[16px] px-1 bg-error text-white text-caption font-black rounded-full flex items-center justify-center">
+                  {savedCount}
+                </span>
+              )}
+            </Link>
+          )}
           <AccountButton onDark={!solidBg} />
         </div>
       </nav>

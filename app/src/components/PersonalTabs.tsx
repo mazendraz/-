@@ -5,7 +5,7 @@ import { useCustomerThreads } from "../lib/chat";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 
-export type PersonalTab = "saved" | "requests" | "messages";
+export type PersonalTab = "saved" | "requests" | "messages" | "account";
 
 /** Segmented control linking the personal areas: Saved ↔ Requests ↔ Messages. */
 export default function PersonalTabs({ active }: { active: PersonalTab }) {
@@ -21,6 +21,8 @@ export default function PersonalTabs({ active }: { active: PersonalTab }) {
     { key: "saved", labelKey: "saved_tab", icon: "favorite", to: "/saved", count: savedCount },
     { key: "requests", labelKey: "requests_tab", icon: "receipt_long", to: "/requests", count: requestCount },
     { key: "messages", labelKey: "messages_tab", icon: "forum", to: "/messages", count: totalUnread },
+    // No badge — an account is a place, not a queue.
+    { key: "account", labelKey: "account_tab", icon: "person", to: "/account", count: 0 },
   ];
 
   return (

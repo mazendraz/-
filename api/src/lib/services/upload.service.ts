@@ -24,6 +24,25 @@ const ALLOWED_MIME = new Set([
   "image/png",
   "image/webp",
   "image/avif",
+  // ── iPhone photos ───────────────────────────────────────────────────────
+  // HEIC is the DEFAULT camera format on every current iPhone. Leaving it out
+  // meant an iPhone user's upload was rejected as "unsupported" — which is not
+  // an edge case for a product whose customers photograph their own apartment.
+  //
+  // Accepted here and ATTEMPTED, rather than rejected up front, because
+  // whether it decodes depends on the sharp binary of the host: libvips reads
+  // the HEIF container fine, but HEVC (what iPhones actually use inside it) is
+  // patent-encumbered and absent from some prebuilt binaries. Measured on the
+  // Windows dev machine: HEVC unsupported, AV1-in-HEIF fine. Production is
+  // Linux and may differ, so this defers to the runtime instead of guessing —
+  // processImage turns a decode failure into a specific, actionable message.
+  //
+  // The mobile apps should convert to JPEG on the device before uploading
+  // anyway (expo-image-manipulator), which sidesteps this entirely AND cuts the
+  // bytes going over an Egyptian mobile connection. This path is the fallback
+  // for everything else.
+  "image/heic",
+  "image/heif",
 ]);
 
 // Video: gallery only (see validate()). Bigger cap than images — a short clip
@@ -70,7 +89,19 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
       .toBuffer();
 
     return { buffer, contentType: "image/webp", ext: "webp" };
-  } catch {
+  } catch (err) {
+    // A HEIC this host cannot decode is a DIFFERENT problem from a corrupt
+    // file, and "not a valid image" would be both wrong and useless — the file
+    // is perfectly valid, it just came out of an iPhone. Say what to do.
+    const message = err instanceof Error ? err.message : "";
+    if (/heif|heic|hevc/i.test(message)) {
+      throw new ValidationError("Could not process image", {
+        file: [
+          "This iPhone photo format (HEIC) can't be read here. On iPhone: " +
+            "Settings → Camera → Formats → Most Compatible, then try again.",
+        ],
+      });
+    }
     // Corrupt, non-image, or over the pixel cap — a client error, not a 500.
     throw new ValidationError("Could not process image", {
       file: ["The file is not a valid image or is too large to process"],
@@ -183,7 +214,7 @@ function validate(file: File, bucket: string): asserts bucket is UploadBucket {
   }
   if (!ALLOWED_MIME.has(file.type)) {
     throw new ValidationError("Unsupported file type", {
-      file: ["Must be a JPEG, PNG, WebP, AVIF image, or an MP4/WebM/MOV video"],
+      file: ["Must be a JPEG, PNG, WebP, AVIF or HEIC image, or an MP4/WebM/MOV video"],
     });
   }
 }

@@ -7,10 +7,11 @@ import { useMyLeads, submitReview, type Lead, type LeadStatus } from "../lib/req
 import { useMyWaitlistEntries, WAITLIST_STATUS_COLORS, WAITLIST_STATUS_KEYS, type WaitlistEntry } from "../lib/availability";
 import { getCompany } from "../lib/catalog";
 import PersonalTabs from "../components/PersonalTabs";
+import { useAccountLeads } from "../hooks/useAccountLeads";
 import SearchInput from "../components/SearchInput";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
-import { t, type StringKey, type Locale } from "../lib/i18n";
+import { t, tCount, type StringKey, type Locale } from "../lib/i18n";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import Icon from "../components/Icon";
@@ -43,6 +44,11 @@ type RequestItem =
   | { kind: "waitlist"; data: WaitlistEntry };
 
 export default function MyRequests() {
+  // Reconciles the account with this device BEFORE the list is read: hands over
+  // this device's past requests to be attached, then pulls everything the
+  // account owns. Both land in the same cache useMyLeads() reads, so the list
+  // below needs no knowledge of accounts at all.
+  const { claimed } = useAccountLeads();
   const myLeads = useMyLeads();
   const myWaitlist = useMyWaitlistEntries();
   // Merged, newest first — a waiting-list join shows up right alongside real
@@ -81,6 +87,19 @@ export default function MyRequests() {
             {t(locale, "requests_sub")}
           </p>
         </div>
+
+        {/* Said once, on the sign-in where it happened. Requests appearing in a
+            list with no explanation reads as a glitch, not as recovery. */}
+        {claimed > 0 && (
+          <div
+            role="status"
+            className="mb-5 bg-success-container text-on-success-container rounded-xl px-4 py-3 text-label font-medium flex items-center gap-2"
+          >
+            <Icon name="history" className="text-subhead" />
+            {t(locale, "requests_claimed_prefix")} {claimed}{" "}
+            {tCount(locale, "noun_lead", claimed)} {t(locale, "requests_claimed_suffix")}
+          </div>
+        )}
 
         {/* Search + status filter */}
         {all.length > 0 && (

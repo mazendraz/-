@@ -31,6 +31,12 @@ const EXEMPT: Record<string, string> = {
     "query string. It creates and modifies nothing, so it falls under the existing " +
     "'reads stay open during maintenance' rule; the verb is about keeping secrets " +
     "out of access logs, not about writing.",
+  "customer/sessions/route.ts":
+    "Revoking a device session is a SECURITY control, not a submission. The person " +
+    "reaching for 'sign out everywhere' has usually just lost a phone, and telling " +
+    "them to come back after maintenance means leaving a live credential on it for " +
+    "the duration. It only ever REMOVES access, so there is no state to protect by " +
+    "blocking it.",
 };
 
 /** Auth-gated prefixes: these are not public, and their dashboards stay usable. */

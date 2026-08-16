@@ -1,14 +1,12 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { withMaintenance } from "@/lib/middleware/maintenance";
-import { ok } from "@/lib/utils/response";
 import { RateLimitError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
-import { verifyEmailSchema } from "@/lib/validation/auth";
-import { signCustomerToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { deviceSchema, verifyEmailSchema } from "@/lib/validation/auth";
+import { customerSignInResponse } from "@/lib/utils/customerSignIn";
 import * as customerPassword from "@/lib/services/customerPassword.service";
-import type { ApiCustomerAuthResponse } from "@/lib/apiTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -35,16 +33,12 @@ export const POST = withErrors(
       throw new RateLimitError(`Too many attempts. Try again in ${seconds}s.`);
     }
 
-    const { token: verifyToken } = verifyEmailSchema.parse(
-      await readJsonObject(request, 4096),
-    );
+    const raw = await readJsonObject(request, 4096);
+    const { token: verifyToken } = verifyEmailSchema.parse(raw);
+    // Present only from a mobile client — see customerSignInResponse.
+    const device = raw.device ? deviceSchema.parse(raw.device) : undefined;
 
     const customer = await customerPassword.verifyEmail(verifyToken, ip);
-    const token = await signCustomerToken({ sub: customer.id });
-
-    const body: ApiCustomerAuthResponse = { token, customer, outcome: "created" };
-    const res = ok(body);
-    res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
-    return res;
+    return customerSignInResponse(customer, "created", device);
   }),
 );

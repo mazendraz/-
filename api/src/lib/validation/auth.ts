@@ -67,3 +67,40 @@ export const verifyEmailSchema = z.object({
 export const resendVerificationSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
 });
+
+/**
+ * Optional device descriptor sent by a MOBILE client at sign-in.
+ *
+ * Its presence is the signal that this client wants a long-lived session — the
+ * website omits it and gets only the httpOnly cookie, which is strictly safer
+ * for a browser than a refresh token in localStorage.
+ *
+ * The fields are display labels for a "your devices" screen. Untrusted, never
+ * read by any authorization decision, and truncated before storage.
+ */
+export const deviceSchema = z.object({
+  deviceName: z.string().trim().max(80).optional(),
+  platform: z.enum(["ios", "android"]).optional(),
+});
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().trim().min(1).max(256),
+});
+
+// Attaching past requests to the signed-in account. The batch is capped because
+// the legitimate caller is a device handing over its own local history — a few
+// dozen at the very outside — while an uncapped array is a way to test a
+// thousand reference numbers in one request that only counts as one against the
+// rate limit.
+export const claimLeadsSchema = z.object({
+  claims: z
+    .array(
+      z.object({
+        refNumber: z.string().trim().min(1).max(64),
+        token: z.string().trim().max(128).optional(),
+        phone: z.string().trim().max(32).optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});

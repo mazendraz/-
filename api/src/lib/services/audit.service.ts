@@ -65,7 +65,15 @@ export type AuthAuditAction =
   // addresses looks like from the log.
   | "auth.customer.registered"
   | "auth.customer.verified"
-  | "auth.customer.failure";
+  | "auth.customer.failure"
+  // A retired refresh token presented after its grace window — the only
+  // explanation is a second holder. The session is revoked on sight; this is
+  // the record of it, and a run of them is a compromised device, not noise.
+  | "auth.customer.session.reuse"
+  // Account deletion. Written BEFORE the row is removed, because afterwards
+  // there is nothing left to name it by — and this is the event most likely to
+  // be asked about months later.
+  | "auth.customer.deleted";
 
 /**
  * Record an AUTHENTICATION event.

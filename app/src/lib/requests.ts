@@ -471,6 +471,44 @@ export function getMyLeads(): Lead[] {
 }
 
 /**
+ * Fold the signed-in ACCOUNT's requests into this device's view.
+ *
+ * Deliberately merged into the same cache + "mine" list that everything else
+ * already reads, rather than surfaced as a parallel list. `useMyLeads()` is
+ * consumed by My Requests, the messages list and the price-verification gate;
+ * a second source of truth would mean teaching all three about accounts and
+ * getting the precedence right in each. This way they see the union and none of
+ * them changes.
+ *
+ * `trackingToken` is preserved from whatever this device already holds: the
+ * account endpoint never returns it (the account IS the credential there), and a
+ * blind overwrite would strip the token from requests this browser submitted —
+ * breaking the chat and review paths that still prove ownership with it. Same
+ * hazard, and same fix, as the admin/provider hydration above.
+ */
+export function absorbAccountLeads(incoming: Lead[]): void {
+  if (incoming.length === 0) return;
+
+  const byId = new Map(read().map((l) => [l.id, l]));
+  for (const lead of incoming) {
+    const existing = byId.get(lead.id);
+    byId.set(lead.id, {
+      ...lead,
+      trackingToken: lead.trackingToken ?? existing?.trackingToken,
+    });
+  }
+  write([...byId.values()]);
+
+  // Register them as this device's own, so useMyLeads() includes them.
+  const mine = readMine();
+  const merged = [...new Set([...incoming.map((l) => l.id), ...mine])];
+  if (merged.length !== mine.length) {
+    localStorage.setItem(MINE_KEY, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent(EVENT));
+  }
+}
+
+/**
  * This device's leads reduced to what the chat endpoints need to prove ownership.
  *
  * A customer has no account: the reference number plus its tracking token IS the

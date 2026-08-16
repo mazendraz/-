@@ -1,18 +1,16 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { withMaintenance } from "@/lib/middleware/maintenance";
-import { ok } from "@/lib/utils/response";
 import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
-import { googleSignInSchema } from "@/lib/validation/auth";
-import { signCustomerToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { deviceSchema, googleSignInSchema } from "@/lib/validation/auth";
+import { customerSignInResponse } from "@/lib/utils/customerSignIn";
 import {
   isGoogleSignInConfigured,
   verifyGoogleIdToken,
 } from "@/lib/services/googleIdentity.service";
 import { signInWithIdentity } from "@/lib/services/customerAuth.service";
-import type { ApiCustomerAuthResponse } from "@/lib/apiTypes";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +43,10 @@ export const POST = withErrors(
       throw new ValidationError("Google sign-in is not available.");
     }
 
-    const { idToken } = googleSignInSchema.parse(await readJsonObject(request, 8192));
+    const raw = await readJsonObject(request, 8192);
+    const { idToken } = googleSignInSchema.parse(raw);
+    // Present only from a mobile client — see customerSignInResponse.
+    const device = raw.device ? deviceSchema.parse(raw.device) : undefined;
 
     const identity = await verifyGoogleIdToken(idToken);
     const { customer, outcome } = await signInWithIdentity(
@@ -53,16 +54,6 @@ export const POST = withErrors(
       ip,
     );
 
-    const token = await signCustomerToken({ sub: customer.id });
-
-    const body: ApiCustomerAuthResponse = { token, customer, outcome };
-
-    // Same dual delivery as the staff login: the httpOnly cookie serves the
-    // website (unreadable by JS, so XSS can't lift it), and the body serves the
-    // mobile apps, which have no cookie jar and keep the token in the platform
-    // keystore instead.
-    const res = ok(body);
-    res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
-    return res;
+    return customerSignInResponse(customer, outcome, device);
   }),
 );
