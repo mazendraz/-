@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
+import type { ApiCompany } from "@alassema/core";
 import {
   DEFAULT_COUNTRY,
   DEFAULT_DIAL_CODE,
@@ -24,8 +25,10 @@ import {
 import Button from "../../components/Button";
 import Icon from "../../components/Icon";
 import TextField from "../../components/TextField";
+import OfferingPicker, { type CartItem } from "../../components/OfferingPicker";
 import { useCustomerAuth } from "../../lib/customerAuth";
 import { submitLead } from "../../lib/leads";
+import { fetchCompany } from "../../lib/companyDetail";
 import { ApiError } from "../../lib/api";
 
 /**
@@ -33,12 +36,13 @@ import { ApiError } from "../../lib/api";
  * group, like sign-in), so it pushes over the tab bar as a flow to complete
  * and leave, matching how /request behaves on the website.
  *
- * Deliberately the classic single-service form, not the website's item-picker
- * flow (Feature C — priced offerings, quantities, package discounts): that
- * needs the company profile's catalog data this app doesn't fetch yet. What's
- * here is the same form every company had before that feature existed, and
- * it's a real, complete request either way — `items` is optional on the
- * contract precisely so this path stays valid.
+ * The classic single-service fields stay required regardless of whether the
+ * company runs a priced catalog (Feature C): the server always needs SOME
+ * `service` string on the payload, even though it overrides the STORED value
+ * with the items' own names when `items` is present (see api's
+ * leads.service.ts `create()`). When the company has published offerings,
+ * OfferingPicker renders above the form and its selection rides along as
+ * `items` — additive, never required.
  */
 export default function NewRequest() {
   const { slug, name: companyName } = useLocalSearchParams<{ slug: string; name: string }>();
@@ -50,10 +54,16 @@ export default function NewRequest() {
   const [service, setService] = useState("");
   const [description, setDescription] = useState("");
   const [districtPickerOpen, setDistrictPickerOpen] = useState(false);
+  const [company, setCompany] = useState<ApiCompany | null>(null);
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [refNumber, setRefNumber] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCompany(slug).then(setCompany).catch(() => setCompany(null));
+  }, [slug]);
 
   const phoneE164 = toE164(phoneNational, DEFAULT_COUNTRY);
   const canSubmit =
@@ -72,6 +82,7 @@ export default function NewRequest() {
         phone: phoneE164,
         district,
         description: description.trim(),
+        items: cart.length > 0 ? cart.map((i) => ({ offeringId: i.offeringId, qty: i.qty, tierId: i.tierId })) : undefined,
       });
       setRefNumber(lead.refNumber);
     } catch (err) {
@@ -118,6 +129,18 @@ export default function NewRequest() {
           {error !== "" && (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {company && company.offerings.length > 0 && (
+            <View style={styles.field}>
+              <Text style={styles.label}>اختار الخدمات اللي محتاجها (اختياري)</Text>
+              <OfferingPicker
+                offerings={company.offerings}
+                bundleRules={company.bundleRules ?? []}
+                value={cart}
+                onChange={setCart}
+              />
             </View>
           )}
 

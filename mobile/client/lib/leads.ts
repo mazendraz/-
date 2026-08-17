@@ -1,10 +1,11 @@
 /**
  * Submitting a request — the mobile counterpart of the website's addLead() in
  * requests.ts, scoped to what a signed-in customer needs. The website's
- * version also supports the anonymous/localStorage path (no account) and
- * multi-item carts (Feature C); neither applies here — every customer in this
- * app is signed in (see the auth-gated tab shell), and item-level requests are
- * a company-profile-catalog feature this app doesn't have yet either.
+ * version also supports the anonymous/localStorage path (no account); that
+ * doesn't apply here since every customer in this app is signed in (see the
+ * auth-gated tab shell). `items` (Feature C) is real here too, wired through
+ * new-request/[slug].tsx's OfferingPicker — prices are never sent, only
+ * {offeringId, qty, tierId}; the server reads real prices from the catalogue.
  */
 import type { ApiLead } from "@alassema/core";
 import { apiPost } from "./api";
@@ -17,6 +18,7 @@ export interface NewLeadInput {
   phone: string;
   district: string;
   description: string;
+  items?: { offeringId: string; qty?: number; tierId?: string | null }[];
 }
 
 export function submitLead(input: NewLeadInput): Promise<ApiLead> {

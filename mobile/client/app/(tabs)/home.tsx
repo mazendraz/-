@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import type { ApiCategory, ApiCompany } from "@alassema/core";
+import type { ApiCategory, ApiCompany, ApiSiteReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import SiteReviewModal from "../../components/SiteReviewModal";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
+import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
+import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
 
 const REASONS = [
   { icon: "check_circle" as const, title: "شركات موثّقة", desc: "كل شركة اتراجعت قبل ما تنشر" },
@@ -24,12 +27,21 @@ const REASONS = [
 export default function Home() {
   const [categories, setCategories] = useState<ApiCategory[] | null>(null);
   const [featured, setFeatured] = useState<ApiCompany[] | null>(null);
+  const [projects, setProjects] = useState<FeaturedProject[]>([]);
+  const [reviews, setReviews] = useState<ApiSiteReview[]>([]);
+  const [reviewsEnabled, setReviewsEnabled] = useState(false);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+
+  const loadReviews = () => fetchSiteReviews().then(setReviews).catch(() => {});
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => setCategories([]));
     fetchCompanies()
       .then((page) => setFeatured(page.data.slice(0, 6)))
       .catch(() => setFeatured([]));
+    fetchFeaturedProjects().then(setProjects).catch(() => {});
+    fetchSiteReviewSettings().then((s) => setReviewsEnabled(s.enabled)).catch(() => {});
+    loadReviews();
   }, []);
 
   return (
@@ -103,6 +115,57 @@ export default function Home() {
           )}
         />
 
+        {projects.length > 0 && (
+          <>
+            <View style={styles.sectionHead}>
+              <Text style={styles.sectionTitle}>مشاريع مميزة</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.projectRow}>
+              {projects.map((p, i) => (
+                <View key={`${p.title}-${i}`} style={styles.projectCard}>
+                  <Image source={{ uri: p.img }} style={styles.projectImage} />
+                  <View style={styles.projectOverlay}>
+                    <Text style={styles.projectCategory}>{p.category}</Text>
+                    <Text style={styles.projectTitle} numberOfLines={1}>{p.title}</Text>
+                    <Text style={styles.projectCompany} numberOfLines={1}>{p.company}</Text>
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>آراء العملاء</Text>
+          <Pressable
+            onPress={() => reviewsEnabled && setReviewModalOpen(true)}
+            disabled={!reviewsEnabled}
+          >
+            <Text style={[styles.sectionLink, !reviewsEnabled && styles.sectionLinkDisabled]}>شارك رأيك</Text>
+          </Pressable>
+        </View>
+        {reviews.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.reviewRow}>
+            {reviews.map((r) => (
+              <View key={r.id} style={styles.reviewCard}>
+                <Text style={styles.reviewStars}>{"★".repeat(r.rating)}</Text>
+                <Text style={styles.reviewText} numberOfLines={4}>{r.text}</Text>
+                <View style={styles.reviewFooter}>
+                  <View style={styles.reviewAvatar}>
+                    <Text style={styles.reviewAvatarText}>{r.name.charAt(0)}</Text>
+                  </View>
+                  <View>
+                    <Text style={styles.reviewName}>{r.name}</Text>
+                    <Text style={styles.reviewDistrict}>{r.district}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          <Text style={styles.noReviews}>لسه مفيش آراء منشورة.</Text>
+        )}
+
         <Pressable style={styles.guidedCard} onPress={() => router.push("/guided-start")}>
           <View style={styles.guidedIcon}>
             <Icon name="check_circle" size={22} color={colors.primary} />
@@ -123,6 +186,15 @@ export default function Home() {
           </Pressable>
         </View>
       </ScrollView>
+
+      <SiteReviewModal
+        visible={reviewModalOpen}
+        onClose={() => setReviewModalOpen(false)}
+        onSubmitted={() => {
+          setReviewModalOpen(false);
+          loadReviews();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -155,6 +227,24 @@ const styles = StyleSheet.create({
   ratingChip: { flexDirection: "row-reverse", alignItems: "center", gap: 2 },
   ratingText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface },
   ratingStar: { color: "#f59e0b", fontSize: type.caption.fontSize },
+  projectRow: { flexDirection: "row-reverse", paddingHorizontal: 20 },
+  projectCard: { width: 220, height: 140, borderRadius: 14, overflow: "hidden", marginStart: 10, backgroundColor: colors.surfaceContainer },
+  projectImage: { width: "100%", height: "100%" },
+  projectOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 10, backgroundColor: "rgba(0,0,0,0.45)" },
+  projectCategory: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.onPrimary, marginBottom: 2, alignSelf: "flex-end" },
+  projectTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: "#fff", textAlign: "right" },
+  projectCompany: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: "rgba(255,255,255,0.8)", textAlign: "right" },
+  sectionLinkDisabled: { color: colors.outline },
+  reviewRow: { flexDirection: "row-reverse", paddingHorizontal: 20 },
+  reviewCard: { width: 240, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 14, marginStart: 10, borderWidth: 1, borderColor: colors.outlineVariant, gap: 8 },
+  reviewStars: { color: "#f59e0b", fontSize: type.body.fontSize, textAlign: "right" },
+  reviewText: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 20 },
+  reviewFooter: { flexDirection: "row-reverse", alignItems: "center", gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant },
+  reviewAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  reviewAvatarText: { color: colors.onPrimary, fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize },
+  reviewName: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface, textAlign: "right" },
+  reviewDistrict: { fontFamily: "Cairo_400Regular", fontSize: 10, color: colors.outline, textAlign: "right" },
+  noReviews: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.outline, textAlign: "center", paddingVertical: 12 },
   guidedCard: { flexDirection: "row-reverse", alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, marginHorizontal: 20, marginTop: 24, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.outlineVariant },
   guidedIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.primaryContainer, alignItems: "center", justifyContent: "center" },
   guidedText: { flex: 1 },
