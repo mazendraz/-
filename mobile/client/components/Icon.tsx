@@ -35,6 +35,9 @@ const MATERIAL_ICON_NAME = {
   favorite: "favorite",
   mark_email_unread: "mark-email-unread",
   check_circle: "check-circle",
+  search: "search",
+  arrow_back: "arrow-back",
+  close: "close",
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;

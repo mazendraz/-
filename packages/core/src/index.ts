@@ -10,3 +10,5 @@ export type { Locale } from "./locale";
 // workspace member rather than a types-only alias.
 export * from "./plural";
 export * from "./theme";
+export * from "./phone";
+export * from "./districts";

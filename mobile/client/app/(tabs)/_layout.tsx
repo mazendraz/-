@@ -35,6 +35,13 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
+        name="companies"
+        options={{
+          title: "الشركات",
+          tabBarIcon: ({ color, size }) => <Icon name="search" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="requests"
         options={{
           title: "طلباتي",

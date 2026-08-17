@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 import type { StringKey } from "./i18n";
+import { DISTRICTS as CORE_DISTRICTS } from "@alassema/core";
 
 export type LeadStatus = "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled";
 
@@ -80,16 +81,10 @@ export const STATUS_COLORS: Record<LeadStatus, string> = {
   Cancelled: "bg-surface-container text-outline",
 };
 
-export const DISTRICTS = [
-  "R7 District",
-  "R8 District",
-  "R9 District",
-  "Central Business District",
-  "Diplomatic Quarter",
-  "Government District",
-  "Green River Area",
-  "Other",
-];
+// Moved to @alassema/core so mobile/client doesn't need a third copy —
+// re-exported here (as a mutable array, matching every existing caller's
+// expectation) so this file's own callers see no change.
+export const DISTRICTS: string[] = [...CORE_DISTRICTS];
 
 export const BUDGETS = [
   "Under EGP 50,000",
