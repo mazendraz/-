@@ -6,25 +6,29 @@ import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import Button from "../../components/Button";
+import FeedbackModal from "../../components/FeedbackModal";
 import { fetchCompany } from "../../lib/companyDetail";
 import { useIsSaved } from "../../lib/saved";
+import { formatPrice } from "../../lib/pricing";
 import { ApiError } from "../../lib/api";
 
 /**
  * The company profile — the context a customer was missing between "search
  * result" and "fill out a form": what they do, their rating, real reviews,
- * finished projects, and whether they're even taking requests right now.
+ * finished projects, published prices, and whether they're even taking
+ * requests right now.
  *
- * Deliberately NOT the website's full CompanyProfile.tsx (the priced
- * offerings catalog — Feature C — is real, separate scope: quantities, tiers,
- * package discounts, a cart). What's here is everything that helps a customer
- * decide, and the classic single-service form new-request/[slug] already
- * built is still the right next step either way.
+ * Offerings are shown for BROWSING only — each line's price, same as the
+ * website's profile page. Actually ordering multiple priced items in a cart
+ * (Feature C's quantities/tiers/bundle-discount request flow) is real,
+ * separate, not-yet-built scope; the classic single-service form
+ * new-request/[slug] is still the way to actually send a request either way.
  */
 export default function CompanyProfile() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const [company, setCompany] = useState<ApiCompany | null>(null);
   const [error, setError] = useState("");
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { saved, toggle } = useIsSaved(slug);
 
   useEffect(() => {
@@ -53,9 +57,14 @@ export default function CompanyProfile() {
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Icon name="arrow_back" size={22} color={colors.onSurface} />
           </Pressable>
-          <Pressable onPress={toggle} hitSlop={12}>
-            <Icon name="favorite" size={22} color={saved ? colors.error : colors.outlineVariant} />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable onPress={() => setFeedbackOpen(true)} hitSlop={12}>
+              <Icon name="feedback" size={22} color={colors.onSurface} />
+            </Pressable>
+            <Pressable onPress={toggle} hitSlop={12}>
+              <Icon name="favorite" size={22} color={saved ? colors.error : colors.outlineVariant} />
+            </Pressable>
+          </View>
         </View>
 
         <Image source={{ uri: company.cover || company.logo }} style={styles.cover} />
@@ -90,6 +99,21 @@ export default function CompanyProfile() {
 
           <Text style={styles.sectionTitle}>عن الشركة</Text>
           <Text style={styles.about}>{company.about}</Text>
+
+          {company.offerings.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>الخدمات والأسعار</Text>
+              {company.offerings.map((o) => (
+                <View key={o.id} style={styles.offeringRow}>
+                  <View style={styles.offeringText}>
+                    <Text style={styles.offeringName}>{o.name}</Text>
+                    {o.description ? <Text style={styles.offeringDesc} numberOfLines={2}>{o.description}</Text> : null}
+                  </View>
+                  <Text style={styles.offeringPrice}>{formatPrice(o)}</Text>
+                </View>
+              ))}
+            </>
+          )}
 
           {company.gallery.length > 0 && (
             <>
@@ -131,6 +155,13 @@ export default function CompanyProfile() {
           }
         />
       </View>
+
+      <FeedbackModal
+        visible={feedbackOpen}
+        companySlug={company.slug}
+        companyName={company.name}
+        onClose={() => setFeedbackOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -149,6 +180,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
+  headerActions: { flexDirection: "row-reverse", gap: 16 },
   cover: { width: "100%", height: 200, backgroundColor: colors.surfaceContainer },
   body: { padding: 20, gap: 4 },
   name: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
@@ -169,6 +201,11 @@ const styles = StyleSheet.create({
   busyText: { flex: 1, fontFamily: "Cairo_500Medium", fontSize: type.label.fontSize, color: colors.onWarningContainer, textAlign: "right" },
   sectionTitle: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface, textAlign: "right", marginTop: 16, marginBottom: 8 },
   about: { fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 24 },
+  offeringRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 10, backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, marginBottom: 8 },
+  offeringText: { flex: 1 },
+  offeringName: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
+  offeringDesc: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
+  offeringPrice: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },
   galleryRow: { flexDirection: "row-reverse" },
   galleryImage: { width: 140, height: 100, borderRadius: 12, marginStart: 10, backgroundColor: colors.surfaceContainer },
   reviewCard: { backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, marginBottom: 8 },

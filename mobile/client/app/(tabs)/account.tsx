@@ -137,6 +137,13 @@ export default function Account() {
               </Text>
             )}
 
+            <View style={styles.linksRow}>
+              <Text style={styles.link} onPress={() => router.push("/about")}>عن العاصمة</Text>
+              <Text style={styles.link} onPress={() => router.push("/contact")}>تواصل معنا</Text>
+              <Text style={styles.link} onPress={() => router.push({ pathname: "/legal/[kind]", params: { kind: "terms" } })}>الشروط والأحكام</Text>
+              <Text style={styles.link} onPress={() => router.push({ pathname: "/legal/[kind]", params: { kind: "privacy" } })}>سياسة الخصوصية</Text>
+            </View>
+
             <Button label="تسجيل الخروج" variant="secondary" onPress={onSignOut} style={styles.signOutBtn} />
 
             <View style={styles.dangerCard}>
@@ -237,6 +244,8 @@ const styles = StyleSheet.create({
   revoke: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.error },
   emptyDevices: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "center", paddingVertical: 12 },
   revokeAll: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.error, textAlign: "center", marginTop: 4, marginBottom: 16 },
+  linksRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 14, marginBottom: 20, marginTop: 4 },
+  link: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.outline, textDecorationLine: "underline" },
   signOutBtn: { marginBottom: 24 },
   dangerCard: { borderWidth: 1, borderColor: `${colors.error}33`, borderRadius: 16, padding: 16, gap: 10 },
   dangerTitle: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.error, textAlign: "right" },

@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { ok } from "@/lib/utils/response";
-import { RateLimitError, UnauthorizedError, ValidationError } from "@/lib/utils/errors";
-import { getCustomerUser } from "@/lib/auth";
+import { RateLimitError, ValidationError } from "@/lib/utils/errors";
+import { optionalCustomerId } from "@/lib/middleware/optionalCustomer";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
@@ -87,21 +87,3 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   const lead = await leadsService.create(payload, customerId);
   return ok(lead, 201);
 }));
-
-/**
- * The signed-in customer's id, or null.
- *
- * Swallows the 401 deliberately: on this route "not signed in" is a legitimate
- * state, not a failure. Only an UnauthorizedError is swallowed, so a genuine
- * fault (the database being down inside getCustomerUser) still surfaces instead
- * of being silently recorded as an anonymous request.
- */
-async function optionalCustomerId(request: NextRequest): Promise<string | null> {
-  try {
-    const customer = await getCustomerUser(request);
-    return customer.id;
-  } catch (err) {
-    if (err instanceof UnauthorizedError) return null;
-    throw err;
-  }
-}

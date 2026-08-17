@@ -40,6 +40,22 @@ const MATERIAL_ICON_NAME = {
   close: "close",
   send: "send",
   forum: "forum",
+  home: "home",
+  category: "category",
+  apps: "apps",
+  grid_view: "grid-view",
+  local_offer: "local-offer",
+  chat: "chat",
+  feedback: "feedback",
+  info: "info",
+  call: "call",
+  description: "description",
+  gavel: "gavel",
+  policy: "policy",
+  list_alt: "list-alt",
+  chevron_right: "chevron-right",
+  star: "star",
+  hourglass_top: "hourglass-top",
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;

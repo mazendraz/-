@@ -6,6 +6,7 @@ import { RateLimitError, ValidationError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
+import { optionalCustomerId } from "@/lib/middleware/optionalCustomer";
 import { waitlistJoinSchema } from "@/lib/validation/availability";
 import * as waitlistService from "@/lib/services/waitlist.service";
 
@@ -40,6 +41,7 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest, ctx:
   await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
 
   const payload = waitlistJoinSchema.parse(raw);
-  const entry = await waitlistService.join(slug, payload);
+  const customerId = await optionalCustomerId(request);
+  const entry = await waitlistService.join(slug, payload, customerId);
   return ok(entry, 201);
 }));

@@ -276,11 +276,21 @@ model WaitlistEntry {
   // has a Lead of its own to appear as instead. SetNull (not Cascade) so deleting
   // the resulting Lead doesn't also delete this history row.
   convertedLeadId String? @unique
+  // The signed-in CustomerUser who joined, when there was one — added for
+  // mobile/client, same pattern as Lead.customerId: nullable + SetNull, since
+  // every waitlist entry before accounts existed (and every one joined by a
+  // visitor who chooses not to sign in) has none, and a join must never
+  // become unreadable because the account behind it was removed.
+  customerId String?
 
-  company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  convertedLead Lead?   @relation(fields: [convertedLeadId], references: [id], onDelete: SetNull)
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  convertedLead Lead?         @relation(fields: [convertedLeadId], references: [id], onDelete: SetNull)
+  customer      CustomerUser? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
   @@index([companyId])
+  // Serves "my waitlist joins" for a signed-in customer, same shape as
+  // Lead's (customerId, createdAt) index.
+  @@index([customerId, createdAt])
   // Serves the provider/admin waitlist list: WHERE companyId=? [AND status=?]
   // ORDER BY createdAt DESC — filter + sort from one index.
   @@index([companyId, status, createdAt])
@@ -962,6 +972,7 @@ model CustomerUser {
   sessions   CustomerSession[]
   devices    PushDevice[]
   leads      Lead[]
+  waitlistEntries WaitlistEntry[]
   // No @@index([email]) — @unique above already creates one, and a second index
   // on the same column only costs write throughput. (`User` above carries that
   // duplication; not worth a migration to undo there, but not worth copying.)

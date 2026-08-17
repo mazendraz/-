@@ -34,6 +34,7 @@ const MAX_PAGE_SIZE = 100;
 export async function join(
   companySlug: string,
   payload: ApiWaitlistPayload,
+  customerId: string | null = null,
 ): Promise<ApiWaitlistEntry> {
   const company = await prisma.company.findFirst({
     where: { slug: companySlug, status: CompanyStatus.ACTIVE },
@@ -49,10 +50,24 @@ export async function join(
       service: payload.service?.trim() || null,
       note: payload.note?.trim() || null,
       status: WaitlistStatus.WAITING,
+      // Optional, same reasoning as Lead.customerId in leads/route.ts: the
+      // route stays public (an anonymous visitor may still join), and this
+      // is attached only when a session happened to be present.
+      customerId,
     },
     include: waitlistInclude,
   });
   return serializeWaitlistEntry(row);
+}
+
+/** A signed-in customer's own waitlist joins, newest first. */
+export async function listForCustomer(customerId: string): Promise<ApiWaitlistEntry[]> {
+  const rows = await prisma.waitlistEntry.findMany({
+    where: { customerId },
+    include: waitlistInclude,
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map(serializeWaitlistEntry);
 }
 
 /**

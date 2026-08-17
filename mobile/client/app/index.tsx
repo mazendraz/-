@@ -7,13 +7,10 @@ import { useCustomerAuth } from "../lib/customerAuth";
  * therefore always false; the check exists to satisfy the type, not because
  * this screen has anything to do while it's true.
  *
- * Only two destinations exist so far — sign-in is the only screen built past
- * this point. "requests" is the tab navigator's future home; the redirect
- * target is named for what it SHOULD become as more of the app is built,
- * not for what exists today.
+ * Two destinations: the signed-in tab shell (landing on Home) or sign-in.
  */
 export default function Index() {
   const { customer, loading } = useCustomerAuth();
   if (loading) return null;
-  return <Redirect href={customer ? "/requests" : "/sign-in"} />;
+  return <Redirect href={customer ? "/home" : "/sign-in"} />;
 }

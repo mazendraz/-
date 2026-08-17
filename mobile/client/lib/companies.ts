@@ -8,8 +8,13 @@ import type { ApiCompany, ApiPage } from "@alassema/core";
 import { apiGet } from "./api";
 
 /** ACTIVE companies only (api's companies.service enforces this server-side). */
-export function fetchCompanies(search?: string): Promise<ApiPage<ApiCompany>> {
-  const params = new URLSearchParams({ pageSize: "30" });
+export function fetchCompanies(
+  search?: string,
+  opts?: { category?: string; page?: number; pageSize?: number },
+): Promise<ApiPage<ApiCompany>> {
+  const params = new URLSearchParams({ pageSize: String(opts?.pageSize ?? 30) });
   if (search?.trim()) params.set("search", search.trim());
+  if (opts?.category) params.set("category", opts.category);
+  if (opts?.page) params.set("page", String(opts.page));
   return apiGet<ApiPage<ApiCompany>>(`/companies?${params.toString()}`);
 }

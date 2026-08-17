@@ -5,10 +5,7 @@ import { useCustomerAuth } from "../../lib/customerAuth";
 import { usePushNotifications } from "../../lib/push";
 
 /**
- * The signed-in shell. Two tabs today — Requests and Account — because those
- * are the only two screens that exist. Browsing services/companies belongs
- * here once it's built; the tab bar is not a preview of the eventual
- * navigation, it's exactly what's real right now.
+ * The signed-in shell: Home, Companies, Requests, Messages, Saved, Account.
  *
  * Guards itself rather than trusting index.tsx's redirect alone: a customer
  * who signs out while sitting on a tab (or a deep link that lands here
@@ -35,6 +32,13 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
+        name="home"
+        options={{
+          title: "الرئيسية",
+          tabBarIcon: ({ color, size }) => <Icon name="home" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="companies"
         options={{
           title: "الشركات",
@@ -46,6 +50,13 @@ export default function TabsLayout() {
         options={{
           title: "طلباتي",
           tabBarIcon: ({ color, size }) => <Icon name="receipt_long" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="messages"
+        options={{
+          title: "الرسائل",
+          tabBarIcon: ({ color, size }) => <Icon name="forum" color={color} size={size} />,
         }}
       />
       <Tabs.Screen
