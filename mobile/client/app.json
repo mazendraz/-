@@ -29,7 +29,13 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-splash-screen",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#005578"
+        }
+      ]
     ],
     "scheme": "alassema"
   }

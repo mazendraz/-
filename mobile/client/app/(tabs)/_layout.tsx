@@ -2,6 +2,7 @@ import { Redirect, Tabs } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { useCustomerAuth } from "../../lib/customerAuth";
+import { usePushNotifications } from "../../lib/push";
 
 /**
  * The signed-in shell. Two tabs today — Requests and Account — because those
@@ -15,6 +16,11 @@ import { useCustomerAuth } from "../../lib/customerAuth";
  */
 export default function TabsLayout() {
   const { customer, loading } = useCustomerAuth();
+  // Registration + tap-to-open are account-level concerns (see push.ts),
+  // mounted once here rather than per-screen. Called unconditionally (hooks
+  // can't be conditional) — it internally no-ops until `customer` exists.
+  usePushNotifications();
+
   if (loading) return null;
   if (!customer) return <Redirect href="/sign-in" />;
 

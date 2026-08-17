@@ -6,6 +6,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import StatusPill from "../../components/StatusPill";
 import { fetchAccountLeads } from "../../lib/customerLeads";
+import { useLiveEvents } from "../../lib/liveEvents";
 import { ApiError } from "../../lib/api";
 
 /**
@@ -41,6 +42,13 @@ export default function Requests() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // "lead" fires on a new request, "lead-status" and "message" on updates to
+  // an existing one (a status change, or a reply worth surfacing via the list
+  // sort order) — all three are simplest handled the same way: refetch. The
+  // payload only ever carries IDs (see api's realtime.service.ts), so there is
+  // no partial-update path that would save more than this costs.
+  useLiveEvents(() => load());
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
