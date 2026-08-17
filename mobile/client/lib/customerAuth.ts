@@ -177,6 +177,44 @@ export async function bootstrapSession(): Promise<void> {
   }
 }
 
+export interface CustomerSession {
+  id: string;
+  deviceName: string | null;
+  platform: string | null;
+  lastUsedAt: number;
+  createdAt: number;
+}
+
+export function fetchSessions(): Promise<CustomerSession[]> {
+  return apiGet<CustomerSession[]>("/customer/sessions");
+}
+
+/** End one device's session, or every one when `sessionId` is omitted. */
+export async function revokeSessions(sessionId?: string): Promise<number> {
+  const { revoked } = await apiPost<{ revoked: number }>(
+    "/customer/sessions",
+    sessionId ? { sessionId } : {},
+  );
+  return revoked;
+}
+
+export interface DeletionSummary {
+  leadsDetached: number;
+  sessionsRevoked: number;
+}
+
+/**
+ * Delete the account. Irreversible. `confirmEmail` must match exactly — the
+ * session already proves who is asking; this proves they meant it. Same rule
+ * as the website's Account.tsx.
+ */
+export async function deleteAccount(confirmEmail: string): Promise<DeletionSummary> {
+  const summary = await apiPost<DeletionSummary>("/customer/delete", { confirmEmail });
+  await clearTokens();
+  setCustomer(null);
+  return summary;
+}
+
 /** Subscribe to the customer session. */
 export function useCustomerAuth(): Snapshot {
   return useSyncExternalStore(
