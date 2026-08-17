@@ -1,5 +1,5 @@
 import { MaterialIcons } from "@expo/vector-icons";
-import type { ColorValue } from "react-native";
+import type { ColorValue, StyleProp, TextStyle } from "react-native";
 import { colors } from "@alassema/core";
 
 /**
@@ -38,6 +38,8 @@ const MATERIAL_ICON_NAME = {
   search: "search",
   arrow_back: "arrow-back",
   close: "close",
+  send: "send",
+  forum: "forum",
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;
@@ -46,6 +48,7 @@ export default function Icon({
   name,
   size = 22,
   color = colors.onSurface,
+  style,
 }: {
   name: IconName;
   size?: number;
@@ -53,6 +56,9 @@ export default function Icon({
   // hands back a ColorValue (it supports PlatformColor()), and a plain
   // `string` prop rejected that at the _layout.tsx call site.
   color?: ColorValue;
+  /** For the rare case a glyph's own artwork needs adjusting — e.g. mirroring
+   *  a directional icon for RTL, which RN's layout flip does not do for you. */
+  style?: StyleProp<TextStyle>;
 }) {
-  return <MaterialIcons name={MATERIAL_ICON_NAME[name]} size={size} color={color} />;
+  return <MaterialIcons name={MATERIAL_ICON_NAME[name]} size={size} color={color} style={style} />;
 }

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ApiLead } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import StatusPill from "../../components/StatusPill";
+import { router } from "expo-router";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { useLiveEvents } from "../../lib/liveEvents";
+import ReviewModal from "../../components/ReviewModal";
 import { ApiError } from "../../lib/api";
 
 /**
@@ -24,6 +26,7 @@ export default function Requests() {
   const [leads, setLeads] = useState<ApiLead[] | null>(null);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [reviewing, setReviewing] = useState<{ id: string; companyName: string } | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -81,6 +84,29 @@ export default function Requests() {
               <Text style={styles.ref}>{item.refNumber}</Text>
               <Text style={styles.district}>{item.district}</Text>
             </View>
+            <View style={styles.cardActions}>
+              <Pressable
+                style={styles.actionBtn}
+                onPress={() =>
+                  router.push({
+                    pathname: "/chat/[leadId]",
+                    params: { leadId: item.id, companyName: item.companyName },
+                  })
+                }
+              >
+                <Icon name="forum" size={16} color={colors.primary} />
+                <Text style={styles.actionText}>المحادثة</Text>
+              </Pressable>
+              {item.status === "Completed" && !item.reviewed && (
+                <Pressable
+                  style={styles.actionBtn}
+                  onPress={() => setReviewing({ id: item.id, companyName: item.companyName })}
+                >
+                  <Icon name="favorite" size={16} color={colors.primary} />
+                  <Text style={styles.actionText}>قيّم الخدمة</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         )}
       />
@@ -89,6 +115,19 @@ export default function Requests() {
         <View style={styles.errorBanner}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
+      )}
+
+      {reviewing && (
+        <ReviewModal
+          visible
+          leadId={reviewing.id}
+          companyName={reviewing.companyName}
+          onClose={() => setReviewing(null)}
+          onSubmitted={() => {
+            setReviewing(null);
+            load();
+          }}
+        />
       )}
     </SafeAreaView>
   );
@@ -118,6 +157,9 @@ const styles = StyleSheet.create({
   company: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, flexShrink: 1, textAlign: "right" },
   service: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right" },
   cardFooter: { flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 4 },
+  cardActions: { flexDirection: "row-reverse", gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.outlineVariant },
+  actionBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  actionText: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: colors.primary },
   ref: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.outline, writingDirection: "ltr" },
   district: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
   empty: { alignItems: "center", gap: 6, paddingTop: 80 },

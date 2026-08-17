@@ -49,6 +49,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="saved"
+        options={{
+          title: "المفضلة",
+          tabBarIcon: ({ color, size }) => <Icon name="favorite" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
         name="account"
         options={{
           title: "حسابي",

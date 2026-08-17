@@ -75,10 +75,7 @@ export default function Companies() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() =>
-              router.push({
-                pathname: "/new-request/[slug]",
-                params: { slug: item.slug, name: item.name, category: item.categoryLabel },
-              })
+              router.push({ pathname: "/company/[slug]", params: { slug: item.slug } })
             }
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           >
