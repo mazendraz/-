@@ -295,24 +295,27 @@ export async function recomputeAggregate(companyId: string): Promise<void> {
  * author/date/district are taken from the lead, so reviews can't be spoofed for
  * an arbitrary company. Recomputes the company aggregate like the admin path.
  */
-export async function submitFromLead(input: SubmitReviewInput): Promise<ApiReview> {
-  const lead = await prisma.lead.findUnique({
-    where: { refNumber: input.ref },
-    select: {
-      id: true,
-      companyId: true,
-      customerName: true,
-      district: true,
-      phone: true,
-      trackingToken: true,
-      status: true,
-      reviewedAt: true,
-    },
-  });
-  // Missing ref and secret mismatch both return 404 — don't reveal valid refs.
-  if (!lead || !leadSecretMatches(lead, { token: input.token, phone: input.phone })) {
-    throw new NotFoundError("Lead");
-  }
+type ReviewableLead = {
+  id: string;
+  companyId: string;
+  customerName: string;
+  district: string;
+  status: LeadStatus;
+  reviewedAt: Date | null;
+};
+
+/**
+ * The claim-and-create transaction shared by both entry points below — the
+ * ref+token path (submitFromLead, pre-account) and the account-owned path
+ * (submitFromLeadId, mobile/customer). Everything about WHO may call this is
+ * decided by the caller resolving `lead` first; this only enforces WHAT state
+ * a lead must be in to be reviewable, which is identical either way.
+ */
+async function claimAndCreate(
+  lead: ReviewableLead,
+  rating: number,
+  text: string,
+): Promise<ApiReview> {
   if (lead.status !== LeadStatus.COMPLETED) {
     throw new ConflictError("Only completed requests can be reviewed.");
   }
@@ -343,8 +346,8 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
         leadId: lead.id, // links the review to its lead; UNIQUE backstops the claim
         author: lead.customerName,
         avatar,
-        rating: input.rating,
-        text: input.text,
+        rating,
+        text,
         date,
         district: lead.district,
         verified: true,
@@ -355,7 +358,47 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
   });
 
   // Alert admins a new customer review came in (push + email) after the response.
-  runAfterResponse(() => notifyAdminsNewReview(lead.companyId, input.rating, lead.customerName));
+  runAfterResponse(() => notifyAdminsNewReview(lead.companyId, rating, lead.customerName));
 
   return serializeReview(review);
+}
+
+/** Pre-account path: gated by ref + tracking token (or phone for legacy leads). */
+export async function submitFromLead(input: SubmitReviewInput): Promise<ApiReview> {
+  const lead = await prisma.lead.findUnique({
+    where: { refNumber: input.ref },
+    select: {
+      id: true, companyId: true, customerName: true, district: true,
+      phone: true, trackingToken: true, status: true, reviewedAt: true,
+    },
+  });
+  // Missing ref and secret mismatch both return 404 — don't reveal valid refs.
+  if (!lead || !leadSecretMatches(lead, { token: input.token, phone: input.phone })) {
+    throw new NotFoundError("Lead");
+  }
+  return claimAndCreate(lead, input.rating, input.text);
+}
+
+/**
+ * Account-owned path: gated by the signed-in customer actually owning the
+ * lead — no ref, no token, matching every other /customer/* route's rule that
+ * the account itself is the credential.
+ */
+export async function submitFromLeadId(
+  leadId: string,
+  customerId: string,
+  rating: number,
+  text: string,
+): Promise<ApiReview> {
+  const lead = await prisma.lead.findUnique({
+    where: { id: leadId },
+    select: {
+      id: true, companyId: true, customerName: true, district: true,
+      status: true, reviewedAt: true, customerId: true,
+    },
+  });
+  // A missing lead and one owned by someone else get the SAME 404 — same
+  // reasoning as every other ownership check in this codebase.
+  if (!lead || lead.customerId !== customerId) throw new NotFoundError("Lead");
+  return claimAndCreate(lead, rating, text);
 }

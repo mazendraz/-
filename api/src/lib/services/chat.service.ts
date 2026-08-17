@@ -45,40 +45,14 @@ const LAST_MESSAGE_INCLUDE = {
   },
 } satisfies Record<string, unknown>;
 
-export type MessageSenderValue = "CUSTOMER" | "PROVIDER" | "ADMIN";
+// Moved to @alassema/core once mobile/client needed them too — re-exported
+// here so every existing `from "@/lib/services/chat.service"` import of these
+// three keeps working unchanged. See the core file's comment on why the
+// website's own differently-shaped local copies were deliberately left alone.
+export type { ApiMessage, ApiConversation, MessageSenderValue } from "@/lib/apiTypes";
+import type { ApiMessage, ApiConversation, MessageSenderValue } from "@/lib/apiTypes";
+
 export type Viewer = "customer" | "provider" | "admin";
-
-export interface ApiMessage {
-  id: string;
-  sender: MessageSenderValue;
-  body: string;
-  attachment: string | null;
-  /** Only ever true in an admin payload — the others never receive hidden rows. */
-  hidden?: boolean;
-  createdAt: number;
-}
-
-export interface ApiConversation {
-  id: string;
-  leadId: string;
-  companyId: string;
-  refNumber?: string;
-  companyName?: string;
-  customerName?: string;
-  lastMessageAt: number | null;
-  /**
-   * First line of the newest visible message — the WhatsApp-style subtitle a
-   * thread list shows instead of just a name and a reference number. Undefined
-   * when the caller didn't ask for it (only the LIST endpoints load it; the
-   * single-thread GET has the real messages array and needs no summary of it).
-   */
-  lastMessagePreview?: string | null;
-  lastMessageSender?: MessageSenderValue | null;
-  customerUnread: number;
-  providerUnread: number;
-  closed: boolean;
-  createdAt: number;
-}
 
 type MessageRow = {
   id: string; sender: MessageSenderValue; body: string;
@@ -474,19 +448,9 @@ export async function markRead(conversationId: string, viewer: Viewer): Promise<
 
 // ── Customer thread summaries ────────────────────────────────────────────────
 
-export interface ApiThreadSummary {
-  refNumber: string;
-  /** Null until someone actually opens the thread — see getSummaries. */
-  conversationId: string | null;
-  companyName: string;
-  companySlug: string;
-  lastMessageAt: number | null;
-  /** First line of the newest message, for the list preview. */
-  lastMessagePreview: string | null;
-  lastMessageSender: MessageSenderValue | null;
-  unread: number;
-  closed: boolean;
-}
+// Also moved to core — see the comment above the ApiMessage re-export.
+export type { ApiThreadSummary } from "@/lib/apiTypes";
+import type { ApiThreadSummary } from "@/lib/apiTypes";
 
 /**
  * Summaries for a customer's own threads, in one round trip.

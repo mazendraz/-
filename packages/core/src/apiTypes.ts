@@ -1282,3 +1282,54 @@ export interface ApiNotificationsResponse {
   notifications: ApiNotification[];
 }
 
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+// Moved out of api's chat.service.ts, where they were declared locally and never
+// caught by the phase 1 core extraction (nothing had duplicated them yet). The
+// website's app/src/lib/chat.ts still keeps its OWN differently-named local
+// copies (ChatMessage/Conversation/Thread/ThreadSummary) — deliberately left
+// alone here rather than folded in too: that file's shapes are used throughout
+// many existing components, and unifying it is a separate, larger piece of work
+// with its own risk, not something to fold into finishing the mobile app. Mobile
+// consumes these new canonical names directly; chat.service.ts re-exports them
+// so no existing import site changed.
+export type MessageSenderValue = "CUSTOMER" | "PROVIDER" | "ADMIN";
+
+export interface ApiMessage {
+  id: string;
+  sender: MessageSenderValue;
+  body: string;
+  attachment: string | null;
+  /** Only ever true in an admin payload — the others never receive hidden rows. */
+  hidden?: boolean;
+  createdAt: number;
+}
+
+export interface ApiConversation {
+  id: string;
+  leadId: string;
+  companyId: string;
+  refNumber?: string;
+  companyName?: string;
+  customerName?: string;
+  lastMessageAt: number | null;
+  lastMessagePreview?: string | null;
+  lastMessageSender?: MessageSenderValue | null;
+  customerUnread: number;
+  providerUnread: number;
+  closed: boolean;
+  createdAt: number;
+}
+
+export interface ApiThreadSummary {
+  refNumber: string;
+  /** Null until someone actually opens the thread. */
+  conversationId: string | null;
+  companyName: string;
+  companySlug: string;
+  lastMessageAt: number | null;
+  lastMessagePreview: string | null;
+  lastMessageSender: MessageSenderValue | null;
+  unread: number;
+  closed: boolean;
+}
