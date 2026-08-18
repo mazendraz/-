@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -25,6 +25,15 @@ import { requireAccount } from "../../lib/authGate";
  * (Feature C's quantities/tiers/bundle-discount request flow) is real,
  * separate, not-yet-built scope; the classic single-service form
  * new-request/[slug] is still the way to actually send a request either way.
+ *
+ * Section nav (phase 5): scroll-to rather than the website's SectionNav
+ * (which swaps what's mounted per section on a multi-page site) — this is
+ * one long ScrollView, so a tap just needs to land on the right offset.
+ * `body`'s onLayout gives that View's y within the ScrollView's content
+ * (its immediate parent there); each section's own onLayout gives its y
+ * within `body`. Summed (bodyY + sectionY), that's the section's true scroll
+ * offset — no `measureLayout` node-handle plumbing needed, and it works
+ * identically on web (react-native-web implements onLayout the same way).
  */
 export default function CompanyProfile() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -34,6 +43,15 @@ export default function CompanyProfile() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { saved, toggle } = useIsSaved(slug);
   const next = `/company/${slug}`;
+
+  const scrollRef = useRef<ScrollView>(null);
+  const bodyY = useRef(0);
+  const sectionY = useRef<Record<string, number>>({});
+
+  function scrollToSection(key: string) {
+    const y = bodyY.current + (sectionY.current[key] ?? 0);
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+  }
 
   useEffect(() => {
     fetchCompany(slug)
@@ -54,9 +72,28 @@ export default function CompanyProfile() {
 
   const isBusy = company.busy;
 
+  const navItems = [
+    { key: "about", label: "عن الشركة" },
+    ...(company.offerings.length > 0 ? [{ key: "pricing", label: "الأسعار" }] : []),
+    ...(company.gallery.length > 0 ? [{ key: "gallery", label: "المعرض" }] : []),
+    ...(company.reviews.length > 0 ? [{ key: "reviews", label: "التقييمات" }] : []),
+  ];
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      {navItems.length > 1 && (
+        <View style={styles.sectionNav}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavContent}>
+            {navItems.map((item) => (
+              <Pressable key={item.key} onPress={() => scrollToSection(item.key)} style={styles.navChip}>
+                <Text style={styles.navChipText}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={12}>
             <Icon name="arrow_back" size={22} color={colors.onSurface} />
@@ -73,7 +110,7 @@ export default function CompanyProfile() {
 
         <Image source={{ uri: company.cover || company.logo }} style={styles.cover} />
 
-        <View style={styles.body}>
+        <View style={styles.body} onLayout={(e) => { bodyY.current = e.nativeEvent.layout.y; }}>
           <Text style={styles.name}>{company.name}</Text>
           <Text style={styles.tagline}>{company.tagline}</Text>
 
@@ -101,11 +138,13 @@ export default function CompanyProfile() {
             </View>
           )}
 
-          <Text style={styles.sectionTitle}>عن الشركة</Text>
-          <Text style={styles.about}>{company.about}</Text>
+          <View onLayout={(e) => { sectionY.current.about = e.nativeEvent.layout.y; }}>
+            <Text style={styles.sectionTitle}>عن الشركة</Text>
+            <Text style={styles.about}>{company.about}</Text>
+          </View>
 
           {company.offerings.length > 0 && (
-            <>
+            <View onLayout={(e) => { sectionY.current.pricing = e.nativeEvent.layout.y; }}>
               <Text style={styles.sectionTitle}>الخدمات والأسعار</Text>
               {company.offerings.map((o) => (
                 <View key={o.id} style={styles.offeringRow}>
@@ -116,22 +155,22 @@ export default function CompanyProfile() {
                   <Text style={styles.offeringPrice}>{formatPrice(o)}</Text>
                 </View>
               ))}
-            </>
+            </View>
           )}
 
           {company.gallery.length > 0 && (
-            <>
+            <View onLayout={(e) => { sectionY.current.gallery = e.nativeEvent.layout.y; }}>
               <Text style={styles.sectionTitle}>معرض الأعمال</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryRow}>
                 {company.gallery.map((uri) => (
                   <Image key={uri} source={{ uri }} style={styles.galleryImage} />
                 ))}
               </ScrollView>
-            </>
+            </View>
           )}
 
           {company.reviews.length > 0 && (
-            <>
+            <View onLayout={(e) => { sectionY.current.reviews = e.nativeEvent.layout.y; }}>
               <Text style={styles.sectionTitle}>آراء العملاء</Text>
               {company.reviews.slice(0, 5).map((r, i) => (
                 <View key={i} style={styles.reviewCard}>
@@ -142,7 +181,7 @@ export default function CompanyProfile() {
                   {r.text ? <Text style={styles.reviewText}>{r.text}</Text> : null}
                 </View>
               ))}
-            </>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -177,6 +216,14 @@ const styles = StyleSheet.create({
   centerFill: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   errorText: { fontFamily: "Cairo_500Medium", fontSize: type.body.fontSize, color: colors.onSurfaceVariant, textAlign: "center" },
   scroll: { paddingBottom: 100 },
+  sectionNav: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.outlineVariant,
+  },
+  sectionNavContent: { flexDirection: "row-reverse", paddingHorizontal: 16, gap: 4 },
+  navChip: { paddingHorizontal: 14, paddingVertical: 12 },
+  navChipText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurfaceVariant },
   header: {
     position: "absolute",
     top: 12,
