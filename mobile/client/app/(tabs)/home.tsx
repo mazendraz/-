@@ -49,6 +49,9 @@ export default function Home() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.topBar}>
         <Logo size={30} />
+        <Pressable onPress={() => router.push("/search")} hitSlop={8}>
+          <Icon name="search" size={22} color={colors.onSurface} />
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
@@ -205,7 +208,7 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  topBar: { flexDirection: "row-reverse", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
   scroll: { paddingBottom: 32 },
   hero: { backgroundColor: colors.primary, padding: 24, paddingTop: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   heroTitle: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_800ExtraBold", color: colors.onPrimary, textAlign: "right", lineHeight: 34 },

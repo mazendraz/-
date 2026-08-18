@@ -43,8 +43,13 @@ export default function Saved() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.topBar}>
-        <Logo size={28} />
-        <Text style={styles.title}>المفضلة</Text>
+        <View style={styles.topBarStart}>
+          <Logo size={28} />
+          <Text style={styles.title}>المفضلة</Text>
+        </View>
+        <Pressable onPress={() => router.push("/search")} hitSlop={8}>
+          <Icon name="search" size={22} color={colors.onSurface} />
+        </Pressable>
       </View>
 
       <FlatList
@@ -80,7 +85,8 @@ export default function Saved() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  topBar: { flexDirection: "row-reverse", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingTop: 12 },
+  topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12 },
+  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   title: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
   listContent: { padding: 20, gap: 10, flexGrow: 1 },
   empty: { alignItems: "center", gap: 6, paddingTop: 80 },

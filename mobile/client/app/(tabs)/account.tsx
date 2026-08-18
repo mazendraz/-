@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FlatList, Modal, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
@@ -95,8 +95,13 @@ export default function Account() {
         ListHeaderComponent={
           <>
             <View style={styles.topBar}>
-              <Logo size={28} />
-              <Text style={styles.title}>حسابك</Text>
+              <View style={styles.topBarStart}>
+                <Logo size={28} />
+                <Text style={styles.title}>حسابك</Text>
+              </View>
+              <Pressable onPress={() => router.push("/search")} hitSlop={8}>
+                <Icon name="search" size={22} color={colors.onSurface} />
+              </Pressable>
             </View>
 
             {error !== "" && (
@@ -215,7 +220,8 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     textAlign: "right",
   },
-  topBar: { flexDirection: "row-reverse", alignItems: "center", gap: 8, marginBottom: 12 },
+  topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   errorBox: { backgroundColor: colors.errorContainer, borderRadius: 12, padding: 12, marginBottom: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
   card: {
