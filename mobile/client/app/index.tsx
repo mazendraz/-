@@ -1,16 +1,10 @@
 import { Redirect } from "expo-router";
-import { useCustomerAuth } from "../lib/customerAuth";
 
 /**
- * The launch route. By the time this renders, RootLayout has already
- * awaited bootstrapSession() (see app/_layout.tsx) — `loading` here is
- * therefore always false; the check exists to satisfy the type, not because
- * this screen has anything to do while it's true.
- *
- * Two destinations: the signed-in tab shell (landing on Home) or sign-in.
+ * The launch route. Guest browsing (phase 1): everyone lands on the public
+ * Home tab regardless of session — screens/actions that need an account gate
+ * themselves instead (see lib/authGate.ts).
  */
 export default function Index() {
-  const { customer, loading } = useCustomerAuth();
-  if (loading) return null;
-  return <Redirect href={customer ? "/home" : "/sign-in"} />;
+  return <Redirect href="/home" />;
 }

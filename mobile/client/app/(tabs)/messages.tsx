@@ -9,6 +9,7 @@ import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchThreadSummaries } from "../../lib/chat";
 import { useLiveEvents } from "../../lib/liveEvents";
 import { ApiError } from "../../lib/api";
+import { useRequireAccount } from "../../lib/authGate";
 
 interface Row {
   leadId: string;
@@ -25,12 +26,16 @@ interface Row {
  * refNumber.
  */
 export default function Messages() {
+  const customer = useRequireAccount("/messages");
   const [summaries, setSummaries] = useState<ApiThreadSummary[] | null>(null);
   const [refByLeadId, setRefByLeadId] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
+    // Guest mid-redirect (see useRequireAccount) — these are account-scoped
+    // endpoints, nothing to fetch without a session.
+    if (!customer) return;
     if (isRefresh) setRefreshing(true);
     setError("");
     try {
@@ -42,7 +47,7 @@ export default function Messages() {
     } finally {
       if (isRefresh) setRefreshing(false);
     }
-  }, []);
+  }, [customer]);
 
   useEffect(() => {
     load();
@@ -60,6 +65,8 @@ export default function Messages() {
       })
       .filter((r): r is Row => r !== null);
   }, [summaries, refByLeadId]);
+
+  if (!customer) return null;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>

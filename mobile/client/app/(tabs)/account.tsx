@@ -10,9 +10,9 @@ import {
   deleteAccount,
   fetchSessions,
   revokeSessions,
-  useCustomerAuth,
   type CustomerSession,
 } from "../../lib/customerAuth";
+import { useRequireAccount } from "../../lib/authGate";
 
 /**
  * The customer's account: profile, signed-in devices, and the way out — the
@@ -27,7 +27,7 @@ import {
  * pressure the week the app is submitted.
  */
 export default function Account() {
-  const { customer } = useCustomerAuth();
+  const customer = useRequireAccount("/account");
   const [sessions, setSessions] = useState<CustomerSession[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -35,10 +35,13 @@ export default function Account() {
   const [typedEmail, setTypedEmail] = useState("");
 
   useEffect(() => {
+    // Guest mid-redirect (see useRequireAccount) — nothing to fetch without
+    // a session.
+    if (!customer) return;
     fetchSessions()
       .then(setSessions)
       .catch(() => setSessions([]));
-  }, []);
+  }, [customer]);
 
   async function onRevoke(sessionId?: string) {
     setBusy(true);

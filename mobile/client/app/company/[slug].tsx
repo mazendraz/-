@@ -11,6 +11,8 @@ import { fetchCompany } from "../../lib/companyDetail";
 import { useIsSaved } from "../../lib/saved";
 import { formatPrice } from "../../lib/pricing";
 import { ApiError } from "../../lib/api";
+import { useCustomerAuth } from "../../lib/customerAuth";
+import { requireAccount } from "../../lib/authGate";
 
 /**
  * The company profile — the context a customer was missing between "search
@@ -26,10 +28,12 @@ import { ApiError } from "../../lib/api";
  */
 export default function CompanyProfile() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
+  const { customer } = useCustomerAuth();
   const [company, setCompany] = useState<ApiCompany | null>(null);
   const [error, setError] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { saved, toggle } = useIsSaved(slug);
+  const next = `/company/${slug}`;
 
   useEffect(() => {
     fetchCompany(slug)
@@ -61,7 +65,7 @@ export default function CompanyProfile() {
             <Pressable onPress={() => setFeedbackOpen(true)} hitSlop={12}>
               <Icon name="feedback" size={22} color={colors.onSurface} />
             </Pressable>
-            <Pressable onPress={toggle} hitSlop={12}>
+            <Pressable onPress={() => requireAccount(customer, next, toggle)} hitSlop={12}>
               <Icon name="favorite" size={22} color={saved ? colors.error : colors.outlineVariant} />
             </Pressable>
           </View>
@@ -147,10 +151,12 @@ export default function CompanyProfile() {
         <Button
           label={isBusy ? "الانضمام لقائمة الانتظار" : "اطلب الخدمة"}
           onPress={() =>
-            router.push(
-              isBusy
-                ? { pathname: "/company/[slug]/waitlist", params: { slug: company.slug, name: company.name } }
-                : { pathname: "/new-request/[slug]", params: { slug: company.slug, name: company.name } },
+            requireAccount(customer, next, () =>
+              router.push(
+                isBusy
+                  ? { pathname: "/company/[slug]/waitlist", params: { slug: company.slug, name: company.name } }
+                  : { pathname: "/new-request/[slug]", params: { slug: company.slug, name: company.name } },
+              ),
             )
           }
         />

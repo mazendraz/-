@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Button from "../components/Button";
 import TextField from "../components/TextField";
@@ -31,6 +31,7 @@ type Mode = "signin" | "register";
  */
 export default function SignIn() {
   const { customer } = useCustomerAuth();
+  const { next: rawNext } = useLocalSearchParams<{ next?: string }>();
   const [mode, setMode] = useState<Mode>("signin");
 
   const [name, setName] = useState("");
@@ -44,17 +45,24 @@ export default function SignIn() {
   const [registered, setRegistered] = useState(false);
   const [mailFailed, setMailFailed] = useState(false);
 
+  // Only ever a path on this site. An absolute URL here would turn sign-in
+  // into an open redirect — same guard as the website's SignIn.tsx.
+  const next =
+    typeof rawNext === "string" && rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : "/requests";
+
   // Already signed in (e.g. a fast-refresh landed here) — leave immediately.
   useEffect(() => {
-    if (customer) router.replace("/requests");
-  }, [customer]);
+    if (customer) router.replace(next as never);
+  }, [customer, next]);
 
   const { ready: googleReady, promptAsync: promptGoogle } = useGoogleSignIn((idToken) => {
     setBusy(true);
     setError("");
     import("../lib/customerAuth")
       .then(({ signInWithGoogle }) => signInWithGoogle(idToken))
-      .then(() => router.replace("/requests"))
+      .then(() => router.replace(next as never))
       .catch((err) => {
         setBusy(false);
         setError(err instanceof ApiError ? err.message : "تعذّر تسجيل الدخول. جرّب تاني.");
@@ -86,7 +94,7 @@ export default function SignIn() {
         return;
       }
       await signInWithPassword(email.trim(), password);
-      router.replace("/requests");
+      router.replace(next as never);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 401 && /confirm your email/i.test(err.message)) {

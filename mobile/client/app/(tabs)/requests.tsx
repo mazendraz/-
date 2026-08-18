@@ -12,6 +12,7 @@ import { fetchMyWaitlistEntries } from "../../lib/waitlist";
 import { useLiveEvents } from "../../lib/liveEvents";
 import ReviewModal from "../../components/ReviewModal";
 import { ApiError } from "../../lib/api";
+import { useRequireAccount } from "../../lib/authGate";
 
 type RequestItem =
   | { kind: "lead"; id: string; createdAt: number; data: ApiLead }
@@ -37,6 +38,7 @@ const FILTERS: { key: Filter; label: string }[] = [
  * its current status, same as the website's smaller WaitlistRequestCard.
  */
 export default function Requests() {
+  const customer = useRequireAccount("/requests");
   const [leads, setLeads] = useState<ApiLead[] | null>(null);
   const [waitlist, setWaitlist] = useState<ApiWaitlistEntry[] | null>(null);
   const [error, setError] = useState("");
@@ -45,6 +47,9 @@ export default function Requests() {
   const [reviewing, setReviewing] = useState<{ id: string; companyName: string } | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
+    // Guest mid-redirect (see useRequireAccount) — these are account-scoped
+    // endpoints, nothing to fetch without a session.
+    if (!customer) return;
     if (isRefresh) setRefreshing(true);
     setError("");
     try {
@@ -58,7 +63,7 @@ export default function Requests() {
     } finally {
       if (isRefresh) setRefreshing(false);
     }
-  }, []);
+  }, [customer]);
 
   useEffect(() => {
     load();
@@ -78,6 +83,8 @@ export default function Requests() {
   }, [leads, waitlist, filter]);
 
   const loaded = leads !== null && waitlist !== null;
+
+  if (!customer) return null;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>

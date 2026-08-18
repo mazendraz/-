@@ -26,10 +26,10 @@ import Button from "../../components/Button";
 import Icon from "../../components/Icon";
 import TextField from "../../components/TextField";
 import OfferingPicker, { type CartItem } from "../../components/OfferingPicker";
-import { useCustomerAuth } from "../../lib/customerAuth";
 import { submitLead } from "../../lib/leads";
 import { fetchCompany } from "../../lib/companyDetail";
 import { ApiError } from "../../lib/api";
+import { useRequireAccount } from "../../lib/authGate";
 
 /**
  * Submit a request to one company — a standalone route (outside the tab
@@ -46,7 +46,7 @@ import { ApiError } from "../../lib/api";
  */
 export default function NewRequest() {
   const { slug, name: companyName } = useLocalSearchParams<{ slug: string; name: string }>();
-  const { customer } = useCustomerAuth();
+  const customer = useRequireAccount(`/new-request/${slug}`);
 
   const [name, setName] = useState(customer?.name ?? "");
   const [phoneNational, setPhoneNational] = useState("");
@@ -93,6 +93,8 @@ export default function NewRequest() {
       setBusy(false);
     }
   }
+
+  if (!customer) return null;
 
   if (refNumber) {
     return (

@@ -1,15 +1,18 @@
-import { Redirect, Tabs } from "expo-router";
+import { Tabs, router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { useCustomerAuth } from "../../lib/customerAuth";
 import { usePushNotifications } from "../../lib/push";
 
 /**
- * The signed-in shell: Home, Companies, Requests, Messages, Saved, Account.
+ * The tab shell: Home, Companies, Requests, Messages, Saved, Account.
  *
- * Guards itself rather than trusting index.tsx's redirect alone: a customer
- * who signs out while sitting on a tab (or a deep link that lands here
- * directly) must not see an authenticated screen with no session behind it.
+ * Guest browsing (phase 1): Home and Companies are open to everyone. The
+ * other four require an account — tapping one as a guest is intercepted here
+ * (tabPress) and redirected to sign-in with `next` set to come straight back.
+ * Each of those screens ALSO guards itself with useRequireAccount (see
+ * lib/authGate.ts), for deep links and for a customer signing out while
+ * sitting on the tab — cases a tab-bar intercept alone can't cover.
  */
 export default function TabsLayout() {
   const { customer, loading } = useCustomerAuth();
@@ -19,7 +22,17 @@ export default function TabsLayout() {
   usePushNotifications();
 
   if (loading) return null;
-  if (!customer) return <Redirect href="/sign-in" />;
+
+  function guardTab(next: string) {
+    return {
+      tabPress: (e: { preventDefault: () => void }) => {
+        if (!customer) {
+          e.preventDefault();
+          router.push({ pathname: "/sign-in", params: { next } });
+        }
+      },
+    };
+  }
 
   return (
     <Tabs
@@ -51,6 +64,7 @@ export default function TabsLayout() {
           title: "طلباتي",
           tabBarIcon: ({ color, size }) => <Icon name="receipt_long" color={color} size={size} />,
         }}
+        listeners={guardTab("/requests")}
       />
       <Tabs.Screen
         name="messages"
@@ -58,6 +72,7 @@ export default function TabsLayout() {
           title: "الرسائل",
           tabBarIcon: ({ color, size }) => <Icon name="forum" color={color} size={size} />,
         }}
+        listeners={guardTab("/messages")}
       />
       <Tabs.Screen
         name="saved"
@@ -65,6 +80,7 @@ export default function TabsLayout() {
           title: "المفضلة",
           tabBarIcon: ({ color, size }) => <Icon name="favorite" color={color} size={size} />,
         }}
+        listeners={guardTab("/saved")}
       />
       <Tabs.Screen
         name="account"
@@ -72,6 +88,7 @@ export default function TabsLayout() {
           title: "حسابي",
           tabBarIcon: ({ color, size }) => <Icon name="person" color={color} size={size} />,
         }}
+        listeners={guardTab("/account")}
       />
     </Tabs>
   );

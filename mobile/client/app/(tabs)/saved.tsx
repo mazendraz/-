@@ -7,6 +7,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCompany } from "../../lib/companyDetail";
 import { useSavedSlugs } from "../../lib/saved";
+import { useRequireAccount } from "../../lib/authGate";
 
 /**
  * Saved companies — reads the device-local list (lib/saved.ts) and resolves
@@ -14,8 +15,13 @@ import { useSavedSlugs } from "../../lib/saved";
  * calls rather than one bulk request: there's no "slugs in" filter on the
  * list endpoint, and a shortlist is small by nature (this mirrors how the
  * website's own Saved page works against the same kind of device list).
+ *
+ * Gated behind an account (phase 1) even though the underlying list is
+ * device-local, not account data — matches the confirmed product decision to
+ * keep this tab, like Requests/Messages/Account, for signed-in customers.
  */
 export default function Saved() {
+  const customer = useRequireAccount("/saved");
   const slugs = useSavedSlugs();
   const [companies, setCompanies] = useState<Record<string, ApiCompany | null>>({});
 
@@ -28,6 +34,8 @@ export default function Saved() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugs]);
+
+  if (!customer) return null;
 
   const rows = slugs.map((slug) => companies[slug]).filter((c): c is ApiCompany => Boolean(c));
 
