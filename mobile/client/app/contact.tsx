@@ -19,6 +19,12 @@ export default function Contact() {
   }, []);
 
   const hasDetails = !!(settings?.support_email || settings?.public_phone || settings?.address);
+  const socials = [
+    { label: "فيسبوك", url: settings?.social_facebook ?? "" },
+    { label: "إنستجرام", url: settings?.social_instagram ?? "" },
+    { label: "إكس", url: settings?.social_twitter ?? "" },
+    { label: "لينكدإن", url: settings?.social_linkedin ?? "" },
+  ].filter((s) => s.url.trim() !== "");
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -41,9 +47,20 @@ export default function Contact() {
             ) : null}
             {settings?.address ? <ContactLine icon="info" text={settings.address} /> : null}
           </View>
-        ) : settings ? (
+        ) : settings && socials.length === 0 ? (
           <Text style={styles.empty}>البيانات دي لسه متوفرتش.</Text>
         ) : null}
+
+        {socials.length > 0 && (
+          <View style={styles.socialsRow}>
+            {socials.map((s) => (
+              <Pressable key={s.label} style={styles.socialChip} onPress={() => Linking.openURL(s.url)}>
+                <Icon name="public" size={16} color={colors.primary} />
+                <Text style={styles.socialText}>{s.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         <Button label="ابعت طلب خدمة" onPress={() => router.push("/companies")} style={styles.cta} />
       </ScrollView>
@@ -70,5 +87,16 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
   lineText: { fontFamily: "Cairo_500Medium", fontSize: type.body.fontSize, color: colors.onSurfaceVariant, textAlign: "right", flex: 1 },
   empty: { fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.outline, textAlign: "center" },
+  socialsRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
+  socialChip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  socialText: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, color: colors.primary },
   cta: { marginTop: 4 },
 });

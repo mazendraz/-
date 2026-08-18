@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import type { ApiCompany } from "@alassema/core";
+import type { ApiCompany, ApiLead } from "@alassema/core";
 import {
   DEFAULT_COUNTRY,
   DEFAULT_DIAL_CODE,
@@ -28,6 +28,7 @@ import TextField from "../../components/TextField";
 import OfferingPicker, { type CartItem } from "../../components/OfferingPicker";
 import { submitLead } from "../../lib/leads";
 import { fetchCompany } from "../../lib/companyDetail";
+import { formatLeadEstimate } from "../../lib/pricing";
 import { ApiError } from "../../lib/api";
 import { useRequireAccount } from "../../lib/authGate";
 
@@ -59,7 +60,7 @@ export default function NewRequest() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [refNumber, setRefNumber] = useState<string | null>(null);
+  const [submittedLead, setSubmittedLead] = useState<ApiLead | null>(null);
 
   useEffect(() => {
     fetchCompany(slug).then(setCompany).catch(() => setCompany(null));
@@ -84,7 +85,7 @@ export default function NewRequest() {
         description: description.trim(),
         items: cart.length > 0 ? cart.map((i) => ({ offeringId: i.offeringId, qty: i.qty, tierId: i.tierId })) : undefined,
       });
-      setRefNumber(lead.refNumber);
+      setSubmittedLead(lead);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "تعذّر إرسال الطلب. جرّب تاني.",
@@ -96,7 +97,8 @@ export default function NewRequest() {
 
   if (!customer) return null;
 
-  if (refNumber) {
+  if (submittedLead) {
+    const hasEstimate = (submittedLead.items?.length ?? 0) > 0;
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.successCard}>
@@ -104,8 +106,27 @@ export default function NewRequest() {
           <Text style={styles.successTitle}>اتبعت طلبك</Text>
           <Text style={styles.successBody}>
             {companyName} هتتواصل معاك قريب. رقم طلبك{" "}
-            <Text style={styles.ref}>{refNumber}</Text>
+            <Text style={styles.ref}>{submittedLead.refNumber}</Text>
           </Text>
+
+          {hasEstimate && (
+            <View style={styles.estimateCard}>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateLabel}>الإجمالي التقديري</Text>
+                <Text style={styles.estimateValue}>{formatLeadEstimate(submittedLead)}</Text>
+              </View>
+              {(submittedLead.discountPercent ?? 0) > 0 && (
+                <Text style={styles.estimateNote}>
+                  خصم الباقة {submittedLead.discountPercent}٪ (على البنود المسعّرة)
+                </Text>
+              )}
+              {submittedLead.hasOnInspection && (
+                <Text style={styles.estimateNote}>+ بنود تتحدد بعد المعاينة</Text>
+              )}
+              <Text style={styles.estimateFooter}>السعر النهائي بيتأكد مع الشركة</Text>
+            </View>
+          )}
+
           <Button
             label="طلباتي"
             onPress={() => router.replace("/requests")}
@@ -291,5 +312,19 @@ const styles = StyleSheet.create({
   successTitle: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface },
   successBody: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "center", lineHeight: 22 },
   ref: { fontFamily: "Cairo_700Bold", color: colors.primary, writingDirection: "ltr" },
+  estimateCard: {
+    alignSelf: "stretch",
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 16,
+    borderTopWidth: 3,
+    borderTopColor: colors.primary,
+    padding: 14,
+    gap: 4,
+  },
+  estimateRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  estimateLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.outline },
+  estimateValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.primary },
+  estimateNote: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary, textAlign: "right" },
+  estimateFooter: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
   successBtn: { marginTop: 20, alignSelf: "stretch" },
 });

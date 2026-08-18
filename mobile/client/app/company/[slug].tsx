@@ -41,6 +41,7 @@ export default function CompanyProfile() {
   const [company, setCompany] = useState<ApiCompany | null>(null);
   const [error, setError] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [openProject, setOpenProject] = useState<number | null>(0);
   const { saved, toggle } = useIsSaved(slug);
   const next = `/company/${slug}`;
 
@@ -76,6 +77,7 @@ export default function CompanyProfile() {
     { key: "about", label: "عن الشركة" },
     ...(company.offerings.length > 0 ? [{ key: "pricing", label: "الأسعار" }] : []),
     ...(company.gallery.length > 0 ? [{ key: "gallery", label: "المعرض" }] : []),
+    ...(company.projects.length > 0 ? [{ key: "projects", label: "المشاريع" }] : []),
     ...(company.reviews.length > 0 ? [{ key: "reviews", label: "التقييمات" }] : []),
   ];
 
@@ -166,6 +168,47 @@ export default function CompanyProfile() {
                   <Image key={uri} source={{ uri }} style={styles.galleryImage} />
                 ))}
               </ScrollView>
+            </View>
+          )}
+
+          {company.projects.length > 0 && (
+            <View onLayout={(e) => { sectionY.current.projects = e.nativeEvent.layout.y; }}>
+              <Text style={styles.sectionTitle}>مشاريع منجزة ({company.projects.length})</Text>
+              {company.projects.map((p, i) => {
+                const open = openProject === i;
+                return (
+                  <View key={`${p.title}-${i}`} style={styles.projectCard}>
+                    <Pressable
+                      style={styles.projectHeader}
+                      onPress={() => setOpenProject(open ? null : i)}
+                    >
+                      <Image source={{ uri: p.img }} style={styles.projectThumb} />
+                      <View style={styles.projectHeaderText}>
+                        <Text style={styles.projectTitle} numberOfLines={1}>{p.title}</Text>
+                        <Text style={styles.projectYear}>{p.year}</Text>
+                      </View>
+                      <Icon
+                        name="expand_more"
+                        size={20}
+                        color={colors.outline}
+                        style={open ? styles.projectChevronOpen : undefined}
+                      />
+                    </Pressable>
+                    {open && (
+                      <View style={styles.projectBody}>
+                        <Image source={{ uri: p.img }} style={styles.projectImage} />
+                        <Text style={styles.projectDesc}>{p.description}</Text>
+                        {company.location ? (
+                          <View style={styles.projectLocationRow}>
+                            <Icon name="location_on" size={14} color={colors.outline} />
+                            <Text style={styles.projectLocation}>{company.location}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -261,6 +304,18 @@ const styles = StyleSheet.create({
   offeringPrice: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },
   galleryRow: { flexDirection: "row-reverse" },
   galleryImage: { width: 140, height: 100, borderRadius: 12, marginStart: 10, backgroundColor: colors.surfaceContainer },
+  projectCard: { backgroundColor: colors.surfaceContainer, borderRadius: 14, marginBottom: 8, overflow: "hidden" },
+  projectHeader: { flexDirection: "row-reverse", alignItems: "center", gap: 10, padding: 10 },
+  projectThumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.surfaceContainerHigh },
+  projectHeaderText: { flex: 1, gap: 2 },
+  projectTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
+  projectYear: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
+  projectChevronOpen: { transform: [{ rotate: "180deg" }] },
+  projectBody: { paddingHorizontal: 12, paddingBottom: 12, gap: 10 },
+  projectImage: { width: "100%", height: 160, borderRadius: 12, backgroundColor: colors.surfaceContainerHigh },
+  projectDesc: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 20 },
+  projectLocationRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  projectLocation: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline },
   reviewCard: { backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, marginBottom: 8 },
   reviewHeader: { flexDirection: "row-reverse", justifyContent: "space-between" },
   reviewAuthor: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface },

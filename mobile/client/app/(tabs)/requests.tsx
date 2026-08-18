@@ -14,6 +14,7 @@ import { useLiveEvents } from "../../lib/liveEvents";
 import ReviewModal from "../../components/ReviewModal";
 import { ApiError } from "../../lib/api";
 import { useRequireAccount } from "../../lib/authGate";
+import { formatLeadEstimate } from "../../lib/pricing";
 
 type RequestItem =
   | { kind: "lead"; id: string; createdAt: number; data: ApiLead }
@@ -168,6 +169,12 @@ function LeadCard({ lead: item, onReview }: { lead: ApiLead; onReview: (v: { id:
         <StatusPill status={item.status} />
       </View>
       <Text style={styles.service} numberOfLines={1}>{item.service}</Text>
+      {(item.items?.length ?? 0) > 0 && (
+        <View style={styles.estimateRow}>
+          <Text style={styles.estimateLabel}>الإجمالي التقديري</Text>
+          <Text style={styles.estimateValue}>{formatLeadEstimate(item)}</Text>
+        </View>
+      )}
       <View style={styles.cardFooter}>
         <Text style={styles.ref}>{item.refNumber}</Text>
         <Text style={styles.district}>{item.district}</Text>
@@ -257,6 +264,9 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
   company: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, flexShrink: 1, textAlign: "right" },
   service: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right" },
+  estimateRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 6, backgroundColor: colors.surfaceContainer, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  estimateLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.outline },
+  estimateValue: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   note: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", backgroundColor: colors.surfaceContainer, borderRadius: 8, padding: 8 },
   waitlistBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 4, alignSelf: "flex-end" },
   waitlistBadgeText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: "#92400e" },

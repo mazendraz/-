@@ -28,6 +28,12 @@ const UNIT_LABELS: Record<PriceUnit, string> = {
   JOB: "المهمة",
 };
 
+/** "12,000 ج" — a plain amount + currency, for totals not tied to an
+ *  Offering (formatPrice's pricingModel branches don't apply). */
+export function formatEgp(amount: number): string {
+  return `${formatAmount(amount)} ج`;
+}
+
 export function unitLabel(unit: PriceUnit | string | null): string {
   if (!unit) return "";
   const entry = UNIT_LABELS[unit as PriceUnit];
@@ -140,4 +146,15 @@ export function formatEstimate(result: PricingResult): string {
     return `${formatAmount(result.totalMin)} – ${formatAmount(result.totalMax)} ج`;
   }
   return `${formatAmount(result.totalMin)} ج`;
+}
+
+/** Same formatting as formatEstimate, over a submitted lead's own snapshot
+ *  (estimatedMin/Max) rather than a live PricingResult — the server-recorded
+ *  figure, not a client recomputation, for a request that's already sent. */
+export function formatLeadEstimate(lead: { estimatedMin?: number | null; estimatedMax?: number | null }): string {
+  if (lead.estimatedMin == null) return "السعر يتحدد بعد المعاينة";
+  if (lead.estimatedMax != null && lead.estimatedMax !== lead.estimatedMin) {
+    return `${formatAmount(lead.estimatedMin)} – ${formatAmount(lead.estimatedMax)} ج`;
+  }
+  return `${formatAmount(lead.estimatedMin)} ج`;
 }

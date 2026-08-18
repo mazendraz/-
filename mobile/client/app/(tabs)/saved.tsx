@@ -7,7 +7,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import Logo from "../../components/Logo";
 import { fetchCompany } from "../../lib/companyDetail";
-import { useSavedSlugs } from "../../lib/saved";
+import { toggleSaved, useSavedSlugs } from "../../lib/saved";
 import { useRequireAccount } from "../../lib/authGate";
 
 /**
@@ -74,8 +74,22 @@ export default function Saved() {
             <View style={styles.cardText}>
               <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.category} numberOfLines={1}>{item.categoryLabel}</Text>
+              <View style={styles.ratingRow}>
+                <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+                <Text style={styles.ratingStar}>★</Text>
+                <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+              </View>
             </View>
-            <Icon name="arrow_back" size={18} color={colors.outline} />
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation();
+                void toggleSaved(item.slug);
+              }}
+              hitSlop={10}
+              style={styles.unsaveBtn}
+            >
+              <Icon name="favorite" size={20} color={colors.error} />
+            </Pressable>
           </Pressable>
         )}
       />
@@ -98,4 +112,9 @@ const styles = StyleSheet.create({
   cardText: { flex: 1 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   category: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right" },
+  ratingRow: { flexDirection: "row-reverse", alignItems: "center", gap: 3, marginTop: 4 },
+  ratingText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
+  ratingStar: { fontSize: type.caption.fontSize, color: "#f59e0b" },
+  reviewCount: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
+  unsaveBtn: { padding: 4 },
 });

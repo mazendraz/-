@@ -58,6 +58,9 @@ const MATERIAL_ICON_NAME = {
   hourglass_top: "hourglass-top",
   tune: "tune",
   check: "check",
+  expand_more: "expand-more",
+  location_on: "location-on",
+  public: "public",
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;

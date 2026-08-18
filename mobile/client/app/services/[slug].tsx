@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import type { ApiCategory, ApiCompany } from "@alassema/core";
@@ -9,19 +9,60 @@ import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
 import { ApiError } from "../../lib/api";
 
-/** Companies filtered by one category — the mobile counterpart of ServiceCategory.tsx. */
+const PAGE_SIZE = 20;
+
+/** Companies filtered by one category — the mobile counterpart of ServiceCategory.tsx.
+ *  Paginated the same way Companies.tsx (phase 4) is — infinite scroll via
+ *  onEndReached — instead of the fixed pageSize:50 this used to load once,
+ *  which silently truncated any category with more companies than that. */
 export default function ServiceCategory() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const [category, setCategory] = useState<ApiCategory | null>(null);
-  const [companies, setCompanies] = useState<ApiCompany[] | null>(null);
+  const [companies, setCompanies] = useState<ApiCompany[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
+
+  const requestId = useRef(0);
+
+  const load = useCallback(
+    async (targetPage: number, append: boolean) => {
+      const id = ++requestId.current;
+      if (append) setLoadingMore(true);
+      else setLoading(true);
+      setError("");
+      try {
+        const res = await fetchCompanies(undefined, { category: slug, page: targetPage, pageSize: PAGE_SIZE });
+        if (id !== requestId.current) return;
+        setCompanies((prev) => (append ? [...prev, ...res.data] : res.data));
+        setTotal(res.meta.total);
+        setPage(res.meta.page);
+      } catch (err) {
+        if (id !== requestId.current) return;
+        setError(err instanceof ApiError ? err.message : "تعذّر تحميل الشركات.");
+      } finally {
+        if (id === requestId.current) {
+          if (append) setLoadingMore(false);
+          else setLoading(false);
+        }
+      }
+    },
+    [slug],
+  );
 
   useEffect(() => {
     fetchCategories().then((all) => setCategory(all.find((c) => c.slug === slug) ?? null));
-    fetchCompanies(undefined, { category: slug, pageSize: 50 })
-      .then((page) => setCompanies(page.data))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "تعذّر تحميل الشركات."));
+    load(1, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canLoadMore = page < pageCount && !loading && !loadingMore;
+  function loadMore() {
+    if (canLoadMore) load(page + 1, true);
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -37,16 +78,21 @@ export default function ServiceCategory() {
       {error !== "" && <Text style={styles.errorText}>{error}</Text>}
 
       <FlatList
-        data={companies ?? []}
+        data={companies}
         keyExtractor={(c) => c.id}
         contentContainerStyle={styles.list}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         ListEmptyComponent={
-          companies !== null ? (
+          !loading ? (
             <View style={styles.empty}>
               <Icon name="search" size={36} color={colors.outline} />
               <Text style={styles.emptyText}>مفيش شركات في القسم ده لسه</Text>
             </View>
           ) : null
+        }
+        ListFooterComponent={
+          loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primary} /> : null
         }
         renderItem={({ item }) => (
           <Pressable
@@ -88,4 +134,5 @@ const styles = StyleSheet.create({
   reviewCount: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline },
   empty: { alignItems: "center", gap: 8, paddingTop: 60 },
   emptyText: { fontFamily: "Cairo_500Medium", fontSize: type.label.fontSize, color: colors.outline },
+  footerSpinner: { paddingVertical: 20 },
 });

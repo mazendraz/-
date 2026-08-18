@@ -7,8 +7,9 @@
  * new-request/[slug].tsx's OfferingPicker — prices are never sent, only
  * {offeringId, qty, tierId}; the server reads real prices from the catalogue.
  */
-import type { ApiLead } from "@alassema/core";
+import type { ApiLead, ApiLeadVerificationPayload } from "@alassema/core";
 import { apiPost } from "./api";
+import { rememberLeadToken, getLeadToken } from "./leadTokens";
 
 export interface NewLeadInput {
   companySlug: string;
@@ -21,8 +22,8 @@ export interface NewLeadInput {
   items?: { offeringId: string; qty?: number; tierId?: string | null }[];
 }
 
-export function submitLead(input: NewLeadInput): Promise<ApiLead> {
-  return apiPost<ApiLead>("/leads", {
+export async function submitLead(input: NewLeadInput): Promise<ApiLead> {
+  const lead = await apiPost<ApiLead>("/leads", {
     ...input,
     // The API's schema keeps this field for leads that predate the removal
     // of budget collection from the form — the website sends "" too.
@@ -35,4 +36,33 @@ export function submitLead(input: NewLeadInput): Promise<ApiLead> {
     // website does whenever Turnstile isn't configured.
     hp_field: "",
   });
+  // The creation response is the ONLY place the server ever includes
+  // trackingToken — save it now or it's gone for good (see leadTokens.ts).
+  if (lead.trackingToken) void rememberLeadToken(lead.refNumber, lead.trackingToken);
+  return lead;
+}
+
+export interface VerifyLeadInput {
+  ref: string;
+  /** This device's own phone-on-file fallback — only effective for a legacy
+   *  lead with no trackingToken; see leadTokens.ts for why. */
+  phone: string;
+  decision: "confirmed" | "discrepancy";
+  clientAmount?: number;
+  note?: string;
+}
+
+/** Confirm or dispute a completed lead's final amount — see
+ *  components/PriceVerificationGate.tsx, the only caller. */
+export async function verifyLeadAmount(input: VerifyLeadInput): Promise<ApiLead> {
+  const token = await getLeadToken(input.ref);
+  const payload: ApiLeadVerificationPayload = {
+    ref: input.ref,
+    token,
+    phone: token ? undefined : input.phone,
+    decision: input.decision,
+    clientAmount: input.clientAmount,
+    note: input.note,
+  };
+  return apiPost<ApiLead>("/leads/verify", payload);
 }
