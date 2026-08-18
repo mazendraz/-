@@ -10,7 +10,9 @@ import { useAppFonts } from "../lib/fonts";
 import { bootstrapSession, useCustomerAuth } from "../lib/customerAuth";
 import { fetchAccountLeads } from "../lib/customerLeads";
 import { useLiveEvents } from "../lib/liveEvents";
+import { useMaintenance } from "../lib/settings";
 import PriceVerificationGate from "../components/PriceVerificationGate";
+import MaintenanceScreen from "../components/MaintenanceScreen";
 
 // RTL must be forced before the FIRST screen mounts — see lib/rtl.ts for why
 // this can't be deferred to a component effect.
@@ -28,13 +30,21 @@ export default function RootLayout() {
   const [sessionReady, setSessionReady] = useState(false);
   const { customer } = useCustomerAuth();
 
+  // ── Maintenance mode (phase 10) ───────────────────────────────────────────
+  // Checked FIRST, ahead of the price-verification gate below — same
+  // priority order the website's RootLayout uses ("Maintenance wins over
+  // offline: it is deliberate and has real copy and an ETA"). Unlike the
+  // website, there's no admin bypass here: this app has no admin session to
+  // let through, only customers.
+  const { status: maintenance, loading: maintenanceLoading, refetch: recheckMaintenance } = useMaintenance();
+
   useEffect(() => {
     bootstrapSession().finally(() => setSessionReady(true));
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded && sessionReady) SplashScreen.hideAsync().catch(() => {});
-  }, [fontsLoaded, sessionReady]);
+    if (fontsLoaded && sessionReady && !maintenanceLoading) SplashScreen.hideAsync().catch(() => {});
+  }, [fontsLoaded, sessionReady, maintenanceLoading]);
 
   // ── Mandatory final-price verification gate (Phase 9) ────────────────────
   // A signed-in customer with a PENDING completion on any of their own leads
@@ -66,14 +76,14 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (sessionReady && customer) void checkPendingVerification();
-  }, [sessionReady, customer, checkPendingVerification]);
+    if (sessionReady && customer && !maintenance.enabled) void checkPendingVerification();
+  }, [sessionReady, customer, maintenance.enabled, checkPendingVerification]);
 
   // Catches a completion that happens WHILE the app is already open, not just
   // at cold start — same "no screen the customer can dodge it on" guarantee
   // the website gets from RootLayout re-rendering on every route.
   useLiveEvents(() => {
-    if (customer) void checkPendingVerification();
+    if (customer && !maintenance.enabled) void checkPendingVerification();
   });
 
   function onGateResolved() {
@@ -81,11 +91,13 @@ export default function RootLayout() {
     setGatedLead(null);
   }
 
-  if (!fontsLoaded || !sessionReady) return null;
+  if (!fontsLoaded || !sessionReady || maintenanceLoading) return null;
 
   return (
     <SafeAreaProvider>
-      {gatedLead ? (
+      {maintenance.enabled ? (
+        <MaintenanceScreen status={maintenance} onRetry={recheckMaintenance} />
+      ) : gatedLead ? (
         <PriceVerificationGate lead={gatedLead} onResolved={onGateResolved} />
       ) : (
         <Stack

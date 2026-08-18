@@ -6,8 +6,10 @@ import { DEFAULT_COUNTRY, DEFAULT_DIAL_CODE, colors, formatAsYouType, toE164, ty
 import Button from "../../../components/Button";
 import Icon from "../../../components/Icon";
 import TextField from "../../../components/TextField";
+import Captcha from "../../../components/Captcha";
 import { useCustomerAuth } from "../../../lib/customerAuth";
 import { joinWaitlist } from "../../../lib/companyDetail";
+import { captchaConfigured } from "../../../lib/captcha";
 import { ApiError } from "../../../lib/api";
 
 /**
@@ -26,19 +28,27 @@ export default function JoinWaitlist() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [joined, setJoined] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   const phoneE164 = toE164(phoneNational, DEFAULT_COUNTRY);
   const canSubmit = name.trim().length >= 2 && phoneE164 !== null;
 
   async function onSubmit() {
     if (!canSubmit || !phoneE164) return;
+    if (captchaConfigured() && !captchaToken) {
+      setError("استنى ثانية لحد ما التحقق يخلص وبعدين جرّب تاني.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await joinWaitlist(slug, { name: name.trim(), phone: phoneE164, note: note.trim() || undefined });
+      await joinWaitlist(slug, { name: name.trim(), phone: phoneE164, note: note.trim() || undefined, captchaToken });
       setJoined(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر الانضمام. جرّب تاني.");
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -94,6 +104,8 @@ export default function JoinWaitlist() {
           </View>
 
           <TextField label="ملاحظة (اختياري)" value={note} onChangeText={setNote} placeholder="أي حاجة تحب تقولها" />
+
+          <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
           <Button label="انضم لقائمة الانتظار" onPress={onSubmit} busy={busy} disabled={!canSubmit} />
         </ScrollView>

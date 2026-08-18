@@ -20,6 +20,11 @@ export interface NewLeadInput {
   district: string;
   description: string;
   items?: { offeringId: string; qty?: number; tierId?: string | null }[];
+  /** From <Captcha> (phase 10) — undefined/null whenever the widget isn't
+   *  configured, matching the website's own fallback: verifyCaptcha() is a
+   *  no-op server-side unless a secret is set, so the honeypot + rate limit
+   *  alone cover that case. */
+  captchaToken?: string | null;
 }
 
 export async function submitLead(input: NewLeadInput): Promise<ApiLead> {
@@ -29,11 +34,7 @@ export async function submitLead(input: NewLeadInput): Promise<ApiLead> {
     // of budget collection from the form — the website sends "" too.
     budget: "",
     // Honeypot: real clients never populate this field name; a bot filling
-    // every field it finds gets caught by it. No CAPTCHA token is sent —
-    // matching the website's own fallback when no Turnstile widget renders:
-    // verifyCaptcha() is a no-op server-side unless a secret is configured,
-    // so this relies on the honeypot + the route's rate limit, same as the
-    // website does whenever Turnstile isn't configured.
+    // every field it finds gets caught by it.
     hp_field: "",
   });
   // The creation response is the ONLY place the server ever includes

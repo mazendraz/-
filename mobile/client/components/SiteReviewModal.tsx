@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
+import Captcha from "./Captcha";
 import { ApiError } from "../lib/api";
+import { captchaConfigured } from "../lib/captcha";
 import { submitSiteReview } from "../lib/siteReviews";
 
 /** Share a general (not-tied-to-one-company) site review — the mobile
@@ -22,22 +24,31 @@ export default function SiteReviewModal({
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   const canSubmit = name.trim().length >= 2 && district.trim().length >= 2 && rating > 0 && text.trim().length >= 5;
 
   async function onSubmit() {
     if (!canSubmit) return;
+    if (captchaConfigured() && !captchaToken) {
+      setError("استنى ثانية لحد ما التحقق يخلص وبعدين جرّب تاني.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      await submitSiteReview({ name: name.trim(), district: district.trim(), rating, text: text.trim() });
+      await submitSiteReview({ name: name.trim(), district: district.trim(), rating, text: text.trim(), captchaToken });
       setName("");
       setDistrict("");
       setRating(0);
       setText("");
+      setCaptchaToken(null);
       onSubmitted();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر إرسال رأيك. جرّب تاني.");
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -83,6 +94,8 @@ export default function SiteReviewModal({
             multiline
             numberOfLines={3}
           />
+
+          <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
           {error !== "" && <Text style={styles.error}>{error}</Text>}
 

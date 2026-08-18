@@ -15,6 +15,9 @@ export function submitSiteReview(input: {
   district: string;
   rating: number;
   text: string;
+  /** From <Captcha> (phase 10) — see lib/leads.ts's submitLead for the
+   *  no-op-when-unconfigured contract this matches. */
+  captchaToken?: string | null;
 }): Promise<ApiSiteReview> {
   return apiPost<ApiSiteReview>("/site-reviews", { ...input, hp_field: "" });
 }

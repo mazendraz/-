@@ -11,6 +11,11 @@ export interface WaitlistInput {
   phone: string;
   service?: string;
   note?: string;
+  /** From <Captcha> (phase 10) — api's companies/[slug]/waitlist route
+   *  verifies this the same way /leads and /feedback do; found via grep
+   *  over every route calling verifyCaptcha(), not in the phase-10 prompt's
+   *  own list of three endpoints. */
+  captchaToken?: string | null;
 }
 
 /** Join the waiting list for a currently-busy company. */

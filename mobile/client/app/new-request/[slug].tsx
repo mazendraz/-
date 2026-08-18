@@ -26,9 +26,11 @@ import Button from "../../components/Button";
 import Icon from "../../components/Icon";
 import TextField from "../../components/TextField";
 import OfferingPicker, { type CartItem } from "../../components/OfferingPicker";
+import Captcha from "../../components/Captcha";
 import { submitLead } from "../../lib/leads";
 import { fetchCompany } from "../../lib/companyDetail";
 import { formatLeadEstimate } from "../../lib/pricing";
+import { captchaConfigured } from "../../lib/captcha";
 import { ApiError } from "../../lib/api";
 import { useRequireAccount } from "../../lib/authGate";
 
@@ -61,6 +63,8 @@ export default function NewRequest() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [submittedLead, setSubmittedLead] = useState<ApiLead | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaReset, setCaptchaReset] = useState(0);
 
   useEffect(() => {
     fetchCompany(slug).then(setCompany).catch(() => setCompany(null));
@@ -72,6 +76,10 @@ export default function NewRequest() {
 
   async function onSubmit() {
     if (!canSubmit || !phoneE164) return;
+    if (captchaConfigured() && !captchaToken) {
+      setError("استنى ثانية لحد ما التحقق يخلص وبعدين جرّب تاني.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -84,12 +92,15 @@ export default function NewRequest() {
         district,
         description: description.trim(),
         items: cart.length > 0 ? cart.map((i) => ({ offeringId: i.offeringId, qty: i.qty, tierId: i.tierId })) : undefined,
+        captchaToken,
       });
       setSubmittedLead(lead);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : "تعذّر إرسال الطلب. جرّب تاني.",
       );
+      setCaptchaToken(null);
+      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -214,6 +225,8 @@ export default function NewRequest() {
               placeholderTextColor={colors.outline}
             />
           </View>
+
+          <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
           <Button label="إرسال الطلب" onPress={onSubmit} busy={busy} disabled={!canSubmit} />
         </ScrollView>

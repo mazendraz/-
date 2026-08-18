@@ -61,6 +61,9 @@ const MATERIAL_ICON_NAME = {
   expand_more: "expand-more",
   location_on: "location-on",
   public: "public",
+  construction: "construction",
+  refresh: "refresh",
+  mail: "mail",
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;
