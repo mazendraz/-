@@ -56,6 +56,8 @@ const MATERIAL_ICON_NAME = {
   chevron_right: "chevron-right",
   star: "star",
   hourglass_top: "hourglass-top",
+  tune: "tune",
+  check: "check",
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;
