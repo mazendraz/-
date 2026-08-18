@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
-import { FlatList, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  FlatList,
+  Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiCategory, ApiCompany, ApiSiteReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
@@ -11,6 +21,17 @@ import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
 import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
 import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
+import { useSettings } from "../../lib/settings";
+
+// The site's actual hero photo (app/public/img/seed-16.jpg — Home.tsx's own
+// HERO default), bundled into the binary. Used whenever the admin hasn't set
+// a custom hero_image_url, exactly mirroring the website's
+// `settings.hero_image_url.trim() || HERO` fallback.
+const DEFAULT_HERO = require("../../assets/hero-skyline.jpg");
+
+// Website's TopNav treats the customer as "scrolled past the hero" at 60px
+// (see TopNav.tsx's `setScrolled(y > 60)`) — same threshold here.
+const SCROLL_SOLID_THRESHOLD = 60;
 
 const REASONS = [
   { icon: "check_circle" as const, title: "شركات موثّقة", desc: "كل شركة اتراجعت قبل ما تنشر" },
@@ -32,6 +53,9 @@ export default function Home() {
   const [reviews, setReviews] = useState<ApiSiteReview[]>([]);
   const [reviewsEnabled, setReviewsEnabled] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const insets = useSafeAreaInsets();
+  const settings = useSettings();
 
   const loadReviews = () => fetchSiteReviews().then(setReviews).catch(() => {});
 
@@ -45,22 +69,36 @@ export default function Home() {
     loadReviews();
   }, []);
 
+  function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    setScrolled(e.nativeEvent.contentOffset.y > SCROLL_SOLID_THRESHOLD);
+  }
+
+  const heroSource = settings.hero_image_url.trim() ? { uri: settings.hero_image_url } : DEFAULT_HERO;
+
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.topBar}>
-        <Logo size={30} />
-        <Pressable onPress={() => router.push("/search")} hitSlop={8}>
-          <Icon name="search" size={22} color={colors.onSurface} />
-        </Pressable>
-      </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>كل خدمة موثوقة في العاصمة الإدارية</Text>
-          <Text style={styles.heroSub}>شركات متخصصة، تقييمات حقيقية، وراحة بال كاملة</Text>
-          <Pressable style={styles.heroCta} onPress={() => router.push("/companies")}>
-            <Icon name="search" size={16} color={colors.onPrimary} />
-            <Text style={styles.heroCtaText}>دوّر على شركة</Text>
-          </Pressable>
+    <View style={styles.container}>
+      {/* Floating transparent-over-hero bar (task 3) — a sibling AFTER the
+          ScrollView in paint order, absolutely positioned over it, so it
+          renders on top without needing an explicit elevation/zIndex fight.
+          Transparent + white icons over the hero photo; solid + dark icons
+          once scrolled past SCROLL_SOLID_THRESHOLD — same behavior and
+          threshold as the website's TopNav on its full-bleed-hero routes. */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+      >
+        <View style={styles.heroWrap}>
+          <Image source={heroSource} style={styles.heroImage} resizeMode="cover" />
+          <View style={styles.heroScrim} />
+          <View style={[styles.heroContent, { paddingTop: insets.top + 56 }]}>
+            <Text style={styles.heroTitle}>كل خدمة موثوقة في العاصمة الإدارية</Text>
+            <Text style={styles.heroSub}>شركات متخصصة، تقييمات حقيقية، وراحة بال كاملة</Text>
+            <Pressable style={styles.heroCta} onPress={() => router.push("/companies")}>
+              <Icon name="search" size={16} color={colors.onPrimary} />
+              <Text style={styles.heroCtaText}>دوّر على شركة</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.reasonsRow}>
@@ -194,6 +232,13 @@ export default function Home() {
         </View>
       </ScrollView>
 
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }, scrolled && styles.topBarSolid]}>
+        <Logo size={30} />
+        <Pressable onPress={() => router.push("/search")} hitSlop={8}>
+          <Icon name="search" size={22} color={scrolled ? colors.onSurface : "#fff"} />
+        </Pressable>
+      </View>
+
       <SiteReviewModal
         visible={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
@@ -202,19 +247,60 @@ export default function Home() {
           loadReviews();
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
+  // Floats over the ScrollView (see the JSX comment) rather than taking its
+  // own space above it — that's what lets the hero image start at the true
+  // top of the screen, behind a transparent bar, matching the website's
+  // `position:fixed` nav over its full-bleed hero.
+  topBar: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+    backgroundColor: "transparent",
+  },
+  topBarSolid: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.outlineVariant,
+  },
   scroll: { paddingBottom: 32 },
-  hero: { backgroundColor: colors.primary, padding: 24, paddingTop: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
-  heroTitle: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_800ExtraBold", color: colors.onPrimary, textAlign: "right", lineHeight: 34 },
-  heroSub: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onPrimary, opacity: 0.85, textAlign: "right" },
-  heroCta: { flexDirection: "row-reverse", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.15)", alignSelf: "flex-end", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, marginTop: 8 },
-  heroCtaText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
+  heroWrap: { height: 340, overflow: "hidden", backgroundColor: colors.primary },
+  heroImage: { ...StyleSheet.absoluteFillObject },
+  heroScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" },
+  heroContent: { flex: 1, justifyContent: "flex-end", padding: 24, paddingBottom: 28, gap: 8 },
+  heroTitle: {
+    fontSize: type.headline.fontSize,
+    fontFamily: "Alexandria_800ExtraBold",
+    color: "#fff",
+    textAlign: "right",
+    lineHeight: 34,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  heroSub: {
+    fontSize: type.body.fontSize,
+    fontFamily: "Cairo_400Regular",
+    color: "#fff",
+    opacity: 0.92,
+    textAlign: "right",
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  heroCta: { flexDirection: "row-reverse", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.18)", alignSelf: "flex-end", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, marginTop: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" },
+  heroCtaText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: "#fff" },
   reasonsRow: { flexDirection: "row-reverse", gap: 10, padding: 20 },
   reasonCard: { flex: 1, backgroundColor: colors.surfaceContainerLowest, borderRadius: 14, padding: 12, gap: 4, borderWidth: 1, borderColor: colors.outlineVariant },
   reasonTitle: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface, textAlign: "right" },
