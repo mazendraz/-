@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import type { ApiCategory, ApiCompany, ApiSiteReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import Logo from "../../components/Logo";
 import SiteReviewModal from "../../components/SiteReviewModal";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
@@ -46,6 +47,9 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={styles.topBar}>
+        <Logo size={30} />
+      </View>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>كل خدمة موثوقة في العاصمة الإدارية</Text>
@@ -201,6 +205,7 @@ export default function Home() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  topBar: { flexDirection: "row-reverse", paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
   scroll: { paddingBottom: 32 },
   hero: { backgroundColor: colors.primary, padding: 24, paddingTop: 16, gap: 8, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   heroTitle: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_800ExtraBold", color: colors.onPrimary, textAlign: "right", lineHeight: 34 },

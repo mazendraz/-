@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Button from "../../components/Button";
 import Icon from "../../components/Icon";
+import Logo from "../../components/Logo";
 import {
   customerLogout,
   deleteAccount,
@@ -93,7 +94,10 @@ export default function Account() {
         contentContainerStyle={styles.scroll}
         ListHeaderComponent={
           <>
-            <Text style={styles.title}>حسابك</Text>
+            <View style={styles.topBar}>
+              <Logo size={28} />
+              <Text style={styles.title}>حسابك</Text>
+            </View>
 
             {error !== "" && (
               <View style={styles.errorBox}>
@@ -210,8 +214,8 @@ const styles = StyleSheet.create({
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",
-    marginBottom: 12,
   },
+  topBar: { flexDirection: "row-reverse", alignItems: "center", gap: 8, marginBottom: 12 },
   errorBox: { backgroundColor: colors.errorContainer, borderRadius: 12, padding: 12, marginBottom: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
   card: {

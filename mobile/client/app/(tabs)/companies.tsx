@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import Logo from "../../components/Logo";
 import { fetchCompanies } from "../../lib/companies";
 import { ApiError } from "../../lib/api";
 
@@ -43,7 +44,10 @@ export default function Companies() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.title}>الشركات</Text>
+      <View style={styles.topBar}>
+        <Logo size={28} />
+        <Text style={styles.title}>الشركات</Text>
+      </View>
 
       <View style={styles.searchRow}>
         <Icon name="search" size={18} color={colors.outline} />
@@ -94,13 +98,18 @@ export default function Companies() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  topBar: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",
-    paddingHorizontal: 20,
-    paddingTop: 12,
   },
   searchRow: {
     flexDirection: "row-reverse",

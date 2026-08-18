@@ -12,6 +12,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Button from "../components/Button";
 import TextField from "../components/TextField";
+import Logo from "../components/Logo";
 import {
   registerWithPassword,
   resendVerification,
@@ -156,7 +157,7 @@ export default function SignIn() {
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
-            <Text style={styles.brand}>العاصمة</Text>
+            <Logo size={56} />
             <Text style={styles.heading}>
               {mode === "signin" ? "تسجيل الدخول" : "اعمل حسابك"}
             </Text>
@@ -247,12 +248,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
     gap: 14,
-  },
-  brand: {
-    fontSize: type.title.fontSize,
-    fontFamily: "Alexandria_800ExtraBold",
-    color: colors.primary,
-    textAlign: "center",
   },
   heading: {
     fontSize: type.headline.fontSize,

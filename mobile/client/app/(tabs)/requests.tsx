@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { ApiLead, ApiLeadStatus, ApiWaitlistEntry } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import Logo from "../../components/Logo";
 import StatusPill from "../../components/StatusPill";
 import WaitlistStatusPill from "../../components/WaitlistStatusPill";
 import { router } from "expo-router";
@@ -88,7 +89,10 @@ export default function Requests() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.title}>طلباتي</Text>
+      <View style={styles.topBar}>
+        <Logo size={28} />
+        <Text style={styles.title}>طلباتي</Text>
+      </View>
 
       {loaded && (leads!.length > 0 || waitlist!.length > 0) && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={styles.filterContent}>
@@ -215,14 +219,19 @@ function WaitlistCard({ entry }: { entry: ApiWaitlistEntry }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  topBar: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 4,
   },
   filterRow: { flexGrow: 0, marginTop: 8 },
   filterContent: { flexDirection: "row-reverse", paddingHorizontal: 20, gap: 8 },

@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import type { ApiThreadSummary } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import Logo from "../../components/Logo";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchThreadSummaries } from "../../lib/chat";
 import { useLiveEvents } from "../../lib/liveEvents";
@@ -70,7 +71,10 @@ export default function Messages() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.title}>الرسائل</Text>
+      <View style={styles.topBar}>
+        <Logo size={28} />
+        <Text style={styles.title}>الرسائل</Text>
+      </View>
 
       <FlatList
         data={rows}
@@ -127,14 +131,19 @@ export default function Messages() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
+  topBar: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 4,
   },
   listContent: { padding: 20, gap: 10, flexGrow: 1 },
   row: {

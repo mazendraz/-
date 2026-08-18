@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import Logo from "../../components/Logo";
 import { fetchCompany } from "../../lib/companyDetail";
 import { useSavedSlugs } from "../../lib/saved";
 import { useRequireAccount } from "../../lib/authGate";
@@ -41,7 +42,10 @@ export default function Saved() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.title}>المفضلة</Text>
+      <View style={styles.topBar}>
+        <Logo size={28} />
+        <Text style={styles.title}>المفضلة</Text>
+      </View>
 
       <FlatList
         data={rows}
@@ -76,7 +80,8 @@ export default function Saved() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  title: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right", paddingHorizontal: 20, paddingTop: 12 },
+  topBar: { flexDirection: "row-reverse", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingTop: 12 },
+  title: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
   listContent: { padding: 20, gap: 10, flexGrow: 1 },
   empty: { alignItems: "center", gap: 6, paddingTop: 80 },
   emptyTitle: { fontSize: type.subhead.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
