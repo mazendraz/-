@@ -5,7 +5,11 @@ import { useCustomerAuth } from "../../lib/customerAuth";
 import { usePushNotifications } from "../../lib/push";
 
 /**
- * The tab shell: Home, Companies, Requests, Messages, Saved, Account.
+ * The tab shell: Home, Companies, Saved, Requests, Messages, Account — order
+ * matches the website's priority (phase 3: Home, then Services/Companies,
+ * then Saved/Requests, then Messages/Account last), kept as 6 tabs rather
+ * than the website's 4 since this app leans on Companies as the entry point
+ * into sending a request.
  *
  * Guest browsing (phase 1): Home and Companies are open to everyone. The
  * other four require an account — tapping one as a guest is intercepted here
@@ -59,6 +63,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="saved"
+        options={{
+          title: "المفضلة",
+          tabBarIcon: ({ color, size }) => <Icon name="favorite" color={color} size={size} />,
+        }}
+        listeners={guardTab("/saved")}
+      />
+      <Tabs.Screen
         name="requests"
         options={{
           title: "طلباتي",
@@ -73,14 +85,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Icon name="forum" color={color} size={size} />,
         }}
         listeners={guardTab("/messages")}
-      />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: "المفضلة",
-          tabBarIcon: ({ color, size }) => <Icon name="favorite" color={color} size={size} />,
-        }}
-        listeners={guardTab("/saved")}
       />
       <Tabs.Screen
         name="account"
