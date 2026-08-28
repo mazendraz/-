@@ -5,7 +5,7 @@
 // HEADER, never the query string — a thread that polls every few seconds would
 // otherwise write that secret into the access log hundreds of times per
 // conversation.
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch, apiGet, apiPost, apiPatch, isApiConfigured } from "./api";
 
 export type MessageSender = "CUSTOMER" | "PROVIDER" | "ADMIN";
@@ -102,6 +102,34 @@ export interface LeadClaim {
  */
 export function fetchCustomerSummaries(claims: LeadClaim[]): Promise<ThreadSummary[]> {
   return apiPost<ThreadSummary[]>("/chat/summaries", { items: claims });
+}
+
+// ── Customer (signed in) ─────────────────────────────────────────────────────
+//
+// The account-based counterparts of the three functions above. A signed-in
+// customer needs no per-request secret: `customerId` on the Lead is what says
+// the thread is theirs, so these take a lead id and send nothing else.
+//
+// They are not an optimisation. A request PULLED FROM THE ACCOUNT arrives
+// without its trackingToken — /customer/leads never returns one, deliberately,
+// because the account is the credential there — and the anonymous gate accepts
+// the phone fallback ONLY for legacy leads that have no token stored at all
+// (see leadSecretMatches in the API). So for every request the customer made on
+// another device, or before this browser's storage was cleared, the token-gated
+// path above cannot work at all: it 404s. That is the "my old chats don't load"
+// case, and this is what fixes it.
+
+/** Every thread this ACCOUNT owns. No claims to assemble — the session is the proof. */
+export function fetchAccountSummaries(): Promise<ThreadSummary[]> {
+  return apiGet<ThreadSummary[]>("/customer/chat/summaries");
+}
+
+export function fetchAccountThread(leadId: string, after?: number): Promise<Thread> {
+  return apiGet<Thread>(`/customer/leads/${leadId}/messages${after ? `?after=${after}` : ""}`);
+}
+
+export function sendAccountMessage(leadId: string, body: string): Promise<ChatMessage> {
+  return apiPost<ChatMessage>(`/customer/leads/${leadId}/messages`, { body });
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -252,8 +280,56 @@ export function invalidateThreadSummaries(): void {
   summaryCache = null;
 }
 
-function loadSummaries(claims: LeadClaim[], force: boolean): Promise<ThreadSummary[]> {
-  const key = JSON.stringify(claims);
+/**
+ * Every thread the customer can see, from BOTH sources at once.
+ *
+ * A signed-in customer's threads come from the account. This device's own
+ * claims are still asked for alongside, because the two sets are not guaranteed
+ * to be identical: a request submitted from this browser is only attached to
+ * the account once the handover in useAccountLeads has run and succeeded, and
+ * until then it exists only as a local claim. Asking both and merging means a
+ * conversation is never invisible because one of the two happened to be behind.
+ *
+ * Account rows win on a duplicate — they carry the same data and come from the
+ * side that will still be right tomorrow.
+ */
+async function loadFromSources(
+  claims: LeadClaim[],
+  signedIn: boolean,
+): Promise<ThreadSummary[]> {
+  const sources: Promise<ThreadSummary[]>[] = [];
+  if (signedIn) sources.push(fetchAccountSummaries());
+  if (claims.length > 0) sources.push(fetchCustomerSummaries(claims));
+  if (sources.length === 0) return [];
+
+  const settled = await Promise.allSettled(sources);
+  const succeeded = settled.filter(
+    (r): r is PromiseFulfilledResult<ThreadSummary[]> => r.status === "fulfilled",
+  );
+  // Only a total failure is a failure. One source erroring while the other
+  // answers must not blank a list the customer can still read.
+  if (succeeded.length === 0) {
+    throw (settled[0] as PromiseRejectedResult).reason;
+  }
+
+  const byRef = new Map<string, ThreadSummary>();
+  for (const result of succeeded) {
+    for (const row of result.value) {
+      if (!byRef.has(row.refNumber)) byRef.set(row.refNumber, row);
+    }
+  }
+  return [...byRef.values()].sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0));
+}
+
+function loadSummaries(
+  claims: LeadClaim[],
+  signedIn: boolean,
+  force: boolean,
+): Promise<ThreadSummary[]> {
+  // `signedIn` is part of the key: the same claims mean a different answer once
+  // the account is in play, and a cache hit from before sign-in would show the
+  // signed-out list to a customer who just signed in.
+  const key = JSON.stringify({ claims, signedIn });
   const fresh = summaryCache
     && summaryCache.key === key
     && Date.now() - summaryCache.at < SUMMARY_TTL_MS;
@@ -262,7 +338,7 @@ function loadSummaries(claims: LeadClaim[], force: boolean): Promise<ThreadSumma
   // Join the request already in the air rather than starting a second one.
   if (summaryInFlight && summaryInFlight.key === key) return summaryInFlight.promise;
 
-  const promise = fetchCustomerSummaries(claims)
+  const promise = loadFromSources(claims, signedIn)
     .then((rows) => {
       summaryCache = { key, at: Date.now(), rows };
       notifySummaryListeners();
@@ -277,21 +353,31 @@ function loadSummaries(claims: LeadClaim[], force: boolean): Promise<ThreadSumma
 }
 
 /**
- * Every conversation this device can prove it owns.
+ * Every conversation this customer can see.
  *
- * The claims come from the leads in localStorage, so this is exactly the set of
- * requests submitted from this browser — the same basis "My Requests" uses. A
- * customer has no account, so there is nothing else to key on.
+ * Two bases, because a customer can have either or both: the ACCOUNT when
+ * signed in, and the reference+token claims this browser holds for requests
+ * submitted from it (which is all an anonymous customer ever has). See
+ * loadFromSources for why both are asked rather than one taking over.
  */
-export function useCustomerThreads(claims: LeadClaim[]): CustomerThreadsResult {
+export function useCustomerThreads(
+  claims: LeadClaim[],
+  signedIn = false,
+): CustomerThreadsResult {
   // Serialized: `claims` is rebuilt on every render of the caller, so depending
   // on the array itself would refetch in a loop.
-  const claimsKey = JSON.stringify(claims);
+  const claimsKey = JSON.stringify({ claims, signedIn });
   const cached = summaryCache?.key === claimsKey ? summaryCache.rows : null;
 
   const [threads, setThreads] = useState<ThreadSummary[]>(cached ?? []);
+  // Assigned during render, so the effect below always reads the CURRENT rows
+  // rather than whatever was in scope when it was created. Taking `threads` as a
+  // dependency instead would re-run the effect on every successful load, which
+  // is a refetch loop.
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
   const [loading, setLoading] = useState(
-    isApiConfigured() && claims.length > 0 && cached === null,
+    isApiConfigured() && (signedIn || claims.length > 0) && cached === null,
   );
   const [errorKey, setErrorKey] = useState<"messages_err_load" | null>(null);
   const [tick, setTick] = useState(0);
@@ -302,8 +388,8 @@ export function useCustomerThreads(claims: LeadClaim[]): CustomerThreadsResult {
   }, []);
 
   useEffect(() => {
-    const parsed = JSON.parse(claimsKey) as LeadClaim[];
-    if (!isApiConfigured() || parsed.length === 0) {
+    const parsed = JSON.parse(claimsKey) as { claims: LeadClaim[]; signedIn: boolean };
+    if (!isApiConfigured() || (!parsed.signedIn && parsed.claims.length === 0)) {
       setThreads([]);
       setLoading(false);
       return;
@@ -315,8 +401,20 @@ export function useCustomerThreads(claims: LeadClaim[]): CustomerThreadsResult {
     };
     summaryListeners.add(onShared);
 
-    setLoading(true);
-    loadSummaries(parsed, tick > 0)
+    // Only show the loading state when there is nothing on screen to keep.
+    //
+    // This ran unconditionally, and `reload()` bumps `tick` — which the 30s
+    // interval in Messages.tsx and every incoming live event both call. So a
+    // background refresh was indistinguishable from a first load: the thread
+    // list was replaced by a spinner every thirty seconds, and again each time a
+    // message arrived. On a slow connection it was a spinner more often than it
+    // was a list.
+    //
+    // Same split Companies.tsx already makes between `loadingEmpty` and
+    // `refetching` (its CMP-03 note): a refresh over existing content is not a
+    // loading state, it is an update.
+    setLoading(threadsRef.current.length === 0);
+    loadSummaries(parsed.claims, parsed.signedIn, tick > 0)
       .then((rows) => { if (alive) { setThreads(rows); setErrorKey(null); } })
       .catch(() => {
         // Keep whatever is already on screen: a failed REFRESH should not wipe

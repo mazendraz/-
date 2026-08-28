@@ -6,7 +6,7 @@ import {
 } from "../../lib/offerings";
 import { formatPrice, PRICING_MODEL_LABELS, PRICE_UNITS, unitLabel } from "../../lib/pricing";
 import { EmptyState } from "./components/EmptyState";
-import { ImageUpload } from "./components/fields";
+import { ImageUpload, TagField } from "./components/fields";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
 import Icon from "../../components/Icon";
@@ -196,6 +196,9 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
   const [form, setForm] = useState<OfferingInput>({
     name: offering?.name ?? "",
     description: offering?.description ?? "",
+    nameAr: offering?.nameAr ?? "",
+    descriptionAr: offering?.descriptionAr ?? "",
+    tags: offering?.tags ?? [],
     kind: offering?.kind ?? "SERVICE",
     pricingModel: offering?.pricingModel ?? "RANGE",
     priceMin: offering?.priceMin ?? null,
@@ -285,6 +288,23 @@ function AdminOfferingModal({ companyId, offering, onClose, onSaved }: {
             <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_description")}</label>
             <textarea className="field-input" rows={3} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
           </div>
+
+          <div>
+            <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_name_ar")}</label>
+            <input className="field-input" dir="rtl" value={form.nameAr ?? ""} onChange={(e) => set("nameAr", e.target.value)} />
+          </div>
+
+          <div>
+            <label className="block text-caption font-bold text-outline mb-1.5">{t(locale, "prov_off_description_ar")}</label>
+            <textarea className="field-input" dir="rtl" rows={3} value={form.descriptionAr ?? ""} onChange={(e) => set("descriptionAr", e.target.value)} />
+          </div>
+
+          <TagField
+            label={t(locale, "prov_off_tags")}
+            tags={form.tags ?? []}
+            onChange={(v) => set("tags", v)}
+            placeholder={t(locale, "prov_off_tags_ph")}
+          />
 
           <ImageUpload
             label={t(locale, "prov_off_image")}

@@ -22,15 +22,40 @@
  * the company it was sent to. The UI says this in plain words before the button
  * is pressed — an "everything will be erased" promise we then don't keep would
  * be worse than the honest version.
+ *
+ * ── The second half of 5.1.1(v), which is easy to miss ───────────────────────
+ * Deleting our rows is not the whole obligation for a customer who signed in
+ * with Apple. Apple separately requires the app to call its revocation endpoint,
+ * so the account stops appearing under Settings → Apple ID → Sign in with Apple.
+ * Without that call the user is left with an entry for an account that no longer
+ * exists and no way to detach it — and it is a documented rejection reason.
+ *
+ * deleteAccount below does that, in the order the ordering note explains: the
+ * local delete is what the customer asked for, and it is never made conditional
+ * on Apple answering.
  */
 import { prisma } from "@/lib/prisma";
 import { NotFoundError } from "@/lib/utils/errors";
 import * as audit from "@/lib/services/audit.service";
+import {
+  isAppleServerAuthConfigured,
+  primaryAppleClientId,
+  revokeAppleRefreshToken,
+} from "@/lib/services/appleServerAuth.service";
+import { open } from "@/lib/utils/secretBox";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 
 export interface DeletionSummary {
   /** Requests whose account link was severed — they remain with their company. */
   leadsDetached: number;
   sessionsRevoked: number;
+  /**
+   * Whether an Apple revocation was scheduled. False covers every ordinary
+   * reason there was nothing to revoke — a Google-only account, a sign-in that
+   * predates the token column, an unconfigured deploy — so it is a fact for the
+   * audit trail, not a failure signal.
+   */
+  appleRevocationScheduled: boolean;
 }
 
 /**
@@ -52,9 +77,12 @@ export async function deleteAccount(
   });
   if (!customer) throw new NotFoundError("Account");
 
-  const [leadsDetached, sessionsRevoked] = await Promise.all([
+  const [leadsDetached, sessionsRevoked, appleToken] = await Promise.all([
     prisma.lead.count({ where: { customerId } }),
     prisma.customerSession.count({ where: { customerId, revokedAt: null } }),
+    // Read BEFORE the delete — CustomerIdentity cascades, so a moment from now
+    // there is nothing left to read it from.
+    appleRefreshTokenFor(customerId),
   ]);
 
   await audit.recordAuth({
@@ -62,7 +90,7 @@ export async function deleteAccount(
     email: customer.email,
     userId: customer.id,
     ip,
-    meta: { leadsDetached, sessionsRevoked },
+    meta: { leadsDetached, sessionsRevoked, appleRevocation: Boolean(appleToken) },
   });
 
   // One statement. CustomerIdentity and CustomerSession cascade; Lead.customerId
@@ -71,5 +99,42 @@ export async function deleteAccount(
   // a new relation is added.
   await prisma.customerUser.delete({ where: { id: customerId } });
 
-  return { leadsDetached, sessionsRevoked };
+  // ── Then tell Apple, and only then ────────────────────────────────────────
+  // Deliberately after the local delete and off the response path. Apple's
+  // endpoint is a third party that can be slow, rate-limited or down, and a
+  // customer who pressed "delete my account" must not be told it failed because
+  // of any of that. The local deletion is the promise; the revocation is the
+  // courtesy that keeps their Apple settings honest.
+  if (appleToken) {
+    const clientId = primaryAppleClientId();
+    if (clientId) {
+      runAfterResponse(() => revokeAppleRefreshToken(appleToken, clientId));
+    }
+  }
+
+  return {
+    leadsDetached,
+    sessionsRevoked,
+    appleRevocationScheduled: Boolean(appleToken),
+  };
+}
+
+/**
+ * The customer's Apple refresh token, decrypted, or null if there isn't a usable
+ * one.
+ *
+ * Null is the common case and never an error: most accounts are Google or
+ * password, most deploys before this shipped stored no token, and a row written
+ * under a since-rotated encryption key simply fails to open. All of them mean
+ * the same thing to the caller — nothing to revoke.
+ */
+async function appleRefreshTokenFor(customerId: string): Promise<string | null> {
+  if (!isAppleServerAuthConfigured()) return null;
+
+  const identity = await prisma.customerIdentity.findFirst({
+    where: { customerId, provider: "APPLE" },
+    select: { refreshTokenEnc: true },
+  });
+
+  return open(identity?.refreshTokenEnc);
 }

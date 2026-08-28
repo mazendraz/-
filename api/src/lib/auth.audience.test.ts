@@ -38,9 +38,14 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-const { signToken, signCustomerToken, getAuthUser, getCustomerUser } = await import(
-  "@/lib/auth"
-);
+const {
+  signToken,
+  signCustomerToken,
+  getAuthUser,
+  getCustomerUser,
+  SESSION_COOKIE,
+  CUSTOMER_SESSION_COOKIE,
+} = await import("@/lib/auth");
 
 beforeAll(() => {
   process.env.JWT_SECRET = "test-secret-for-vitest";
@@ -49,6 +54,16 @@ beforeAll(() => {
 function bearer(token: string): NextRequest {
   return new NextRequest("http://localhost/api/v1/customer/me", {
     headers: new Headers({ authorization: `Bearer ${token}` }),
+  });
+}
+
+/** A request carrying cookies, the way a browser sends them. */
+function withCookies(jar: Record<string, string>): NextRequest {
+  const cookie = Object.entries(jar)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("; ");
+  return new NextRequest("http://localhost/api/v1/customer/me", {
+    headers: new Headers({ cookie }),
   });
 }
 
@@ -119,5 +134,42 @@ describe("legacy tokens with no typ claim", () => {
       .sign(new TextEncoder().encode(process.env.JWT_SECRET!));
 
     await expect(getCustomerUser(bearer(legacy))).rejects.toThrow(/invalid or expired/i);
+  });
+});
+
+
+// ── One browser, both populations ───────────────────────────────────────────
+// The staff and customer sessions used to share ONE cookie name, so a browser
+// could hold only one of them: signing into the dashboard evicted the customer
+// session and vice versa, and the evicted side then 401'd on the audience check
+// above — which the frontend correctly reads as "signed out". These are the
+// tests that keep the two names apart.
+describe("staff and customer cookies coexist", () => {
+  it("both sessions resolve from the same cookie jar", async () => {
+    const jar = {
+      [SESSION_COOKIE]: await signToken({ sub: "staff-1", role: "ADMIN", companyId: null }),
+      [CUSTOMER_SESSION_COOKIE]: await signCustomerToken({ sub: "cust-1" }),
+    };
+    await expect(getAuthUser(withCookies(jar))).resolves.toMatchObject({ id: "staff-1" });
+    await expect(getCustomerUser(withCookies(jar))).resolves.toMatchObject({ id: "cust-1" });
+  });
+
+  it("a staff cookie alone does not produce a customer session", async () => {
+    const jar = {
+      [SESSION_COOKIE]: await signToken({ sub: "staff-1", role: "ADMIN", companyId: null }),
+    };
+    await expect(getCustomerUser(withCookies(jar))).rejects.toThrow(/invalid or expired/i);
+  });
+
+  it("a customer cookie alone does not produce a staff session", async () => {
+    const jar = { [CUSTOMER_SESSION_COOKIE]: await signCustomerToken({ sub: "cust-1" }) };
+    await expect(getAuthUser(withCookies(jar))).rejects.toThrow(/invalid or expired|authentication required/i);
+  });
+
+  it("a customer token still in the LEGACY shared cookie keeps working", async () => {
+    // Sessions opened before the split live there. Dropping them would sign out
+    // every signed-in customer on the deploy that fixed this.
+    const jar = { [SESSION_COOKIE]: await signCustomerToken({ sub: "cust-1" }) };
+    await expect(getCustomerUser(withCookies(jar))).resolves.toMatchObject({ id: "cust-1" });
   });
 });

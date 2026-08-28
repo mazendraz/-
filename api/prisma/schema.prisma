@@ -94,6 +94,12 @@ model Category {
   slug            String              @unique
   label           String // the frontend calls it label, not name
   description     String              @db.Text
+  // Optional Arabic companions to label/description above — additive, nullable.
+  // label/description stay the canonical (English) fields every existing reader
+  // uses; labelAr/descriptionAr exist purely so bilingual search + display can
+  // show/match the Arabic form when an admin has filled it in.
+  labelAr         String?
+  descriptionAr   String?             @db.Text
   icon            String // Material Symbols icon name
   cover           String? // ApiCategory.cover — category cover image
   isActive        Boolean             @default(true)
@@ -148,6 +154,9 @@ model Company {
   id                  String        @id @default(uuid())
   slug                String        @unique
   name                String
+  // Optional Arabic companion to `name` — additive, nullable, same pattern as
+  // Category.labelAr. `name` stays the canonical field every existing reader uses.
+  nameAr              String?
   tagline             String // short one-liner
   about               String        @db.Text
   logo                String
@@ -205,6 +214,12 @@ model Company {
   // CategoryPricingMode's default. Set only when a specific provider needs a
   // different rate than the platform default (see finance.service.ts).
   commissionPercent   Decimal?      @db.Decimal(5, 2)
+  // "YYYY-MM" of the last calendar month this company was sent its monthly
+  // summary email (notifications.reengagement.service.ts's sweepProviderMonthlySummaries)
+  // — a period string, not a timestamp, because the idempotency question is
+  // "did August already get sent", not "how long ago". Prevents a resend if
+  // the cron runs more than once after the 1st of the month.
+  lastMonthlySummaryPeriod String?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 
@@ -257,18 +272,54 @@ model CompanyTelegramChat {
   @@index([companyId])
 }
 
-// A customer who joined a company's waiting list while it was busy. Stores only
-// name + phone (contact is off-platform, matching the lead-generation model). The
+// A customer who joined a company's waiting list while it was busy.
+//
+// This is a COMPLETE request that is simply queued: the customer fills the same
+// form, with the same fields and the same priced basket, as a request sent to an
+// available company — the only difference is that the provider has to accept it
+// before it enters the CRM pipeline. That is what lets convertToLead build a Lead
+// indistinguishable from one submitted directly (see it for why placeholders are
+// the fallback for pre-existing rows, not the normal path).
+//
+// Contact is still off-platform (phone), matching the lead-generation model. The
 // provider/admin dashboards list these and move them through WaitlistStatus.
 model WaitlistEntry {
   id        String         @id @default(uuid())
   companyId String
   name      String
   phone     String
-  service   String? // optionally the service they're waiting for
-  note      String?        @db.Text
+  // Same concurrency guard as Lead.dedupKey, on the same terms — see
+  // utils/dedupKey.ts. Set only by the public join; the service's own comment
+  // argues this path needs it MORE than the lead one, since a duplicate queued
+  // entry sits unnoticed until someone accepts both.
+  dedupKey  String?        @unique
+  service   String? // the service they're waiting for — item names once a basket was picked
+  note      String?        @db.Text // the customer's description of the job
   status    WaitlistStatus @default(WAITING)
   createdAt DateTime       @default(now()) // returned as epoch ms in the API
+  // The rest of the request form, carried verbatim into the Lead on accept.
+  // Nullable because every entry joined before the form was the full one has
+  // neither — those still convert, with the placeholders convertToLead has
+  // always used.
+  district  String?
+  budget    String?
+  // The customer's priced basket, SNAPSHOTTED at join time — the resolved
+  // ResolvedRequest from leadItems.service (lines + estimate + discount), stored
+  // whole and handed straight back to createLeadRecord's `resolved` input when
+  // the entry is accepted.
+  //
+  // Json, not a WaitlistEntryItem table mirroring LeadItem, because nothing ever
+  // queries, filters or aggregates these lines before conversion: they are read
+  // exactly twice — once to show the provider what was ordered, once to copy
+  // into LeadItem — and a parallel table would duplicate the whole priced-line
+  // shape to serve two whole-object reads.
+  //
+  // Snapshotted rather than re-resolved on accept for the reason the rest of the
+  // pricing code states everywhere: a price the provider changes next week must
+  // never rewrite what this customer was quoted when they ordered. Accepting a
+  // three-week-old entry quotes the three-week-old price, exactly as if the
+  // request had been sent directly that day.
+  itemsSnapshot Json?
   // Set exactly once, when an accept (status -> CONVERTED) creates the real Lead
   // this entry became — see waitlist.service.ts convertToLead. @unique makes the
   // conversion idempotent (a second accept reuses this instead of creating another
@@ -356,6 +407,13 @@ model Review {
 model Lead {
   id            String     @id @default(uuid())
   refNumber     String     @unique // AA-YYYYMMDD-XXXX — generated server-side
+  // Concurrency guard for the public submit — see utils/dedupKey.ts. Hash of
+  // (companyId, phone, service, 5-minute bucket); UNIQUE so simultaneous copies
+  // of one request collide in the database rather than each becoming an order.
+  // Nullable, and set ONLY by the public submit path: NULLs don't collide, so
+  // every pre-existing lead and every waiting-list conversion (which has its own
+  // atomic claim) opts out.
+  dedupKey      String?    @unique
   // High-entropy secret (generated at creation) that gates public status tracking
   // and the one-time review, replacing the guessable phone number. Nullable so
   // leads created before this column existed fall back to phone-tail matching.
@@ -371,6 +429,11 @@ model Lead {
   // Set once the customer leaves a (verified) review for this lead — gates the
   // one-time review flow so a completed request can be reviewed exactly once.
   reviewedAt    DateTime?
+  // Set once the "your request is still open" nudge (notifications.reengagement
+  // .service.ts) has fired for this lead — the sweep's own idempotency marker,
+  // so a lead stuck at NEW/CONTACTED past the 48h threshold gets nudged exactly
+  // once, not on every cron tick after that.
+  staleNudgeSentAt DateTime?
   createdAt     DateTime   @default(now()) // returned as epoch ms (Number) in the API
   updatedAt     DateTime   @updatedAt
 
@@ -467,6 +530,10 @@ model LeadCompletion {
   clientAmount       Int?
   discrepancyNote    String? @db.Text
   verifiedAt         DateTime?
+  // Set once the "rate this company" nudge (notifications.reengagement
+  // .service.ts) has fired, 24h after verification — the sweep's own
+  // idempotency marker, same role as Lead.staleNudgeSentAt above.
+  reviewRequestSentAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -474,6 +541,10 @@ model LeadCompletion {
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([verificationStatus])
+  // Serves the review-request sweep: WHERE verificationStatus != PENDING AND
+  // reviewRequestSentAt IS NULL AND verifiedAt <= ? — verifiedAt leads the
+  // scan since the sweep's whole job is "find rows crossing the 24h mark".
+  @@index([verifiedAt, reviewRequestSentAt])
 }
 
 model User {
@@ -484,6 +555,18 @@ model User {
   role         UserRole @default(PROVIDER)
   companyId    String?
   isActive     Boolean  @default(true)
+  // Staff counterpart of CustomerUser.tokensValidFrom — see that field for the
+  // full reasoning. Here it closes the gap PATCH /api/auth/password documented
+  // and accepted for a long time: "Other sessions are NOT revoked — there is no
+  // token denylist. To force every session out, deactivate and reactivate the
+  // user." Changing a password is what a person does when they think someone
+  // else has their session, so it has to end that session. Bumped on a password
+  // change, on an admin-set password, and on a role change (an account that is
+  // no longer an ADMIN must not keep a token that says it is).
+  //
+  // NULL = no floor, which is where every existing row starts: nobody is signed
+  // out by this deploy.
+  tokensValidFrom DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   // Self-service Telegram link, same mechanism as Company's (see telegram.service
@@ -690,7 +773,14 @@ model Offering {
   id                  String       @id @default(uuid())
   companyId           String
   name                String
+  // Optional Arabic companions to name/description — additive, nullable, same
+  // pattern as Category.labelAr/Company.nameAr. name/description stay canonical.
+  nameAr              String?
+  descriptionAr       String?      @db.Text
   description         String?      @db.Text
+  // Free-form keywords/tags for search (bilingual mix is fine — matched, not
+  // displayed as language-specific UI text). No display surface yet; search-only.
+  tags                String[]     @default([])
   kind                OfferingKind @default(SERVICE)
   pricingModel        PricingModel @default(RANGE)
   // Egyptian pounds, whole numbers — no piastres anywhere in the product, and no
@@ -959,20 +1049,76 @@ model CustomerUser {
   // 32 bytes of CSPRNG output, so there is no low-entropy guess to slow down.
   emailVerifyTokenHash String?   @unique
   emailVerifyExpires   DateTime?
+  // ── Forgot-password ─────────────────────────────────────────────────────────
+  // Same hashed-token shape as email verification above, deliberately a
+  // SEPARATE pair of columns rather than reused ones: verification proves "you
+  // control this inbox" (and marks the address verified); reset proves the
+  // same thing but its holder gets to overwrite the password outright. Mixing
+  // the two secrets would let whichever email happened to arrive last silently
+  // reinterpret an old link as the other kind of proof. A Google-only account
+  // (passwordHash null) never gets one issued — there is no password to reset.
+  passwordResetTokenHash String?   @unique
+  passwordResetExpires   DateTime?
   // Same kill-switch semantics as User.isActive: token verification re-checks it
   // on every request, so flipping it false revokes access without waiting for
   // the JWT to expire.
   isActive      Boolean @default(true)
 
+  // ── Session floor: the missing half of revocation ──────────────────────────
+  // The access token is a stateless JWT and cannot be recalled. `isActive`
+  // above is a kill switch for the whole ACCOUNT, but there was nothing in
+  // between — so "sign out everywhere" and a password reset both revoked
+  // refresh tokens (CustomerSession) while every access token already in
+  // circulation kept working until it expired.
+  //
+  // This is that missing floor: any token whose `iat` predates it is refused
+  // on the next request, exactly the way isActive is. Bumped by revokeAll
+  // ("sign out everywhere") and by a password reset, which is the customer
+  // saying "assume this account may be compromised".
+  //
+  // NULL means "no floor" — the state every existing row starts in, so this
+  // deploy signs nobody out. Single-device revocation does NOT touch it (that
+  // would sign out every device); it is handled by the `sid` claim instead.
+  tokensValidFrom DateTime?
+
+  // Marketing opt-out (order/account notifications are never gated by this —
+  // see notifications.customer.service.ts's notifyCustomer, the one place
+  // that reads it). Defaults to true (opt-out, not opt-in): a customer who
+  // never visits the settings screen still hears about re-engagement offers,
+  // same as the transactional-vs-marketing split already decided in the
+  // notifications blueprint. App Store/Play both require the OFF switch to
+  // exist, not that the default be off.
+  marketingPushEnabled  Boolean @default(true)
+  marketingEmailEnabled Boolean @default(true)
+
+  // ── Lightweight browsing signal ─────────────────────────────────────────────
+  // The MOST RECENT category a signed-in customer viewed — overwritten on every
+  // view, not a history table. That is deliberately all the 14-day inactive-
+  // browsing re-engagement email (notifications.reengagement.service.ts) needs:
+  // "what to mention", not a full analytics pipeline. Denormalized (slug +
+  // label captured at view time, not a Category relation) so a category
+  // rename or deletion later never breaks an old signal or requires a join.
+  lastViewedCategorySlug  String?
+  lastViewedCategoryLabel String?
+  lastViewedCategoryAt    DateTime?
+
+  // Set once the "rate your first service" nudge (7 days after the customer's
+  // FIRST ever completed+verified order) has fired — a customer-level event,
+  // unlike LeadCompletion.reviewRequestSentAt which is per-lead and fires for
+  // every completed order. Never re-armed: this is a one-time "welcome to the
+  // reviewed-service loop" nudge, not a recurring one.
+  firstServiceNudgeSentAt DateTime?
+
   lastLoginAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  identities CustomerIdentity[]
-  sessions   CustomerSession[]
-  devices    PushDevice[]
-  leads      Lead[]
+  identities    CustomerIdentity[]
+  sessions      CustomerSession[]
+  devices       PushDevice[]
+  leads         Lead[]
   waitlistEntries WaitlistEntry[]
+  notifications Notification[]
   // No @@index([email]) — @unique above already creates one, and a second index
   // on the same column only costs write throughput. (`User` above carries that
   // duplication; not worth a migration to undo there, but not worth copying.)
@@ -997,6 +1143,23 @@ model CustomerIdentity {
   // Opaque — never parse it, never show it.
   subject    String
   createdAt  DateTime         @default(now())
+
+  // ── Apple's refresh token, for revocation at account deletion ──────────────
+  // Apple guideline 5.1.1(v) does not stop at "let the user delete the account".
+  // For Sign in with Apple it also requires the app to TELL Apple, by calling
+  // /auth/revoke — otherwise the deleted account keeps showing up under the
+  // user's Apple ID → "Sign in with Apple" list forever, with no way to detach
+  // it. Revoking needs a token, and the only moment one is obtainable is the
+  // sign-in itself, so it is captured then and parked here until deletion.
+  //
+  // Encrypted, not hashed: unlike CustomerSession.tokenHash this value has to be
+  // REPLAYED to Apple later, so a one-way hash cannot work. See utils/secretBox.
+  //
+  // NULL is the ordinary state, not an error — it means no revocable token is on
+  // file: a Google identity, an Apple sign-in that predates this column, or a
+  // deploy with APPLE_TEAM_ID unset. Deletion proceeds either way; see
+  // customerDeletion.service for why it never blocks on Apple.
+  refreshTokenEnc String?
 
   customer CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
@@ -1110,6 +1273,48 @@ model PushDevice {
 
   @@index([userId])
   @@index([customerId])
+}
+
+// What kind of event a Notification records — drives which icon/route the
+// in-app list uses, and (via notifyCustomer's own switch) whether the
+// marketing opt-out applies. Not shared with the admin bell: that one still
+// reads live off recentActivity() (see admin/notifications/route.ts's own
+// comment on why) — this table is CUSTOMER-facing only, for now.
+enum NotificationType {
+  LEAD_CREATED
+  LEAD_STATUS
+  LEAD_COMPLETED
+  CHAT_MESSAGE
+  WAITLIST_NOTIFIED
+  MARKETING
+}
+
+// Persisted, read-tracked record of every push sent to a customer — the
+// gap the notifications blueprint (2026-08-24) flagged as the biggest hole
+// in the customer experience: a push that arrives while the app is closed,
+// or gets swiped away, was gone for good with no way to see it later. One
+// row per notifyCustomer() call (see notifications.customer.service.ts),
+// written alongside the push itself so the in-app list and the badge count
+// can never drift from what was actually sent.
+model Notification {
+  id         String            @id @default(uuid())
+  customerId String
+  type       NotificationType
+  title      String
+  body       String
+  // Relative in-app path to open on tap — same shape push.ts's data.url
+  // already uses, so the notification list and a tapped push notification
+  // land on the exact same screen.
+  url        String?
+  read       Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  customer CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Serves the notification list (WHERE customerId=? ORDER BY createdAt DESC)
+  // and the unread badge (WHERE customerId=? AND read=false) from one index —
+  // same reasoning as WaitlistEntry's (companyId, status, createdAt).
+  @@index([customerId, read, createdAt])
 }
 
 model Client {

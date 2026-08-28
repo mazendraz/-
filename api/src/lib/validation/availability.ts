@@ -19,13 +19,44 @@ export const availabilitySchema = z.object({
 });
 export type AvailabilityInput = z.infer<typeof availabilitySchema>;
 
-// POST /companies/:slug/waitlist — public join. Mirrors the lead/feedback shape:
-// contact is name + phone (off-platform follow-up), service/note optional.
+// POST /companies/:slug/waitlist — public join.
+//
+// Field-for-field the same request as createLeadSchema (leads.ts), because it IS
+// the same request — just queued behind the company's busy period. Everything
+// accepted here is carried onto the Lead verbatim when the provider accepts, so
+// anything this schema drops is a detail the customer typed and the provider
+// would never see.
+//
+// The two shape differences from createLeadSchema are both structural:
+// companySlug/companyName are in the URL, and the description is called `note`
+// after the column it has always written.
+//
+// district/budget stay OPTIONAL rather than becoming required like the lead's
+// district: the mobile client and any bookmarked page can still be running the
+// short join form, and rejecting those submissions outright would turn "we
+// collect less from you" into "you cannot join at all".
 export const waitlistJoinSchema = z.object({
   name: sanitizedText(2, 120),
   phone: z.string().trim().min(8).max(30),
   service: sanitizedOptionalText(150).optional(),
-  note: sanitizedOptionalText(500).optional(),
+  note: sanitizedOptionalText(2000).optional(),
+  district: sanitizedOptionalText(100).optional(),
+  budget: sanitizedOptionalText(100).optional(),
+  // Feature C, same contract as the lead's: ids and quantities only. Accepting a
+  // price from the client would let the basket be submitted with whatever total
+  // the browser felt like — and here it would sit unnoticed until the day the
+  // provider accepts it.
+  items: z
+    .array(
+      z.object({
+        offeringId: z.string().min(1).max(64),
+        qty: z.number().int().positive().max(10_000).optional(),
+        tierId: z.string().min(1).max(64).nullish(),
+      }),
+    )
+    .min(1)
+    .max(25)
+    .optional(),
 });
 export type WaitlistJoinInput = z.infer<typeof waitlistJoinSchema>;
 

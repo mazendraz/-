@@ -19,8 +19,10 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
   const { locale } = useLocale();
   const isNew = !category;
   const [label, setLabel] = useState(category?.label ?? "");
+  const [labelAr, setLabelAr] = useState(category?.labelAr ?? "");
   const [icon, setIcon] = useState(category?.icon ?? "category");
   const [description, setDescription] = useState(category?.description ?? "");
+  const [descriptionAr, setDescriptionAr] = useState(category?.descriptionAr ?? "");
   const [cover, setCover] = useState(category?.cover ?? "");
   const [pricingMode, setPricingMode] = useState<CategoryPricingMode>(category?.pricingMode ?? "QUOTE_ONLY");
   // Shown only when switching FIXED_CATALOG → QUOTE_ONLY on a category that
@@ -37,10 +39,12 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
     label: category?.label ?? "", icon: category?.icon ?? "category", description: category?.description ?? "",
     cover: category?.cover ?? "", pricingMode: category?.pricingMode ?? "QUOTE_ONLY",
     metaTitle: category?.metaTitle ?? "", metaDescription: category?.metaDescription ?? "",
+    labelAr: category?.labelAr ?? "", descriptionAr: category?.descriptionAr ?? "",
   }).current;
   const dirty = label !== initial.label || icon !== initial.icon || description !== initial.description
     || cover !== initial.cover || pricingMode !== initial.pricingMode
-    || metaTitle !== initial.metaTitle || metaDescription !== initial.metaDescription;
+    || metaTitle !== initial.metaTitle || metaDescription !== initial.metaDescription
+    || labelAr !== initial.labelAr || descriptionAr !== initial.descriptionAr;
   const [confirmingClose, setConfirmingClose] = useState(false);
   const navBlocker = useUnsavedChangesGuard(dirty);
 
@@ -65,7 +69,7 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
 
   function save() {
     if (!label.trim()) { alert(t(locale, "admin_cat_label_required")); return; }
-    const fields = { label, icon, description, cover, pricingMode, metaTitle, metaDescription };
+    const fields = { label, labelAr, icon, description, descriptionAr, cover, pricingMode, metaTitle, metaDescription };
     if (category) updateCategory(category.slug, fields);
     else addCategory({ slug: "", ...fields });
     onClose();
@@ -77,8 +81,10 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
       <div className="p-5">
       <div className="space-y-4">
         <LField label={t(locale, "admin_cat_label")} required><input className="field-input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t(locale, "admin_cat_label_ph")} /></LField>
+        <LField label={t(locale, "admin_cat_label_ar")}><input className="field-input" dir="rtl" value={labelAr} onChange={(e) => setLabelAr(e.target.value)} placeholder={t(locale, "admin_cat_label_ar_ph")} /></LField>
         <LField label={t(locale, "admin_cat_icon")}><input className="field-input" value={icon} onChange={(e) => setIcon(e.target.value)} placeholder={t(locale, "admin_cat_icon_ph")} /></LField>
         <LField label={t(locale, "admin_cat_description")}><textarea className="field-input resize-none" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></LField>
+        <LField label={t(locale, "admin_cat_description_ar")}><textarea className="field-input resize-none" dir="rtl" rows={2} value={descriptionAr} onChange={(e) => setDescriptionAr(e.target.value)} /></LField>
 
         {/* Phase 9 — per-category pricing mode. This only decides what a
             provider in the category is offered; the real enforcement lives

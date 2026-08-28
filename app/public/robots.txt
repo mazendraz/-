@@ -3,4 +3,4 @@ Disallow: /admin
 Disallow: /provider
 Allow: /
 
-Sitemap: https://alassema.com/sitemap.xml
+Sitemap: https://al-assema.tech/sitemap.xml

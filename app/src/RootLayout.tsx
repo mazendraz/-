@@ -17,6 +17,7 @@ import { useHashScroll } from "./hooks/useHashScroll";
 import { useSaved } from "./hooks/useSaved";
 import { getCurrentUser } from "./lib/auth";
 import { useMyLeads, useMyLeadsHydrated } from "./lib/requests";
+import { useAccountLeads } from "./hooks/useAccountLeads";
 import { hasFullBleedHero } from "./lib/heroRoutes";
 import { t } from "./lib/i18n";
 
@@ -51,6 +52,13 @@ export default function RootLayout() {
   // panel and the optional review step ever get a chance to render. The gate
   // only releases when PriceVerificationGate itself calls onResolved (review
   // submitted or explicitly skipped).
+  // Pulls the signed-in account's requests (and waiting-list joins) into the
+  // same local cache useMyLeads() reads. Mounted HERE rather than on My
+  // Requests so that signing in on a new browser fills in the whole shell —
+  // the messages list, the unread badge and the verification gate below all
+  // read that cache and used to see nothing until My Requests happened to be
+  // opened. No-op for a signed-out visitor.
+  const { settled: accountSettled } = useAccountLeads();
   const myLeads = useMyLeads();
   // Closes a real refresh-bypass window: without this, the FIRST render after a
   // hard refresh paints from whatever this device cached before the provider
@@ -60,6 +68,26 @@ export default function RootLayout() {
   // persist after refresh" means the server gets asked BEFORE we decide,
   // not that we decide first and correct ourselves after — see useMyLeadsHydrated.
   const leadsHydrated = useMyLeadsHydrated();
+
+  // ── Structural backstop for the three first-paint gates ───────────────────
+  // Each `return <BootSpinner/>` below waits on a promise, and a promise that
+  // never settles never runs its `.finally()` — so before lib/api.ts grew a
+  // request deadline, any one of these three could hold the ENTIRE public site
+  // on a spinner indefinitely (a captive portal, a black-holed route: the
+  // socket connects and nothing ever comes back). No error, no retry, and a
+  // reload did the same thing.
+  //
+  // The request timeout is the real fix and this is not a substitute for it —
+  // note the 20s here is LONGER than api.ts's 15s deliberately. The ordering
+  // matters: the request layer must always be the thing that gives up first, so
+  // a failure still travels through the normal catch/finally paths and the
+  // offline screen still gets its signal. This only ever fires if some FUTURE
+  // unbounded await slips back in, and its whole job is to make that a slow
+  // page rather than a dead site.
+  const maintenanceReady = useReleasedAfter(!maintenanceLoading);
+  const leadsReady = useReleasedAfter(leadsHydrated);
+  const accountReady = useReleasedAfter(accountSettled);
+
   const [gatedLeadId, setGatedLeadId] = useState<string | null>(null);
   const livePendingLead = myLeads.find((l) => l.completion?.verificationStatus === "PENDING");
   useEffect(() => {
@@ -150,27 +178,20 @@ export default function RootLayout() {
   // which looks like a bug and briefly exposes pages that are supposed to be
   // down. ST-01: this used to be a blank white div — on a slow connection
   // that reads as a broken page, not a loading one.
-  if (maintenanceLoading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <Logo className="h-11 w-11 object-contain" width={44} height={44} />
-        <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-      </div>
-    );
-  }
+  if (!maintenanceReady) return <BootSpinner />;
 
   // Same reasoning as maintenanceLoading above, for the same reason: render
   // nothing routable until we've actually asked the server whether this device
   // has a pending price verification, so there is no frame where a stale local
   // cache gets to decide that for us.
-  if (!leadsHydrated) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <Logo className="h-11 w-11 object-contain" width={44} height={44} />
-        <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-      </div>
-    );
-  }
+  //
+  // BOTH sources, because a customer's requests can come from either: this
+  // device's own submissions (leadsHydrated) and the signed-in account
+  // (accountSettled). Waiting on only the first would let an account-owned
+  // pending verification slip through on any browser that didn't happen to
+  // submit the request itself. accountSettled resolves immediately for a
+  // signed-out visitor, so nobody waits for a check that doesn't apply.
+  if (!leadsReady || !accountReady) return <BootSpinner />;
 
   // No <TopNav>/<BottomNav> in this branch — that is what makes the block
   // structural rather than a dismissible modal. It replaces the entire public
@@ -239,6 +260,54 @@ function PublicBottomNav() {
       ]}
     />
   );
+}
+
+/**
+ * The full-screen hold shown before the shell can decide what to render.
+ *
+ * ST-01: this used to be a blank white div — on a slow connection that reads as
+ * a broken page, not a loading one. Extracted rather than duplicated so the two
+ * gates that use it can never drift apart.
+ */
+function BootSpinner() {
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+      <Logo className="h-11 w-11 object-contain" width={44} height={44} />
+      <div className="w-7 h-7 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+    </div>
+  );
+}
+
+/** See the block comment at the `maintenanceReady` declaration for why this exists. */
+const GATE_BACKSTOP_MS = 20_000;
+
+/**
+ * `ready`, but forced true once GATE_BACKSTOP_MS has passed without it becoming
+ * true on its own.
+ *
+ * Latching (rather than tracking `ready` continuously) is the point: once the
+ * backstop has fired we stay released, so a gate can never re-close and trap the
+ * user a second time. Nothing here re-arms it, and nothing should — a gate that
+ * needs to hold the shell again after first paint is a different mechanism, not
+ * this one.
+ */
+function useReleasedAfter(ready: boolean): boolean {
+  const [released, setReleased] = useState(false);
+
+  useEffect(() => {
+    if (ready || released) return;
+    const id = window.setTimeout(() => {
+      console.warn(
+        `[al-assema] A first-paint gate did not settle within ${GATE_BACKSTOP_MS}ms — ` +
+          "releasing it so the site is usable. This should not happen: lib/api.ts times " +
+          "requests out well before this. Check for an await that bypasses apiFetch.",
+      );
+      setReleased(true);
+    }, GATE_BACKSTOP_MS);
+    return () => window.clearTimeout(id);
+  }, [ready, released]);
+
+  return ready || released;
 }
 
 /** Minimal fallback while a lazily-loaded route chunk is fetched. Keeps the

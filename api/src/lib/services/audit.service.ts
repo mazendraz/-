@@ -66,6 +66,12 @@ export type AuthAuditAction =
   | "auth.customer.registered"
   | "auth.customer.verified"
   | "auth.customer.failure"
+  // A completed forgot-password flow — the account's password changed with no
+  // one typing the OLD one. Worth its own action distinct from `.verified`:
+  // that event means "an address was proven"; this means "a credential was
+  // replaced," which is the more security-relevant fact to be able to find in
+  // the log when a customer reports they didn't do this.
+  | "auth.customer.password_reset"
   // A retired refresh token presented after its grace window — the only
   // explanation is a second holder. The session is revoked on sight; this is
   // the record of it, and a run of them is a compromised device, not noise.

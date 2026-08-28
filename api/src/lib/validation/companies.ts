@@ -26,6 +26,9 @@ const baseCompanySchema = z.object({
   // categoryIds[0] in the service layer when omitted.
   primaryCategoryId: z.string().uuid().optional(),
   name: z.string().trim().min(2).max(150),
+  // Optional Arabic companion to name — same optional-text convention as
+  // metaTitle/metaDescription below, not required on every save.
+  nameAr: sanitizedOptionalText(150).optional(),
   tagline: sanitizedOptionalText(200),
   about: sanitizedOptionalText(5000),
   logo: imageRef,

@@ -11,6 +11,7 @@ import ChatThread from "../../components/ChatThread";
 import ConversationListItem from "../../components/ConversationListItem";
 import { EmptyState } from "./components/EmptyState";
 import MobileChatOverlay from "../../components/MobileChatOverlay";
+import { useAtLeast } from "../../hooks/useBreakpoint";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
 import Icon from "../../components/Icon";
@@ -43,6 +44,13 @@ export function ChatTab() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeId = searchParams.get("c");
   const active = items.find((c) => c.id === activeId) ?? null;
+
+  // Which of the two panes below actually mounts the ChatThread. They used to
+  // both render and hide each other with CSS, which does not unmount anything —
+  // so every open conversation ran two initial fetches, two poll loops and two
+  // read-marking calls. `lg`, not `md`, because that is the breakpoint this
+  // screen's panes use (admin has a wider list column than provider does).
+  const isDesktop = useAtLeast("lg");
   // Selecting pushes a history entry (setSearchParams' default). The back
   // arrow in the thread header should undo exactly that push — `navigate(-1)`
   // — so it and the system Back button behave identically. But that's only
@@ -193,7 +201,9 @@ export function ChatTab() {
             whole screen instead, fixed to the viewport so it can't scroll
             away with the rest of the dashboard. */}
         <div className="hidden lg:block bg-surface-container-lowest rounded-2xl shadow-bloom p-4">
-          {active ? (
+          {/* The wrapper keeps its CSS visibility (the grid layout depends on
+              it); only the thread itself is gated, so exactly one mounts. */}
+          {active && isDesktop ? (
             <>
               <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-outline-variant/15">
                 <div className="min-w-0">
@@ -234,7 +244,7 @@ export function ChatTab() {
       {/* Below lg: — WhatsApp-style full-screen takeover, pinned to the
           viewport (not the page) so the input bar can never scroll out of
           view and rides above the on-screen keyboard. */}
-      {active && (
+      {active && !isDesktop && (
         <MobileChatOverlay
           hiddenFrom="lg"
           header={

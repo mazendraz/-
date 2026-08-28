@@ -27,6 +27,9 @@ export type Company = {
   id: string;
   slug: string;
   name: string;
+  // Optional Arabic companion to name — null/absent until an admin fills it
+  // in. name stays canonical.
+  nameAr?: string | null;
   tagline: string;
   about: string;
   logo: string;
@@ -92,6 +95,10 @@ export type ServiceCategory = {
   description: string;
   count: number;
   cover: string;
+  // Optional Arabic companions to label/description — null/absent until an
+  // admin fills them in. label/description stay canonical.
+  labelAr?: string | null;
+  descriptionAr?: string | null;
   // Phase 9 — whether this category's companies may run a priced Offering
   // catalog. Optional/possibly-missing on old cached data; treat a missing
   // value as "QUOTE_ONLY" (the schema default).

@@ -47,6 +47,31 @@ jobs:
       - run: npm test
       - run: npm run test:integration
 
+      # Dependency advisories, on every push rather than at audit time.
+      #
+      # Not a bare `npm audit --omit=dev`: that flag does not actually exclude
+      # the prisma CLI chain (a devDependency nothing in `dependencies`
+      # reaches), so it fails on day one — see api/scripts/audit-ci.mjs, which
+      # fails on any high/critical EXCEPT a short list documented as
+      # unreachable from a request.
+      #
+      # This exists because a HIGH advisory (libvips, via the sharp that Next
+      # bundles) sat in the tree unnoticed until a manual audit found it.
+      - name: Audit production dependencies
+        run: npm run audit:ci
+
+      # Debug logging that reaches production is a recurring failure mode here:
+      # three `// TEMP` console.log lines in realtime.service.ts — printing a
+      # customer channel id and the full event payload on every publish — were
+      # sitting uncommitted in the working tree, one `npm run ship` away from
+      # deploying.
+      - name: Reject leftover debug markers
+        run: |
+          if grep -rn "// TEMP" src/ --include="*.ts"; then
+            echo "::error::Leftover '// TEMP' marker in api/src — remove it before merging."
+            exit 1
+          fi
+
   web:
     runs-on: ubuntu-latest
     defaults:

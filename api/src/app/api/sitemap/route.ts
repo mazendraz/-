@@ -9,7 +9,7 @@ import { CompanyStatus } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
-const SITE_URL = (process.env.PUBLIC_SITE_URL ?? "https://alassema.com").replace(/\/$/, "");
+const SITE_URL = (process.env.PUBLIC_SITE_URL ?? "https://al-assema.tech").replace(/\/$/, "");
 
 function entry(path: string, changefreq: string, priority: string): string {
   return `  <url><loc>${SITE_URL}${path}</loc><changefreq>${changefreq}</changefreq><priority>${priority}</priority></url>`;

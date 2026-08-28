@@ -2,7 +2,7 @@
 // In API mode these hit the backend; in demo mode (no VITE_API_URL) writes are a
 // best-effort no-op so the UI still works against the localStorage catalog.
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPatch, apiDelete, isApiConfigured } from "./api";
+import { apiGet, apiPost, apiPatch, apiDelete, apiFetch, isApiConfigured } from "./api";
 import { refreshCatalogFromApi } from "./catalog";
 import { formatDate } from "./format";
 import type { Locale, StringKey } from "./i18n";
@@ -73,11 +73,22 @@ export async function setCompanyAvailability(id: string, p: AvailabilityPayload)
 }
 
 // ── Public: join the waiting list ────────────────────────────────────────────
+/**
+ * The same request a customer sends to an available company — see
+ * ApiWaitlistPayload. The request form builds this and calls joinWaitlist instead
+ * of addLead when the company is busy; nothing else about the form changes,
+ * because nothing else about the request does.
+ */
 export interface WaitlistJoinInput {
   name: string;
   phone: string;
   service?: string;
+  /** The customer's description of the job. */
   note?: string;
+  district?: string;
+  budget?: string;
+  /** Prices are never sent — the server reads them from the catalogue. */
+  items?: { offeringId: string; qty?: number; tierId?: string | null }[];
 }
 
 /**
@@ -85,7 +96,7 @@ export interface WaitlistJoinInput {
  * (a failed submission surfaces — don't fake success) and the created entry is
  * returned so the caller can remember it (see rememberMyWaitlistEntry) — that's
  * what lets this device see it later in "My Requests". In demo mode there is
- * nothing to remember, so it resolves to null and the modal just shows success.
+ * nothing to remember, so it resolves to null and the caller just shows success.
  */
 export async function joinWaitlist(
   companySlug: string,
@@ -99,6 +110,9 @@ export async function joinWaitlist(
     phone: input.phone,
     service: input.service || undefined,
     note: input.note || undefined,
+    district: input.district || undefined,
+    budget: input.budget || undefined,
+    items: input.items?.length ? input.items : undefined,
     hp_field: honeypot,
     captchaToken: captchaToken ?? undefined,
   });
@@ -112,6 +126,11 @@ export async function joinWaitlist(
 // their own status, it does not add any new capability to act on it.
 const WAITLIST_CACHE_KEY = "al-assema-waitlist-entries";
 const MINE_WAITLIST_KEY = "al-assema-my-waitlist";
+// Which of the "mine" ids arrived from the ACCOUNT rather than from a join made
+// on this device. A WaitlistEntry is the API's own type, shared with the
+// provider/admin screens, so the marker lives beside the list instead of as a
+// client-only field on rows those screens also read. See forgetAccountWaitlistEntries.
+const ACCOUNT_WAITLIST_KEY = "al-assema-account-waitlist";
 const WAITLIST_EVENT = "al-assema-waitlist-changed";
 
 function readWaitlistCache(): WaitlistEntry[] {
@@ -158,8 +177,17 @@ let myWaitlistHydrated = false;
 
 async function trackWaitlistEntry(id: string, phone: string): Promise<WaitlistEntry | null> {
   try {
-    return await apiGet<WaitlistEntry>(
-      `/waitlist/track?id=${encodeURIComponent(id)}&phone=${encodeURIComponent(phone)}`,
+    // The phone travels in a HEADER, not `?phone=`. It is this entry's shared
+    // secret as well as personal data, and a query string is written to the
+    // reverse proxy's access log, every intermediary's log, and every backup of
+    // both — the same reasoning that already keeps the chat token out of the
+    // URL (see chat.ts's X-Lead-Token). The API accepts the old query parameter
+    // for one release so an already-open tab keeps working; this is the side
+    // that has to move first for that fallback to ever be removable.
+    return await apiFetch<WaitlistEntry>(
+      `/waitlist/track?id=${encodeURIComponent(id)}`,
+      { method: "GET" },
+      { "X-Waitlist-Phone": phone },
     );
   } catch {
     return null; // 404 (not found / phone mismatch) or network — keep the local copy
@@ -182,6 +210,69 @@ export async function refreshMyWaitlistFromApi(): Promise<void> {
   writeWaitlistCache(readWaitlistCache().map((e) => byId.get(e.id) ?? e));
 }
 
+/** Every waiting-list join attached to the signed-in account, newest first. */
+export function fetchAccountWaitlistEntries(): Promise<WaitlistEntry[]> {
+  return apiGet<WaitlistEntry[]>("/customer/waitlist");
+}
+
+/**
+ * Fold the signed-in ACCOUNT's waiting-list joins into this device's view.
+ *
+ * The exact counterpart of absorbAccountLeads in lib/requests.ts, and here for
+ * the same reason: "My Requests" merges leads and waitlist joins into one list,
+ * so an account whose leads follow it across devices while its waitlist joins
+ * stay pinned to one browser is half a feature. Both halves now come from the
+ * account when there is one.
+ */
+export function absorbAccountWaitlistEntries(incoming: WaitlistEntry[]): void {
+  if (incoming.length === 0) return;
+
+  const byId = new Map(readWaitlistCache().map((e) => [e.id, e]));
+  for (const entry of incoming) byId.set(entry.id, entry);
+  writeWaitlistCache([...byId.values()]);
+
+  const mine = readMineWaitlistIds();
+  const merged = [...new Set([...incoming.map((e) => e.id), ...mine])];
+  if (merged.length !== mine.length) {
+    localStorage.setItem(MINE_WAITLIST_KEY, JSON.stringify(merged));
+    window.dispatchEvent(new CustomEvent(WAITLIST_EVENT));
+  }
+
+  const fromAccount = readAccountWaitlistIds();
+  localStorage.setItem(
+    ACCOUNT_WAITLIST_KEY,
+    JSON.stringify([...new Set([...incoming.map((e) => e.id), ...fromAccount])]),
+  );
+}
+
+function readAccountWaitlistIds(): string[] {
+  try {
+    const raw = localStorage.getItem(ACCOUNT_WAITLIST_KEY);
+    return raw ? (JSON.parse(raw) as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Drop the waiting-list joins that came from the ACCOUNT, keeping the ones made
+ * on this device. The counterpart of forgetAccountLeads in lib/requests.ts, and
+ * called from the same place for the same reason: signing out must not leave
+ * one person's history readable to the next person on the browser.
+ */
+export function forgetAccountWaitlistEntries(): void {
+  const fromAccount = new Set(readAccountWaitlistIds());
+  if (fromAccount.size === 0) return;
+
+  writeWaitlistCache(readWaitlistCache().filter((e) => !fromAccount.has(e.id)));
+  localStorage.setItem(
+    MINE_WAITLIST_KEY,
+    JSON.stringify(readMineWaitlistIds().filter((id) => !fromAccount.has(id))),
+  );
+  localStorage.removeItem(ACCOUNT_WAITLIST_KEY);
+  window.dispatchEvent(new CustomEvent(WAITLIST_EVENT));
+}
+
 export function useMyWaitlistEntries(): WaitlistEntry[] {
   const [list, setList] = useState<WaitlistEntry[]>(() => getMyWaitlistEntries());
   useEffect(() => {
@@ -190,7 +281,21 @@ export function useMyWaitlistEntries(): WaitlistEntry[] {
     window.addEventListener("storage", refresh);
     if (!myWaitlistHydrated) {
       myWaitlistHydrated = true;
-      void refreshMyWaitlistFromApi().then(refresh);
+      // `.catch` is not optional here. The chain had none, so anything
+      // refreshMyWaitlistFromApi rejected with — a localStorage quota error out
+      // of writeWaitlistCache is the realistic one — became an unhandled
+      // rejection. On the website that is console noise; the same missing catch
+      // in the mobile client's settings.ts was found to surface as a full-screen
+      // red box (see the note in its refreshSettings), so the pattern is worth
+      // closing wherever it appears. Also releases the once-per-session flag, so
+      // a failed hydration can be retried instead of pinning the list to
+      // whatever was cached.
+      void refreshMyWaitlistFromApi()
+        .then(refresh)
+        .catch((err: unknown) => {
+          myWaitlistHydrated = false;
+          console.warn("Waitlist hydration from API failed:", err);
+        });
     }
     return () => {
       window.removeEventListener(WAITLIST_EVENT, refresh);

@@ -1,3 +1,9 @@
+// MUST stay the first import. Its module side effect drops caches whose shape
+// changed, and ./router below transitively imports lib/catalog.ts and
+// lib/settings.ts, which read those caches and begin fetching at module scope.
+// Imports are evaluated in order, so anything after this point is too late.
+import "./lib/cacheVersion";
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";

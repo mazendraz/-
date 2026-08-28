@@ -8,10 +8,16 @@
  * signing in is an empty list where their history should be.
  *
  * The credential for a claim is the one that already governs a request:
- * `refNumber` + `trackingToken` (or a phone tail for leads predating the token),
- * exactly as /leads/track and the customer chat gate use it. Nothing new is
- * invented and nothing weaker is accepted — if you can already read the request
- * with these, attaching it to your account grants you no access you didn't have.
+ * `refNumber` + `trackingToken`, exactly as /leads/track and the customer chat
+ * gate use it. Nothing new is invented and nothing weaker is accepted — if you
+ * can already read the request with these, attaching it to your account grants
+ * you no access you didn't have.
+ *
+ * The phone-tail fallback that /leads/track still accepts for LEGACY leads
+ * (trackingToken == null) is deliberately NOT accepted here: this is a batch
+ * endpoint (50 references per call), and a batch turns a low-entropy secret into
+ * an enumeration oracle. See LeadClaim in middleware/customerGuard.ts, which
+ * makes the same cut for the same reason.
  */
 import { prisma } from "@/lib/prisma";
 import type { ApiLead } from "@/lib/apiTypes";
@@ -21,7 +27,6 @@ import { leadInclude, leadSecretMatches } from "@/lib/services/leads.service";
 export interface ClaimCandidate {
   refNumber: string;
   token?: string;
-  phone?: string;
 }
 
 export type ClaimOutcome =
@@ -60,7 +65,9 @@ async function claimOne(customerId: string, candidate: ClaimCandidate): Promise<
   });
 
   if (!lead) return "rejected";
-  if (!leadSecretMatches(lead, { token: candidate.token, phone: candidate.phone })) {
+  // Token only — a legacy lead has no token and therefore cannot be claimed in
+  // a batch. See the module comment.
+  if (!leadSecretMatches(lead, { token: candidate.token })) {
     return "rejected";
   }
   if (lead.customerId === customerId) return "already";

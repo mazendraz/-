@@ -167,8 +167,10 @@ function buildWhere(
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
+      { nameAr: { contains: search, mode: "insensitive" } },
       { tagline: { contains: search, mode: "insensitive" } },
       { categories: { some: { category: { label: { contains: search, mode: "insensitive" } } } } },
+      { categories: { some: { category: { labelAr: { contains: search, mode: "insensitive" } } } } },
       { services: { has: search } },
     ];
   }
@@ -244,6 +246,7 @@ export interface CompanyInput {
   // categoryIds[0] when omitted.
   primaryCategoryId?: string;
   name: string;
+  nameAr?: string;
   tagline: string;
   about: string;
   logo: string;
@@ -329,8 +332,10 @@ export async function listAll(
   if (search) {
     where.OR = [
       { name: { contains: search, mode: "insensitive" } },
+      { nameAr: { contains: search, mode: "insensitive" } },
       { tagline: { contains: search, mode: "insensitive" } },
       { categories: { some: { category: { label: { contains: search, mode: "insensitive" } } } } },
+      { categories: { some: { category: { labelAr: { contains: search, mode: "insensitive" } } } } },
       { services: { has: search } },
     ];
   }
@@ -368,6 +373,7 @@ export async function create(input: CompanyInput): Promise<ApiCompany> {
       },
       slug,
       name: input.name,
+      nameAr: input.nameAr ?? null,
       tagline: input.tagline,
       about: input.about,
       logo: input.logo,
@@ -423,6 +429,7 @@ export async function update(
 
   const scalarData = {
     name: input.name ?? undefined,
+    nameAr: input.nameAr === undefined ? undefined : input.nameAr,
     tagline: input.tagline ?? undefined,
     about: input.about ?? undefined,
     logo: input.logo ?? undefined,

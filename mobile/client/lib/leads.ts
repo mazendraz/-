@@ -7,9 +7,9 @@
  * new-request/[slug].tsx's OfferingPicker — prices are never sent, only
  * {offeringId, qty, tierId}; the server reads real prices from the catalogue.
  */
-import type { ApiLead, ApiLeadVerificationPayload } from "@alassema/core";
+import type { ApiLead } from "@alassema/core";
 import { apiPost } from "./api";
-import { rememberLeadToken, getLeadToken } from "./leadTokens";
+import { rememberLeadToken } from "./leadTokens";
 
 export interface NewLeadInput {
   companySlug: string;
@@ -44,26 +44,28 @@ export async function submitLead(input: NewLeadInput): Promise<ApiLead> {
 }
 
 export interface VerifyLeadInput {
-  ref: string;
-  /** This device's own phone-on-file fallback — only effective for a legacy
-   *  lead with no trackingToken; see leadTokens.ts for why. */
-  phone: string;
+  leadId: string;
   decision: "confirmed" | "discrepancy";
   clientAmount?: number;
   note?: string;
 }
 
-/** Confirm or dispute a completed lead's final amount — see
- *  components/PriceVerificationGate.tsx, the only caller. */
+/**
+ * Confirm or dispute a completed lead's final amount — see
+ * components/PriceVerificationGate.tsx, the only caller.
+ *
+ * Account-owned (`/customer/leads/:id/verify`), not the ref+token-gated
+ * `/leads/verify`: the gate only ever mounts for a signed-in customer (see
+ * app/_layout.tsx), and the token-gated route is unreachable for a lead this
+ * DEVICE didn't create — GET /customer/leads never returns trackingToken (see
+ * lib/leadTokens.ts's comment). A reinstall, a second phone, or a lead
+ * attached later via claimDeviceLeads all had no token to send and hit a
+ * permanent 404 on a screen with no way to dismiss it.
+ */
 export async function verifyLeadAmount(input: VerifyLeadInput): Promise<ApiLead> {
-  const token = await getLeadToken(input.ref);
-  const payload: ApiLeadVerificationPayload = {
-    ref: input.ref,
-    token,
-    phone: token ? undefined : input.phone,
+  return apiPost<ApiLead>(`/customer/leads/${input.leadId}/verify`, {
     decision: input.decision,
     clientAmount: input.clientAmount,
     note: input.note,
-  };
-  return apiPost<ApiLead>("/leads/verify", payload);
+  });
 }

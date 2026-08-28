@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
+import { ApiError, apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 import type { StringKey } from "./i18n";
 import { DISTRICTS as CORE_DISTRICTS } from "@alassema/core";
@@ -47,6 +47,13 @@ export interface Lead {
   // High-entropy secret returned on creation; stored on this device and sent to
   // gate status tracking + the review (replaces sending the phone as the secret).
   trackingToken?: string;
+  // CLIENT-SIDE ONLY, never sent by the API: set by absorbAccountLeads on rows
+  // that arrived from GET /customer/leads. It marks the rows whose live status
+  // comes from the ACCOUNT pull, so refreshMyLeadsFromApi knows not to also
+  // chase them through the anonymous tracking gate — which cannot work for them
+  // (no trackingToken is ever returned there) and would spend the whole per-IP
+  // budget on guaranteed 404s.
+  accountOwned?: boolean;
   createdAt: number;
   // Absent until the provider marks the service completed. See LeadCompletion.
   completion?: LeadCompletion;
@@ -204,6 +211,21 @@ function markMyLeadsHydrationSettled() {
   myLeadsHydrationListeners.forEach((fn) => fn());
 }
 
+/**
+ * One lead's live status, or null when the server says it can't have it.
+ *
+ * Rejects — rather than returning null — when the request never reached the
+ * server at all (ApiError status 0: unreachable, or apiFetch's own timeout).
+ * The two used to be collapsed into the same `return null`, which read fine at
+ * this level and was wrong one level up: with the network down every call
+ * "succeeded" with nothing, so the caller could not tell "these leads are
+ * genuinely not retrievable" from "we never got to ask", and the once-per-session
+ * hydration flag stayed set on a session that had hydrated nothing.
+ *
+ * A 404 still returns null, and still means keep the local copy: that is the
+ * secret not matching (a legacy lead whose phone no longer gates it), which
+ * retrying cannot fix.
+ */
 async function trackLead(
   refNumber: string,
   token: string | undefined,
@@ -216,8 +238,9 @@ async function trackLead(
       ? `token=${encodeURIComponent(token)}`
       : `phone=${encodeURIComponent(phone)}`;
     return await apiGet<Lead>(`/leads/track?ref=${encodeURIComponent(refNumber)}&${secret}`);
-  } catch {
-    return null; // 404 (not found / secret mismatch) or network — keep local copy
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 0) throw err;
+    return null; // 404 (not found / secret mismatch) — keep local copy
   }
 }
 
@@ -225,7 +248,10 @@ export async function refreshMyLeadsFromApi(): Promise<void> {
   // Admins/providers already get the authoritative list via hydrateLeadsFromApi.
   if (!isApiConfigured() || isAuthenticated()) return;
   const mineIds = new Set(readMine());
-  const mine = read().filter((l) => mineIds.has(l.id));
+  // Account-owned rows are excluded: useAccountLeads pulls their live status
+  // from GET /customer/leads, and the gate below has no secret that would let
+  // them through anyway. See Lead.accountOwned.
+  const mine = read().filter((l) => mineIds.has(l.id) && !l.accountOwned);
   if (mine.length === 0) return;
 
   const results = await Promise.allSettled(
@@ -235,7 +261,16 @@ export async function refreshMyLeadsFromApi(): Promise<void> {
   for (const r of results) {
     if (r.status === "fulfilled" && r.value) byRef.set(r.value.refNumber, r.value);
   }
-  if (byRef.size === 0) return;
+
+  // Nothing came back AND at least one call never reached the server: this was a
+  // connectivity failure, not an answer. Surface it, so the caller's
+  // once-per-session guard releases and a later mount can try again. (A partial
+  // success is still a success — we keep what landed and say nothing.)
+  if (byRef.size === 0) {
+    const unreachable = results.find((r) => r.status === "rejected");
+    if (unreachable) throw (unreachable as PromiseRejectedResult).reason;
+    return;
+  }
 
   // Merge server truth over the local copy, keyed by the stable reference number.
   //
@@ -264,17 +299,26 @@ export async function submitReview(
   captchaToken?: string | null,
   // The lead's tracking token (preferred secret); phone is the legacy fallback.
   trackingToken?: string,
+  // Set for a request that came from the signed-in ACCOUNT, which carries no
+  // tracking token — the same reason verifyLeadAmount takes these. Without it a
+  // customer could read a completed request from another device but never
+  // review it.
+  account?: { leadId: string; owned: boolean },
 ): Promise<void> {
   if (isApiConfigured()) {
-    await apiPost("/reviews", {
-      ref: refNumber,
-      // Send the token when we have it; otherwise fall back to phone (legacy leads).
-      ...(trackingToken ? { token: trackingToken } : { phone }),
-      rating,
-      text,
-      hp_field: honeypot,
-      captchaToken: captchaToken ?? undefined,
-    });
+    if (account?.owned && !trackingToken) {
+      await apiPost(`/customer/leads/${account.leadId}/review`, { rating, text });
+    } else {
+      await apiPost("/reviews", {
+        ref: refNumber,
+        // Send the token when we have it; otherwise fall back to phone (legacy leads).
+        ...(trackingToken ? { token: trackingToken } : { phone }),
+        rating,
+        text,
+        hp_field: honeypot,
+        captchaToken: captchaToken ?? undefined,
+      });
+    }
   }
   write(read().map((l) => (l.refNumber === refNumber ? { ...l, reviewed: true } : l)));
 }
@@ -361,6 +405,29 @@ export interface LeadCompletionPayload {
   attachments?: string[];
 }
 
+/**
+ * Provider: fetch ONE of their own company's leads by id.
+ *
+ * The dashboard's other reads all go through the capped
+ * `GET /provider/leads?pageSize=100` hydration below, which is fine for lists but
+ * cannot answer "give me this lead". A page addressed by lead id then had only
+ * two sources — whatever the previous route handed it via router state, and that
+ * capped cache — so a reload (state gone) of a lead the cache never held reported
+ * "not found" for a lead that exists. A lead the provider accepted off the
+ * waiting list a moment ago is exactly that lead: it is created after the cache
+ * was filled, and nothing refills it on an in-app navigation.
+ *
+ * Writes the result into the shared cache on the way out, with the same
+ * trackingToken preservation every other lead write here performs.
+ */
+export async function fetchProviderLead(leadId: string): Promise<Lead> {
+  const lead = await apiGet<Lead>(`/provider/leads/${leadId}`);
+  const previous = read().find((l) => l.id === leadId);
+  const merged = { ...lead, trackingToken: lead.trackingToken ?? previous?.trackingToken };
+  write(previous ? read().map((l) => (l.id === leadId ? merged : l)) : [merged, ...read()]);
+  return merged;
+}
+
 /** Provider: mark `leadId` (their own company's) completed with the final amount. */
 export async function submitLeadCompletion(leadId: string, payload: LeadCompletionPayload): Promise<Lead> {
   const updated = await apiPost<Lead>(`/provider/leads/${leadId}/complete`, payload);
@@ -380,14 +447,38 @@ export interface LeadVerificationPayload {
   decision: "confirmed" | "discrepancy";
   clientAmount?: number;
   note?: string;
+  /**
+   * The lead's id, used when the ACCOUNT is the credential rather than the
+   * tracking token — see the account branch below.
+   */
+  leadId?: string;
+  accountOwned?: boolean;
 }
 
 /**
  * Public: the client confirms or disputes the provider's reported final amount
  * for their own lead. Same ref+token trust model as submitReview.
+ *
+ * Except when there is no token to trust. A request pulled from the signed-in
+ * account has none (GET /customer/leads never returns one) and the phone
+ * fallback is refused for any lead that HAS a token stored server-side — so on
+ * a browser that didn't itself submit the request, the public route can only
+ * 404. That matters more here than anywhere else in this file: the price
+ * verification is a mandatory, non-dismissible gate over the whole site, so a
+ * customer signing in on a new browser with one pending would have been stuck
+ * behind a screen that could never succeed. The account route resolves
+ * ownership from the session instead.
  */
 export async function verifyLeadAmount(payload: LeadVerificationPayload): Promise<Lead> {
-  const updated = await apiPost<Lead>("/leads/verify", payload);
+  const { leadId, accountOwned, ...publicPayload } = payload;
+  const updated =
+    accountOwned && !payload.token && leadId
+      ? await apiPost<Lead>(`/customer/leads/${leadId}/verify`, {
+          decision: payload.decision,
+          clientAmount: payload.clientAmount,
+          note: payload.note,
+        })
+      : await apiPost<Lead>("/leads/verify", publicPayload);
   // trackingToken is never resent by the server (see hydrateLeadsFromApi's
   // comment) — carry this device's copy forward so chat/review access survives.
   write(read().map((l) =>
@@ -490,6 +581,7 @@ export function absorbAccountLeads(incoming: Lead[]): void {
     byId.set(lead.id, {
       ...lead,
       trackingToken: lead.trackingToken ?? existing?.trackingToken,
+      accountOwned: true,
     });
   }
   write([...byId.values()]);
@@ -504,15 +596,104 @@ export function absorbAccountLeads(incoming: Lead[]): void {
 }
 
 /**
+ * Drop everything that came from the ACCOUNT, leaving only what this device
+ * itself submitted.
+ *
+ * Called on sign-out. The account's requests are folded into the same local
+ * cache as this browser's own (see absorbAccountLeads — that sharing is what
+ * lets every screen stay account-agnostic), so signing out has to unpick it or
+ * the next person to use the browser reads the last person's request history
+ * off a signed-out page. A request this device submitted itself stays: it was
+ * here before any account was, and it is still legitimately this browser's.
+ */
+export function forgetAccountLeads(): void {
+  const all = read();
+  // Nothing came from an account — don't rewrite storage or fire a change event
+  // for a no-op. clearSession() calls this on every 401, which for a signed-out
+  // visitor is once per page load.
+  if (!all.some((l) => l.accountOwned)) return;
+
+  const kept = all.filter((l) => !l.accountOwned);
+  const keptIds = new Set(kept.map((l) => l.id));
+  write(kept);
+  localStorage.setItem(
+    MINE_KEY,
+    JSON.stringify(readMine().filter((id) => keptIds.has(id))),
+  );
+  window.dispatchEvent(new CustomEvent(EVENT));
+}
+
+/**
+ * Drop everything a STAFF session pulled onto this device, keeping only what this
+ * browser submitted itself.
+ *
+ * The staff counterpart of forgetAccountLeads above, called from lib/auth.ts on
+ * sign-out and on an expired session. Until it existed, staff sign-out cleared
+ * the cached profile and nothing else, so `hydrateLeadsFromApi`'s page of 100
+ * leads — every one of them carrying a real customer's name, phone, district and
+ * budget — simply stayed in localStorage for whoever used the browser next. The
+ * visible symptom was provider B seeing provider A's leads for the frame before
+ * their own hydration landed.
+ *
+ * "Mine" is the same definition every other function here uses: an id in
+ * MINE_KEY. A lead can be BOTH (an admin who also submitted a request from this
+ * machine — the trackingToken preservation throughout this file exists for
+ * exactly that overlap), and in that case it is kept, because it was this
+ * device's before any staff session touched it.
+ */
+export function forgetStaffLeads(): void {
+  const mineIds = new Set(readMine());
+  const all = read();
+  const kept = all.filter((l) => mineIds.has(l.id));
+  // Nothing to do — don't rewrite storage or fire a change event for a no-op.
+  // clearSession() runs on every sign-out, including ones where no staff
+  // hydration ever happened.
+  if (kept.length === all.length) return;
+  write(kept);
+}
+
+/**
  * This device's leads reduced to what the chat endpoints need to prove ownership.
  *
  * A customer has no account: the reference number plus its tracking token IS the
  * credential. Kept here rather than in the chat module because this file owns
  * what "my requests" means, and the messages list must be exactly that set.
  */
-export function useMyLeadClaims(): { ref: string; token?: string; phone: string }[] {
+export interface MyLeadClaim {
+  ref: string;
+  token?: string;
+}
+
+/**
+ * The phone number is deliberately NOT included any more.
+ *
+ * Both endpoints these claims are sent to — POST /chat/summaries and the
+ * account handover — are BATCH endpoints, and the API stopped accepting the
+ * legacy phone-tail fallback on those: 50 (reference, phone) pairs per request
+ * turned a phone number, which is not a secret, into a way to enumerate
+ * somebody's requests. Sending a value the server now ignores would leave a
+ * real phone number travelling in a payload for no purpose at all.
+ *
+ * Practical effect: a lead old enough to predate `trackingToken` no longer
+ * appears in the messages list or attaches to an account. It is still reachable
+ * one at a time through the tracking page, which kept the fallback.
+ */
+function toClaim(l: Lead): MyLeadClaim {
+  return { ref: l.refNumber, token: l.trackingToken };
+}
+
+/**
+ * The same set, read once instead of subscribed to. For callers outside React —
+ * the account handover fires from an effect and needs the claims as they are at
+ * that moment, not a value that changes identity on every render.
+ */
+export function getMyLeadClaims(): MyLeadClaim[] {
+  return getMyLeads().map(toClaim);
+}
+
+export function useMyLeadClaims(): MyLeadClaim[] {
   const mine = useMyLeads();
-  return mine.map((l) => ({ ref: l.refNumber, token: l.trackingToken, phone: l.phone }));
+  return mine.map(toClaim);
 }
 
 export function useMyLeads(): Lead[] {
@@ -523,9 +704,23 @@ export function useMyLeads(): Lead[] {
     window.addEventListener(EVENT, refresh);
     window.addEventListener("storage", refresh);
     // Pull live status for this device's submissions (once per session).
+    //
+    // The flag is set BEFORE the call so concurrent mounts don't each fire one —
+    // but it used never to be cleared again, which quietly turned "once per
+    // session" into "at most one ATTEMPT per session". A hydration that failed
+    // (offline at the moment the page loaded, a timeout, a 500) left "My
+    // Requests" pinned to whatever localStorage happened to hold, for the rest
+    // of the page's life, with nothing able to retry it. Releasing it on failure
+    // keeps the dedupe for the success path — which is all it was ever for —
+    // while letting the next mount, or a manual refresh, try again.
     if (!myLeadsHydrated) {
       myLeadsHydrated = true;
-      void refreshMyLeadsFromApi().finally(markMyLeadsHydrationSettled);
+      void refreshMyLeadsFromApi()
+        .catch((err: unknown) => {
+          myLeadsHydrated = false;
+          reportHydrationFailure("My-requests hydration from API", err);
+        })
+        .finally(markMyLeadsHydrationSettled);
     }
     return () => {
       window.removeEventListener(EVENT, refresh);

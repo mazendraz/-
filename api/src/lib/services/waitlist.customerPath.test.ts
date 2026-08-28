@@ -11,6 +11,9 @@ interface EntryRow {
   phone: string;
   service: string | null;
   note: string | null;
+  district?: string | null;
+  budget?: string | null;
+  itemsSnapshot?: unknown;
   status: string;
   customerId: string | null;
   convertedLeadId: string | null;
@@ -19,12 +22,20 @@ interface EntryRow {
 
 let entries: EntryRow[] = [];
 let nextId = 1;
+// Set by the one test that needs join() to hit the pending-verification guard;
+// every other test leaves it null, i.e. "this customer owes nothing".
+let pendingVerificationLead: { id: string; refNumber: string } | null = null;
 const COMPANY = { id: "co1", slug: "acme", name: "شركة أكمي" };
 
 const db = {
   company: {
     findFirst: async ({ where }: { where: { slug: string; status: string } }) =>
       where.slug === COMPANY.slug ? { id: COMPANY.id } : null,
+  },
+  // join() now refuses to queue new work for a customer who still has a final
+  // amount to confirm (leadsService.assertNoPendingVerification).
+  lead: {
+    findFirst: async () => pendingVerificationLead,
   },
   waitlistEntry: {
     create: async ({ data }: { data: Omit<EntryRow, "id" | "createdAt" | "convertedLeadId"> }) => {
@@ -37,6 +48,16 @@ const db = {
       entries.push(row);
       return { ...row, company: COMPANY };
     },
+    // join() rejects a near-identical re-submit inside a 5-minute window (the
+    // same guard POST /leads applies). Every entry these tests create differs by
+    // phone, so this only has to be present, not clever.
+    findFirst: async ({ where }: { where: { companyId: string; phone: string; service: string | null } }) =>
+      entries.find(
+        (e) =>
+          e.companyId === where.companyId &&
+          e.phone === where.phone &&
+          e.service === where.service,
+      ) ?? null,
     findMany: async ({ where }: { where: { customerId: string } }) =>
       entries
         .filter((e) => e.customerId === where.customerId)
@@ -55,6 +76,33 @@ const OTHER = "customer-other";
 beforeEach(() => {
   entries = [];
   nextId = 1;
+  pendingVerificationLead = null;
+});
+
+describe("join — an unconfirmed final amount blocks new work", () => {
+  // The waiting list is the other way to start something, so the rule that
+  // guards POST /leads has to guard this too — otherwise the check there is a
+  // one-click detour rather than a rule. See leadsService.assertNoPendingVerification.
+  it("refuses a signed-in customer who still owes a price verification", async () => {
+    pendingVerificationLead = { id: "lead-9", refNumber: "AA-20260826-7F3K" };
+
+    await expect(
+      join(COMPANY.slug, { name: "عميل", phone: "+201234567890" }, OWNER),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      details: { reason: ["PENDING_VERIFICATION"] },
+    });
+
+    expect(entries).toHaveLength(0);
+  });
+
+  it("still lets a GUEST join — there is no account to owe anything", async () => {
+    pendingVerificationLead = { id: "lead-9", refNumber: "AA-20260826-7F3K" };
+
+    await join(COMPANY.slug, { name: "عميل", phone: "+201234567890" });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].customerId).toBeNull();
+  });
 });
 
 describe("join — customerId is optional and additive", () => {

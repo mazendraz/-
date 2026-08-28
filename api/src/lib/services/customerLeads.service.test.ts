@@ -81,9 +81,20 @@ describe("a valid claim", () => {
     expect(leads[0]!.customerId).toBe(ME);
   });
 
-  it("accepts a phone tail for a legacy request with no token", async () => {
-    expect(await claim("AA-20260101-BBBB", { phone: "+201009876543" })).toBe("claimed");
-    expect(leads[1]!.customerId).toBe(ME);
+  // Deliberately changed: this path used to accept the phone-tail fallback that
+  // /leads/track still allows for legacy leads. Claiming is a BATCH operation
+  // (50 references per call), and a batch turns a phone number — which is not a
+  // secret, and which an attacker targeting someone already has — into a
+  // practical way to enumerate that person's requests. A legacy lead stays
+  // reachable one at a time; it just cannot be claimed. See ClaimCandidate.
+  it("refuses a phone tail for a legacy request — a batch takes tokens only", async () => {
+    expect(await claim("AA-20260101-BBBB", { phone: "+201009876543" } as never)).toBe("rejected");
+    expect(leads[1]!.customerId).toBeNull();
+  });
+
+  it("refuses a legacy request even with the correct phone and no token at all", async () => {
+    expect(await claim("AA-20260101-BBBB", {})).toBe("rejected");
+    expect(leads[1]!.customerId).toBeNull();
   });
 
   it("normalizes the reference — case and whitespace are typing, not identity", async () => {
@@ -148,9 +159,10 @@ describe("batches", () => {
     const results = await claimLeads(ME, [
       { refNumber: "AA-20260101-AAAA", token: "token-one" },
       { refNumber: "AA-19990101-ZZZZ", token: "nope" },
-      { refNumber: "AA-20260101-BBBB", phone: "+201009876543" },
+      // Legacy (no token): rejected now that the batch path takes tokens only.
+      { refNumber: "AA-20260101-BBBB" },
     ]);
-    expect(results.map((r) => r.outcome)).toEqual(["claimed", "rejected", "claimed"]);
+    expect(results.map((r) => r.outcome)).toEqual(["claimed", "rejected", "rejected"]);
   });
 });
 

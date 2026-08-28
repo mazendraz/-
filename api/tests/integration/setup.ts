@@ -44,6 +44,22 @@ if (!LOCAL_HOSTS.has(host) && process.env.ALLOW_REMOTE_TEST_DB !== "1") {
   );
 }
 
+// ── CAPTCHA off ───────────────────────────────────────────────────────────────
+// Every public write in this suite (join a waiting list, submit a lead, leave
+// feedback) runs verifyCaptcha, which is a no-op UNLESS a secret is configured.
+// A developer's own api/.env normally HAS one — so on a real machine those
+// requests came back 400 "CAPTCHA verification required" while the same tests
+// passed in CI, where no secret is set. The tests are not the browser and have
+// no widget to get a token from.
+//
+// Cleared here rather than skipped per-test: the captcha is a client gate, not
+// the behaviour any of these tests exist to check, and env vars are read at
+// request time so deleting them is enough. Same intent as the maintenance-mode
+// precondition below — remove the ambient switch that makes the suite fail for
+// reasons unrelated to what it asserts.
+delete process.env.TURNSTILE_SECRET_KEY;
+delete process.env.RECAPTCHA_SECRET_KEY;
+
 // ── Known-good preconditions ──────────────────────────────────────────────────
 // The suite shares the developer's local database, so it inherits whatever state
 // was left in the admin UI. Maintenance mode is the one that bites: it makes

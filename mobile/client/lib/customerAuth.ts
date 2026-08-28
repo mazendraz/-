@@ -14,10 +14,13 @@
  */
 import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
+import { router } from "expo-router";
 import Constants from "expo-constants";
 import type { ApiCustomer } from "@alassema/core";
 import { apiGet, apiPost, isApiConfigured, ApiError } from "./api";
-import { clearTokens, getRefreshToken, saveTokens } from "./session";
+import { clearTokens, getRefreshToken, onAuthInvalidated, saveTokens } from "./session";
+import { claimDeviceLeads } from "./customerLeads";
+import { unregisterPush } from "./push";
 
 export type Customer = ApiCustomer;
 export type SignInOutcome = "created" | "linked" | "returning";
@@ -61,14 +64,33 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+// The server-side counterpart of a dead session (a rejected refresh token —
+// see session.ts's invalidateSession, which api.ts's refreshAccessToken calls
+// instead of clearing tokens silently). Module-level, not inside a hook: this
+// has to fire regardless of which — if any — component holding
+// useCustomerAuth() happens to be mounted at the moment the refresh fails.
+onAuthInvalidated(() => setCustomer(null));
+
 // Device descriptor sent with every sign-in — see the module comment. A real
 // device name (Constants.deviceName) is what the /account devices list shows;
 // Platform.OS is the "ios" | "android" the schema stores. deviceName isn't
 // guaranteed non-null on every runtime, so it's optional to the API too.
+//
+// `platform` is sent ONLY when it really is one of those two. Under
+// `expo start --web` (the render-verification surface — see lib/session.ts)
+// Platform.OS is "web", which the API's deviceSchema rejects outright:
+// `z.enum(["ios","android"])`. The previous `Platform.OS as "ios" | "android"`
+// cast silenced TypeScript about exactly that case, so every sign-in and
+// registration from the web build failed with a 400 "Validation failed" and no
+// hint as to why. The field is optional server-side, so omitting it keeps the
+// `device` object present — which is what signals "issue a refresh token" —
+// without lying about which platform this is.
 function deviceInfo() {
+  const os = Platform.OS;
+  const platform = os === "ios" || os === "android" ? os : undefined;
   return {
-    deviceName: Constants.deviceName ?? undefined,
-    platform: Platform.OS as "ios" | "android",
+    deviceName: Constants.deviceName ?? (os === "web" ? "Web" : undefined),
+    platform,
   };
 }
 
@@ -82,6 +104,11 @@ async function applySignIn(res: CustomerAuthResponse): Promise<SignInOutcome> {
   }
   await saveTokens({ accessToken: res.token, refreshToken: res.refreshToken });
   setCustomer(res.customer);
+  // Fire-and-forget, AFTER the tokens are stored (it makes an authenticated
+  // call) and deliberately not awaited: attaching this device's past requests
+  // to the account is a recovery nicety, and sign-in must not wait on it or
+  // fail because of it. See claimDeviceLeads for why the app needs this at all.
+  void claimDeviceLeads();
   return res.outcome;
 }
 
@@ -89,6 +116,31 @@ async function applySignIn(res: CustomerAuthResponse): Promise<SignInOutcome> {
 export async function signInWithGoogle(idToken: string): Promise<SignInOutcome> {
   const res = await apiPost<CustomerAuthResponse>("/auth/google", {
     idToken,
+    device: deviceInfo(),
+  });
+  return applySignIn(res);
+}
+
+/**
+ * Exchange an Apple identity token for our session.
+ *
+ * Four fields where Google needs one. `rawNonce` is what the server hashes to
+ * check against the nonce Apple signed into the token — see appleAuth.ts.
+ * `fullName` is present ONLY on a customer first authorization; Apple never
+ * sends it again, so it is passed through when present and absent thereafter.
+ * `authorizationCode` has nothing to do with signing in — the server trades it
+ * for the token it needs to revoke this app's access if the account is ever
+ * deleted. All of them are forwarded as-is; the server decides what to do with
+ * them.
+ */
+export async function signInWithApple(payload: {
+  identityToken: string;
+  rawNonce: string;
+  fullName?: string;
+  authorizationCode?: string;
+}): Promise<SignInOutcome> {
+  const res = await apiPost<CustomerAuthResponse>("/auth/apple", {
+    ...payload,
     device: deviceInfo(),
   });
   return applySignIn(res);
@@ -130,11 +182,45 @@ export async function verifyEmailToken(token: string): Promise<SignInOutcome> {
   return applySignIn(res);
 }
 
-export async function resendVerification(email: string): Promise<void> {
-  await apiPost("/auth/customer/resend-verification", { email });
+/**
+ * Ask for another verification link. Resolves to whether the mail actually
+ * went out — `false` means the server accepted the request but the mail
+ * transport refused it, so the caller must NOT tell the customer to go check
+ * an inbox. See api's resend-verification route for why an unknown address
+ * still reports `true`.
+ */
+export async function resendVerification(email: string): Promise<boolean> {
+  const res = await apiPost<{ sent?: boolean }>("/auth/customer/resend-verification", { email });
+  // Defaults to true so an older API build (which returned `{sent:true}`
+  // unconditionally, or no body at all) keeps its previous behaviour rather
+  // than reading as a failure.
+  return res?.sent !== false;
+}
+
+/** Start a password reset — always resolves, whether or not the address has
+ *  an account, so the caller can show the same "check your inbox" copy. */
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiPost("/auth/customer/forgot-password", { email });
+}
+
+/** Complete a password reset from the emailed link's token (deep-linked in,
+ *  same mechanism as verifyEmailToken above). Signs in on success and revokes
+ *  every other device's session — see api's resetPassword for why. */
+export async function resetPassword(token: string, password: string): Promise<SignInOutcome> {
+  const res = await apiPost<CustomerAuthResponse>("/auth/customer/reset-password", {
+    token,
+    password,
+    device: deviceInfo(),
+  });
+  return applySignIn(res);
 }
 
 export async function customerLogout(): Promise<void> {
+  // Forget this phone's push token BEFORE the access token is cleared below —
+  // the unregister route requires auth (see push-device/route.ts's DELETE),
+  // and without this the previous owner of a shared phone keeps receiving
+  // notifications for an account they've just signed out of.
+  await unregisterPush().catch(() => {});
   try {
     const refreshToken = await getRefreshToken();
     // Tells the server to revoke THIS device's session — without it, sign-out
@@ -144,6 +230,14 @@ export async function customerLogout(): Promise<void> {
   } catch {
     /* best-effort — tokens are cleared locally regardless */
   }
+  // Leave for a screen that does not need an account BEFORE clearing the state
+  // that the account gates watch. The gates are focus-scoped (see
+  // authGate.ts's useRequireAccount), so whichever screen is on top when
+  // `customer` goes null is the one that decides where the customer ends up —
+  // and signing out should put them in the guest app, not back at a sign-in
+  // form. Doing it in the other order made sign-out a round trip to the very
+  // screen the user was trying to leave.
+  router.replace("/home");
   await clearTokens();
   setCustomer(null);
 }

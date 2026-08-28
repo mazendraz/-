@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiCategory } from "@alassema/core";
@@ -7,6 +8,8 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCategories } from "../../lib/categories";
 import { ApiError } from "../../lib/api";
+import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { assetUri } from "../../lib/assetUrl";
 
 /** All service categories to browse — the mobile counterpart of Services.tsx. */
 export default function Services() {
@@ -14,11 +17,22 @@ export default function Services() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetchCategories()
-      .then(setCategories)
+      .then((all) => {
+        setCategories(all);
+        setError("");
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "تعذّر تحميل الخدمات."));
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // A category added, renamed or removed from the website's admin shows up on
+  // the next visit to this screen instead of only after an app restart.
+  useRefreshOnFocus(load);
 
   const q = query.trim().toLowerCase();
   const filtered = (categories ?? []).filter(
@@ -28,7 +42,7 @@ export default function Services() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
           <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
         </Pressable>
         <Text style={styles.title}>الخدمات</Text>
@@ -58,7 +72,7 @@ export default function Services() {
             style={styles.card}
             onPress={() => router.push({ pathname: "/services/[slug]", params: { slug: item.slug } })}
           >
-            <Image source={{ uri: item.cover }} style={styles.cover} />
+            <Image source={{ uri: assetUri(item.cover) }} style={styles.cover} />
             <View style={styles.cardBody}>
               <Text style={styles.cardTitle}>{item.label}</Text>
               <Text style={styles.cardDesc} numberOfLines={2}>{item.description}</Text>

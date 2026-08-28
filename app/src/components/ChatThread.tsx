@@ -122,8 +122,21 @@ export default function ChatThread({ load, send, viewer, onToggleHidden, classNa
       schedule();
     };
 
+    // Clearing before setting is what keeps this to ONE chain. `onVisible` below
+    // calls tick() directly, which ends in schedule() — so without this line the
+    // timer that was already pending stayed pending, fired later, and scheduled
+    // a chain of its own. timerRef only ever tracks the most recent one, so the
+    // older chains were untracked AND uncancellable, and the cleanup below could
+    // only ever clear the last of them.
+    //
+    // The effect was cumulative and permanent for the life of the mount: every
+    // tab-switch-away-and-back added another concurrent poll chain. Twenty tab
+    // switches over a working day meant twenty-one chains at the 8s cadence —
+    // and, before the two ChatThread mounts were deduplicated, double that. It
+    // read as "the dashboard gets slow after a while", not as a bug.
     const schedule = () => {
       if (!alive) return;
+      if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(tick, pollInterval(lastActivityRef.current));
     };
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t, type Locale, type StringKey } from "../../lib/i18n";
 import { submitReview, type Lead } from "../../lib/requests";
 import { captchaConfigured } from "../../lib/captcha";
@@ -28,6 +28,12 @@ export default function ReviewStep({ lead, onDone, locale }: { lead: Lead; onDon
   const [done, setDone] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaReset, setCaptchaReset] = useState(0);
+  // The "thanks" panel shows for a beat before releasing the gate. Tracked and
+  // cleared on unmount so the callback can't fire into a torn-down tree — this
+  // one resolves the price-verification gate, which is not a callback to leave
+  // pointing at a component that no longer exists.
+  const doneTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(doneTimer.current), []);
 
   async function submit() {
     if (rating < 1) return;
@@ -38,9 +44,12 @@ export default function ReviewStep({ lead, onDone, locale }: { lead: Lead; onDon
     setBusy(true);
     setError("");
     try {
-      await submitReview(lead.refNumber, lead.phone, rating, text.trim(), "", captchaToken, lead.trackingToken);
+      await submitReview(
+        lead.refNumber, lead.phone, rating, text.trim(), "", captchaToken, lead.trackingToken,
+        { leadId: lead.id, owned: Boolean(lead.accountOwned) },
+      );
       setDone(true);
-      setTimeout(onDone, 1200);
+      doneTimer.current = window.setTimeout(onDone, 1200);
     } catch {
       setError(t(locale, "lead_review_error"));
       setCaptchaToken(null);

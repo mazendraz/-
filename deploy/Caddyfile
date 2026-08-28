@@ -119,7 +119,21 @@ your-domain.com {
 		#
 		# ROLLBACK (one word): rename the header below back to
 		# `Content-Security-Policy-Report-Only` and `systemctl reload caddy`.
-		header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co https://*.googleusercontent.com; media-src 'self' https://*.supabase.co; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://challenges.cloudflare.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+		# ── fonts.googleapis.com / fonts.gstatic.com are GONE from this policy ──
+		# The web fonts are self-hosted as of the reliability audit (app/src/fonts.css
+		# + app/public/fonts) precisely so a third-party host can no longer stall the
+		# first paint. Removing the allowances is the other half of that: it makes the
+		# policy state the truth, and it means a future re-added <link> fails loudly at
+		# review time instead of quietly reintroducing the outage.
+		#
+		# `font-src 'self'` still covers the WOFF2 files — they are same-origin now.
+		# `style-src` keeps 'unsafe-inline' (React sets inline style="" attributes) and
+		# the GIS stylesheet, which is not ours to host.
+		#
+		# ⚠ IF TEXT SUDDENLY RENDERS IN A SYSTEM FONT after deploying this: a
+		# @font-face url in app/src/fonts.css is pointing off-origin. Fix the file,
+		# don't widen the policy back.
+		header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self'; img-src 'self' data: https://*.supabase.co https://*.googleusercontent.com; media-src 'self' https://*.supabase.co; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://challenges.cloudflare.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
 
 		# ── Deep-link association files ──────────────────────────────────────
 		# `apple-app-site-association` has NO file extension, so Caddy guesses
@@ -137,7 +151,74 @@ your-domain.com {
 		@aasa path /.well-known/apple-app-site-association
 		header @aasa Content-Type application/json
 
-		try_files {path} /index.html
+		# ── Cache-Control ────────────────────────────────────────────────────
+		# There was NONE of this until the 2026-08-26 reliability audit, and the
+		# absence was not neutral. With no explicit freshness directive a browser
+		# falls back to HEURISTIC caching (RFC 9111 §4.2.2) — commonly 10% of the
+		# time since Last-Modified. An index.html a week old therefore gets
+		# roughly seventeen hours of "fresh" with NO revalidation, so a returning
+		# visitor is handed the previous release's HTML, which references
+		# content-hashed chunks that the deploy has already replaced. The result
+		# is a ChunkLoadError and the CrashScreen — "works after a hard refresh".
+		#
+		# The two rules below are a pair and only work together:
+		#
+		#   • HTML must ALWAYS revalidate. `no-cache` does not mean "don't
+		#     store" — it means "store it, but check before reusing it". With
+		#     Caddy's Etag that check is a 304 with an empty body, so this costs
+		#     one round trip and no bandwidth. This is the rule that guarantees a
+		#     reload picks up the new build.
+		#
+		#   • Hashed assets can be cached FOREVER, and should be. The filename
+		#     changes whenever the bytes change, so there is no such thing as a
+		#     stale hit — `immutable` additionally tells the browser not to
+		#     revalidate even on an explicit reload, which is what makes a hard
+		#     refresh cheap instead of re-downloading the whole bundle.
+		#
+		# The other half of this fix lives in deploy/_build.sh, which no longer
+		# deletes the previous build's chunks. Headers alone would not help a tab
+		# asking for a file that is no longer on disk.
+		#
+		# ── Why the second rule is "everything else" and not "the HTML" ───────
+		# The obvious spelling is `@html path / /index.html`. Don't use it. A
+		# deep link like /companies/foo is REWRITTEN to /index.html by try_files
+		# below, and whether the `header` matcher sees the original path or the
+		# rewritten one depends on where `header` sits in Caddy's directive
+		# order — which is not something this file should be betting the fix on.
+		# `not path /assets/*` is true either way, before or after any rewrite.
+		#
+		# The cost of the broader rule is that the unhashed files from
+		# app/public (favicon, logo, manifest, sw.js, locale-init.js, /img/*)
+		# also revalidate on each load. Those are conditional requests answered
+		# with an empty 304 thanks to Caddy's Etag, and two of them — sw.js and
+		# manifest.webmanifest — are ones you actively WANT picked up promptly.
+		# Accepted deliberately; if /img/* ever shows up in a performance
+		# profile, give it its own `max-age` rule rather than narrowing this one.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+
+		@revalidate not path /assets/*
+		header @revalidate Cache-Control "no-cache"
+
+		# ── SPA fallback ─────────────────────────────────────────────────────
+		# `try_files {path} /index.html` is what makes client-side routing work:
+		# /companies/foo is not a file, so it serves the app shell and the router
+		# takes over. That is correct for ROUTES and actively harmful for ASSETS.
+		#
+		# A missing /assets/*.js otherwise answers `200 text/html` (the shell)
+		# instead of 404. The browser refuses to execute HTML as a module, so the
+		# failure still happens — the retry in app/src/router.tsx still fires —
+		# but it arrives as an opaque "failed to fetch dynamically imported
+		# module" next to a 200 in the network panel, which is about as
+		# misleading as a diagnostic can get.
+		#
+		# Attaching the matcher to try_files (rather than splitting this into
+		# nested handle blocks) keeps the routing shape identical to what was
+		# here before: for /assets/* the rewrite is simply skipped and
+		# file_server answers directly, which means a real 404 for a real
+		# missing file.
+		@spaRoute not path /assets/*
+		try_files @spaRoute {path} /index.html
 		file_server
 	}
 }

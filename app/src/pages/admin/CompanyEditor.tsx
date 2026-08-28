@@ -158,6 +158,7 @@ export function CompanyEditor({ company, categories, onClose }: {
         <TabPanel idPrefix="ce" id="details" className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <LField label={t(locale, "admin_ce_name")} required><input className="field-input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder={t(locale, "admin_ce_name_ph")} /></LField>
+            <LField label={t(locale, "admin_ce_name_ar")}><input className="field-input" dir="rtl" value={draft.nameAr ?? ""} onChange={(e) => set("nameAr", e.target.value)} placeholder={t(locale, "admin_ce_name_ar_ph")} /></LField>
             <LField label={t(locale, "admin_ce_tagline")}><input className="field-input" value={draft.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder={t(locale, "admin_ce_tagline_ph")} /></LField>
           </div>
           <LField label={t(locale, "admin_ce_categories")} required>

@@ -11,6 +11,9 @@ import { prisma } from "@/lib/prisma";
 import { UnauthorizedError } from "@/lib/utils/errors";
 import type { CustomerAuthUser } from "@/lib/auth";
 import * as audit from "@/lib/services/audit.service";
+import { sendCustomerWelcomeEmail } from "@/lib/services/notifications.service";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
+import { seal } from "@/lib/utils/secretBox";
 
 /** A provider-verified identity, shaped the same whoever verified it. */
 export interface VerifiedIdentity {
@@ -18,8 +21,27 @@ export interface VerifiedIdentity {
   subject: string;
   email: string;
   emailVerified: boolean;
-  name: string;
+  /**
+   * What the provider asserts about the profile, or null when it asserts
+   * NOTHING. That distinction is load-bearing rather than cosmetic: Google sends
+   * both on every sign-in, Apple sends neither — a name reaches the client once,
+   * on the first authorization, and never again. Writing a null straight through
+   * would blank a real name and avatar on the customer's SECOND Apple sign-in.
+   * See refreshProfile for the half of this that does the work.
+   */
+  name: string | null;
   avatarUrl: string | null;
+  /**
+   * A name to use ONLY when this sign-in creates a brand-new row, where the
+   * non-null column has to be given something. Never written over an existing
+   * profile, which is what separates it from `name` above.
+   *
+   * It exists for Apple. A customer who authorized the app once, deleted their
+   * account here, then came back arrives with no name at all — and for a
+   * Hide-My-Email address the obvious fallback, the email's local part, is random
+   * hex. The Apple route resolves something readable instead and passes it here.
+   */
+  fallbackName?: string;
 }
 
 export interface SignInResult {
@@ -192,7 +214,11 @@ export async function signInWithIdentity(
       const row = await tx.customerUser.create({
         data: {
           email,
-          name: identity.name,
+          // CustomerUser.name is non-null, so a provider that asserts no name
+          // still needs one to create a row. The Apple route resolves a real
+          // display name before it reaches here (appleDisplayName), so this is a
+          // backstop rather than the path any live sign-in takes.
+          name: identity.name ?? identity.fallbackName ?? email.split("@")[0]!,
           avatarUrl: identity.avatarUrl,
           emailVerified: identity.emailVerified,
           lastLoginAt: new Date(),
@@ -212,6 +238,10 @@ export async function signInWithIdentity(
       ip,
       meta: { provider },
     });
+    // Unlike the password path, there is no separate activation step here —
+    // the provider already asserted the identity, so the account is usable
+    // the moment this row exists. Same welcome email, same deferred send.
+    runAfterResponse(() => sendCustomerWelcomeEmail(created.email, created.name));
     return { customer: toAuthUser(created), outcome: "created" };
   } catch (err) {
     // Two devices signing in for the very first time at the same moment both
@@ -252,13 +282,64 @@ async function refreshProfile(
   return prisma.customerUser.update({
     where: { id: customerId },
     data: {
-      name: identity.name,
-      avatarUrl: identity.avatarUrl,
+      // Only the fields the provider actually asserted. A null means "no
+      // assertion", so it leaves the stored value alone instead of clearing it —
+      // the entire reason those fields are nullable.
+      //
+      // The cost: a Google user who removes their profile photo keeps the stale
+      // cached URL until some later sign-in carries a new one. That is a far
+      // smaller wrong than blanking a returning Apple user's name on every
+      // single sign-in, which is what the unconditional write did.
+      ...(identity.name !== null && { name: identity.name }),
+      ...(identity.avatarUrl !== null && { avatarUrl: identity.avatarUrl }),
       emailVerified: identity.emailVerified,
       lastLoginAt: new Date(),
     },
     select: CUSTOMER_SELECT,
   });
+}
+
+/**
+ * Park an Apple refresh token against an identity row, encrypted.
+ *
+ * Called after a successful Apple sign-in, on a best-effort basis — see the
+ * route. Never throws: the customer is already signed in by the time this runs,
+ * and losing the ability to revoke later is not worth turning a working sign-in
+ * into an error.
+ *
+ * ── Why it only ever writes a non-empty value ────────────────────────────────
+ * Apple issues an authorization code on every sign-in, but the exchange can fail
+ * (expired code, network, a deploy with no private key). Writing the null result
+ * of a failed exchange would ERASE a perfectly good token captured on an earlier
+ * sign-in, trading a working revocation for a broken one. So a failure leaves
+ * the column alone, and any later successful sign-in replaces it.
+ *
+ * ── Why it is keyed on (provider, subject) ───────────────────────────────────
+ * The same unique key sign-in itself uses. Keying on customerId would be wrong
+ * for an account with both a Google and an Apple identity — there are two rows,
+ * and only the Apple one has a token Apple will accept.
+ */
+export async function storeAppleRefreshToken(
+  subject: string,
+  refreshToken: string | null,
+): Promise<void> {
+  if (!refreshToken) return;
+
+  const sealed = seal(refreshToken);
+  // Null when APPLE_TOKEN_ENCRYPTION_KEY is unset. Storing the plaintext as a
+  // fallback would quietly defeat the reason the column is encrypted at all.
+  if (!sealed) return;
+
+  try {
+    await prisma.customerIdentity.update({
+      where: { provider_subject: { provider: "APPLE", subject } },
+      data: { refreshTokenEnc: sealed },
+    });
+  } catch (err) {
+    console.warn(
+      `[apple] could not store refresh token: ${err instanceof Error ? err.message : "unknown"}`,
+    );
+  }
 }
 
 /** Prisma's unique-constraint failure (P2002), without importing the error class. */

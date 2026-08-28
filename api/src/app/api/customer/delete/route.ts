@@ -6,7 +6,12 @@ import { ValidationError } from "@/lib/utils/errors";
 import { clientIp } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { withCustomerAuth } from "@/lib/middleware/withCustomerAuth";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import {
+  CUSTOMER_SESSION_COOKIE,
+  SESSION_COOKIE,
+  isCustomerToken,
+  sessionCookieOptions,
+} from "@/lib/auth";
 import * as customerDeletion from "@/lib/services/customerDeletion.service";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +53,14 @@ export const POST = withErrors(
     // leaving the browser holding a token for a deleted user means every
     // subsequent request 401s with no explanation.
     const res = ok(summary);
-    res.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions(), maxAge: 0 });
+    const expire = { ...sessionCookieOptions(), maxAge: 0 };
+    res.cookies.set(CUSTOMER_SESSION_COOKIE, "", expire);
+    // And the legacy shared cookie if THIS population is what's in it — see the
+    // same guard in the customer logout route.
+    const legacy = request.cookies.get(SESSION_COOKIE)?.value;
+    if (legacy && (await isCustomerToken(legacy))) {
+      res.cookies.set(SESSION_COOKIE, "", expire);
+    }
     return res;
   }),
   ),

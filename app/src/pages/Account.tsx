@@ -92,7 +92,7 @@ export default function Account() {
         <PersonalTabs active="account" />
 
         <div className="mb-6">
-          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-1">
+          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-2">
             {t(locale, "account_title")}
           </h1>
           <p className="text-label text-outline">{t(locale, "account_sub")}</p>

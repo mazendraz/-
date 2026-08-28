@@ -16,6 +16,8 @@ import type {
 } from "@/generated/prisma/enums";
 import type { InputJsonValue } from "@/generated/prisma/internal/prismaNamespace";
 import * as audit from "@/lib/services/audit.service";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
+import { notifyProviderChangeRequestReviewed } from "@/lib/services/notifications.service";
 import { updateCompanySchema } from "@/lib/validation/companies";
 import {
   updateOfferingSchema,
@@ -36,7 +38,7 @@ const MAX_PAGE_SIZE = 100;
 // column added to the schema later is closed by default rather than open.
 export const EDITABLE_FIELDS: Record<ChangeEntity, readonly string[]> = {
   COMPANY: [
-    "name", "tagline", "about", "logo", "cover", "gallery",
+    "name", "nameAr", "tagline", "about", "logo", "cover", "gallery",
     "phone", "whatsapp", "email", "location",
     "yearsExperience", "responseTime", "badges",
     "metaTitle", "metaDescription",
@@ -44,7 +46,7 @@ export const EDITABLE_FIELDS: Record<ChangeEntity, readonly string[]> = {
   // Wired up in Feature B (phase 3) — listed now so the shape is visible, but
   // ENTITY_DISPATCH rejects these entities until their models exist.
   OFFERING: [
-    "name", "description", "kind", "pricingModel",
+    "name", "nameAr", "description", "descriptionAr", "tags", "kind", "pricingModel",
     "priceMin", "priceMax", "unit", "minQty", "image", "note",
   ],
   // `sortOrder` is intentionally absent: it is display ordering, so it takes the
@@ -609,6 +611,37 @@ export interface ReviewResult {
   skipped: string[];
 }
 
+/**
+ * One email per review decision — called exactly once from whichever of
+ * review()'s four branches actually ran, right alongside that branch's own
+ * audit.record call. Fire-and-forget (runAfterResponse), fail-open: the
+ * approval/rejection itself already committed by the time this runs, so a
+ * mail hiccup here must never surface as "did my request go through?".
+ */
+function notifyChangeRequestReviewed(
+  submittedById: string,
+  companyName: string,
+  entity: string,
+  action: "approve" | "reject",
+  reviewNote: string | null,
+): void {
+  runAfterResponse(async () => {
+    const submitter = await prisma.user
+      .findUnique({ where: { id: submittedById }, select: { email: true } })
+      .catch((err) => {
+        console.error(`[notify] change-request submitter lookup failed for ${submittedById}:`, err);
+        return null;
+      });
+    await notifyProviderChangeRequestReviewed({
+      to: submitter?.email ?? null,
+      companyName,
+      entity,
+      action,
+      reviewNote,
+    });
+  });
+}
+
 export async function review(
   actor: AuthUser,
   id: string,
@@ -639,6 +672,7 @@ export async function review(
       entityId: id,
       meta: { companyId: row.companyId, fields: Object.keys(changes) },
     });
+    notifyChangeRequestReviewed(row.submittedById, updated.company.name, row.entity, "reject", input.reviewNote ?? null);
     return { request: serialize(updated), applied: [], skipped: Object.keys(changes) };
   }
 
@@ -685,6 +719,7 @@ export async function review(
       entity: "ChangeRequest", entityId: id,
       meta: { companyId: row.companyId, entity: row.entity, entityId: row.entityId },
     });
+    notifyChangeRequestReviewed(row.submittedById, updated.company.name, row.entity, "approve", input.reviewNote ?? null);
     return { request: serialize(updated), applied: [], skipped: [] };
   }
 
@@ -717,6 +752,7 @@ export async function review(
       entity: "ChangeRequest", entityId: id,
       meta: { companyId: row.companyId, entity: row.entity, entityId: row.entityId },
     });
+    notifyChangeRequestReviewed(row.submittedById, updated.company.name, row.entity, "approve", input.reviewNote ?? null);
     return { request: serialize(updated), applied: [], skipped: [] };
   }
 
@@ -778,6 +814,7 @@ export async function review(
     entityId: id,
     meta: { companyId: row.companyId, entity: row.entity, applied, skipped },
   });
+  notifyChangeRequestReviewed(row.submittedById, updated.company.name, row.entity, "approve", input.reviewNote ?? null);
 
   return { request: serialize(updated), applied, skipped };
 }

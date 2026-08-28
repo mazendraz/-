@@ -8,6 +8,7 @@ import Modal from "../../components/Modal";
 import { useLocale } from "../../context/LocaleContext";
 import { t, type StringKey } from "../../lib/i18n";
 import { formatDate, formatDateTime } from "../../lib/format";
+import { formatPrice } from "../../lib/pricing";
 import Icon from "../../components/Icon";
 import Select from "../../components/Select";
 import FinalPriceSummary from "./components/FinalPriceSummary";
@@ -267,8 +268,45 @@ export function WaitlistDetailModal({ entry, onClose, onStatusChange, onDelete }
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={entry.name} /><InfoField label={t(locale, "admin_lead_phone")} val={entry.phone} />
           <InfoField label={t(locale, "admin_lead_company")} val={entry.companyName} /><InfoField label={t(locale, "waitlist_service")} val={entry.service || "—"} />
+          {/* A queued entry carries the whole request form now, so the admin
+              sees what a lead's panel shows. Both are absent on entries joined
+              through the short form this replaced — hence the dashes. */}
+          <InfoField label={t(locale, "admin_lead_district")} val={entry.district || "—"} />
+          <InfoField
+            label={t(locale, "admin_lead_estimate")}
+            val={
+              entry.estimatedMin == null
+                ? "—"
+                : formatPrice(
+                    {
+                      pricingModel:
+                        entry.estimatedMax != null && entry.estimatedMax !== entry.estimatedMin
+                          ? "RANGE"
+                          : "FIXED",
+                      priceMin: entry.estimatedMin,
+                      priceMax: entry.estimatedMax,
+                      unit: null,
+                    },
+                    locale,
+                  )
+            }
+          />
           <InfoField label={t(locale, "admin_lead_date")} val={formatDateTime(entry.createdAt, locale)} span={2} />
         </div>
+        {entry.items.length > 0 && (
+          <div>
+            <p className="text-caption font-bold text-outline mb-1.5">{t(locale, "admin_lead_items")}</p>
+            <div className="bg-surface-container rounded-xl p-4 space-y-1.5">
+              {entry.items.map((item) => (
+                <p key={item.id} className="text-label text-on-surface">
+                  {item.nameSnapshot}
+                  {item.tierLabel ? ` · ${item.tierLabel}` : ""}
+                  {item.qty > 1 ? ` ×${item.qty}` : ""}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <p className="text-caption font-bold text-outline mb-1.5">{t(locale, "waitlist_note")}</p>
           <div className="bg-surface-container rounded-xl p-4 text-label text-on-surface leading-relaxed">{entry.note || <span className="text-outline italic">{t(locale, "admin_lead_no_description")}</span>}</div>

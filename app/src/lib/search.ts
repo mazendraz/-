@@ -1,10 +1,11 @@
 import { getCompanies, getCategoriesWithCounts, type Company } from "./catalog";
 import { apiGet, isApiConfigured } from "./api";
+import type { ApiCatalogSearchResponse, ApiCatalogSearchResult } from "./apiTypes";
 
 export type SearchResult =
-  | { type: "service"; slug: string; label: string; sub: string; icon: string; to: string }
-  | { type: "company"; slug: string; label: string; sub: string; image: string; to: string; rating: number }
-  | { type: "serviceItem"; label: string; sub: string; companySlug: string; to: string; image: string };
+  | { type: "category"; slug: string; label: string; sub: string; icon: string; to: string }
+  | { type: "company"; slug: string; label: string; sub: string; image: string; to: string }
+  | { type: "product" | "service"; label: string; sub: string; image: string; to: string; companySlug: string };
 
 const POPULAR = [
   "Interior Design",
@@ -52,13 +53,13 @@ function matchesQuery(text: string, normQ: string): boolean {
   return false;
 }
 
-// Service-category matches (fully loaded in the catalog, so always client-side).
+// Category matches (fully loaded in the catalog, so always client-side).
 function categoryResults(q: string): SearchResult[] {
   const out: SearchResult[] = [];
   for (const cat of getCategoriesWithCounts()) {
     if (matchesQuery(cat.label, q) || matchesQuery(cat.description, q)) {
       out.push({
-        type: "service",
+        type: "category",
         slug: cat.slug,
         label: cat.label,
         sub: `${cat.count} companies`,
@@ -70,7 +71,9 @@ function categoryResults(q: string): SearchResult[] {
   return out;
 }
 
-// Company + individual-service-item matches from a set of companies.
+// Company matches from a set of companies (no per-service-string results any
+// more — real products/services come from the unified /search endpoint's
+// Offering-backed "product"/"service" results instead, see searchRemote).
 function companyResults(companies: Company[], q: string): SearchResult[] {
   const out: SearchResult[] = [];
   for (const c of companies) {
@@ -81,33 +84,15 @@ function companyResults(companies: Company[], q: string): SearchResult[] {
         label: c.name,
         sub: c.categoryLabel,
         image: c.logo,
-        rating: c.rating,
         to: `/companies/${c.slug}`,
       });
-    }
-  }
-  const seen = new Set<string>();
-  for (const c of companies) {
-    for (const svc of c.services) {
-      const key = norm(svc) + "|" + c.slug;
-      if (matchesQuery(svc, q) && !seen.has(key)) {
-        seen.add(key);
-        out.push({
-          type: "serviceItem",
-          label: svc,
-          sub: `by ${c.name}`,
-          companySlug: c.slug,
-          image: c.logo,
-          to: `/companies/${c.slug}`,
-        });
-      }
     }
   }
   return out;
 }
 
 function prioritise(results: SearchResult[], limit: number): SearchResult[] {
-  const order = { service: 0, company: 1, serviceItem: 2 } as const;
+  const order = { category: 0, company: 1, product: 2, service: 2 } as const;
   return [...results].sort((a, b) => order[a.type] - order[b.type]).slice(0, limit);
 }
 
@@ -121,21 +106,61 @@ export function search(query: string, limit = 8): SearchResult[] {
   return prioritise([...categoryResults(q), ...companyResults(getCompanies(), q)], limit);
 }
 
+/** Map one backend catalog-search result to the shape the overlay renders.
+ *  Categories are always fully loaded locally, so their icon (not returned by
+ *  the search endpoint — it only carries a cover image) is recovered from
+ *  there by slug. */
+function mapRemoteResult(r: ApiCatalogSearchResult): SearchResult {
+  if (r.type === "category") {
+    const local = getCategoriesWithCounts().find((c) => c.slug === r.slug);
+    return {
+      type: "category",
+      slug: r.slug,
+      label: r.name,
+      sub: local ? `${local.count} companies` : r.subtitle,
+      icon: local?.icon ?? "category",
+      to: `/services/${r.slug}`,
+    };
+  }
+  if (r.type === "company") {
+    return {
+      type: "company",
+      slug: r.slug,
+      label: r.name,
+      sub: r.subtitle,
+      image: r.image ?? "",
+      to: `/companies/${r.slug}`,
+    };
+  }
+  // product | service — an Offering, always tied to a company profile (no
+  // standalone product/service page exists).
+  const companySlug = r.companySlug ?? r.slug;
+  return {
+    type: r.type,
+    label: r.name,
+    sub: r.subtitle,
+    image: r.image ?? "",
+    companySlug,
+    to: r.offeringId ? `/companies/${companySlug}?offering=${r.offeringId}` : `/companies/${companySlug}`,
+  };
+}
+
 /**
- * Backend-backed search over the COMPLETE company dataset (so the overlay finds
- * companies/services that were never loaded into the browser). Categories stay
- * local (fully loaded). Falls back to the synchronous local search when the API
- * isn't configured or the request fails.
+ * Backend-backed search over the COMPLETE catalog — Category + Company +
+ * Offering (products/services) together, ranked by relevance server-side (see
+ * catalogSearch.service.ts). One request, covering everything the overlay can
+ * show. Falls back to the synchronous local search when the API isn't
+ * configured or the request fails.
  */
 export async function searchRemote(query: string, limit = 8): Promise<SearchResult[]> {
-  const q = norm(query);
+  const q = query.trim();
   if (!q) return [];
   if (!isApiConfigured()) return search(query, limit);
   try {
-    const res = await apiGet<{ data: Company[] }>(
-      `/companies?search=${encodeURIComponent(query.trim())}&pageSize=${limit}`,
+    const res = await apiGet<ApiCatalogSearchResponse>(
+      `/search?q=${encodeURIComponent(q)}&limit=${limit}`,
     );
-    return prioritise([...categoryResults(q), ...companyResults(res.data, q)], limit);
+    return res.results.map(mapRemoteResult);
   } catch {
     return search(query, limit); // network/parse failure → local best-effort
   }

@@ -6,7 +6,8 @@
 // Auth is only enforced when the API is configured (VITE_API_URL); in the
 // localStorage/demo mode the dashboards stay open as before.
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, isApiConfigured } from "./api";
+import { AUTH_EXPIRED_EVENT, apiGet, apiPost, isApiConfigured } from "./api";
+import { forgetStaffLeads } from "./requests";
 
 const USER_KEY = "al-assema-user";
 const EVENT = "al-assema-auth-changed";
@@ -57,9 +58,46 @@ function setSession(user: AuthUser) {
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
+/**
+ * End the staff session AND everything it pulled onto this device.
+ *
+ * This used to be one line — `removeItem(USER_KEY)` — while the customer side
+ * (customerAuth.ts's clearSession) already unpicked its caches properly. That
+ * asymmetry was the bug: a staff session writes considerably MORE to this
+ * browser than a customer one does.
+ *
+ * `hydrateLeadsFromApi()` pulls a page of 100 leads — names, phone numbers,
+ * districts, budgets, descriptions — into the shared lead cache. Leaving them
+ * behind meant provider B, signing in on the same browser after provider A
+ * signed out, rendered A's leads for the paint before their own hydration
+ * landed. Same shape as the customer leak that `forgetAccountLeads` exists to
+ * prevent, so it gets the same treatment: drop what the SESSION brought, keep
+ * what this device submitted itself.
+ *
+ * The catalogue needs no cleanup here — it is now keyed by audience (see
+ * catalog.ts's companiesKey), so an admin's list and the public list live in
+ * different slots and a signed-out browser simply stops reading the admin one.
+ */
 function clearSession() {
   localStorage.removeItem(USER_KEY);
+  forgetStaffLeads();
   window.dispatchEvent(new CustomEvent(EVENT));
+}
+
+// A 401 anywhere in the app proves the staff cookie is dead — see
+// AUTH_EXPIRED_EVENT in api.ts. Registered at module scope, not inside useAuth:
+// this has to fire regardless of which components happen to be mounted, and the
+// dashboards are exactly where a session sits idle long enough to expire.
+if (typeof window !== "undefined") {
+  window.addEventListener(AUTH_EXPIRED_EVENT, (event) => {
+    const detail = (event as CustomEvent<{ audience?: string }>).detail;
+    if (detail?.audience !== "staff") return;
+    // Guarded so a stray 401 on a browser with no staff session doesn't fire a
+    // change event (and a re-render) for a session that was never there.
+    if (!getCurrentUser()) return;
+    console.warn("[al-assema] Staff session expired — signing out.");
+    clearSession();
+  });
 }
 
 export async function login(email: string, password: string): Promise<AuthUser> {

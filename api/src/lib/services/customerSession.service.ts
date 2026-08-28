@@ -48,6 +48,24 @@ export interface IssuedSession {
   expiresAt: Date;
 }
 
+/**
+ * Has this exact (deviceName, platform) pair ever opened a session for this
+ * customer before? Includes revoked/expired sessions on purpose — a device
+ * that signed out months ago and is signing back in is a RETURNING device,
+ * not a new one; only a name+platform this account has genuinely never seen
+ * counts. Used to gate the new-device-login security email (see
+ * customerSignIn.ts) — deliberately loose matching (a display name a client
+ * chose, not a hardware id), which is exactly what that email needs: "have
+ * we told this person about this device before", not device fingerprinting.
+ */
+export async function hasSeenDevice(customerId: string, device: DeviceInfo): Promise<boolean> {
+  const existing = await prisma.customerSession.findFirst({
+    where: { customerId, deviceName: device.deviceName ?? null, platform: device.platform ?? null },
+    select: { id: true },
+  });
+  return existing !== null;
+}
+
 /** Open a new device session and return its refresh token (shown once). */
 export async function issue(
   customerId: string,
@@ -196,12 +214,32 @@ export async function revoke(customerId: string, sessionId: string): Promise<voi
   });
 }
 
-/** End every session for this customer — "sign out everywhere". */
+/**
+ * End every session for this customer — "sign out everywhere".
+ *
+ * Moves the ACCOUNT-WIDE token floor as well as revoking the session rows, and
+ * that second half is what makes the phrase true. Revoking sessions alone kills
+ * refresh tokens; every access token already issued kept working until it
+ * expired, including one a thief was holding — which is the exact scenario
+ * somebody clicks this button in. Bumping `tokensValidFrom` refuses all of them
+ * on their next request (see auth.ts's isBeforeFloor).
+ *
+ * Note this ends the CURRENT device too. That is the intended reading of "sign
+ * out everywhere", and the alternative — carving out the caller — would mean
+ * the one session an attacker is actively using could be the one spared.
+ */
 export async function revokeAll(customerId: string): Promise<number> {
-  const { count } = await prisma.customerSession.updateMany({
-    where: { customerId, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
+  const now = new Date();
+  const [{ count }] = await prisma.$transaction([
+    prisma.customerSession.updateMany({
+      where: { customerId, revokedAt: null },
+      data: { revokedAt: now },
+    }),
+    prisma.customerUser.update({
+      where: { id: customerId },
+      data: { tokensValidFrom: now },
+    }),
+  ]);
   return count;
 }
 

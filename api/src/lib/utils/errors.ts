@@ -55,8 +55,15 @@ export class NotFoundError extends AppError {
 }
 
 export class ConflictError extends AppError {
-  constructor(message = "Conflict") {
-    super("CONFLICT", message, 409);
+  /**
+   * `details` is optional and carries a machine-readable `reason` where the
+   * client needs to tell two conflicts apart — "this company is unavailable,
+   * offer the waiting list" vs "you have a price to confirm first, open the
+   * gate" are both 409 CONFLICT, and branching on human copy (which is
+   * translated) is not something a client should have to do.
+   */
+  constructor(message = "Conflict", details?: Record<string, string[]>) {
+    super("CONFLICT", message, 409, details);
   }
 }
 

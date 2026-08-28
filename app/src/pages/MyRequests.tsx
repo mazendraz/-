@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ApiLeadItem } from "../lib/apiTypes";
 import Modal from "../components/Modal";
 import { formatPrice } from "../lib/pricing";
 import { chatAvailable } from "../lib/chat";
@@ -82,7 +83,7 @@ export default function MyRequests() {
         {/* Header */}
         <PersonalTabs active="requests" />
         <div className="mb-5">
-          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-1">{t(locale, "requests_title")}</h1>
+          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-2">{t(locale, "requests_title")}</h1>
           <p className="text-label text-outline">
             {t(locale, "requests_sub")}
           </p>
@@ -164,6 +165,83 @@ export default function MyRequests() {
   );
 }
 
+// ── Itemised lines + estimate ────────────────────────────────────────────────
+/**
+ * The priced basket behind a request. Every number here is the SNAPSHOT taken
+ * when the request was SENT — it does not move if the provider changes their
+ * prices afterwards.
+ *
+ * Shared by both cards below, because a queued request carries exactly the same
+ * basket as a sent one: the waiting list now takes the whole request form, and
+ * the entry's estimate is frozen at join time the same way a lead's is (see
+ * WaitlistEntry.itemsSnapshot). The customer must see the same total while they
+ * wait as they will after the provider accepts.
+ */
+function RequestItems({ request, locale }: {
+  request: {
+    items?: ApiLeadItem[];
+    estimatedMin?: number | null;
+    estimatedMax?: number | null;
+    discountPercent?: number;
+    hasOnInspection?: boolean;
+  };
+  locale: Locale;
+}) {
+  if ((request.items?.length ?? 0) === 0) return null;
+  return (
+    <div className="px-4 pt-3">
+      <div className="rounded-xl bg-surface-container p-3 space-y-1.5">
+        {request.items!.map((item) => (
+          <div key={item.id} className="flex items-center justify-between gap-2 text-label">
+            <span className="text-on-surface-variant truncate">
+              {item.nameSnapshot}
+              {item.tierLabel ? ` · ${item.tierLabel}` : ""}
+              {item.qty > 1 ? ` ×${item.qty}` : ""}
+            </span>
+            <span className="text-on-surface font-bold flex-shrink-0">
+              {item.lineMin == null
+                ? (locale === "ar" ? "بعد المعاينة" : "On inspection")
+                : formatPrice(
+                    { pricingModel: item.lineMax != null && item.lineMax !== item.lineMin ? "RANGE" : "FIXED",
+                      priceMin: item.lineMin, priceMax: item.lineMax, unit: null },
+                    locale,
+                  )}
+            </span>
+          </div>
+        ))}
+
+        <div className="border-t border-outline-variant/20 pt-1.5 mt-1.5 flex items-center justify-between gap-2">
+          <span className="text-caption font-bold text-outline">
+            {locale === "ar" ? "الإجمالي التقديري" : "Estimated total"}
+          </span>
+          <span className="font-display font-black text-body text-primary">
+            {request.estimatedMin == null
+              ? (locale === "ar" ? "يتحدد بعد المعاينة" : "Quoted after inspection")
+              : formatPrice(
+                  { pricingModel: request.estimatedMax != null && request.estimatedMax !== request.estimatedMin ? "RANGE" : "FIXED",
+                    priceMin: request.estimatedMin, priceMax: request.estimatedMax ?? null, unit: null },
+                  locale,
+                )}
+          </span>
+        </div>
+
+        {(request.discountPercent ?? 0) > 0 && (
+          <p className="text-caption text-primary font-bold">
+            {locale === "ar"
+              ? `خصم الباقة ${request.discountPercent}٪ (على البنود المسعّرة)`
+              : `Bundle discount ${request.discountPercent}% (on priced items)`}
+          </p>
+        )}
+        {request.hasOnInspection && (
+          <p className="text-caption text-outline">
+            {locale === "ar" ? "+ بنود تتحدد بعد المعاينة" : "+ items quoted on site"}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── A real service request ───────────────────────────────────────────────────
 function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Locale; onReview: (l: Lead) => void }) {
   const company = getCompany(lead.companySlug);
@@ -189,61 +267,7 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
         </span>
       </div>
 
-      {/* Itemised lines + estimate. Every number here is the SNAPSHOT
-          taken when the request was sent — it does not move if the
-          provider changes their prices afterwards. */}
-      {(lead.items?.length ?? 0) > 0 && (
-        <div className="px-4 pt-3">
-          <div className="rounded-xl bg-surface-container p-3 space-y-1.5">
-            {lead.items!.map((item) => (
-              <div key={item.id} className="flex items-center justify-between gap-2 text-label">
-                <span className="text-on-surface-variant truncate">
-                  {item.nameSnapshot}
-                  {item.tierLabel ? ` · ${item.tierLabel}` : ""}
-                  {item.qty > 1 ? ` ×${item.qty}` : ""}
-                </span>
-                <span className="text-on-surface font-bold flex-shrink-0">
-                  {item.lineMin == null
-                    ? (locale === "ar" ? "بعد المعاينة" : "On inspection")
-                    : formatPrice(
-                        { pricingModel: item.lineMax != null && item.lineMax !== item.lineMin ? "RANGE" : "FIXED",
-                          priceMin: item.lineMin, priceMax: item.lineMax, unit: null },
-                        locale,
-                      )}
-                </span>
-              </div>
-            ))}
-
-            <div className="border-t border-outline-variant/20 pt-1.5 mt-1.5 flex items-center justify-between gap-2">
-              <span className="text-caption font-bold text-outline">
-                {locale === "ar" ? "الإجمالي التقديري" : "Estimated total"}
-              </span>
-              <span className="font-display font-black text-body text-primary">
-                {lead.estimatedMin == null
-                  ? (locale === "ar" ? "يتحدد بعد المعاينة" : "Quoted after inspection")
-                  : formatPrice(
-                      { pricingModel: lead.estimatedMax != null && lead.estimatedMax !== lead.estimatedMin ? "RANGE" : "FIXED",
-                        priceMin: lead.estimatedMin, priceMax: lead.estimatedMax ?? null, unit: null },
-                      locale,
-                    )}
-              </span>
-            </div>
-
-            {(lead.discountPercent ?? 0) > 0 && (
-              <p className="text-caption text-primary font-bold">
-                {locale === "ar"
-                  ? `خصم الباقة ${lead.discountPercent}٪ (على البنود المسعّرة)`
-                  : `Bundle discount ${lead.discountPercent}% (on priced items)`}
-              </p>
-            )}
-            {lead.hasOnInspection && (
-              <p className="text-caption text-outline">
-                {locale === "ar" ? "+ بنود تتحدد بعد المعاينة" : "+ items quoted on site"}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
+      <RequestItems request={lead} locale={locale} />
 
       {/* Detail row */}
       <div className="p-4 grid grid-cols-2 gap-y-2.5 gap-x-4">
@@ -304,11 +328,13 @@ function LeadRequestCard({ lead, locale, onReview }: { lead: Lead; locale: Local
   );
 }
 
-// ── A waiting-list join ───────────────────────────────────────────────────────
-// Deliberately smaller than LeadRequestCard: a waitlist join never had a
-// district/budget/description/estimate/ref, and contact stays off-platform
-// (phone), so there is no chat thread or review to offer here — this card only
-// lets the customer see it exists and its current status.
+// ── A queued request ─────────────────────────────────────────────────────────
+// A request sent to a company that was booked out. It carries the SAME content
+// as LeadRequestCard's — services, estimate, district, description — because it
+// is the same form; what it does not have yet is a reference number, a chat
+// thread or a review, all of which are created the moment the provider accepts
+// it. So this card shows the whole request and, instead of those actions, says
+// where it stands in the queue.
 function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: Locale }) {
   const company = getCompany(entry.companySlug);
   return (
@@ -333,15 +359,38 @@ function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: 
         </span>
       </div>
 
+      <RequestItems request={entry} locale={locale} />
+
       <div className="p-4 grid grid-cols-2 gap-y-2.5 gap-x-4">
         <Detail icon="calendar_today" label={t(locale, "requests_submitted")} val={new Date(entry.createdAt).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US")} />
         {entry.service && <Detail icon="handyman" label={t(locale, "waitlist_service")} val={entry.service} />}
+        {/* Absent on joins made through the short form this replaced — those
+            genuinely never collected a district. */}
+        {entry.district && <Detail icon="location_on" label={t(locale, "requests_district")} val={entry.district} />}
       </div>
       {entry.note && (
         <div className="px-4 pb-4">
           <p className="text-label text-on-surface-variant bg-surface-container rounded-xl p-3 leading-relaxed">{entry.note}</p>
         </div>
       )}
+
+      {/* Where it stands. CONVERTED means the provider accepted it and a real
+          request now exists — which is a card of its own further up this same
+          list, so this points at it rather than repeating it. */}
+      <div className="px-4 pb-4">
+        <div className={`flex items-start gap-2.5 rounded-xl p-3 ${
+          entry.status === "CONVERTED" ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"
+        }`}>
+          <Icon
+            name={entry.status === "CONVERTED" ? "task_alt" : "hourglass_top"}
+            className="text-subhead flex-shrink-0 mt-0.5"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          />
+          <p className="text-label font-bold leading-relaxed">
+            {t(locale, entry.status === "CONVERTED" ? "waitlist_card_converted" : "waitlist_card_queued")}
+          </p>
+        </div>
+      </div>
 
       {company && (
         <div className="px-4 pb-4">
@@ -359,6 +408,9 @@ function WaitlistRequestCard({ entry, locale }: { entry: WaitlistEntry; locale: 
 }
 
 function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar"; onClose: () => void }) {
+  // Cleared on unmount — see the matching note in ReviewStep.tsx.
+  const doneTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(doneTimer.current), []);
   const [rating, setRating] = useState(0);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -376,9 +428,12 @@ function ReviewModal({ lead, locale, onClose }: { lead: Lead; locale: "en" | "ar
     setBusy(true);
     setError("");
     try {
-      await submitReview(lead.refNumber, lead.phone, rating, text.trim(), "", captchaToken, lead.trackingToken);
+      await submitReview(
+        lead.refNumber, lead.phone, rating, text.trim(), "", captchaToken, lead.trackingToken,
+        { leadId: lead.id, owned: Boolean(lead.accountOwned) },
+      );
       setDone(true);
-      setTimeout(onClose, 1400);
+      doneTimer.current = window.setTimeout(onClose, 1400);
     } catch {
       setError(t(locale, "lead_review_error"));
       setCaptchaToken(null);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   useCustomerThreads, fetchCustomerThread, sendCustomerMessage,
+  fetchAccountThread, sendAccountMessage,
   chatAvailable, POLL_IDLE_MS, type ThreadSummary,
 } from "../lib/chat";
 import { useMyLeads, useMyLeadClaims, type Lead } from "../lib/requests";
@@ -40,7 +41,11 @@ export default function Messages() {
   // below so opening ONE specific conversation never has to wait on that fetch.
   const myLeads = useMyLeads();
   const claims = useMyLeadClaims();
-  const { threads, loading, errorKey, reload } = useCustomerThreads(claims);
+  // Signed in, the ACCOUNT is a second (and better) source of threads — see
+  // loadFromSources in lib/chat.ts. Read here rather than further down because
+  // the list itself depends on it now, not just the live stream.
+  const { customer } = useCustomerAuth();
+  const { threads, loading, errorKey, reload } = useCustomerThreads(claims, Boolean(customer));
 
   // `?ref=` deep-links straight into one conversation — that is how the button
   // on a request card and the request-success screen get here.
@@ -89,7 +94,6 @@ export default function Messages() {
   // signed-in customer: EventSource cannot send the X-Lead-Token header the
   // anonymous chat gate requires, and moving that token into the query string
   // would undo a deliberate decision to keep it out of access logs.
-  const { customer } = useCustomerAuth();
   const { connected: live } = useLiveEvents(
     customer ? streamUrl("/customer/stream") : null,
     reload,
@@ -112,19 +116,36 @@ export default function Messages() {
     return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
   }, [activeRef, reload, live]);
 
+  // ── Which gate opens this thread ─────────────────────────────────────────
+  //
+  // The tracking token, when this browser has one: it is the credential the
+  // request was created with, it works signed in or out, and it is the only
+  // thing that works for a request that was never attached to an account.
+  //
+  // Otherwise the account. A request pulled from the account arrives WITHOUT a
+  // token — /customer/leads deliberately never returns one — and the anonymous
+  // gate's phone fallback only applies to legacy leads that have no token
+  // stored at all. So for every request made on another device (or before this
+  // browser's storage was cleared) the token path cannot work, and asking it to
+  // is exactly why those conversations came back empty.
+  const useAccountGate = Boolean(customer) && !activeLead?.trackingToken;
   const load = useMemo(
     () => (after?: number) =>
-      fetchCustomerThread({
-        ref: activeLead!.refNumber, token: activeLead!.trackingToken, phone: activeLead!.phone, after,
-      }),
-    [activeLead],
+      useAccountGate
+        ? fetchAccountThread(activeLead!.id, after)
+        : fetchCustomerThread({
+            ref: activeLead!.refNumber, token: activeLead!.trackingToken, phone: activeLead!.phone, after,
+          }),
+    [activeLead, useAccountGate],
   );
   const send = useMemo(
     () => (body: string) =>
-      sendCustomerMessage({
-        ref: activeLead!.refNumber, token: activeLead!.trackingToken, phone: activeLead!.phone, body,
-      }),
-    [activeLead],
+      useAccountGate
+        ? sendAccountMessage(activeLead!.id, body)
+        : sendCustomerMessage({
+            ref: activeLead!.refNumber, token: activeLead!.trackingToken, phone: activeLead!.phone, body,
+          }),
+    [activeLead, useAccountGate],
   );
 
   const shell = (children: React.ReactNode) => (
@@ -132,7 +153,7 @@ export default function Messages() {
       <div className="max-w-4xl mx-auto px-5">
         <PersonalTabs active="messages" />
         <div className="mb-5">
-          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-1">
+          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-2">
             {t(locale, "messages_title")}
           </h1>
           <p className="text-label text-outline">{t(locale, "messages_sub")}</p>

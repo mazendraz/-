@@ -33,6 +33,8 @@ export interface CategoryInput {
   pricingMode?: ApiCategoryPricingMode;
   metaTitle?: string;
   metaDescription?: string;
+  labelAr?: string;
+  descriptionAr?: string;
 }
 
 /**
@@ -106,6 +108,8 @@ export async function create(input: CategoryInput): Promise<ApiAdminCategory> {
       pricingMode: input.pricingMode ?? undefined, // undefined → schema default (QUOTE_ONLY)
       metaTitle: input.metaTitle ?? null,
       metaDescription: input.metaDescription ?? null,
+      labelAr: input.labelAr ?? null,
+      descriptionAr: input.descriptionAr ?? null,
     },
   });
   // A brand-new category has no companies yet, so nothing can have a
@@ -135,6 +139,8 @@ export async function update(
       pricingMode: input.pricingMode ?? undefined,
       metaTitle: input.metaTitle === undefined ? undefined : input.metaTitle,
       metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,
+      labelAr: input.labelAr === undefined ? undefined : input.labelAr,
+      descriptionAr: input.descriptionAr === undefined ? undefined : input.descriptionAr,
     },
     include: { _count: { select: { companies: true } } },
   });

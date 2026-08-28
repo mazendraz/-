@@ -22,6 +22,19 @@ const price = z.number().int().min(0).max(100_000_000);
 const offeringBase = z.object({
   name: text(120).pipe(z.string().min(1, "Name is required")),
   description: text(2000).nullish(),
+  // Optional Arabic companions — same nullish convention as description above.
+  nameAr: text(120).nullish(),
+  descriptionAr: text(2000).nullish(),
+  // Free-form search keywords. Capped like every other array on sibling schemas
+  // (companies.ts services/badges). Deliberately `.nullish()`, NOT `.default([])`:
+  // this shape is shared by updateOfferingSchema via `.partial()`, and whether
+  // partial() suppresses a default is a Zod implementation detail this codebase
+  // already flags as unreliable (see changeRequests.service.ts's comment on the
+  // same hazard for companies.ts's services/badges) — offerings.service.ts's
+  // direct-patch update path has no downstream guard against that, unlike the
+  // change-request path, so the base schema stays default-free and `create()`
+  // coalesces `input.tags ?? []` itself instead.
+  tags: z.array(text(40).pipe(z.string().min(1))).max(30).nullish(),
   kind: z.enum(OFFERING_KINDS).optional(),
   pricingModel: z.enum(PRICING_MODELS).optional(),
   priceMin: price.nullish(),

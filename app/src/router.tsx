@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, Outlet } from "react-router-dom";
 
 import RootLayout from "./RootLayout";
@@ -29,56 +29,132 @@ import { ToastProvider } from "./context/ToastContext";
 // accepts nothing — so Vite does a full page reload, which is the correct
 // behaviour for an entry point.
 
+// ── Chunk-load recovery ──────────────────────────────────────────────────────
+// Every route below is a separate JS file fetched on first navigation, and a
+// deploy replaces those files. A tab that was open BEFORE the deploy still holds
+// the old index.html, so its next click asks for a chunk name from the previous
+// build. deploy/_build.sh no longer deletes those (it prunes on age instead), and
+// deploy/Caddyfile now makes index.html revalidate — but neither helps a tab that
+// is already in the bad state, and neither covers a chunk that genuinely fails
+// for some other reason (a dropped connection mid-download, a proxy mangling the
+// response). Without this wrapper any of those throws during render and the user
+// gets CrashScreen for what a reload would have fixed.
+//
+// So: reload once, which fetches fresh HTML and therefore the current chunk names.
+//
+// ── The guard is the important part ──────────────────────────────────────────
+// An unguarded "reload on chunk error" is strictly worse than the crash screen,
+// because a genuinely broken build turns into an infinite reload loop with no way
+// for the user to stop it or read the error. The timestamp is what bounds it:
+// a second failure within RELOAD_COOLDOWN_MS means the reload did NOT fix it, so
+// we stop trying and let the error surface.
+//
+// A timestamp rather than a boolean flag so it self-clears: two deploys in one
+// long session each get their own retry, instead of the first one permanently
+// spending it.
+//
+// sessionStorage rather than localStorage — the state is about THIS tab's page
+// load, not about this device — and every access is wrapped, because Safari's
+// private mode throws on access rather than returning null. When we cannot read
+// or write it we deliberately DON'T reload: not retrying is a visible error,
+// retrying blind is a loop nobody can escape.
+const RELOAD_KEY = "al-assema-chunk-reload";
+const RELOAD_COOLDOWN_MS = 10_000;
+
+function shouldReloadForChunkError(): boolean {
+  try {
+    const previous = Number(sessionStorage.getItem(RELOAD_KEY) ?? 0);
+    if (previous && Date.now() - previous < RELOAD_COOLDOWN_MS) return false;
+    sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `lazy()` with one automatic reload when the chunk itself can't be fetched.
+ *
+ * The returned never-settling promise is deliberate: after calling reload() there
+ * is nothing useful to render, and resolving with a placeholder would paint a
+ * broken frame in the moment before the navigation happens. Suspense keeps
+ * showing the route fallback until the page goes away.
+ */
+// Mirrors React's own `lazy` bound, `any` included. That is not laziness: the
+// props type is contravariant here, so a narrower bound (`unknown`, `never`)
+// stops a route that takes props — `<LegalPage kind="terms" />` — from
+// type-checking at its usage site, and makes the
+// `.then(m => ({ default: m.X }))` re-export routes below fail to infer at all.
+// Verified: `tsc --noEmit` is clean with this and errors with either
+// alternative.
+type RouteComponent = ComponentType<any>;
+
+function lazyRoute<T extends RouteComponent>(
+  load: () => Promise<{ default: T }>,
+): LazyExoticComponent<T> {
+  return lazy(() =>
+    load().catch((err: unknown) => {
+      if (!shouldReloadForChunkError()) throw err;
+      console.warn("[al-assema] Route chunk failed to load — reloading once.", err);
+      window.location.reload();
+      // Never settles — see the note above.
+      return new Promise<{ default: T }>(() => {});
+    }),
+  );
+}
+
 // Everything else is code-split so the initial load only ships Home + chrome.
 // Each route's JS is fetched on first navigation (and cached thereafter).
-const Services = lazy(() => import("./pages/Services"));
-const ServiceCategory = lazy(() => import("./pages/ServiceCategory"));
-const Companies = lazy(() => import("./pages/Companies"));
-const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
-const RequestForm = lazy(() => import("./pages/RequestForm"));
-const MyRequests = lazy(() => import("./pages/MyRequests"));
-const SignIn = lazy(() => import("./pages/SignIn"));
-const Account = lazy(() => import("./pages/Account"));
-const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
-const Messages = lazy(() => import("./pages/Messages"));
-const GuidedStart = lazy(() => import("./pages/GuidedStart"));
-const Saved = lazy(() => import("./pages/Saved"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const LegalPage = lazy(() => import("./pages/LegalPage"));
-const About = lazy(() => import("./pages/About"));
-const Contact = lazy(() => import("./pages/Contact"));
-const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
-const AdminIndexRedirect = lazy(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminIndexRedirect })));
+const Services = lazyRoute(() => import("./pages/Services"));
+const ServiceCategory = lazyRoute(() => import("./pages/ServiceCategory"));
+const Companies = lazyRoute(() => import("./pages/Companies"));
+const CompanyProfile = lazyRoute(() => import("./pages/CompanyProfile"));
+const RequestForm = lazyRoute(() => import("./pages/RequestForm"));
+const MyRequests = lazyRoute(() => import("./pages/MyRequests"));
+const SignIn = lazyRoute(() => import("./pages/SignIn"));
+const Account = lazyRoute(() => import("./pages/Account"));
+const VerifyEmail = lazyRoute(() => import("./pages/VerifyEmail"));
+const ForgotPassword = lazyRoute(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazyRoute(() => import("./pages/ResetPassword"));
+const Messages = lazyRoute(() => import("./pages/Messages"));
+const GuidedStart = lazyRoute(() => import("./pages/GuidedStart"));
+const Saved = lazyRoute(() => import("./pages/Saved"));
+const NotFound = lazyRoute(() => import("./pages/NotFound"));
+const LegalPage = lazyRoute(() => import("./pages/LegalPage"));
+const About = lazyRoute(() => import("./pages/About"));
+const Contact = lazyRoute(() => import("./pages/Contact"));
+const AdminLayout = lazyRoute(() => import("./pages/admin/AdminLayout"));
+const AdminIndexRedirect = lazyRoute(() => import("./pages/admin/AdminLayout").then((m) => ({ default: m.AdminIndexRedirect })));
 // NAV-06: the admin dashboard's 10 tabs used to all ship in one chunk with
 // every editor — each is now its own lazy route, fetched only on first visit.
-const AdminOverviewPage = lazy(() => import("./pages/admin/tabs/OverviewPage"));
-const AdminLeadsPage = lazy(() => import("./pages/admin/tabs/LeadsPage"));
-const AdminCompaniesPage = lazy(() => import("./pages/admin/tabs/CompaniesPage"));
-const AdminServicesPage = lazy(() => import("./pages/admin/tabs/ServicesPage"));
-const AdminTeamPage = lazy(() => import("./pages/admin/tabs/TeamPage"));
-const AdminReviewsPage = lazy(() => import("./pages/admin/ReviewsTab").then((m) => ({ default: m.AdminReviewsTab })));
-const AdminChangesPage = lazy(() => import("./pages/admin/ChangeRequestsTab").then((m) => ({ default: m.ChangeRequestsTab })));
-const AdminChatPage = lazy(() => import("./pages/admin/ChatTab").then((m) => ({ default: m.ChatTab })));
-const AdminStatusPage = lazy(() => import("./pages/admin/SiteStatusTab").then((m) => ({ default: m.SiteStatusTab })));
-const AdminSettingsPage = lazy(() => import("./pages/admin/tabs/SettingsPage"));
-const ProviderLayout = lazy(() => import("./pages/provider/ProviderLayout"));
-const ProviderIndexRedirect = lazy(() => import("./pages/provider/ProviderLayout").then((m) => ({ default: m.ProviderIndexRedirect })));
+const AdminOverviewPage = lazyRoute(() => import("./pages/admin/tabs/OverviewPage"));
+const AdminLeadsPage = lazyRoute(() => import("./pages/admin/tabs/LeadsPage"));
+const AdminCompaniesPage = lazyRoute(() => import("./pages/admin/tabs/CompaniesPage"));
+const AdminServicesPage = lazyRoute(() => import("./pages/admin/tabs/ServicesPage"));
+const AdminTeamPage = lazyRoute(() => import("./pages/admin/tabs/TeamPage"));
+const AdminReviewsPage = lazyRoute(() => import("./pages/admin/ReviewsTab").then((m) => ({ default: m.AdminReviewsTab })));
+const AdminChangesPage = lazyRoute(() => import("./pages/admin/ChangeRequestsTab").then((m) => ({ default: m.ChangeRequestsTab })));
+const AdminChatPage = lazyRoute(() => import("./pages/admin/ChatTab").then((m) => ({ default: m.ChatTab })));
+const AdminStatusPage = lazyRoute(() => import("./pages/admin/SiteStatusTab").then((m) => ({ default: m.SiteStatusTab })));
+const AdminSettingsPage = lazyRoute(() => import("./pages/admin/tabs/SettingsPage"));
+const ProviderLayout = lazyRoute(() => import("./pages/provider/ProviderLayout"));
+const ProviderIndexRedirect = lazyRoute(() => import("./pages/provider/ProviderLayout").then((m) => ({ default: m.ProviderIndexRedirect })));
 // DM-02/DM-12: the provider dashboard used to be one 1,000-line component
 // holding all ten tab bodies, statically importing the charting library, the
 // offerings editor, the profile editor and the chat client — a provider opening
 // their dashboard on 3G downloaded all of it before seeing a lead count. Each
 // tab is now its own route and its own chunk, like admin's.
-const ProviderOverviewPage = lazy(() => import("./pages/provider/tabs/OverviewPage"));
-const ProviderLeadsPage = lazy(() => import("./pages/provider/tabs/LeadsPage"));
-const ProviderMessagesPage = lazy(() => import("./pages/provider/tabs/MessagesPage"));
-const ProviderProjectsPage = lazy(() => import("./pages/provider/tabs/ProjectsPage"));
-const ProviderReviewsPage = lazy(() => import("./pages/provider/tabs/ReviewsPage"));
-const ProviderAnalyticsPage = lazy(() => import("./pages/provider/tabs/AnalyticsPage"));
-const ProviderAvailabilityPage = lazy(() => import("./pages/provider/tabs/AvailabilityPage"));
-const ProviderPricingPage = lazy(() => import("./pages/provider/tabs/PricingPage"));
-const ProviderProfilePage = lazy(() => import("./pages/provider/tabs/ProfilePage"));
-const ProviderSettingsPage = lazy(() => import("./pages/provider/tabs/SettingsPage"));
-const ProviderCompleteServicePage = lazy(() => import("./pages/provider/completion/CompleteServicePage"));
+const ProviderOverviewPage = lazyRoute(() => import("./pages/provider/tabs/OverviewPage"));
+const ProviderLeadsPage = lazyRoute(() => import("./pages/provider/tabs/LeadsPage"));
+const ProviderMessagesPage = lazyRoute(() => import("./pages/provider/tabs/MessagesPage"));
+const ProviderProjectsPage = lazyRoute(() => import("./pages/provider/tabs/ProjectsPage"));
+const ProviderReviewsPage = lazyRoute(() => import("./pages/provider/tabs/ReviewsPage"));
+const ProviderAnalyticsPage = lazyRoute(() => import("./pages/provider/tabs/AnalyticsPage"));
+const ProviderAvailabilityPage = lazyRoute(() => import("./pages/provider/tabs/AvailabilityPage"));
+const ProviderPricingPage = lazyRoute(() => import("./pages/provider/tabs/PricingPage"));
+const ProviderProfilePage = lazyRoute(() => import("./pages/provider/tabs/ProfilePage"));
+const ProviderSettingsPage = lazyRoute(() => import("./pages/provider/tabs/SettingsPage"));
+const ProviderCompleteServicePage = lazyRoute(() => import("./pages/provider/completion/CompleteServicePage"));
 
 function DashboardFallback() {
   return (
@@ -141,6 +217,11 @@ export const router = createBrowserRouter([
       // already sent, so it must stay stable — see the URL built in api's
       // sendCustomerVerificationEmail.
       { path: "/verify-email", element: <VerifyEmail /> },
+      { path: "/forgot-password", element: <ForgotPassword /> },
+      // Same stability rule as /verify-email: this exact path is what
+      // sendCustomerPasswordResetEmail puts in every link it sends, and the
+      // mobile app's deep link (alassema://reset-password) mirrors it.
+      { path: "/reset-password", element: <ResetPassword /> },
     ],
   },
   // Internal dashboards — lazy-loaded, no public nav/footer chrome.

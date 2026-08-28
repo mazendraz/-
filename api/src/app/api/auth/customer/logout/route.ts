@@ -2,7 +2,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import {
+  CUSTOMER_SESSION_COOKIE,
+  SESSION_COOKIE,
+  isCustomerToken,
+  sessionCookieOptions,
+} from "@/lib/auth";
 import * as sessions from "@/lib/services/customerSession.service";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +36,16 @@ export const POST = withErrors(async (request: NextRequest) => {
   if (refreshToken) await sessions.revokeByToken(refreshToken);
 
   const res = new NextResponse(null, { status: 204 });
-  res.cookies.set(SESSION_COOKIE, "", { ...sessionCookieOptions(), maxAge: 0 });
+  const expire = { ...sessionCookieOptions(), maxAge: 0 };
+  res.cookies.set(CUSTOMER_SESSION_COOKIE, "", expire);
+
+  // The legacy shared cookie, but ONLY when it actually holds this population's
+  // token. Clearing it unconditionally would sign an admin out of the dashboard
+  // in the same browser — the mirror image of the collision that splitting the
+  // two names fixed in the first place.
+  const legacy = request.cookies.get(SESSION_COOKIE)?.value;
+  if (legacy && (await isCustomerToken(legacy))) {
+    res.cookies.set(SESSION_COOKIE, "", expire);
+  }
   return res;
 });

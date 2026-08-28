@@ -80,7 +80,8 @@ export function isDerivedFromEmail(plain: string, email: string): boolean {
   return plain.toLowerCase().replace(/[^a-z0-9]/g, "").includes(local);
 }
 
-/** The shared password rule. Used by every write path that sets a password. */
+/** The shared password rule. Used by every write path that sets a STAFF
+ *  (admin/provider) password. */
 export const passwordSchema = z
   .string()
   .min(MIN_PASSWORD_LENGTH, `Use at least ${MIN_PASSWORD_LENGTH} characters.`)
@@ -89,3 +90,23 @@ export const passwordSchema = z
     (p) => !isCommonPassword(p),
     "That password is too common — pick something harder to guess.",
   );
+
+/**
+ * Customer-account password rule — deliberately lighter than staff's, at
+ * mazen's explicit call (2026-08-24): 8 characters, no common-password
+ * blocklist. A consumer signup abandons over friction in a way an admin
+ * account holder, who HAS to get past the gate to do their job, does not.
+ *
+ * Two things still apply regardless: the length still bounds bcrypt's
+ * 72-byte input (MAX_PASSWORD_LENGTH, same reasoning as the staff rule
+ * above), and register()/resetPassword() in customerPassword.service.ts
+ * separately reject a password derived from the account's own email
+ * (isDerivedFromEmail) — that check needs both the password and the email
+ * together, so it can't live in a single-field Zod schema like this one.
+ */
+export const MIN_CUSTOMER_PASSWORD_LENGTH = 8;
+
+export const customerPasswordSchema = z
+  .string()
+  .min(MIN_CUSTOMER_PASSWORD_LENGTH, `Use at least ${MIN_CUSTOMER_PASSWORD_LENGTH} characters.`)
+  .max(MAX_PASSWORD_LENGTH, `Use at most ${MAX_PASSWORD_LENGTH} characters.`);

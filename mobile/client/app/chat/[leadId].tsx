@@ -82,7 +82,7 @@ export default function Chat() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
           <Icon name="arrow_back" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{companyName || "المحادثة"}</Text>
@@ -122,6 +122,8 @@ export default function Chat() {
             onPress={onSend}
             disabled={!draft.trim() || sending}
             style={[styles.sendBtn, (!draft.trim() || sending) && styles.sendBtnDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel="إرسال"
           >
             {/* MaterialIcons' send glyph is a paper plane drawn pointing toward
                 LTR's "forward" (upper-right) — RN's RTL flip mirrors layout,

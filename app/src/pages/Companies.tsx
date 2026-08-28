@@ -280,7 +280,7 @@ export default function Companies() {
             {Array.from({ length: 6 }).map((_, i) => <CompanyCardSkeleton key={i} />)}
           </div>
         ) : errorEmpty ? (
-          <CatalogError />
+          <CatalogError onRetry={apiMode ? companySearch.refresh : undefined} />
         ) : visibleList.length === 0 ? (
           <div className="bg-surface-container-lowest rounded-2xl shadow-bloom">
             {/* Three different situations, told apart rather than blurred into

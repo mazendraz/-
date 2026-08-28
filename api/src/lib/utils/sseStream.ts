@@ -7,7 +7,12 @@
  * and browsers reconnect on their own. A WebSocket would add a second protocol
  * and a second authorization path for no capability we need.
  */
-import { subscribe, type RealtimeEvent } from "@/lib/services/realtime.service";
+import {
+  listenerCount,
+  subscribe,
+  type RealtimeEvent,
+} from "@/lib/services/realtime.service";
+import { RateLimitError } from "@/lib/utils/errors";
 
 /**
  * How often to send a comment line down an idle connection.
@@ -21,6 +26,25 @@ import { subscribe, type RealtimeEvent } from "@/lib/services/realtime.service";
 const HEARTBEAT_MS = 25_000;
 
 /**
+ * How many streams one channel — i.e. one customer, or one company — may hold
+ * open at a time.
+ *
+ * A held-open connection is not free: it pins a ReadableStream, a heartbeat
+ * interval and a listener in the hub for as long as it lasts, on a single PM2
+ * fork. Nothing capped that, so one account could open them without limit and
+ * exhaust the process. The mobile client is well behaved about this now (it
+ * multiplexes ONE connection across every component that asks — see
+ * liveEvents.ts), but a server must not depend on a client choosing to be
+ * polite: the client is the thing an attacker replaces.
+ *
+ * Sized for the legitimate worst case with room over it: a person with the site
+ * open in a few browser tabs AND the app in the foreground. Past that, the
+ * caller is told to slow down rather than silently served a connection that
+ * competes with their own.
+ */
+const MAX_STREAMS_PER_CHANNEL = 8;
+
+/**
  * Open an SSE response subscribed to `channels`.
  *
  * The stream closes when the client disconnects — `request.signal` fires on
@@ -28,6 +52,13 @@ const HEARTBEAT_MS = 25_000;
  * every navigation would leak a listener and the hub would grow forever.
  */
 export function sseResponse(request: Request, channels: string[]): Response {
+  // Checked BEFORE the stream is constructed, so an over-limit caller costs a
+  // map lookup rather than a subscription that has to be torn down again.
+  const over = channels.find((c) => listenerCount(c) >= MAX_STREAMS_PER_CHANNEL);
+  if (over) {
+    throw new RateLimitError("Too many open connections. Close a tab and try again.");
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({

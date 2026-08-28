@@ -38,9 +38,22 @@ WebBrowser.maybeCompleteAuthSession();
 // The Web client from phase 0 (api's GOOGLE_CLIENT_IDS) works as `webClientId`
 // for Expo Go testing, but real iOS/Android clients should replace it before
 // release — see the setup note below for why.
-const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
-const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+//
+// `|| undefined` matters here, not just style: the .env template ships these
+// as `""` (empty string) when unset, not absent. expo-auth-session's Google
+// provider resolves the per-platform id as `config[iosClientId|androidClientId
+// |webClientId] ?? config.clientId` — `??` only falls through on
+// null/undefined, NOT on `""`. Left as `""`, iosClientId/androidClientId
+// would be passed straight through as an empty string on a real device
+// instead of falling back to the web client id, and Google's own web client
+// ID request would be rejected downstream — silently, with no
+// isGoogleSignInConfigured() signal, since `Boolean("")` is `false` there too
+// but `""` still isn't `undefined` here. Normalizing blanks to `undefined` at
+// the source makes both the visibility check AND the library's own fallback
+// behave the way this file's comments already say they should.
+const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || undefined;
+const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined;
+const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined;
 
 export function isGoogleSignInConfigured(): boolean {
   return Boolean(WEB_CLIENT_ID || IOS_CLIENT_ID || ANDROID_CLIENT_ID);

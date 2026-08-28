@@ -3,10 +3,11 @@
 // verifyLeadSchema validates POST /leads/verify.
 import { z } from "zod";
 import { sanitizedText, sanitizedOptionalText } from "@/lib/utils/sanitize";
+import { moneyEgp } from "@/lib/validation/shared";
 
 const additionalWork = z.object({
   description: sanitizedText(1, 2000),
-  amount: z.number().int().min(0),
+  amount: moneyEgp,
 });
 
 // Provider: mark a lead completed with the final amount (+ optional additional
@@ -14,7 +15,7 @@ const additionalWork = z.object({
 // mockup's explicit Yes/No choice rather than treating "no additional work" as
 // "the provider forgot to say".
 export const completeLeadSchema = z.object({
-  providerAmount: z.number().int().min(0),
+  providerAmount: moneyEgp,
   additionalWork: additionalWork.nullable(),
   // .optional(): the frontend omits the key entirely (not "") when there's
   // nothing to send, so sanitizedOptionalText alone (which still requires the
@@ -38,7 +39,11 @@ export const verifyLeadSchema = z
     token: z.string().trim().min(1).max(200).optional(),
     phone: z.string().trim().min(8).max(20).optional(),
     decision: z.enum(["confirmed", "discrepancy"]),
-    clientAmount: z.number().int().min(0).optional(),
+    // Bounded, unlike before: this value is CLIENT-supplied on a dispute and
+    // flows straight into the commission ledger (finance.recognizeCommission),
+    // so an unbounded integer let a customer write an arbitrary figure into
+    // Al Asima's revenue numbers — or overflow int4 and 500 the endpoint.
+    clientAmount: moneyEgp.optional(),
     // .optional() — same reason as completeLeadSchema.notes above.
     note: sanitizedOptionalText(2000).optional(),
   })
@@ -51,3 +56,22 @@ export const verifyLeadSchema = z
   });
 
 export type VerifyLeadInput = z.infer<typeof verifyLeadSchema>;
+
+// Account-owned counterpart of verifyLeadSchema — POST /customer/leads/:id/verify.
+// No ref/token/phone: withCustomerAuth's session plus the route's own
+// Lead.customerId === customer.id check IS the credential (see that route's
+// comment on why the token-gated path is structurally unreachable from an
+// account-owned request — GET /customer/leads never returns trackingToken).
+export const verifyOwnedLeadSchema = z
+  .object({
+    decision: z.enum(["confirmed", "discrepancy"]),
+    // Bounded for the same reason as verifyLeadSchema.clientAmount above.
+    clientAmount: moneyEgp.optional(),
+    note: sanitizedOptionalText(2000).optional(),
+  })
+  .refine((o) => o.decision !== "discrepancy" || o.clientAmount != null, {
+    message: "clientAmount is required when reporting a different amount",
+    path: ["clientAmount"],
+  });
+
+export type VerifyOwnedLeadInput = z.infer<typeof verifyOwnedLeadSchema>;

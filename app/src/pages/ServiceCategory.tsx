@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
 import { useCategories, useCompanies, useCatalogStatus, type Company } from "../lib/catalog";
@@ -15,10 +15,13 @@ import { useLocale } from "../context/LocaleContext";
 import { t, tCount, type Locale } from "../lib/i18n";
 import { formatRating } from "../lib/format";
 import Icon from "../components/Icon";
+import { useCustomerAuth } from "../lib/customerAuth";
+import { recordCategoryView } from "../lib/categoryView";
 
 export default function ServiceCategoryPage() {
   const { category } = useParams<{ category: string }>();
   const { locale } = useLocale();
+  const { customer } = useCustomerAuth();
   const categories = useCategories();
   const allCompaniesRaw = useCompanies();
   const status = useCatalogStatus();
@@ -29,6 +32,13 @@ export default function ServiceCategoryPage() {
   );
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
+
+  // Signed-in only (see recordCategoryView) — a guest's browsing has no
+  // account to attach the signal to. Mirrors the mobile app's identical
+  // effect in app/services/[slug].tsx.
+  useEffect(() => {
+    if (customer && category) recordCategoryView(category);
+  }, [customer, category]);
 
   // Server-driven over the COMPLETE catalog (API mode); the client filter is the
   // demo (localStorage) path.
@@ -102,7 +112,7 @@ export default function ServiceCategoryPage() {
             {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-44 md:h-48 rounded-2xl" />)}
           </div>
         ) : errorEmpty ? (
-          <CatalogError />
+          <CatalogError onRetry={apiMode ? companySearch.refresh : undefined} />
         ) : allCompanies.length === 0 ? (
           <div className="text-center py-20" role="status" aria-live="polite" aria-atomic="true">
             <Icon name="search_off" className="text-outline text-[64px] mb-4 block" />

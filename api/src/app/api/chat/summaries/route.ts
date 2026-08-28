@@ -44,15 +44,15 @@ export const POST = withErrors(async (request: NextRequest) => {
     throw new ValidationError(`At most ${MAX_CLAIMS} requests can be looked up at once.`);
   }
 
+  // `phone` is deliberately NOT read, even when a client still sends it: a
+  // 50-per-request batch turns the legacy phone-tail fallback into an
+  // enumeration oracle against a target whose number is not a secret. See
+  // LeadClaim in customerGuard.ts for the full reasoning.
   const claims: LeadClaim[] = items.flatMap((item) => {
     if (!item || typeof item !== "object") return [];
-    const { ref, token, phone } = item as Record<string, unknown>;
+    const { ref, token } = item as Record<string, unknown>;
     if (typeof ref !== "string" || !ref.trim()) return [];
-    return [{
-      ref,
-      token: typeof token === "string" ? token : undefined,
-      phone: typeof phone === "string" ? phone : undefined,
-    }];
+    return [{ ref, token: typeof token === "string" ? token : undefined }];
   });
 
   const leads = await resolveCustomerLeads(claims);

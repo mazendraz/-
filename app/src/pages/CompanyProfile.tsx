@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
 import OfferingCards from "../components/OfferingCards";
-import PricingCTA, { PRICING_SECTION_ID } from "../components/PricingCTA";
+import PricingCTA, { PRICING_SECTION_ID, goToPricingSection } from "../components/PricingCTA";
 import RequestBar, { RequestBarContent, deriveBasketSummary } from "../components/RequestBar";
 import SectionNav from "../components/SectionNav";
 import CompanyGallery from "../components/CompanyGallery";
@@ -15,7 +15,7 @@ import CatalogError from "../components/CatalogError";
 import SaveButton from "../components/SaveButton";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { addFeedback, type FeedbackType } from "../lib/feedback";
-import { isBusy, formatReopenDate, joinWaitlist, rememberMyWaitlistEntry, availabilityLabel, availableAgainAt } from "../lib/availability";
+import { isBusy, formatReopenDate, availabilityLabel, availableAgainAt } from "../lib/availability";
 import Modal from "../components/Modal";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
@@ -23,16 +23,19 @@ import { formatRating } from "../lib/format";
 import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import PhoneInput from "../components/PhoneInput";
-import { isValidE164 } from "../lib/phone";
 import Icon from "../components/Icon";
-import Select from "../components/Select";
 
 export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
   const { locale } = useLocale();
   const navigate = useNavigate();
   const location = useLocation();
-  const { company, loading: detailLoading } = useCompanyDetail(slug ?? "");
+  const {
+    company,
+    loading: detailLoading,
+    error: detailError,
+    refetch: refetchDetail,
+  } = useCompanyDetail(slug ?? "");
   const status = useCatalogStatus();
   const { items: basketItems } = useCart(slug ?? "");
   usePageMeta(
@@ -40,7 +43,17 @@ export default function CompanyProfile() {
     company?.metaDescription || company?.tagline
   );
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
+
+  // A search result for a product/service (Offering) links here with
+  // `?offering=<id>` so the visitor lands on the priced cards, not just the
+  // top of the profile — same scroll+highlight PricingCTA's button already
+  // uses, just triggered on arrival instead of on click.
+  useEffect(() => {
+    if (!company) return;
+    if (!new URLSearchParams(location.search).has("offering")) return;
+    const id = requestAnimationFrame(() => goToPricingSection());
+    return () => cancelAnimationFrame(id);
+  }, [company, location.search]);
 
   const headerRef = useReveal(0.06);
   const aboutRef = useReveal(0.06);
@@ -59,7 +72,7 @@ export default function CompanyProfile() {
       "@type": "LocalBusiness",
       name: company.name,
       description: company.tagline,
-      url: `https://alassema.com/companies/${company.slug}`,
+      url: `https://al-assema.tech/companies/${company.slug}`,
       logo: company.logo,
       image: company.gallery,
       priceRange: "$$",
@@ -91,10 +104,20 @@ export default function CompanyProfile() {
         </div>
       );
     }
-    if (status === "error") {
+    // `detailError` matters as much as the catalog's own status here. The
+    // by-slug fetch can fail (500, timeout, unreachable backend) while the
+    // CATALOG is perfectly healthy — and until useCompanyDetail reported it, that
+    // failure was indistinguishable from a genuinely missing company, so a
+    // transient error rendered "this company doesn't exist" and pushed the
+    // visitor off a page that was fine. Retry re-runs the detail fetch, not
+    // catalogue hydration, since the detail fetch is what failed.
+    if (status === "error" || detailError) {
       return (
         <div className="min-h-screen flex items-center justify-center pt-20 px-5">
-          <CatalogError message={t(locale, "catalog_error_body_company")} />
+          <CatalogError
+            message={t(locale, "catalog_error_body_company")}
+            onRetry={detailError ? refetchDetail : undefined}
+          />
         </div>
       );
     }
@@ -109,8 +132,11 @@ export default function CompanyProfile() {
     );
   }
 
-  // When the company is busy, the whole profile swaps its "Request Service" CTAs for
-  // a "Join the waiting list" action (see requestOrWaitlistCTA usages below).
+  // When the company is busy, the whole profile's "Request Service" CTAs change
+  // wording and colour — but they all still go to the SAME request form, which
+  // queues the finished request on the waiting list instead of sending it as a
+  // lead (see RequestForm). The customer fills in one form either way; only
+  // what happens to it afterwards differs.
   const busy = isBusy(company);
   // Resolved across the manual switch AND any running scheduled window; null =
   // open-ended, which the copy below handles with its date-less wording.
@@ -142,14 +168,14 @@ export default function CompanyProfile() {
       >
         <SaveButton slug={company.slug} className="!w-12 !h-12 flex-shrink-0 border border-outline-variant/30" />
         {busy ? (
-          <button
-            onClick={() => setWaitlistOpen(true)}
+          <Link
+            to={requestHref}
             className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-white
                        py-3.5 rounded-xl font-bold text-body shadow-bloom touch-press btn-press"
           >
             <Icon name="hourglass_top" className="text-title" />
             {t(locale, "waitlist_join_cta")}
-          </button>
+          </Link>
         ) : basketSummary ? (
           <RequestBarContent summary={basketSummary} requestHref={requestHref} />
         ) : (
@@ -260,14 +286,14 @@ export default function CompanyProfile() {
               <div className="hidden sm:flex sm:flex-shrink-0 mt-2 sm:mt-0 gap-2">
                 <SaveButton slug={company.slug} variant="pill" />
                 {busy ? (
-                  <button
-                    onClick={() => setWaitlistOpen(true)}
+                  <Link
+                    to={requestHref}
                     className="flex items-center justify-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl
                                font-bold text-label hover:bg-amber-600 transition-colors shadow-bloom touch-press btn-press"
                   >
                     <Icon name="hourglass_top" className="text-title" />
                     {t(locale, "waitlist_join_cta")}
-                  </button>
+                  </Link>
                 ) : (
                   <PricingCTA
                     pricingMode={company.categoryPricingMode}
@@ -295,7 +321,7 @@ export default function CompanyProfile() {
                   </p>
                   {company.busyNote
                     ? <p className="text-label text-amber-800 mt-0.5">{company.busyNote}</p>
-                    : <p className="text-label text-amber-800 mt-0.5">{t(locale, "waitlist_modal_sub")}</p>}
+                    : <p className="text-label text-amber-800 mt-0.5">{t(locale, "waitlist_busy_sub")}</p>}
                 </div>
               </div>
             )}
@@ -369,7 +395,6 @@ export default function CompanyProfile() {
             requestHref={requestHref}
             pricingMode={company.categoryPricingMode}
             companyName={company.name}
-            onWaitlistOpen={() => setWaitlistOpen(true)}
           />
         </section>
 
@@ -460,13 +485,13 @@ export default function CompanyProfile() {
                     ? `${t(locale, "busy_available_again")} ${formatReopenDate(backAt, locale)}`
                     : t(locale, "busy_banner_fully_booked")}
                 </h3>
-                <p className="text-body opacity-90 mb-4">{t(locale, "waitlist_modal_sub")}</p>
-                <button
-                  onClick={() => setWaitlistOpen(true)}
+                <p className="text-body opacity-90 mb-4">{t(locale, "waitlist_busy_sub")}</p>
+                <Link
+                  to={requestHref}
                   className="block w-full text-center bg-white text-amber-700 text-label py-3 rounded-xl hover:bg-amber-50 transition-colors font-bold"
                 >
                   {t(locale, "waitlist_join_cta")}
-                </button>
+                </Link>
               </div>
             ) : (
               <div className="bg-primary rounded-2xl p-6 shadow-bloom text-on-primary">
@@ -496,16 +521,6 @@ export default function CompanyProfile() {
         />
       )}
 
-      {/* Waiting-list modal */}
-      {waitlistOpen && (
-        <WaitlistModal
-          companySlug={company.slug}
-          companyName={company.name}
-          services={company.services}
-          onClose={() => setWaitlistOpen(false)}
-          locale={locale}
-        />
-      )}
     </div>
   );
 }
@@ -654,151 +669,6 @@ function FeedbackModal({ companySlug, companyName, onClose, locale }: {
   );
 }
 
-// ── Waiting-list modal ────────────────────────────────────────────────────────
-// Shown when a busy company's "Join the waiting list" CTA is tapped. Mirrors the
-// FeedbackModal (honeypot + CAPTCHA + focus trap); on success the customer is queued
-// and the company contacts them off-platform.
-function WaitlistModal({ companySlug, companyName, services, onClose, locale }: {
-  companySlug: string;
-  companyName: string;
-  services: string[];
-  onClose: () => void;
-  locale: Locale;
-}) {
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [service, setService] = useState("");
-  const [note, setNote] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [honeypot, setHoneypot] = useState("");
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaReset, setCaptchaReset] = useState(0);
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (name.trim().length < 2) { setError(t(locale, "waitlist_err_name")); return; }
-    if (!isValidE164(phone)) { setError(t(locale, "waitlist_err_phone")); return; }
-    if (captchaConfigured() && !captchaToken) { setError(t(locale, "form_err_captcha")); return; }
-    setIsSubmitting(true);
-    setError("");
-    try {
-      const entry = await joinWaitlist(
-        companySlug,
-        { name: name.trim(), phone: phone.trim(), service: service.trim(), note: note.trim() },
-        honeypot,
-        captchaToken,
-      );
-      // Remember it on this device so it shows up in "My Requests" — mirrors how
-      // a submitted lead is remembered. Null in demo mode (nothing to track).
-      if (entry) rememberMyWaitlistEntry(entry);
-      setSubmitted(true);
-    } catch {
-      setError(t(locale, "waitlist_err_submit"));
-      setCaptchaToken(null);
-      setCaptchaReset((n) => n + 1);
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <Modal
-      onClose={onClose}
-      title={
-        <>
-          <Icon name="hourglass_top" className="text-amber-500 text-title" style={{ fontVariationSettings: "'FILL' 1" }} />
-          {t(locale, "waitlist_modal_title")}
-        </>
-      }
-    >
-        <div className="p-5">
-          {submitted ? (
-            <div className="text-center py-6">
-              <Icon name="check_circle" className="text-green-600 text-[48px] mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }} />
-              <p className="font-bold text-subhead text-on-surface mb-1">{t(locale, "waitlist_success")}</p>
-              <p className="text-label text-outline mb-5">{t(locale, "waitlist_success_sub")}</p>
-              <button onClick={onClose} className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-label">{t(locale, "common_close")}</button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Regarding */}
-              <div className="flex items-center gap-2 bg-surface-container rounded-xl px-3 py-2.5 text-label text-on-surface-variant">
-                <Icon name="business" className="text-body text-outline" />
-                {t(locale, "feedback_regarding")} <span className="font-bold text-on-surface ms-1">{companyName}</span>
-              </div>
-
-              <p className="text-label text-outline leading-relaxed">{t(locale, "waitlist_modal_sub")}</p>
-
-              {/* Name + Phone */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_your_name")} <span className="text-error">*</span></label>
-                  <input className="field-input !py-2 text-label" value={name} onChange={(e) => { setName(e.target.value); if (error) setError(""); }} />
-                </div>
-                <div>
-                  <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_phone")} <span className="text-error">*</span></label>
-                  <PhoneInput value={phone} onChange={(v) => { setPhone(v); if (error) setError(""); }} hideError />
-                </div>
-              </div>
-
-              {/* Service */}
-              <div>
-                <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_service")}</label>
-                {services.length > 0 ? (
-                  <Select
-                    triggerClassName="field-input !py-2 text-label flex items-center justify-between gap-2 text-start touch-press"
-                    value={service}
-                    onChange={setService}
-                    placeholder="—"
-                    options={[{ value: "", label: "—" }, ...services.map((s) => ({ value: s, label: s }))]}
-                  />
-                ) : (
-                  <input className="field-input !py-2 text-label" value={service} onChange={(e) => setService(e.target.value)} />
-                )}
-              </div>
-
-              {/* Note */}
-              <div>
-                <label className="block text-caption font-bold text-on-surface mb-1">{t(locale, "waitlist_note")}</label>
-                <textarea className="field-input resize-none" rows={3} value={note} onChange={(e) => setNote(e.target.value)} />
-              </div>
-
-              {error && <p className="text-caption text-error font-bold">{error}</p>}
-
-              {/* CAPTCHA — renders only when VITE_TURNSTILE_SITE_KEY is set */}
-              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className={`w-full bg-amber-500 text-white py-3 rounded-xl font-bold text-label transition-colors touch-press
-                  ${isSubmitting ? "opacity-80 cursor-not-allowed" : "hover:bg-amber-600 btn-press"}`}
-              >
-                {t(locale, "waitlist_send")}
-              </button>
-
-              {/* Honeypot — hidden from real users; bots auto-fill it. */}
-              <input
-                type="text"
-                name="hp_field"
-                tabIndex={-1}
-                autoComplete="off"
-                aria-hidden="true"
-                data-1p-ignore="true"
-                data-lpignore="true"
-                data-bwignore="true"
-                data-form-type="other"
-                value={honeypot}
-                onChange={(e) => setHoneypot(e.target.value)}
-                className="sr-only"
-              />
-            </form>
-          )}
-        </div>
-    </Modal>
-  );
-}
 
 
 /**

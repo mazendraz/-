@@ -37,8 +37,15 @@ export const POST = withErrors(
     // trips the per-address cap gets the same 200 as everyone else, so the cap
     // can't be used to discover which addresses are real either.
     const perEmail = await rateLimit(`customer-resend:email:${email}`, EMAIL_LIMIT);
-    if (perEmail.ok) await customerPassword.resendVerification(email);
+    const outcome = perEmail.ok
+      ? await customerPassword.resendVerification(email)
+      : "skipped";
 
-    return ok({ sent: true });
+    // "skipped" reports as sent — that is the non-disclosure rule above, and
+    // it covers the throttled case too. Only a genuine transport failure says
+    // so, which is what stops the client claiming "check your inbox" over an
+    // email that was never accepted. See resendVerification's own comment for
+    // the enumeration tradeoff this makes.
+    return ok({ sent: outcome !== "failed" });
   }),
 );

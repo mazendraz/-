@@ -15,11 +15,24 @@ import { hashPassword, verifyPasswordSafe, type CustomerAuthUser } from "@/lib/a
 import { ConflictError, UnauthorizedError, ValidationError } from "@/lib/utils/errors";
 import { isDerivedFromEmail } from "@/lib/validation/password";
 import * as audit from "@/lib/services/audit.service";
-import { sendCustomerVerificationEmail } from "@/lib/services/notifications.service";
+import * as sessions from "@/lib/services/customerSession.service";
+import {
+  sendCustomerVerificationEmail,
+  sendCustomerPasswordResetEmail,
+  sendCustomerWelcomeEmail,
+} from "@/lib/services/notifications.service";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 
 // Long enough to survive a slow inbox and a next-morning click; short enough that
 // a link found later in a forwarded thread or a shared machine is already dead.
 const VERIFY_TTL_MS = 24 * 60 * 60 * 1000;
+
+// Shorter than verification: a reset link is a stronger credential — its
+// holder gets to overwrite the password outright, not just prove inbox
+// control — so it deserves a tighter window. One hour is generous enough to
+// survive a slow inbox check without staying live long enough to be a
+// realistic target from a shared machine's browser history.
+const RESET_TTL_MS = 60 * 60 * 1000;
 
 /**
  * Hash a verification token for storage.
@@ -32,12 +45,12 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function newToken(): { token: string; hash: string; expires: Date } {
+function newToken(ttlMs: number): { token: string; hash: string; expires: Date } {
   const token = randomBytes(32).toString("base64url");
   return {
     token,
     hash: hashToken(token),
-    expires: new Date(Date.now() + VERIFY_TTL_MS),
+    expires: new Date(Date.now() + ttlMs),
   };
 }
 
@@ -114,7 +127,7 @@ export async function register(input: RegisterInput, ip?: string): Promise<Regis
   }
 
   const passwordHash = await hashPassword(input.password);
-  const { token, hash, expires } = newToken();
+  const { token, hash, expires } = newToken(VERIFY_TTL_MS);
 
   const customerId = existing
     ? (
@@ -204,6 +217,13 @@ export async function verifyEmail(token: string, ip?: string): Promise<CustomerA
     ip,
   });
 
+  // The account only becomes usable NOW (see the module comment — a
+  // password account is inert until this call), so this is the one moment
+  // a welcome email means "your account is ready", not "click a link to
+  // finish setting up". Deferred past the response, like every other
+  // notification send in this codebase.
+  runAfterResponse(() => sendCustomerWelcomeEmail(customer.email, customer.name));
+
   return customer;
 }
 
@@ -279,23 +299,137 @@ export async function loginWithPassword(
   return customer;
 }
 
-/** Re-send the verification link for an unverified account. Never reveals whether
- *  the address exists — the caller always shows the same "check your inbox". */
-export async function resendVerification(emailInput: string): Promise<void> {
+/**
+ * Re-send the verification link for an unverified account.
+ *
+ * `"skipped"` covers every address there is nothing to send to (missing,
+ * already verified, deactivated, provider-only) and is deliberately
+ * INDISTINGUISHABLE from success at the route — that non-disclosure is the
+ * whole point of this endpoint (see its own comment).
+ *
+ * `"failed"` is different in kind: the address WAS real and pending, and the
+ * mail transport itself refused. That case used to be swallowed here, so the
+ * route answered `{sent:true}` and the UI told the customer to go check an
+ * inbox nothing would ever arrive in — with a "resend" button that would keep
+ * claiming success forever. `register()` above has always reported this
+ * honestly (`verificationSent`); this path simply never got the same contract.
+ *
+ * ── The tradeoff, stated plainly ────────────────────────────────────────────
+ * While mail is BROKEN, "failed" vs "skipped" does distinguish a real pending
+ * account from an unknown address. That is a real (small) enumeration signal,
+ * and it is accepted here for two reasons: registration already discloses the
+ * same fact outright (409 vs 201, same 5/hour cap), and the alternative is a
+ * permanently lying UI that leaves customers with no way to tell a slow inbox
+ * from a dead one. When mail is healthy — the normal case — every address
+ * still gets the identical answer.
+ */
+export type ResendOutcome = "sent" | "skipped" | "failed";
+
+export async function resendVerification(emailInput: string): Promise<ResendOutcome> {
   const email = emailInput.trim().toLowerCase();
   const row = await prisma.customerUser.findUnique({
     where: { email },
     select: { id: true, name: true, emailVerified: true, isActive: true, passwordHash: true },
   });
 
-  // Nothing to do for a missing, verified, deactivated, or provider-only account
-  // — and in every one of those cases the caller says the same thing anyway.
-  if (!row || row.emailVerified || !row.isActive || !row.passwordHash) return;
+  if (!row || row.emailVerified || !row.isActive || !row.passwordHash) return "skipped";
 
-  const { token, hash, expires } = newToken();
+  const { token, hash, expires } = newToken(VERIFY_TTL_MS);
   await prisma.customerUser.update({
     where: { id: row.id },
     data: { emailVerifyTokenHash: hash, emailVerifyExpires: expires },
   });
-  await sendCustomerVerificationEmail(email, row.name, token);
+  return (await sendCustomerVerificationEmail(email, row.name, token)) ? "sent" : "failed";
+}
+
+// ── Forgot password ──────────────────────────────────────────────────────────
+
+/**
+ * Start a password reset: issue a token and email the link. Never reveals
+ * whether the address exists, is Google-only, or deactivated — same
+ * non-disclosure rule as resendVerification above, and for the same reason
+ * (a "forgot password" form is the classic account-enumeration surface).
+ *
+ * A Google-only account (passwordHash null) gets no token: there is no
+ * password on that row to reset, and issuing one anyway would let a reset
+ * link silently CREATE a password on an account that never had one — a way
+ * to add a second, weaker way into an account that chose to only accept one.
+ */
+export async function requestPasswordReset(emailInput: string): Promise<void> {
+  const email = emailInput.trim().toLowerCase();
+  const row = await prisma.customerUser.findUnique({
+    where: { email },
+    select: { id: true, name: true, isActive: true, passwordHash: true },
+  });
+
+  if (!row || !row.isActive || !row.passwordHash) return;
+
+  const { token, hash, expires } = newToken(RESET_TTL_MS);
+  await prisma.customerUser.update({
+    where: { id: row.id },
+    data: { passwordResetTokenHash: hash, passwordResetExpires: expires },
+  });
+  await sendCustomerPasswordResetEmail(email, row.name, token);
+}
+
+/**
+ * Complete a password reset and sign the customer in — same reasoning as
+ * verifyEmail's own sign-in-on-success: the link came from the inbox they're
+ * proving they control, which is exactly the evidence a login would ask for.
+ *
+ * Looked up by the token's HASH with the expiry checked in the query, same
+ * pattern as verifyEmail — an expired row simply doesn't match.
+ *
+ * Every OTHER session on the account is revoked (see revokeAll below). A
+ * password reset is the customer telling the system "assume this account may
+ * have been compromised" (they either forgot the password themselves, or
+ * someone else changed it and they're taking it back) — either way, a device
+ * or refresh token that was already signed in under the OLD password must not
+ * keep riding it past this point.
+ */
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+  ip?: string,
+): Promise<CustomerAuthUser> {
+  const row = await prisma.customerUser.findFirst({
+    where: {
+      passwordResetTokenHash: hashToken(token),
+      passwordResetExpires: { gt: new Date() },
+    },
+    select: { ...CUSTOMER_SELECT, isActive: true },
+  });
+
+  if (!row || !row.isActive) {
+    throw new UnauthorizedError("This link is invalid or has expired. Request a new one.");
+  }
+
+  if (isDerivedFromEmail(newPassword, row.email)) {
+    throw new ValidationError("Pick a password that isn't part of your email address.");
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  const customer = await prisma.customerUser.update({
+    where: { id: row.id },
+    data: {
+      passwordHash,
+      // Single use — the same reasoning as emailVerifyTokenHash being cleared
+      // on verification: a link recovered from an inbox or a proxy log stays
+      // dead after its first use, not live for the rest of its hour.
+      passwordResetTokenHash: null,
+      passwordResetExpires: null,
+    },
+    select: CUSTOMER_SELECT,
+  });
+
+  await sessions.revokeAll(customer.id);
+
+  await audit.recordAuth({
+    action: "auth.customer.password_reset",
+    email: customer.email,
+    userId: customer.id,
+    ip,
+  });
+
+  return customer;
 }

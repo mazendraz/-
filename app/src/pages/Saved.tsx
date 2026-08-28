@@ -27,7 +27,7 @@ export default function Saved() {
         {/* Header */}
         <PersonalTabs active="saved" />
         <div className="mb-7">
-          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-1">{t(locale, "saved_title")}</h1>
+          <h1 className="font-black text-headline md:text-display text-on-surface tracking-tight mb-2">{t(locale, "saved_title")}</h1>
           <p className="text-label text-outline">
             {t(locale, "saved_sub")}
           </p>

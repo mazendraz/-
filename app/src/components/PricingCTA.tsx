@@ -15,7 +15,7 @@ const HIGHLIGHT_MS = 1200;
  * destination reads as "the page jumped", not "here are the services".
  * Skips the halo (but still scrolls, just instantly) under reduced motion.
  */
-function goToPricingSection(): void {
+export function goToPricingSection(): void {
   const el = document.getElementById(PRICING_SECTION_ID);
   if (!el) return;
   const reduced = prefersReducedMotion();

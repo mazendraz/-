@@ -167,8 +167,12 @@ export default function SignIn() {
   async function onResend() {
     setBusy(true);
     try {
-      await resendVerification(email.trim());
-      setResent(true);
+      // The server now reports whether the mail actually left; a `false` here
+      // used to be indistinguishable from success, so the page said "sent"
+      // over an email the transport had refused.
+      const sent = await resendVerification(email.trim());
+      setMailFailed(!sent);
+      setResent(sent);
     } catch {
       setError(t(locale, "signin_err_generic"));
     } finally {
@@ -330,6 +334,23 @@ export default function SignIn() {
           // Stated up front, not discovered by being rejected.
           hint={mode === "register" ? "signin_password_hint" : undefined}
         />
+
+        {/* Signing in only — on the registration form there is no password to
+            have forgotten yet, and the link would read as a warning.
+            The typed address rides along in router state rather than the query
+            string: it saves retyping it on the very next screen without
+            writing an email address into the URL bar and the history. */}
+        {mode === "signin" && (
+          <div className="flex justify-end -mt-1">
+            <Link
+              to="/forgot-password"
+              state={{ email: email.trim() }}
+              className="text-caption font-bold text-primary hover:underline"
+            >
+              {t(locale, "signin_forgot")}
+            </Link>
+          </div>
+        )}
 
         <button
           type="submit"

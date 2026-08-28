@@ -134,6 +134,23 @@ export async function update(id: string, input: UpdateUserInput): Promise<ApiAdm
   // until/unless that role is also changed to ADMIN in the same or a later call.
   if (input.desktopPermissions !== undefined) data.desktopPermissions = input.desktopPermissions;
 
+  // ── End this user's existing sessions when the change demands it ───────────
+  // A staff token carries `role` and `companyId` as CLAIMS. getAuthUser re-reads
+  // the row for identity and isActive, but a token minted while the account was
+  // an ADMIN keeps saying ADMIN, and withRole reads exactly that. So demoting
+  // someone, unlinking them from a company, or setting a new password for them
+  // has to move the floor — otherwise the privilege they just lost survives in
+  // whatever tab they still have open, for up to JWT_TTL.
+  //
+  // `isActive: false` is deliberately NOT in this list: it already ends every
+  // session immediately, because getAuthUser rejects an inactive user outright.
+  const revokes =
+    input.password !== undefined ||
+    input.role !== undefined ||
+    input.companyId !== undefined ||
+    input.desktopPermissions !== undefined;
+  if (revokes) data.tokensValidFrom = new Date();
+
   const user = await prisma.user.update({
     where: { id },
     data,
@@ -183,7 +200,19 @@ export async function changeOwnPassword(
 
   await prisma.user.update({
     where: { id: userId },
-    data: { passwordHash: await hashPassword(newPassword) },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      // Every token minted before this moment stops working — see
+      // User.tokensValidFrom. Changing a password is what a person does when
+      // they believe someone else has their session, and until this existed the
+      // route said so outright: "Other sessions are NOT revoked... To force
+      // every session out, deactivate and reactivate the user."
+      //
+      // Including the CALLER's own token, which is why the route re-issues one
+      // in the same response rather than leaving them to discover they have
+      // been signed out of the screen they are standing on.
+      tokensValidFrom: new Date(),
+    },
   });
 }
 

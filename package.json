@@ -8,6 +8,7 @@
     "install:all": "npm --prefix api install && npm --prefix app install",
     "dev:api": "npm --prefix api run dev",
     "dev:app": "npm --prefix app run dev",
+    "dev:app:lan": "npm --prefix app run dev -- --host 0.0.0.0",
     "build:api": "npm --prefix api run build",
     "build:app": "npm --prefix app run build",
     "build": "npm run build:api && npm run build:app",

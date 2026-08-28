@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ApiLead } from "@alassema/core";
 import { colors, type } from "@alassema/core";
@@ -9,6 +9,7 @@ import ReviewModal from "./ReviewModal";
 import { verifyLeadAmount } from "../lib/leads";
 import { formatEgp } from "../lib/pricing";
 import { ApiError } from "../lib/api";
+import { useSettings } from "../lib/settings";
 
 type Phase = "amount" | "discrepancy" | "confirmed" | "rating";
 
@@ -37,6 +38,8 @@ export default function PriceVerificationGate({
   // Guaranteed present: the caller only ever mounts this for a lead whose
   // completion.verificationStatus is PENDING.
   const completion = lead.completion!;
+  const settings = useSettings();
+  const supportEmail = settings.support_email?.trim();
   const [phase, setPhase] = useState<Phase>("amount");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -45,7 +48,7 @@ export default function PriceVerificationGate({
     setBusy(true);
     setError("");
     try {
-      await verifyLeadAmount({ ref: lead.refNumber, phone: lead.phone, decision: "confirmed" });
+      await verifyLeadAmount({ leadId: lead.id, decision: "confirmed" });
       setPhase("confirmed");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تسجيل التأكيد. جرّب تاني.");
@@ -59,8 +62,7 @@ export default function PriceVerificationGate({
     setError("");
     try {
       await verifyLeadAmount({
-        ref: lead.refNumber,
-        phone: lead.phone,
+        leadId: lead.id,
         decision: "discrepancy",
         clientAmount,
         note: note || undefined,
@@ -116,6 +118,21 @@ export default function PriceVerificationGate({
 
         {phase === "confirmed" && (
           <ConfirmationState lead={lead} completion={completion} onContinue={() => setPhase("rating")} />
+        )}
+
+        {/* Escape hatch — deliberately absent from "confirmed"/"rating": this
+            gate has no back/close/skip by design (see the module comment),
+            but that must never mean a customer who genuinely can't resolve
+            it (a server error, a dispute they can't phrase in one field) is
+            trapped with zero way out. Linking.openURL, not router.push: this
+            component renders in PLACE of the whole Stack (see app/_layout.tsx)
+            — there is no navigator mounted underneath it to receive an
+            in-app push, same reason MaintenanceScreen's own contact link
+            uses mailto: instead of a route. */}
+        {supportEmail && (phase === "amount" || phase === "discrepancy") && (
+          <Pressable onPress={() => Linking.openURL(`mailto:${supportEmail}`)} hitSlop={8} style={styles.helpLink}>
+            <Text style={styles.helpLinkText}>محتاج مساعدة؟ تواصل معانا</Text>
+          </Pressable>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -284,6 +301,13 @@ function ConfirmationState({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: 20, gap: 12, flexGrow: 1, justifyContent: "center" },
+  helpLink: { alignSelf: "center", paddingVertical: 12, paddingHorizontal: 8, marginTop: 4 },
+  helpLinkText: {
+    fontSize: type.label.fontSize,
+    fontFamily: "Cairo_600SemiBold",
+    color: colors.outline,
+    textDecorationLine: "underline",
+  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_800ExtraBold",

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import LazyImage from "./LazyImage";
@@ -16,16 +17,16 @@ import type { Project, CategoryPricingMode } from "../lib/data";
  * explicitly asked to reuse existing data wherever possible.
  */
 export default function CompanyProjects({
-  projects, services, location, busy, requestHref, pricingMode, companyName, onWaitlistOpen,
+  projects, services, location, busy, requestHref, pricingMode, companyName,
 }: {
   projects: Project[];
   services: string[];
   location: string;
+  /** Only changes the CTA's wording and colour — both go to the same form. */
   busy: boolean;
   requestHref: string;
   pricingMode: CategoryPricingMode | undefined;
   companyName: string;
-  onWaitlistOpen: () => void;
 }) {
   const { locale } = useLocale();
   const [selected, setSelected] = useState(0);
@@ -149,15 +150,18 @@ export default function CompanyProjects({
       {/* Bottom CTA */}
       <div className="mt-10 bg-surface-container-lowest rounded-2xl p-8 text-center shadow-bloom">
         <p className="text-subhead text-outline mb-4">{t(locale, "profile_like_what")} {companyName}.</p>
+        {/* Busy goes to the SAME request form, which queues it on the waiting
+            list instead of sending it (see RequestForm). This used to open a
+            short "leave your name and number" modal — a different, smaller
+            thing than what the customer came here to ask for. */}
         {busy ? (
-          <button
-            type="button"
-            onClick={onWaitlistOpen}
+          <Link
+            to={requestHref}
             className="inline-flex items-center gap-2 bg-amber-500 text-white px-6 py-3 rounded-xl text-label hover:bg-amber-600 transition-colors shadow-bloom"
           >
             <Icon name="hourglass_top" className="text-title" />
             {t(locale, "waitlist_join_cta")}
-          </button>
+          </Link>
         ) : (
           <PricingCTA
             pricingMode={pricingMode}

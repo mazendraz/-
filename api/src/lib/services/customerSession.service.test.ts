@@ -86,7 +86,24 @@ const db = {
       return { count: matches.length };
     },
   },
+  // revokeAll now moves the ACCOUNT-WIDE token floor alongside revoking the
+  // session rows — see CustomerUser.tokensValidFrom. Without that half, "sign
+  // out everywhere" only killed refresh tokens and left every access token
+  // already issued working until it expired.
+  customerUser: {
+    update: async ({ where, data }: { where: { id: string }; data: { tokensValidFrom?: Date } }) => {
+      if (data.tokensValidFrom) tokenFloors.set(where.id, data.tokensValidFrom);
+      return { id: where.id };
+    },
+  },
+  // The two writes above are one transaction so a crash between them cannot
+  // leave the sessions revoked and the floor unmoved. Prisma's array form
+  // resolves the promises it is handed, which is all this needs to mirror.
+  $transaction: async (ops: Promise<unknown>[]) => Promise.all(ops),
 };
+
+/** customerId -> the floor revokeAll set, for assertions. */
+const tokenFloors = new Map<string, Date>();
 
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
 
@@ -107,6 +124,7 @@ beforeEach(() => {
   recorded.length = 0;
   nextId = 1;
   customerActive = true;
+  tokenFloors.clear();
 });
 
 describe("issuing", () => {
@@ -254,6 +272,28 @@ describe("revocation", () => {
     await svc.issue(CUSTOMER);
     expect(await svc.revokeAll(CUSTOMER)).toBe(2);
     expect(await svc.listActive(CUSTOMER)).toHaveLength(0);
+  });
+
+  // Revoking the session rows kills REFRESH tokens. It does nothing to an
+  // access token already in circulation — that is a stateless JWT — so without
+  // the floor, "sign out everywhere" left a thief's token working until it
+  // expired, which is the one scenario someone taps that button in.
+  it("moves the account token floor, not just the session rows", async () => {
+    const before = Date.now();
+    await svc.issue(CUSTOMER);
+    await svc.revokeAll(CUSTOMER);
+
+    const floor = tokenFloors.get(CUSTOMER);
+    expect(floor).toBeInstanceOf(Date);
+    expect(floor!.getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it("does NOT move the floor when revoking a single device", async () => {
+    // One lost phone must not sign out every other device — that case is
+    // carried by the token's `sid` claim instead.
+    const { sessionId } = await svc.issue(CUSTOMER);
+    await svc.revoke(CUSTOMER, sessionId);
+    expect(tokenFloors.has(CUSTOMER)).toBe(false);
   });
 
   it("revokes by token — what an app's own sign-out calls", async () => {

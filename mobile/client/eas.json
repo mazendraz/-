@@ -9,28 +9,51 @@
       "distribution": "internal",
       "ios": { "simulator": false },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://alassema.com/api/v1",
-        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": ""
+        "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAEYeItuX_kr2VI0e",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "592484560089-tgrpblqd2e34rs0o956072m31f371tag.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "592484560089-sjqeh9fht1kr38vl9ek3deb4p3rtqgho.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_KEY": ""
       }
     },
     "preview": {
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://alassema.com/api/v1",
-        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": ""
+        "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAEYeItuX_kr2VI0e",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "592484560089-tgrpblqd2e34rs0o956072m31f371tag.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "592484560089-sjqeh9fht1kr38vl9ek3deb4p3rtqgho.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_KEY": ""
       }
     },
     "production": {
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://alassema.com/api/v1",
-        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": ""
+        "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
+        "EXPO_PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAEYeItuX_kr2VI0e",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "592484560089-tgrpblqd2e34rs0o956072m31f371tag.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "592484560089-sjqeh9fht1kr38vl9ek3deb4p3rtqgho.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com",
+        "EXPO_PUBLIC_API_KEY": ""
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "SS923F3FW8",
+        "ascApiKeyId": "69TH75M6BG",
+        "ascApiKeyIssuerId": "26d81207-dbbb-42ad-8cd0-f2c22ca04538",
+        "ascApiKeyPath": "C:/Users/CM/.alassema-secrets/AuthKey_69TH75M6BG.p8"
+      },
+      "android": {
+        "serviceAccountKeyPath": "C:/Users/CM/.alassema-secrets/google-play-service-account.json",
+        "track": "internal"
+      }
+    }
   }
 }

@@ -4,15 +4,7 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.alassema.client",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_RELEASE_SHA256"]
-    }
-  },
-  {
-    "relation": ["delegate_permission/common.handle_all_urls"],
-    "target": {
-      "namespace": "android_app",
-      "package_name": "com.alassema.business",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_RELEASE_SHA256"]
+      "sha256_cert_fingerprints": ["38:43:B3:7E:F3:12:B0:39:70:CF:64:B0:B8:27:35:78:17:86:66:A2:53:66:D2:A4:89:50:17:71:9A:6A:E6:2A"]
     }
   }
 ]

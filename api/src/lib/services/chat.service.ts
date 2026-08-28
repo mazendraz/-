@@ -2,11 +2,13 @@
 import { prisma } from "@/lib/prisma";
 import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { AuthUser } from "@/lib/auth";
-import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/utils/errors";
+import { NotFoundError, ValidationError } from "@/lib/utils/errors";
 import type { ApiPage } from "@/lib/apiTypes";
 import * as audit from "@/lib/services/audit.service";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import { notifyCompanyProviders, notifyAdmins as pushAdmins } from "@/lib/services/push.service";
+import { notifyCustomer } from "@/lib/services/notifications.customer.service";
+import { NotificationType } from "@/generated/prisma/enums";
 import {
   ADMIN_CHANNEL,
   channelForCompany,
@@ -378,19 +380,47 @@ export async function postMessage(params: {
  * Push + Telegram for a just-posted message, run after the response is sent
  * (see runAfterResponse) so a slow or failing channel never delays the send
  * itself. CUSTOMER → provider + admin (the admin heads-up mirrors the lead
- * notification pattern); ADMIN stepping in → provider only; PROVIDER → nobody,
- * since the customer side has no account to hold a subscription or a link.
+ * notification pattern); ADMIN stepping in → provider only; PROVIDER →
+ * the customer's own devices, IF the lead has an account attached.
+ *
+ * That PROVIDER branch used to return immediately with a comment claiming
+ * "the customer side has no account to hold a subscription or a link" — true
+ * when this was written, false since customer accounts + native push
+ * (lib/services/notifications.customer.service.ts's notifyCustomer) shipped. Until
+ * this branch existed, a provider's reply — the single moment this
+ * lead-generation product exists to deliver — reached a customer only if the
+ * app happened to be open, foregrounded, with a live SSE connection.
  */
 function notifyNewMessage(
   conversation: {
     id: string;
     company: { id: string; name: string };
-    lead: { refNumber: string; customerName: string } | null;
+    lead: { id: string; refNumber: string; customerName: string; customerId: string | null } | null;
   },
   sender: MessageSenderValue,
   body: string,
 ): void {
-  if (sender === "PROVIDER" || !conversation.lead) return;
+  if (!conversation.lead) return;
+
+  const bodyPreview = preview(body);
+
+  if (sender === "PROVIDER") {
+    const customerId = conversation.lead.customerId;
+    // A guest-submitted lead (optionalCustomerId) has no account and
+    // therefore no device to push to — same "nothing to tell" case the
+    // original comment described, just narrowed to when it's actually true.
+    if (!customerId) return;
+    runAfterResponse(() =>
+      notifyCustomer(customerId, {
+        type: NotificationType.CHAT_MESSAGE,
+        title: `رد جديد من ${conversation.company.name}`,
+        body: bodyPreview,
+        url: `/chat/${conversation.lead!.id}`,
+        tag: `chat-${conversation.id}`,
+      }),
+    );
+    return;
+  }
 
   const senderLabel = sender === "CUSTOMER" ? "العميل" : "الإدارة";
   const text = buildChatTelegramMessage({
@@ -400,7 +430,6 @@ function notifyNewMessage(
     senderLabel,
     body,
   });
-  const bodyPreview = preview(body);
 
   runAfterResponse(async () => {
     // Admins can mute the CHAT channel specifically (see ApiAdminNotificationSettings)
@@ -525,9 +554,15 @@ export async function assertProviderAccess(
     where: { id: conversationId },
     include: { lead: { select: { refNumber: true, customerName: true } }, company: { select: { name: true } } },
   });
-  if (!conversation) throw new NotFoundError("Conversation");
-  if (conversation.companyId !== companyId) {
-    throw new ForbiddenError("This conversation belongs to another company.");
+  // A conversation that does not exist and one belonging to another company get
+  // the SAME 404. The previous 403 ("This conversation belongs to another
+  // company") confirmed that the id was real, which is the one thing an id-
+  // probing caller wants and the standard every other ownership check in this
+  // codebase already holds to — see resolveOwnedLead in
+  // customer/leads/[id]/messages, resolveCustomerLead in customerGuard, and
+  // trackByRefAndSecret in leads.service.
+  if (!conversation || conversation.companyId !== companyId) {
+    throw new NotFoundError("Conversation");
   }
   return conversation;
 }

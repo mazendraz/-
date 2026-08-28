@@ -42,7 +42,19 @@ export default function CompanyGallery({ images, alt }: { images: string[]; alt:
               onClick={() => setLightboxIdx(i)}
             >
               {isVideo ? (
-                <video src={img} muted preload="metadata" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-slow" />
+                // Autoplaying muted+looping is also what makes the tile show
+                // anything: gallery videos have no server-generated poster
+                // (nothing transcodes them), and a paused <video> is a black
+                // box on iOS Safari rather than a first frame.
+                <video
+                  src={img}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="metadata"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-slow"
+                />
               ) : (
                 <LazyImage
                   src={img}

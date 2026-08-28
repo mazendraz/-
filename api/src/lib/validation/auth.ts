@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { passwordSchema } from "@/lib/validation/password";
+import { customerPasswordSchema, passwordSchema } from "@/lib/validation/password";
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
@@ -37,15 +37,49 @@ export const googleSignInSchema = z.object({
 
 export type GoogleSignInInput = z.infer<typeof googleSignInSchema>;
 
+// ── Apple sign-in ───────────────────────────────────────────────────────────
+// Three fields where Google needs one, because Apple hands the client things it
+// never puts in the token:
+//
+//   identityToken — the JWT. Same 4096 sanity bound as Google, same reason: the
+//                   real validation is the signature, not the length.
+//   rawNonce      — the un-hashed nonce the client generated before calling
+//                   Apple. appleIdentity.service requires it whenever the token
+//                   carries a nonce claim, which binds this token to this
+//                   request. Not a secret and not stored.
+//   fullName      — present ONLY on a genuine first authorization; Apple never
+//                   sends it again, and it is not in the token at all, so it
+//                   cannot be verified. Untrusted decoration for the profile,
+//                   never read by an authorization decision. Capped at the
+//                   column width rather than rejected when long, because a long
+//                   name is a bad label, not an attack.
+//   authorizationCode
+//                 — Apple's one-time code, handed to the client alongside the
+//                   identity token. NOT used to authenticate this request: the
+//                   identity token alone decides who is signing in. It is traded
+//                   server-side for a refresh token whose only purpose is
+//                   revoking this app's access when the account is deleted
+//                   (guideline 5.1.1(v) — see appleServerAuth.service). Optional
+//                   so a client that omits it still signs in normally, just
+//                   without a revocable token on file.
+export const appleSignInSchema = z.object({
+  identityToken: z.string().trim().min(1, "Missing Apple token.").max(4096),
+  rawNonce: z.string().trim().min(1).max(256).optional(),
+  fullName: z.string().trim().max(80).optional(),
+  authorizationCode: z.string().trim().min(1).max(1024).optional(),
+});
+
+export type AppleSignInInput = z.infer<typeof appleSignInSchema>;
+
 // ── Customer password auth ──────────────────────────────────────────────────
 
 export const customerRegisterSchema = z.object({
   name: z.string().trim().min(2, "Enter your name.").max(80),
   email: z.string().trim().toLowerCase().email(),
-  // The SAME strength rule as staff accounts. A customer account holds a phone
-  // number, a home address and a message history — there is no version of this
-  // where it deserves a weaker bar than a dashboard login.
-  password: passwordSchema,
+  // Lighter than staff's passwordSchema — see customerPasswordSchema's own
+  // comment for why, and customerPassword.service.ts's isDerivedFromEmail
+  // check for the one rule beyond length that still applies here.
+  password: customerPasswordSchema,
 });
 
 export type CustomerRegisterInput = z.infer<typeof customerRegisterSchema>;
@@ -66,6 +100,19 @@ export const verifyEmailSchema = z.object({
 
 export const resendVerificationSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().trim().min(1).max(256),
+  // The new password being SET — customerPasswordSchema, unlike loginSchema's
+  // plain string above, applies the same (customer) strength bar registration
+  // uses. This route is customer-only (see auth/customer/reset-password) —
+  // staff password resets go through a different flow entirely.
+  password: customerPasswordSchema,
 });
 
 /**
@@ -95,10 +142,12 @@ export const refreshTokenSchema = z.object({
 export const claimLeadsSchema = z.object({
   claims: z
     .array(
+      // No `phone`: the legacy phone-tail fallback is not accepted in a BATCH,
+      // for the same reason /api/chat/summaries does not take it — see
+      // LeadClaim in middleware/customerGuard.ts.
       z.object({
         refNumber: z.string().trim().min(1).max(64),
         token: z.string().trim().max(128).optional(),
-        phone: z.string().trim().max(32).optional(),
       }),
     )
     .min(1)

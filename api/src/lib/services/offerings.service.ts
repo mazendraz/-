@@ -121,6 +121,7 @@ type TierRow = {
 
 type OfferingRow = {
   id: string; companyId: string; name: string; description: string | null;
+  nameAr: string | null; descriptionAr: string | null; tags: string[];
   kind: string; pricingModel: string; priceMin: number | null; priceMax: number | null;
   unit: string | null; minQty: number | null; image: string | null; note: string | null;
   sortOrder: number; isActive: boolean; isPublished: boolean;
@@ -141,6 +142,9 @@ export function serializeOffering(o: OfferingRow): ApiOffering {
     companyId: o.companyId,
     name: o.name,
     description: o.description,
+    nameAr: o.nameAr,
+    descriptionAr: o.descriptionAr,
+    tags: o.tags,
     kind: o.kind as ApiOffering["kind"],
     pricingModel: o.pricingModel as ApiOffering["pricingModel"],
     priceMin: o.priceMin,
@@ -208,6 +212,9 @@ async function loadOwned(companyId: string, id: string) {
 export interface OfferingInput {
   name: string;
   description?: string | null;
+  nameAr?: string | null;
+  descriptionAr?: string | null;
+  tags?: string[] | null;
   kind?: "SERVICE" | "PRODUCT";
   pricingModel?: "FIXED" | "RANGE" | "PER_UNIT" | "ON_INSPECTION";
   priceMin?: number | null;
@@ -226,6 +233,9 @@ export async function create(companyId: string, input: OfferingInput): Promise<A
       companyId,
       name: input.name,
       description: input.description ?? null,
+      nameAr: input.nameAr ?? null,
+      descriptionAr: input.descriptionAr ?? null,
+      tags: input.tags ?? [],
       kind: input.kind ?? "SERVICE",
       pricingModel: input.pricingModel ?? "RANGE",
       priceMin: input.priceMin ?? null,
@@ -580,6 +590,9 @@ export async function adminUpsert(
   const data = {
     name: input.name,
     description: input.description ?? null,
+    nameAr: input.nameAr ?? null,
+    descriptionAr: input.descriptionAr ?? null,
+    tags: input.tags ?? [],
     kind: (input.kind ?? "SERVICE") as never,
     pricingModel: (input.pricingModel ?? "RANGE") as never,
     priceMin: input.priceMin ?? null,

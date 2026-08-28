@@ -53,7 +53,9 @@ export const POST = withErrors(async (request: NextRequest) => {
     throw new UnauthorizedError("Session expired. Please sign in again.");
   }
 
-  const token = await signCustomerToken({ sub: customer.id });
+  // Bound to the session it was refreshed from, so revoking that one device
+  // kills this access token too rather than leaving it live until it expires.
+  const token = await signCustomerToken({ sub: customer.id, sid: result.sessionId });
 
   return ok(
     {

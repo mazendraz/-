@@ -6,7 +6,14 @@ import { savePendingRequest, takePendingRequest } from "../lib/pendingRequest";
 import { DISTRICTS, addLead, getMyLeads, type Lead } from "../lib/requests";
 import { useSettings, parseLines } from "../lib/settings";
 import { useCompanyDetail } from "../lib/catalog";
-import { isBusy, formatReopenDate, availableAgainAt } from "../lib/availability";
+import {
+  isBusy,
+  formatReopenDate,
+  availableAgainAt,
+  joinWaitlist,
+  rememberMyWaitlistEntry,
+  type WaitlistEntry,
+} from "../lib/availability";
 import { usePageMeta } from "../hooks/usePageMeta";
 import { useLocale } from "../context/LocaleContext";
 import { t, type Locale } from "../lib/i18n";
@@ -34,6 +41,55 @@ interface FormState {
 
 const EMPTY: FormState = { name: "", phone: "", district: "", description: "", service: "" };
 const DESCRIPTION_MAX = 500;
+
+/** The finished request, in the shape both destinations take. */
+interface SubmittedRequest {
+  service: string;
+  name: string;
+  phone: string;
+  district: string;
+  budget: string;
+  description: string;
+  items?: CartItem[];
+}
+
+/**
+ * Send a finished request to a company that is currently unavailable: it joins
+ * their waiting list instead of becoming a lead.
+ *
+ * Everything the customer filled in goes with it — district, description and the
+ * priced basket included — because the entry is converted into a real Lead
+ * verbatim when the provider accepts it (see waitlist.service.ts convertToLead).
+ * The customer waits for a slot; they do not fill the form again.
+ *
+ * `description` becomes `note`, the column the waiting list has always written.
+ */
+async function joinRequest(
+  companySlug: string,
+  request: SubmittedRequest,
+  honeypot: string,
+  captchaToken: string | null,
+): Promise<{ kind: "queued"; entry: WaitlistEntry | null }> {
+  const entry = await joinWaitlist(
+    companySlug,
+    {
+      name: request.name,
+      phone: request.phone,
+      service: request.service,
+      note: request.description,
+      district: request.district,
+      budget: request.budget,
+      items: request.items,
+    },
+    honeypot,
+    captchaToken,
+  );
+  // Remember it on this device, the same way addLead remembers a lead — that is
+  // what puts it in "My Requests" for a customer who is not signed in on their
+  // next visit. Null in demo mode, where there is nothing to remember.
+  if (entry) rememberMyWaitlistEntry(entry);
+  return { kind: "queued", entry };
+}
 
 export default function RequestForm() {
   const { locale } = useLocale();
@@ -73,7 +129,21 @@ export default function RequestForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [shakeForm, setShakeForm] = useState(false);
-  const [submittedLead, setSubmittedLead] = useState<Lead | null>(null);
+  /**
+   * What the submission produced. Two shapes, because a busy company queues the
+   * request instead of taking it: `lead` is the usual Lead (ref number, chat,
+   * tracking), `queued` is the waiting-list entry the SAME form produced when the
+   * company was unavailable. Discriminated rather than two independent pieces of
+   * state so "submitted" can only ever mean one of them.
+   *
+   * `entry` is nullable inside `queued` for demo mode alone — with no API there is
+   * no entry to remember, and the screen still has to say the request went in.
+   */
+  const [submitted, setSubmitted] = useState<
+    | { kind: "lead"; lead: Lead }
+    | { kind: "queued"; entry: WaitlistEntry | null }
+    | null
+  >(null);
   const [honeypot, setHoneypot] = useState(""); // bot trap — see hidden field below
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaReset, setCaptchaReset] = useState(0); // bump to reset the widget
@@ -130,6 +200,17 @@ export default function RequestForm() {
   // logged out.
   const needsSignIn = gateOn && !authLoading && !customer;
 
+  // Is this company unavailable right now? The ONE thing that changes about this
+  // form when they are: the finished request is queued on their waiting list
+  // instead of landing as a lead. Same fields, same validation, same sign-in gate
+  // — see handleSubmit. `company` is undefined until the profile loads, and an
+  // unloaded company is not a busy one.
+  const busy = !!company && isBusy(company);
+  // Resolved across the manual switch AND any running scheduled window, so a
+  // company busy because of a scheduled period still shows its return date
+  // instead of falling through to the date-less wording.
+  const backAt = company ? availableAgainAt(company) : null;
+
   function validate(): boolean {
     const e: Partial<FormState> = {};
     if (!form.name.trim()) e.name = t(locale, "form_err_name");
@@ -179,26 +260,38 @@ export default function RequestForm() {
     }
     setIsSubmitting(true);
     setSubmitError(null);
+    // One payload for both destinations: a request to a busy company is the same
+    // request, so anything added to the form reaches the waiting list too without
+    // a second place to remember.
+    const request = {
+      // With items the server overwrites this with their names; it stays the
+      // human-readable summary the older screens and emails read.
+      service: form.service || "General Inquiry",
+      name: form.name.trim(),
+      phone: form.phone,
+      district: form.district,
+      // Budget is no longer collected on this form; the field stays required
+      // on the Lead/API shape (existing leads have real values), so send "".
+      budget: "",
+      description: form.description.trim(),
+      ...(items.length > 0 ? { items } : {}),
+    };
     try {
-      const lead = await addLead({
-        companySlug: companySlug || "general",
-        companyName,
-        // With items the server overwrites this with their names; it stays the
-        // human-readable summary the older screens and emails read.
-        service: form.service || "General Inquiry",
-        name: form.name.trim(),
-        phone: form.phone,
-        district: form.district,
-        // Budget is no longer collected on this form; the field stays required
-        // on the Lead/API shape (existing leads have real values), so send "".
-        budget: "",
-        description: form.description.trim(),
-        ...(items.length > 0 ? { items } : {}),
-      }, honeypot, captchaToken);
+      const result = busy
+        ? await joinRequest(companySlug, request, honeypot, captchaToken)
+        : ({
+            kind: "lead",
+            lead: await addLead(
+              { companySlug: companySlug || "general", companyName, ...request },
+              honeypot,
+              captchaToken,
+            ),
+          } as const);
       // The basket has become a request — leaving it would re-offer the same
-      // items next visit as if nothing had been sent.
+      // items next visit as if nothing had been sent. True of a queued request
+      // too: it is sent, it is just waiting.
       if (companySlug) clearCart(companySlug);
-      setSubmittedLead(lead);
+      setSubmitted(result);
       setStep("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -209,8 +302,11 @@ export default function RequestForm() {
     }
   }
 
-  if (step === "success" && submittedLead) {
-    return <SuccessScreen lead={submittedLead} companyName={companyName} locale={locale} />;
+  if (step === "success" && submitted) {
+    return submitted.kind === "lead"
+      ? <SuccessScreen lead={submitted.lead} companyName={companyName} locale={locale} />
+      : <QueuedScreen entry={submitted.entry} request={form} companyName={companyName}
+                      backAt={backAt} locale={locale} />;
   }
 
   // A lead must attach to a real company the platform can route it to. When the
@@ -256,27 +352,24 @@ export default function RequestForm() {
           )}
         </div>
 
-        {/* Busy notice — this company can't take new requests right now; point the
-            customer to the waiting list on the profile. Doesn't hard-block submitting. */}
-        {company && isBusy(company) && (() => {
-          // Hoisted: resolved across the manual switch AND any running scheduled
-          // window, so a company busy because of a scheduled period still shows
-          // its return date instead of falling through to the date-less wording.
-          const backAt = availableAgainAt(company);
-          return (
-            <Notice variant="warning" icon="event_busy">
-              <p className="text-label text-amber-900 font-bold leading-snug">
-                {backAt
-                  ? `${companyName} ${t(locale, "busy_banner_booked_until_inline")} ${formatReopenDate(backAt, locale)}`
-                  : `${companyName} — ${t(locale, "busy_banner_fully_booked")}`}
-              </p>
-              <Link to={`/companies/${companySlug}`} className="text-label text-amber-800 font-bold hover:underline inline-flex items-center gap-1 mt-1">
-                <Icon name="hourglass_top" className="text-body" />
-                {t(locale, "waitlist_join_cta")}
-              </Link>
-            </Notice>
-          );
-        })()}
+        {/* Busy notice. This used to send the customer away to a separate,
+            shorter "join the waiting list" form on the profile — which meant a
+            busy company collected a name and a phone number instead of the
+            request the customer came to make. Now the form is the same one
+            either way and this only sets the expectation: it is going in, it
+            waits its turn. */}
+        {busy && (
+          <Notice variant="warning" icon="event_busy">
+            <p className="text-label text-amber-900 font-bold leading-snug">
+              {backAt
+                ? `${companyName} ${t(locale, "busy_banner_booked_until_inline")} ${formatReopenDate(backAt, locale)}`
+                : `${companyName} — ${t(locale, "busy_banner_fully_booked")}`}
+            </p>
+            <p className="text-label text-amber-800 leading-relaxed mt-1">
+              {t(locale, "waitlist_form_notice")}
+            </p>
+          </Notice>
+        )}
 
         {/* Smart pre-fill notice */}
         {prefilled && (
@@ -476,14 +569,19 @@ export default function RequestForm() {
               <>
                 {/* The button says what the next click actually does. A visitor
                     who presses "Send" and lands on a sign-in page was misled,
-                    even though the request does go out a moment later. */}
-                <Icon name={needsSignIn ? "login" : "send"} className="text-title" />
-                {t(locale, needsSignIn ? "form_submit_signin" : "form_submit")}
+                    even though the request does go out a moment later — and one
+                    who presses "Send" at a booked-out company should know their
+                    request is joining a queue before they press it, not after. */}
+                <Icon
+                  name={needsSignIn ? "login" : busy ? "hourglass_top" : "send"}
+                  className="text-title"
+                />
+                {t(locale, needsSignIn ? "form_submit_signin" : busy ? "waitlist_submit" : "form_submit")}
               </>
             )}
           </button>
           <p className="text-center text-caption text-outline">
-            {t(locale, needsSignIn ? "form_signin_why" : "form_contact_24h")}
+            {t(locale, needsSignIn ? "form_signin_why" : busy ? "waitlist_submit_why" : "form_contact_24h")}
           </p>
 
           {/* Honeypot — hidden from real users; bots auto-fill it and the server
@@ -671,6 +769,91 @@ function SuccessScreen({ lead, companyName, locale }: { lead: Lead; companyName:
                 ? "bg-surface-container-lowest text-on-surface hover:bg-surface-container-low border border-outline-variant/25"
                 : "bg-primary text-on-primary hover:bg-primary-container"
             }`}>
+            {t(locale, "common_back_to_home")}
+          </Link>
+          <Link to="/companies"
+            className="flex-1 bg-surface-container-lowest text-on-surface py-3.5 rounded-xl font-bold text-body
+                       hover:bg-surface-container-low transition-colors text-center border border-outline-variant/25 touch-press">
+            {t(locale, "common_browse_companies")}
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Queued success screen ─────────────────────────────────────────────────
+// The same request, sent to a company that is currently booked out. Says the two
+// things the customer needs and nothing else: it is IN (with everything they
+// typed, not a callback slip), and roughly when it starts moving.
+//
+// No reference number or chat link, unlike SuccessScreen: neither exists yet.
+// Both are created the moment the provider accepts the entry, and the request
+// then appears in "My Requests" as an ordinary request — which is why that is
+// the one link offered here.
+function QueuedScreen({ entry, request, companyName, backAt, locale }: {
+  entry: WaitlistEntry | null;
+  request: FormState;
+  companyName: string;
+  backAt: number | null;
+  locale: Locale;
+}) {
+  return (
+    <div className="bg-surface min-h-screen pb-16 px-5 flex items-center justify-center">
+      <div className="max-w-md w-full text-center">
+
+        <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-6 shadow-bloom">
+          <Icon name="hourglass_top" className="text-amber-600 text-[48px]" style={{ fontVariationSettings: "'FILL' 1" }} />
+        </div>
+
+        <h1 className="font-black text-headline text-on-surface mb-2 tracking-tight">
+          {t(locale, "waitlist_queued_title")}
+        </h1>
+        <p className="text-body text-outline mb-7 leading-relaxed max-w-sm mx-auto">
+          {t(locale, "waitlist_queued_sub")}
+        </p>
+
+        <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-bloom mb-6 text-start">
+          {/* The expected start, when there is one. An open-ended busy period
+              has no date to show and the row is simply absent — inventing
+              "soon" would be the one number on this screen nobody could keep. */}
+          {backAt && (
+            <>
+              <p className="text-caption font-black text-outline ltr:uppercase ltr:tracking-[0.12em] mb-1.5">
+                {t(locale, "waitlist_queued_when")}
+              </p>
+              <p className="font-black text-amber-600 text-[1.5rem] mb-5">{formatReopenDate(backAt, locale)}</p>
+            </>
+          )}
+          <div className={`space-y-2.5 ${backAt ? "pt-4 border-t border-outline-variant/20" : ""}`}>
+            <InfoRow icon="person" label={t(locale, "form_name")} val={request.name} />
+            <InfoRow icon="phone" label={t(locale, "form_phone_label")} val={formatPhoneDisplay(request.phone)} />
+            <InfoRow icon="location_on" label={t(locale, "requests_district")} val={request.district} />
+            <InfoRow icon="business" label={t(locale, "form_company")} val={companyName} />
+            {entry?.service && (
+              <InfoRow icon="handyman" label={t(locale, "waitlist_service")} val={entry.service} />
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-7 text-start">
+          <Icon name="info" className="text-amber-600 text-subhead flex-shrink-0 mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }} />
+          <p className="text-label text-on-surface-variant leading-relaxed">
+            {t(locale, "waitlist_queued_note")}
+          </p>
+        </div>
+
+        <Link to="/requests"
+          className="flex items-center justify-center gap-2 w-full bg-primary text-on-primary py-3.5 rounded-xl font-bold text-body
+                     hover:bg-primary-container transition-colors touch-press btn-press mb-3">
+          <Icon name="receipt_long" className="text-title" />
+          {t(locale, "waitlist_queued_track")}
+        </Link>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Link to="/"
+            className="flex-1 bg-surface-container-lowest text-on-surface py-3.5 rounded-xl font-bold text-body
+                       hover:bg-surface-container-low transition-colors text-center border border-outline-variant/25 touch-press btn-press">
             {t(locale, "common_back_to_home")}
           </Link>
           <Link to="/companies"

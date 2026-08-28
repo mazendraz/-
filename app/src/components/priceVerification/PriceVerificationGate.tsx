@@ -41,7 +41,11 @@ export default function PriceVerificationGate({
     setBusy(true);
     setError(undefined);
     try {
-      await verifyLeadAmount({ ref: lead.refNumber, token: lead.trackingToken, phone: lead.phone, decision: "confirmed" });
+      await verifyLeadAmount({
+        ref: lead.refNumber, token: lead.trackingToken, phone: lead.phone,
+        leadId: lead.id, accountOwned: lead.accountOwned,
+        decision: "confirmed",
+      });
       setPhase("confirmed");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t(locale, "verify_error_generic"));
@@ -56,6 +60,7 @@ export default function PriceVerificationGate({
     try {
       await verifyLeadAmount({
         ref: lead.refNumber, token: lead.trackingToken, phone: lead.phone,
+        leadId: lead.id, accountOwned: lead.accountOwned,
         decision: "discrepancy", clientAmount, note: note || undefined,
       });
       setPhase("confirmed");

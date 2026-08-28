@@ -75,8 +75,15 @@ export function useBackendHealth(): boolean {
       schedule();
     };
 
+    // Clear before setting: `onVisible` calls probe() directly, and probe() ends
+    // in schedule(). Without this the already-pending timer survived, fired, and
+    // started a second chain — one more per tab-return, each untracked, since
+    // `timer.current` only ever holds the newest. Same defect as ChatThread's
+    // poll loop; same one-line fix, placed in schedule() rather than in the
+    // caller so any future caller inherits it.
     const schedule = () => {
       if (!alive || !probing.current) return;
+      if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(probe, PROBE_INTERVAL_MS);
     };
 

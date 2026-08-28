@@ -32,6 +32,7 @@ export default function MediaLightbox({ items, index, onIndex, onClose, label }:
 }) {
   const { locale } = useLocale();
   const swipeX = useRef<number | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const total = items.length;
 
   // Keyboard nav. Escape-to-close, focus-on-open and the focus trap all come
@@ -46,6 +47,22 @@ export default function MediaLightbox({ items, index, onIndex, onClose, label }:
   }, [index, total, onIndex]);
 
   const item = items[index];
+
+  // Start playing on open (and on every paged-to video). `autoPlay` alone is
+  // not enough: with sound, browsers only allow it off a user gesture, and
+  // Safari does not count the click that opened this dialog. So play() is
+  // called explicitly, and a rejection falls back to a MUTED autoplay —
+  // which is always permitted — rather than leaving a frozen first frame.
+  // The controls are right there for the viewer to unmute.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.play().catch(() => {
+      video.muted = true;
+      void video.play().catch(() => {});
+    });
+  }, [index, item?.src]);
+
   if (!item) return null;
 
   const caption = item.caption;
@@ -97,8 +114,11 @@ export default function MediaLightbox({ items, index, onIndex, onClose, label }:
         // player-sized frame.
         <video
           key={item.src}
+          ref={videoRef}
           src={item.src}
           controls
+          autoPlay
+          playsInline
           className={`w-[min(90vw,900px)] ${mediaMaxH} aspect-video rounded-xl shadow-2xl bg-black`}
           onClick={(e) => e.stopPropagation()}
         />

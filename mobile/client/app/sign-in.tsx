@@ -11,15 +11,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Button from "../components/Button";
+import Icon from "../components/Icon";
 import TextField from "../components/TextField";
 import Logo from "../components/Logo";
+import GoogleIcon from "../components/GoogleIcon";
+import * as AppleAuthentication from "expo-apple-authentication";
 import {
   registerWithPassword,
   resendVerification,
+  signInWithApple,
   signInWithPassword,
   useCustomerAuth,
 } from "../lib/customerAuth";
 import { isGoogleSignInConfigured, useGoogleSignIn } from "../lib/googleAuth";
+import { isAppleSignInAvailable, signInWithApple as runAppleSheet } from "../lib/appleAuth";
 import { ApiError } from "../lib/api";
 
 type Mode = "signin" | "register";
@@ -32,8 +37,12 @@ type Mode = "signin" | "register";
  */
 export default function SignIn() {
   const { customer } = useCustomerAuth();
-  const { next: rawNext } = useLocalSearchParams<{ next?: string }>();
-  const [mode, setMode] = useState<Mode>("signin");
+  const { next: rawNext, mode: rawMode } = useLocalSearchParams<{ next?: string; mode?: string }>();
+  // Guest prompts that offer "إنشاء حساب" (e.g. starting a service request)
+  // link here with ?mode=register so that tap lands straight on the
+  // registration form instead of sign-in — same screen either way, just a
+  // different starting tab.
+  const [mode, setMode] = useState<Mode>(rawMode === "register" ? "register" : "signin");
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -45,6 +54,9 @@ export default function SignIn() {
   const [resent, setResent] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [mailFailed, setMailFailed] = useState(false);
+  // Native check, so it cannot be answered at module scope the way
+  // isGoogleSignInConfigured() can. False on Android and on iOS below 13.
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   // Only ever a path on this site. An absolute URL here would turn sign-in
   // into an open redirect — same guard as the website's SignIn.tsx.
@@ -69,6 +81,42 @@ export default function SignIn() {
         setError(err instanceof ApiError ? err.message : "تعذّر تسجيل الدخول. جرّب تاني.");
       });
   });
+
+  useEffect(() => {
+    let alive = true;
+    void isAppleSignInAvailable()
+      .then((ok) => {
+        if (alive) setAppleAvailable(ok);
+      })
+      // Availability is a rendering decision, not a failure worth surfacing: if
+      // the check itself breaks, the right outcome is simply no Apple button.
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function onApplePress() {
+    // Apple renders its own native button, which has no disabled state — so the
+    // re-entrancy guard the other buttons get from `busy` has to be explicit.
+    if (busy) return;
+    setError("");
+    setBusy(true);
+    try {
+      const payload = await runAppleSheet();
+      if (!payload) {
+        // The sheet was dismissed. A cancel is an ordinary outcome of a login
+        // screen, not something to show a message about.
+        setBusy(false);
+        return;
+      }
+      await signInWithApple(payload);
+      router.replace(next as never);
+    } catch (err) {
+      setBusy(false);
+      setError(err instanceof ApiError ? err.message : "تعذّر تسجيل الدخول بـ Apple. جرّب تاني.");
+    }
+  }
 
   async function onGooglePress() {
     setError("");
@@ -118,8 +166,12 @@ export default function SignIn() {
   async function onResend() {
     setBusy(true);
     try {
-      await resendVerification(email.trim());
-      setResent(true);
+      // The server now reports whether the mail actually left; a `false` here
+      // used to be indistinguishable from success and produced a "اتبعت"
+      // message over an email that was never accepted.
+      const sent = await resendVerification(email.trim());
+      setMailFailed(!sent);
+      setResent(sent);
     } catch {
       setError("تعذّر إرسال اللينك. جرّب تاني.");
     } finally {
@@ -130,21 +182,91 @@ export default function SignIn() {
   if (registered) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.heading}>
-            {mailFailed ? "متعرفناش نبعت الإيميل" : "بصّ في بريدك"}
-          </Text>
-          <Text style={styles.body}>
-            {mailFailed
-              ? "حسابك اتعمل، بس إيميل التأكيد ماخرجش. جرّب تبعته تاني — ولو فضل يفشل كلّمنا وهنظبطها."
-              : `بعتنا لينك تأكيد على ${email.trim()}`}
-          </Text>
-          {resent ? (
-            <Text style={styles.resent}>اتبعت. بصّ في بريدك.</Text>
-          ) : (
-            <Button label="ابعت اللينك تاني" variant="secondary" busy={busy} onPress={onResend} />
-          )}
-        </View>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.card}>
+            {/* Status badge — a tinted disc rather than a bare glyph, so the
+                outcome reads at a glance before any text is parsed. Tone
+                follows the outcome: brand blue for "on its way", warning
+                amber for "we couldn't send it". */}
+            <View style={[styles.statusBadge, mailFailed && styles.statusBadgeWarn]}>
+              <Icon
+                name={mailFailed ? "report_problem" : "mark_email_unread"}
+                size={34}
+                color={mailFailed ? colors.onWarningContainer : colors.primary}
+              />
+            </View>
+
+            <Text style={styles.heading}>
+              {mailFailed ? "متعرفناش نبعت الإيميل" : "بصّ في بريدك"}
+            </Text>
+
+            {mailFailed ? (
+              <Text style={styles.body}>
+                حسابك اتعمل بنجاح، بس إيميل التأكيد ماخرجش. جرّب تبعته تاني — ولو فضل
+                يفشل كلّمنا وهنظبطها.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.body}>بعتنا لينك التأكيد على</Text>
+                {/* The address gets its own emphasized chip: it is the one
+                    thing worth double-checking here (a typo in it is the most
+                    common reason the mail "never arrives"). LTR + selectable
+                    so it reads correctly and can be copied. */}
+                <View style={styles.emailChip}>
+                  <Text style={styles.emailChipText} selectable numberOfLines={1}>
+                    {email.trim()}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            {!mailFailed && (
+              <View style={styles.stepsBox}>
+                <View style={styles.stepRow}>
+                  <Text style={styles.stepNum}>١</Text>
+                  <Text style={styles.stepText}>افتح الإيميل واضغط على زرار التأكيد</Text>
+                </View>
+                <View style={styles.stepRow}>
+                  <Text style={styles.stepNum}>٢</Text>
+                  <Text style={styles.stepText}>هترجع للتطبيق وحسابك يبقى جاهز</Text>
+                </View>
+                <Text style={styles.stepsNote}>
+                  اللينك صالح ٢٤ ساعة. لو ملقتهوش، بصّ في الـ Spam أو الرسائل المهملة.
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.registeredActions}>
+              {resent ? (
+                <View style={styles.resentRow}>
+                  <Icon name="check_circle" size={18} color={colors.success} />
+                  <Text style={styles.resent}>اتبعت تاني. بصّ في بريدك.</Text>
+                </View>
+              ) : (
+                <Button
+                  label="ابعت اللينك تاني"
+                  variant="secondary"
+                  busy={busy}
+                  onPress={onResend}
+                />
+              )}
+
+              {/* A way back. Without this the screen was terminal — the only
+                  exits were the OS back gesture or force-quitting the app. */}
+              <Text
+                style={styles.switchRow}
+                onPress={() => {
+                  setRegistered(false);
+                  setResent(false);
+                  setMailFailed(false);
+                  setMode("signin");
+                }}
+              >
+                أكّدت بريدك؟ <Text style={styles.switchLink}>سجّل دخولك</Text>
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -163,7 +285,7 @@ export default function SignIn() {
             </Text>
             <Text style={styles.body}>عشان تتابع طلباتك وتتكلم مع الشركات</Text>
 
-            {error && (
+            {error !== "" && (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{error}</Text>
               </View>
@@ -180,14 +302,35 @@ export default function SignIn() {
               </View>
             )}
 
-            {isGoogleSignInConfigured() && (
+            {(appleAvailable || isGoogleSignInConfigured()) && (
               <>
-                <Button
-                  label="المتابعة باستخدام جوجل"
-                  onPress={onGooglePress}
-                  busy={busy}
-                  disabled={!googleReady}
-                />
+                {/*
+                  Apple first, and rendered with Apple own component rather than
+                  the app Button. Both are review requirements, not taste:
+                  guideline 4.8 says the Sign in with Apple option must be
+                  offered at least as prominently as any other, and the App Store
+                  guidelines require this proprietary button rather than a custom
+                  one. cornerRadius matches Button styles.base so the two line up.
+                */}
+                {appleAvailable && (
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                    cornerRadius={12}
+                    style={styles.appleButton}
+                    onPress={onApplePress}
+                  />
+                )}
+                {isGoogleSignInConfigured() && (
+                  <Button
+                    label="المتابعة باستخدام Google"
+                    variant="google"
+                    icon={<GoogleIcon size={20} />}
+                    onPress={onGooglePress}
+                    busy={busy}
+                    disabled={!googleReady}
+                  />
+                )}
                 <View style={styles.dividerRow}>
                   <View style={styles.dividerLine} />
                   <Text style={styles.dividerLabel}>أو</Text>
@@ -214,8 +357,14 @@ export default function SignIn() {
               secure
               autoComplete={mode === "register" ? "password-new" : "password"}
               ltr
-              hint={mode === "register" ? "12 حرف على الأقل. ابعد عن أي حاجة سهل تتخمّن." : undefined}
+              hint={mode === "register" ? "8 حروف على الأقل. متستخدمش حاجة من إيميلك." : undefined}
             />
+
+            {mode === "signin" && (
+              <Text style={styles.forgotLink} onPress={() => router.push("/forgot-password")}>
+                نسيت كلمة المرور؟
+              </Text>
+            )}
 
             <Button
               label={mode === "signin" ? "دخول" : "إنشاء حساب"}
@@ -292,6 +441,80 @@ const styles = StyleSheet.create({
     color: colors.success,
     textAlign: "center",
   },
+  // ── "Check your inbox" screen ─────────────────────────────────────────────
+  statusBadge: {
+    alignSelf: "center",
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: `${colors.primary}14`,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 2,
+  },
+  statusBadgeWarn: { backgroundColor: colors.warningContainer },
+  emailChip: {
+    alignSelf: "center",
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    maxWidth: "100%",
+    marginTop: -6,
+  },
+  emailChipText: {
+    fontSize: type.label.fontSize,
+    fontFamily: "Cairo_700Bold",
+    color: colors.onSurface,
+    writingDirection: "ltr",
+    textAlign: "center",
+  },
+  stepsBox: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+    marginTop: 2,
+  },
+  stepRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  stepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    color: colors.onPrimary,
+    fontFamily: "Cairo_700Bold",
+    fontSize: type.caption.fontSize,
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  stepText: {
+    flex: 1,
+    fontSize: type.label.fontSize,
+    fontFamily: "Cairo_400Regular",
+    color: colors.onSurfaceVariant,
+    textAlign: "right",
+  },
+  stepsNote: {
+    fontSize: type.caption.fontSize,
+    fontFamily: "Cairo_400Regular",
+    color: colors.outline,
+    textAlign: "right",
+    lineHeight: 18,
+  },
+  registeredActions: { gap: 12, marginTop: 2 },
+  resentRow: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6 },
+  forgotLink: {
+    fontSize: type.caption.fontSize,
+    fontFamily: "Cairo_600SemiBold",
+    color: colors.primary,
+    textAlign: "left",
+    marginTop: -6,
+  },
+  // Apple button draws itself entirely from these two values — it ignores
+  // backgroundColor and borderRadius by design, and renders nothing at all
+  // without an explicit height and width.
+  appleButton: { height: 48, width: "100%" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 2 },
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.outlineVariant },
   dividerLabel: { fontSize: type.caption.fontSize, color: colors.outline, fontFamily: "Cairo_400Regular" },

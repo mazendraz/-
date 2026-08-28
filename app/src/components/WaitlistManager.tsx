@@ -9,6 +9,7 @@ import { useLocale } from "../context/LocaleContext";
 import { t } from "../lib/i18n";
 import { formatDate } from "../lib/format";
 import { formatPhoneDisplay } from "../lib/phone";
+import { formatPrice } from "../lib/pricing";
 import Icon from "./Icon";
 import Select from "./Select";
 
@@ -119,6 +120,34 @@ export default function WaitlistManager({ scope }: { scope: WaitlistScope }) {
                   </div>
                   <a href={`tel:${e.phone}`} className="text-label font-bold text-primary hover:underline" dir="ltr">{formatPhoneDisplay(e.phone)}</a>
                   {e.service && <p className="text-caption text-outline">{t(locale, "prov_wl_waiting_for")} {e.service}</p>}
+                  {/* The rest of the request. An entry is a complete request now,
+                      not a callback slip — deciding whether to accept it means
+                      seeing what was actually ordered, and the estimate the
+                      customer was quoted when they sent it. Both are absent on
+                      entries joined through the short form this replaced. */}
+                  {e.district && (
+                    <p className="text-caption text-outline flex items-center gap-1">
+                      <Icon name="location_on" className="text-label" />
+                      {e.district}
+                    </p>
+                  )}
+                  {e.estimatedMin != null && (
+                    <p className="text-caption font-bold text-primary flex items-center gap-1">
+                      <Icon name="sell" className="text-label" />
+                      {formatPrice(
+                        {
+                          pricingModel:
+                            e.estimatedMax != null && e.estimatedMax !== e.estimatedMin ? "RANGE" : "FIXED",
+                          priceMin: e.estimatedMin,
+                          priceMax: e.estimatedMax,
+                          unit: null,
+                        },
+                        locale,
+                      )}
+                      {e.discountPercent > 0 && ` · −${e.discountPercent}%`}
+                      {e.hasOnInspection && ` · ${t(locale, "prov_wl_plus_on_inspection")}`}
+                    </p>
+                  )}
                   {e.note && <p className="text-sm text-on-surface-variant mt-1 line-clamp-2">{e.note}</p>}
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">

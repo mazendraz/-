@@ -59,6 +59,12 @@ async function sendToTokens(tokens: string[], payload: PushPayload): Promise<num
       // counterpart of the service worker's notificationclick URL.
       data: payload.url ? { url: payload.url } : undefined,
       sound: "default",
+      // No per-account unread count to reconcile against (no Notification/
+      // read-state table yet), so this is deliberately a fixed "something's
+      // waiting" flag rather than an accumulating count — the client resets
+      // it to 0 on foreground (see mobile's lib/push.ts), so a burst of
+      // pushes before the app is reopened still just shows "1", not N.
+      badge: 1,
       // Collapses repeats about the same lead into one entry, matching the
       // `tag` the web notification uses.
       ...(payload.tag ? { collapseId: payload.tag } : {}),

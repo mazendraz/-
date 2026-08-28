@@ -91,6 +91,9 @@ export interface ApiCompany {
   id: string;
   slug: string;
   name: string;
+  // Optional Arabic companion to `name` — additive, null until an admin/provider
+  // fills it in. `name` stays the canonical field every existing reader uses.
+  nameAr?: string | null;
   tagline: string;
   about: string;
   logo: string;
@@ -187,6 +190,12 @@ export interface ApiAvailabilityPayload {
 
 export type ApiWaitlistStatus = "WAITING" | "NOTIFIED" | "CONVERTED" | "CANCELLED";
 
+/**
+ * A queued request. Carries the SAME fields as ApiLead's request half, because a
+ * waiting-list join is now the same full request form — see the WaitlistEntry
+ * model comment. `district`/`budget` and the pricing fields are null/empty on
+ * entries joined before that was true.
+ */
 export interface ApiWaitlistEntry {
   id: string;
   companyId: string;
@@ -195,20 +204,42 @@ export interface ApiWaitlistEntry {
   name: string;
   phone: string;
   service: string | null;
+  /** The customer's description of the job — becomes Lead.description on accept. */
   note: string | null;
   status: ApiWaitlistStatus;
   createdAt: number; // epoch ms
   // Set once accepted (status CONVERTED) — the id of the Lead this entry became.
   // See waitlist.service.ts convertToLead. Null until then.
   convertedLeadId: string | null;
+  district: string | null;
+  budget: string | null;
+  /**
+   * The priced basket, snapshotted at join time — identical in shape and meaning
+   * to ApiLead.items, and copied onto the Lead verbatim on accept. Empty for a
+   * single-service request, exactly like a lead's.
+   */
+  items: ApiLeadItem[];
+  estimatedMin: number | null;
+  estimatedMax: number | null;
+  discountPercent: number;
+  hasOnInspection: boolean;
 }
 
-/** POST /companies/:slug/waitlist — public join body. */
+/**
+ * POST /companies/:slug/waitlist — public join body. Deliberately the same shape
+ * as ApiLeadPayload minus companySlug/companyName (both already in the URL): the
+ * customer fills one form whether or not the company happens to be free.
+ */
 export interface ApiWaitlistPayload {
   name: string;
   phone: string;
   service?: string;
+  /** The description of the job. Named `note` for the column it has always written. */
   note?: string;
+  district?: string;
+  budget?: string;
+  /** Prices are NEVER sent by the client — the server reads them from the catalogue. */
+  items?: { offeringId: string; qty?: number; tierId?: string | null }[];
 }
 
 /** PATCH /provider/waitlist/:id · /admin/companies/:id/waitlist/:entryId body. */
@@ -239,6 +270,10 @@ export interface ApiCategory {
   // Optional per-page SEO overrides; null/absent → frontend uses defaults.
   metaTitle?: string | null;
   metaDescription?: string | null;
+  // Optional Arabic companions to label/description — additive, null until an
+  // admin fills them in. label/description stay canonical.
+  labelAr?: string | null;
+  descriptionAr?: string | null;
   /**
    * How many companies would be affected by turning this category's pricing
    * catalog off. ADMIN payloads only — absent everywhere else, which is why it
@@ -749,6 +784,12 @@ export interface ApiOffering {
   companyId: string;
   name: string;
   description: string | null;
+  // Optional Arabic companions — additive, null until an admin/provider fills
+  // them in. name/description stay canonical. tags is search-only keywords,
+  // no display surface today, so it's a plain (possibly empty) string array.
+  nameAr: string | null;
+  descriptionAr: string | null;
+  tags: string[];
   kind: ApiOfferingKind;
   pricingModel: ApiPricingModel;
   priceMin: number | null;
@@ -1253,17 +1294,46 @@ export interface ApiSearchResponse {
   results: ApiSearchResult[];
 }
 
+// ── Public global search (website + mobile) ─────────────────────────────────
+// Deliberately separate from ApiSearchCategory/ApiSearchResult above: those back
+// the desktop Business Control Center's internal search over Client/Provider/
+// Request/Service/Transaction (permission-filtered staff data). This is the
+// public catalog search over Category/Company/Offering, unauthenticated, the
+// same one result set consumed by both the website and mobile client — see
+// catalogSearch.service.ts.
+export type ApiCatalogSearchResultType = "company" | "category" | "product" | "service";
+
+export interface ApiCatalogSearchResult {
+  type: ApiCatalogSearchResultType;
+  id: string;
+  /** Category slug for a "category" result; company slug for everything else
+   *  (the navigation target). */
+  slug: string;
+  name: string;
+  nameAr?: string | null;
+  /** Category label for a company; company name for a product/service;
+   *  company count text for a category. */
+  subtitle: string;
+  image?: string | null;
+  /** Set for "product"/"service" results — the company they belong to. */
+  companySlug?: string | null;
+  /** Set for "product"/"service" results — lets the client scroll straight to it. */
+  offeringId?: string | null;
+}
+
+export interface ApiCatalogSearchResponse {
+  results: ApiCatalogSearchResult[];
+}
+
 // ── Business Control Center (desktop app): Notification Center ─────────────
-// No Notification table exists — adding one needs a real migration
-// (`prisma migrate dev`), which this environment cannot run (see
-// admin/notifications/route.ts's doc comment). So this reuses the SAME
-// merged real-events feed desktopOverview.service.ts's recentActivity()
-// already computes for the Overview screen's activity list, permission-
-// filtered the same way Search is. There is no persisted read/unread flag —
-// the desktop app tracks "seen up to" as a local timestamp (see
-// Header.tsx's NotificationBell), which is honest about what's real here:
-// an activity feed, not a notification delivery system with server-side
-// read receipts.
+// This stays on the merged real-events feed desktopOverview.service.ts's
+// recentActivity() already computes for the Overview screen's activity list,
+// permission-filtered the same way Search is — an org-wide activity feed for
+// staff, not a personal inbox, so it's kept separate from the customer-facing
+// Notification table below even though one now exists (added for the
+// customer app's notification center — see ApiCustomerNotification). There is
+// no persisted read/unread flag here — the desktop app tracks "seen up to" as
+// a local timestamp (see Header.tsx's NotificationBell).
 
 export type ApiNotificationType = "new_request" | "service_completed" | "dispute_raised" | "commission_collected" | "new_client";
 
@@ -1280,6 +1350,47 @@ export interface ApiNotification {
 
 export interface ApiNotificationsResponse {
   notifications: ApiNotification[];
+}
+
+// ── Customer app: Notification Center ───────────────────────────────────────
+// Backed by the real `Notification` table (Prisma) — every push a customer
+// receives is also written here (see notifications.customer.service.ts's
+// notifyCustomer, the one place that does both), so this list is never a
+// re-derived feed the way the desktop one above is: it IS the delivery
+// record, with real server-side read state.
+
+export type ApiCustomerNotificationType =
+  | "LEAD_CREATED"
+  | "LEAD_STATUS"
+  | "LEAD_COMPLETED"
+  | "CHAT_MESSAGE"
+  | "WAITLIST_NOTIFIED"
+  | "MARKETING";
+
+export interface ApiCustomerNotification {
+  id: string;
+  type: ApiCustomerNotificationType;
+  title: string;
+  body: string;
+  /** Relative in-app path to open on tap, or null. Same shape as a push
+   *  payload's `url` (see mobile's lib/push.ts) — tapping a push and tapping
+   *  its row in this list land on the same screen. */
+  url: string | null;
+  read: boolean;
+  createdAt: number; // epoch ms
+}
+
+export interface ApiCustomerNotificationsResponse {
+  notifications: ApiCustomerNotification[];
+  unreadCount: number;
+}
+
+/** GET/PATCH /customer/notification-preferences. Order/account notifications
+ *  (LEAD_CREATED, LEAD_STATUS, LEAD_COMPLETED, CHAT_MESSAGE,
+ *  WAITLIST_NOTIFIED) are never gated by these — only MARKETING is. */
+export interface ApiCustomerNotificationPreferences {
+  marketingPushEnabled: boolean;
+  marketingEmailEnabled: boolean;
 }
 
 

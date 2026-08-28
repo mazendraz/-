@@ -1,3 +1,4 @@
+import path from "path";
 import type { NextConfig } from "next";
 
 // Baseline security headers for every API response. The API is JSON-only and
@@ -13,6 +14,16 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Without this, Next.js's root-detection walks UP from here, finds the
+  // monorepo's own root package-lock.json (this is an npm workspace), and
+  // picks THAT as Turbopack's project root instead of api/ itself — which
+  // makes Turbopack resolve/watch/compile against the entire monorepo
+  // (mobile/, app/, docs/, design mockups, everything) rather than just this
+  // package. Confirmed as the actual cause of this dev server repeatedly
+  // taking 60s+ per route on first compile and eventually OOMing outright
+  // (heap hit 8GB compiling a single dynamic route) — not a fluke, not
+  // leftover processes, this exact misdetection, every time.
+  turbopack: { root: __dirname },
   // sharp is a native module — keep it external so the bundler doesn't try to
   // inline its prebuilt binaries.
   serverExternalPackages: ["sharp"],

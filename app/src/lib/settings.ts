@@ -221,13 +221,23 @@ export function useMaintenance(): { status: MaintenanceStatus; loading: boolean 
   useEffect(() => {
     if (!isApiConfigured()) return;
     let alive = true;
+    // Ordering guard. `load` runs on mount AND on every visibilitychange, with
+    // nothing stopping several from being in flight at once — flick between tabs
+    // a few times and they overlap. Without a generation the last RESPONSE won
+    // rather than the last REQUEST, so a slow earlier read could land after a
+    // fast later one and reinstate a status that is no longer true. That is not
+    // a cosmetic race here: this value decides whether the entire public site is
+    // replaced by the maintenance screen, so a stale answer either takes a
+    // healthy site down or puts a site back up that was deliberately taken down.
+    let generation = 0;
     const load = () => {
+      const mine = ++generation;
       fetchMaintenance()
-        .then((s) => { if (alive) setStatus(s); })
+        .then((s) => { if (alive && mine === generation) setStatus(s); })
         // A failed /status read must not take the site down. If the backend is
         // unreachable, useBackendHealth() owns that story (offline screen).
-        .catch(() => { if (alive) setStatus(MAINTENANCE_OFF); })
-        .finally(() => { if (alive) setLoading(false); });
+        .catch(() => { if (alive && mine === generation) setStatus(MAINTENANCE_OFF); })
+        .finally(() => { if (alive && mine === generation) setLoading(false); });
     };
     load();
     // Re-check when the tab regains focus, so someone who left a tab open sees

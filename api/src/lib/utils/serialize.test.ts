@@ -94,6 +94,8 @@ describe("serializeCategory", () => {
       pricingMode: "QUOTE_ONLY" as const,
       metaTitle: null,
       metaDescription: null,
+      labelAr: null,
+      descriptionAr: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -107,6 +109,8 @@ describe("serializeCategory", () => {
       pricingMode: "QUOTE_ONLY",
       metaTitle: null,
       metaDescription: null,
+      labelAr: null,
+      descriptionAr: null,
     });
   });
 });

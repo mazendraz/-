@@ -37,6 +37,13 @@ const EXEMPT: Record<string, string> = {
     "them to come back after maintenance means leaving a live credential on it for " +
     "the duration. It only ever REMOVES access, so there is no state to protect by " +
     "blocking it.",
+  "unsubscribe/route.ts":
+    "The one write a customer must be able to make even during maintenance: a link " +
+    "sitting in an already-delivered email, opened by someone who may never come " +
+    "back to check whether it 'worked yet'. 503ing it means the opt-out silently " +
+    "fails and the next marketing send goes out anyway. It only ever flips " +
+    "marketingEmailEnabled to false, authenticated by a signed per-customer token " +
+    "(not a user submission), so there is no meaningful state to protect by blocking it.",
 };
 
 /** Auth-gated prefixes: these are not public, and their dashboards stay usable. */

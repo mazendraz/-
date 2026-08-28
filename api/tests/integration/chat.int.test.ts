@@ -368,7 +368,11 @@ describe("provider access", () => {
     const res = await providerGET(
       req({ token: otherProviderToken }), ctx({ conversationId }),
     );
-    expect(res.status).toBe(403);
+    // 404, not 403. A 403 confirms the conversation EXISTS and merely belongs to
+    // someone else, which is itself a leak: it turns this endpoint into an oracle
+    // for probing conversation ids. 404 is what a caller with no claim to the row
+    // should see, and it is indistinguishable from an id that was never real.
+    expect(res.status).toBe(404);
   });
 
   it("refuses to POST into another company's conversation", async () => {
@@ -376,7 +380,9 @@ describe("provider access", () => {
       req({ method: "POST", body: { body: "intruding" }, token: otherProviderToken }),
       ctx({ conversationId }),
     );
-    expect(res.status).toBe(403);
+    // Same 404-not-403 reasoning as the read above — and the write path matters
+    // more: the message must not be stored either way.
+    expect(res.status).toBe(404);
   });
 
   it("replies to its own conversation", async () => {

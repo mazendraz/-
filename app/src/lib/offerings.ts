@@ -24,6 +24,9 @@ export type BundleRule = ApiBundleRule;
 export interface OfferingInput {
   name: string;
   description?: string | null;
+  nameAr?: string | null;
+  descriptionAr?: string | null;
+  tags?: string[] | null;
   kind?: OfferingKind;
   pricingModel?: PricingModel;
   priceMin?: number | null;

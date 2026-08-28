@@ -30,9 +30,47 @@ export class ApiError extends Error {
 export const API_DOWN_EVENT = "al-assema-api-down";
 export const API_UP_EVENT = "al-assema-api-up";
 
-function signal(name: string): void {
+// ── Session-expiry signal ────────────────────────────────────────────────────
+// Staff tokens expire FLAT at JWT_TTL (1d by default — api/src/lib/auth.ts says
+// so explicitly: "Staff sessions have no such renewal and still expire flat"),
+// and useAuth() only revalidates on mount. A dashboard tab is a long-lived
+// mount, so nothing ever re-checked: after 24h every request 401'd, every panel
+// rendered its own generic error, and the sidebar carried on showing the
+// signed-in shell. The only way out was a reload the UI never suggested — the
+// textbook "works after reload".
+//
+// This is the missing signal. api.ts is the one place that sees every 401.
+export const AUTH_EXPIRED_EVENT = "al-assema-auth-expired";
+
+/** Which population's session a 401 on this path proves is dead. */
+export type SessionAudience = "staff" | "customer";
+
+/**
+ * Classify a 401 by path prefix, or null when we can't be sure.
+ *
+ * There are TWO independent httpOnly cookies (al-assema-session for staff,
+ * al-assema-customer-session for customers) and one browser can legitimately
+ * hold both — an admin who also submitted a request from their own machine is a
+ * case the lead cache already goes out of its way to support. So a 401 must
+ * clear the session it actually belongs to and leave the other one alone.
+ *
+ * Deliberately conservative: only prefixes that are unambiguously guarded by one
+ * audience are classified, and anything else returns null and changes nothing.
+ * A method-dependent route like PATCH /leads/:id (staff-only, while POST /leads
+ * is public) can't be told apart from a path prefix, so it isn't tried — the
+ * dashboards issue enough /admin/* and /provider/* calls that an expired staff
+ * session is caught within moments regardless.
+ */
+function audienceFor401(path: string): SessionAudience | null {
+  if (path.startsWith("/customer/")) return "customer";
+  if (path.startsWith("/admin/") || path.startsWith("/provider/")) return "staff";
+  if (path === "/auth/me") return "staff";
+  return null;
+}
+
+function signal(name: string, detail?: unknown): void {
   // Guard for non-DOM contexts (tests, SSR).
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(name));
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
 /**
@@ -52,6 +90,83 @@ function isReachabilityFailure(status: number, code?: string): boolean {
 /** A deliberate cancellation, not a failure. Callers should swallow these. */
 export function isAbort(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
+}
+
+// ── Request timeout ──────────────────────────────────────────────────────────
+// `fetch()` has no built-in timeout, and a promise that never settles is not an
+// error any caller can catch — it is a caller that never runs its `catch` or its
+// `finally` at all. Against a host that ACCEPTS the connection and then answers
+// nothing (a captive portal, a black-holed route after a Wi-Fi↔cellular switch, a
+// half-open socket, a wedged upstream) the request simply hangs.
+//
+// That is survivable when it stalls one panel. It was not survivable here,
+// because RootLayout holds the ENTIRE public site behind three of these
+// (maintenance, leads hydration, account sync) and every one of them releases its
+// gate from a `.finally()` — which never runs. The whole site sat on a spinner
+// with no error, no retry and nothing a reload could fix.
+//
+// This is a straight port of mobile/client/lib/api.ts's withTimeout(), which has
+// been carrying exactly this fix on the phone for a while (its comment describes
+// the same failure: "That single hung call used to freeze the WHOLE app"). Kept
+// deliberately similar so the two clients still read as counterparts.
+//
+// 15s, not mobile's 12s: this client also drives the admin dashboard, whose
+// slowest legitimate read is /admin/companies?pageSize=200 on a cold cache. Long
+// enough that no real request is ever cut off, short enough that a hang resolves
+// while the user is still looking at the screen.
+const REQUEST_TIMEOUT_MS = 15_000;
+
+// Uploads get their own, far longer budget. MAX_VIDEO_UPLOAD_BYTES is 50MB (see
+// api's upload.service.ts) and a gallery video on a slow uplink legitimately
+// takes minutes — capping that at REQUEST_TIMEOUT_MS would abort real work.
+// Still bounded, because "no timeout" is the bug this whole block exists for.
+const UPLOAD_TIMEOUT_MS = 120_000;
+
+interface Deadline {
+  /** Pass to fetch. Fires on OUR timeout or the caller's own cancellation. */
+  signal: AbortSignal;
+  /** Always call in a `finally` — clears the timer. */
+  finish: () => void;
+  /** True when the abort came from us, not from the caller. */
+  isOurTimeout: () => boolean;
+}
+
+/**
+ * Compose the caller's AbortSignal (if any) with an internal deadline.
+ *
+ * The two have to stay distinguishable: a caller-initiated abort is a superseded
+ * search keystroke or an unmounting component and must keep surfacing as a real
+ * AbortError so every existing `isAbort()` check goes on ignoring it. OUR timeout
+ * is a failed request and must flow into the same ApiError/API_DOWN_EVENT path as
+ * any other dropped connection.
+ */
+function withTimeout(externalSignal: AbortSignal | null | undefined, ms: number): Deadline {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, ms);
+
+  let detach = () => {};
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      const onAbort = () => controller.abort();
+      externalSignal.addEventListener("abort", onAbort, { once: true });
+      // Removed in finish() rather than relying on `once` alone: a caller can
+      // reuse one long-lived signal across many requests, and each of those
+      // would otherwise leave a listener on it until the signal finally fires.
+      detach = () => externalSignal.removeEventListener("abort", onAbort);
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    finish: () => { clearTimeout(timer); detach(); },
+    isOurTimeout: () => timedOut,
+  };
 }
 
 /**
@@ -117,24 +232,54 @@ export async function apiFetch<T>(
 ): Promise<T> {
   if (!BASE_URL) throw new ApiError(0, "VITE_API_URL is not configured");
 
-  let res: Response;
+  // The deadline covers the WHOLE exchange — headers AND body — and is cleared
+  // in the `finally` at the end of this function. Headers arriving is not a
+  // promise the body will: aborting mid-stream is a real failure mode, and the
+  // res.json() below is inside the same guarded window for that reason.
+  const deadline = withTimeout(options.signal, REQUEST_TIMEOUT_MS);
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
-      ...options,
-      headers: buildHeaders(extraHeaders),
-      credentials: "include", // send the httpOnly session cookie
-    });
-  } catch (err) {
-    // An abort is US cancelling, not the server failing. Treating it as
-    // unreachability would flash the offline screen every time a caller
-    // superseded its own request (a search keystroke) or unmounted mid-flight.
-    if (isAbort(err) || options.signal?.aborted) throw err;
-    // Otherwise fetch only rejects on a network-level failure (server
-    // unreachable, DNS, connection reset) — the case the offline screen exists for.
-    signal(API_DOWN_EVENT);
-    throw new ApiError(0, err instanceof Error ? err.message : "Network request failed");
-  }
+    let res: Response;
+    try {
+      res = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        signal: deadline.signal,
+        headers: buildHeaders(extraHeaders),
+        credentials: "include", // send the httpOnly session cookie
+      });
+    } catch (err) {
+      // An abort is US cancelling, not the server failing. Treating it as
+      // unreachability would flash the offline screen every time a caller
+      // superseded its own request (a search keystroke) or unmounted mid-flight.
+      // Our OWN timeout firing is the opposite — a request that failed — so it
+      // deliberately falls through to the ApiError path below.
+      if (!deadline.isOurTimeout() && (isAbort(err) || options.signal?.aborted)) throw err;
+      // Otherwise fetch only rejects on a network-level failure (server
+      // unreachable, DNS, connection reset) — the case the offline screen exists for.
+      signal(API_DOWN_EVENT);
+      throw new ApiError(
+        0,
+        deadline.isOurTimeout()
+          ? "Request timed out"
+          : err instanceof Error ? err.message : "Network request failed",
+      );
+    }
 
+    return await readBody<T>(path, res, options, deadline);
+  } finally {
+    deadline.finish();
+  }
+}
+
+/**
+ * Split out of apiFetch purely so the deadline's `try`/`finally` above stays
+ * readable — this is the second half of the same request.
+ */
+async function readBody<T>(
+  path: string,
+  res: Response,
+  options: RequestInit,
+  deadline: Deadline,
+): Promise<T> {
   if (!res.ok) {
     let message = res.statusText;
     let code: string | undefined;
@@ -144,6 +289,13 @@ export async function apiFetch<T>(
       code = typeof body.code === "string" ? body.code : undefined;
     } catch { /* ignore */ }
     if (isReachabilityFailure(res.status, code)) signal(API_DOWN_EVENT);
+    // The session behind this request is gone. lib/auth.ts and lib/customerAuth.ts
+    // each listen and clear their OWN state — see audienceFor401 for why this is
+    // addressed rather than broadcast. Sign-in and sign-out routes are excluded
+    // by that classifier: a wrong password on the login form is a 401 that must
+    // NOT be read as "your session ended".
+    const audience = res.status === 401 ? audienceFor401(path) : null;
+    if (audience) signal(AUTH_EXPIRED_EVENT, { audience });
     throw new ApiError(res.status, message, code);
   }
 
@@ -163,9 +315,16 @@ export async function apiFetch<T>(
   try {
     return (await res.json()) as T;
   } catch (err) {
-    if (isAbort(err) || options.signal?.aborted) throw err;
+    // Same split as the fetch above: a caller cancelling stays an AbortError,
+    // our own deadline expiring mid-body is a failed request.
+    if (!deadline.isOurTimeout() && (isAbort(err) || options.signal?.aborted)) throw err;
     signal(API_DOWN_EVENT);
-    throw new ApiError(0, err instanceof Error ? err.message : "Failed to read response body");
+    throw new ApiError(
+      0,
+      deadline.isOurTimeout()
+        ? "Request timed out"
+        : err instanceof Error ? err.message : "Failed to read response body",
+    );
   }
 }
 
@@ -207,16 +366,53 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   const headers: Record<string, string> = {};
   if (API_KEY) headers["X-Api-Key"] = API_KEY;
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    body: form,
-    headers,
-    credentials: "include", // send the httpOnly session cookie
-  });
-  if (!res.ok) {
-    let message = res.statusText;
-    try { message = (await res.json()).message ?? message; } catch { /* ignore */ }
-    throw new ApiError(res.status, message);
+  // This path bypasses apiFetch (it must let the browser set the multipart
+  // Content-Type with its boundary), and it used to bypass everything apiFetch
+  // does AROUND the request too: no deadline, no error `code`, no reachability
+  // signal, and an unguarded body read. So an upload that failed because the
+  // backend was unreachable never told useBackendHealth — the admin got a bare
+  // error on a page that still looked perfectly healthy.
+  const deadline = withTimeout(null, UPLOAD_TIMEOUT_MS);
+  try {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE_URL}${path}`, {
+        method: "POST",
+        body: form,
+        headers,
+        signal: deadline.signal,
+        credentials: "include", // send the httpOnly session cookie
+      });
+    } catch (err) {
+      signal(API_DOWN_EVENT);
+      throw new ApiError(
+        0,
+        deadline.isOurTimeout()
+          ? "Upload timed out"
+          : err instanceof Error ? err.message : "Upload failed",
+      );
+    }
+
+    if (!res.ok) {
+      let message = res.statusText;
+      let code: string | undefined;
+      try {
+        const body = await res.json();
+        message = body.message ?? message;
+        code = typeof body.code === "string" ? body.code : undefined;
+      } catch { /* ignore */ }
+      if (isReachabilityFailure(res.status, code)) signal(API_DOWN_EVENT);
+      throw new ApiError(res.status, message, code);
+    }
+
+    signal(API_UP_EVENT);
+    try {
+      return (await res.json()) as T;
+    } catch (err) {
+      signal(API_DOWN_EVENT);
+      throw new ApiError(0, err instanceof Error ? err.message : "Failed to read upload response");
+    }
+  } finally {
+    deadline.finish();
   }
-  return res.json() as Promise<T>;
 }

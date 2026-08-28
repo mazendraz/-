@@ -9,7 +9,7 @@ import { t } from "../lib/i18n";
 // distinct pages. `?lang=` makes the current language part of the URL itself
 // (echoed in canonical/hreflang below); LocaleProvider reads it back on load
 // (see context/LocaleContext.tsx) so a shared link actually opens in that language.
-const SITE_URL = "https://alassema.com";
+const SITE_URL = "https://al-assema.tech";
 const DEFAULT_IMAGE = `${SITE_URL}/logo.png`;
 
 function upsertMeta(nameOrProp: string, content: string, attr: "name" | "property" = "name") {

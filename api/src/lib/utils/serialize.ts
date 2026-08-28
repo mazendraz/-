@@ -13,6 +13,7 @@ import type {
   Lead,
   LeadCompletion,
   LeadItem,
+  Notification,
   Offering,
   OfferingTier,
   Project,
@@ -27,6 +28,7 @@ import type {
   ApiCategory,
   ApiClient,
   ApiCompany,
+  ApiCustomerNotification,
   ApiFinancialAccount,
   ApiLead,
   ApiLeadCompletion,
@@ -249,6 +251,8 @@ export function serializeCategory(c: Category, count: number): ApiCategory {
     pricingMode: c.pricingMode,
     metaTitle: c.metaTitle ?? null,
     metaDescription: c.metaDescription ?? null,
+    labelAr: c.labelAr ?? null,
+    descriptionAr: c.descriptionAr ?? null,
   };
 }
 
@@ -298,6 +302,7 @@ function companyScalars(c: CompanyCardRow) {
     id: c.id,
     slug: c.slug,
     name: c.name,
+    nameAr: c.nameAr ?? null,
     tagline: c.tagline,
     about: c.about,
     logo: c.logo,
@@ -384,7 +389,60 @@ export type WaitlistEntryWithCompany = WaitlistEntry & {
   company: Pick<Company, "slug" | "name">;
 };
 
+export function serializeCustomerNotification(n: Notification): ApiCustomerNotification {
+  return {
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    body: n.body,
+    url: n.url ?? null,
+    read: n.read,
+    createdAt: toEpochMs(n.createdAt),
+  };
+}
+
+/**
+ * The priced basket frozen onto a waitlist entry, in the shape the client already
+ * reads for a lead's items.
+ *
+ * The snapshot is a `ResolvedRequest` written whole by waitlist.service.join, and
+ * its lines carry everything ApiLeadItem needs except `id` — the lines are not
+ * rows and have none until conversion creates the LeadItems. The index stands in:
+ * it is stable for a given entry (the array is never reordered or written again)
+ * and is used for nothing but React keys until then.
+ *
+ * Everything is defensive here because the column is Json: a row written before it
+ * existed reads as null, and one written by hand can be any shape at all.
+ */
+function waitlistItems(snapshot: unknown): ApiLeadItem[] {
+  if (!snapshot || typeof snapshot !== "object") return [];
+  const lines = (snapshot as { lines?: unknown }).lines;
+  if (!Array.isArray(lines)) return [];
+  return lines.map((line, i) => {
+    const l = line as Record<string, unknown>;
+    return {
+      id: `${i}`,
+      offeringId: (l.offeringId as string) ?? null,
+      nameSnapshot: (l.nameSnapshot as string) ?? "",
+      tierLabel: (l.tierLabel as string) ?? null,
+      qty: typeof l.qty === "number" ? l.qty : 1,
+      pricingModel: l.pricingModel as ApiLeadItem["pricingModel"],
+      unitPriceMin: typeof l.unitPriceMin === "number" ? l.unitPriceMin : null,
+      unitPriceMax: typeof l.unitPriceMax === "number" ? l.unitPriceMax : null,
+      lineMin: typeof l.lineMin === "number" ? l.lineMin : null,
+      lineMax: typeof l.lineMax === "number" ? l.lineMax : null,
+    };
+  });
+}
+
+function waitlistNumber(snapshot: unknown, key: string): number | null {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const v = (snapshot as Record<string, unknown>)[key];
+  return typeof v === "number" ? v : null;
+}
+
 export function serializeWaitlistEntry(e: WaitlistEntryWithCompany): ApiWaitlistEntry {
+  const snapshot = e.itemsSnapshot;
   return {
     id: e.id,
     companyId: e.companyId,
@@ -397,6 +455,21 @@ export function serializeWaitlistEntry(e: WaitlistEntryWithCompany): ApiWaitlist
     status: e.status,
     createdAt: toEpochMs(e.createdAt),
     convertedLeadId: e.convertedLeadId ?? null,
+    // Null on entries joined through the short form that predates the full one —
+    // see the WaitlistEntry model comment.
+    district: e.district ?? null,
+    budget: e.budget ?? null,
+    // Coerced to the same non-optional shape serializeLead emits, and for the
+    // same reason: a payload whose keys come and go makes every client guard
+    // each field.
+    items: waitlistItems(snapshot),
+    estimatedMin: waitlistNumber(snapshot, "estimatedMin"),
+    estimatedMax: waitlistNumber(snapshot, "estimatedMax"),
+    discountPercent: waitlistNumber(snapshot, "discountPercent") ?? 0,
+    hasOnInspection:
+      typeof snapshot === "object" && snapshot !== null
+        ? (snapshot as { hasOnInspection?: unknown }).hasOnInspection === true
+        : false,
   };
 }
 

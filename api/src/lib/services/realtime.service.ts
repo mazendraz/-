@@ -101,6 +101,12 @@ export function publishAll(channelList: string[], event: RealtimeEvent): void {
   for (const channel of new Set(channelList)) publish(channel, event);
 }
 
+/** How many streams are currently subscribed to one channel. Used by
+ *  sseStream's per-channel connection cap — see MAX_STREAMS_PER_CHANNEL. */
+export function listenerCount(channel: string): number {
+  return channels.get(channel)?.size ?? 0;
+}
+
 /** Live listener count — for the health endpoint and for tests. */
 export function subscriberCount(): number {
   let total = 0;

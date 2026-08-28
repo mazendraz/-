@@ -18,23 +18,25 @@
  * notifying the previous account — see that route's comment.
  */
 import { useEffect } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { router } from "expo-router";
-import { apiPost } from "./api";
+import { apiPost, apiDelete } from "./api";
 import { useCustomerAuth } from "./customerAuth";
 
 // Foreground behavior: show the banner and add it to the notification list,
-// but no sound — a reply from a provider is not an alarm. Matches the
-// website's Notification API usage (a visible toast, not an audible alert).
+// no sound (a reply from a provider is not an alarm, matching the website's
+// Notification API — a visible toast, not an audible alert), but DO apply
+// the server-set badge count (see expoPush.service.ts's `badge: 1`) so the
+// app icon reflects "something's waiting" even while the app is open.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
     shouldPlaySound: false,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
 
@@ -91,6 +93,33 @@ async function registerForPush(): Promise<void> {
 }
 
 /**
+ * Forget this device's push token, both locally-known state and server-side
+ * — what sign-out calls. Resolves the SAME token registerForPush would (Expo
+ * tokens are stable for the life of an install), rather than persisting one
+ * separately, so there is nothing to keep in sync between the two.
+ *
+ * Never prompts: if permission was never granted there was nothing to
+ * unregister, and asking a user who's in the middle of signing OUT to grant
+ * notification permission would be bizarre. Never throws — same fail-open
+ * contract as registerForPush; a sign-out must complete even if this fails
+ * (the DELETE route also accepts no auth's-worth of scoping, see its own
+ * comment, but the caller here still has to run before tokens are cleared).
+ */
+export async function unregisterPush(): Promise<void> {
+  if (Platform.OS === "web" || !Device.isDevice) return;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+    const id = projectId();
+    if (!id) return;
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id });
+    await apiDelete("/customer/push-device", { token });
+  } catch (err) {
+    console.warn("Push unregistration failed:", err);
+  }
+}
+
+/**
  * Registers for push once per signed-in session, and wires a tap on a
  * notification to open the request it's about — mirrors the website's
  * notificationclick handler in sw.js reading the same `data.url`.
@@ -106,6 +135,21 @@ export function usePushNotifications(): void {
   useEffect(() => {
     if (customer) registerForPush();
   }, [customer]);
+
+  // Badge clears when the app comes to the foreground — "you're looking at
+  // it now" is the simplest honest reset point without a server-side unread
+  // count to reconcile against (there's no Notification/read-state table
+  // yet — see the notifications blueprint's phase 2). Runs once on mount too
+  // (AppState's listener only fires on a SUBSEQUENT transition), so a cold
+  // launch also clears whatever badge was showing before the app opened.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    Notifications.setBadgeCountAsync(0).catch(() => {});
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") Notifications.setBadgeCountAsync(0).catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
 
   // `Platform.OS === "web"` branches the WHOLE hook body — not just a value
   // inside it — which is safe specifically because Platform.OS is a constant

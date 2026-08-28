@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import CaptchaDom from "./CaptchaDom";
 import { captchaConfigured, turnstileSiteKey } from "../lib/captcha";
 
 /**
@@ -19,6 +20,18 @@ import { captchaConfigured, turnstileSiteKey } from "../lib/captcha";
  * challenge/token, since Turnstile tokens are single-use — simpler and more
  * reliable across RN WebView versions than trying to call the JS-side
  * `turnstile.reset()` through a second round of postMessage plumbing.
+ *
+ * On web, none of that applies and react-native-webview has no implementation
+ * at all — it renders the red "React Native WebView does not support this
+ * platform." string and no token ever arrives, which blocks every form that
+ * uses it. So the browser gets CaptchaDom instead, which renders the real
+ * Turnstile widget into the DOM.
+ *
+ * The switch is an explicit `Platform.OS` branch rather than a `Captcha.web.tsx`
+ * platform-extension file: the extension is the idiomatic form, but resolving
+ * it depends on Metro picking up a NEWLY ADDED file, which a warm dev-server
+ * cache does not do until it is restarted with --clear. A branch inside the
+ * one module both platforms already import cannot miss.
  */
 export default function Captcha({
   onToken,
@@ -30,6 +43,7 @@ export default function Captcha({
   const [height, setHeight] = useState(70);
 
   if (!captchaConfigured()) return null;
+  if (Platform.OS === "web") return <CaptchaDom onToken={onToken} resetSignal={resetSignal} />;
 
   function onMessage(e: WebViewMessageEvent) {
     try {
@@ -46,7 +60,24 @@ export default function Captcha({
         key={resetSignal}
         source={{ html: buildHtml(turnstileSiteKey()) }}
         onMessage={onMessage}
-        originWhitelist={["*"]}
+        // The initial content is a static string with no real origin
+        // (loads as "about:blank"), and Turnstile's widget script pulls in
+        // its own challenge iframe from Cloudflare's domain — both need to
+        // be allowed to load. Nothing else does: this WebView has exactly
+        // one job, and pinning it stops the widget's script (or a
+        // compromised/malicious CDN response) from navigating this surface
+        // to an arbitrary page. onShouldStartLoadWithRequest below is the
+        // one that actually blocks disallowed navigation; this only
+        // controls which origins the WebView itself will render into.
+        originWhitelist={["about:*", "https://challenges.cloudflare.com"]}
+        onShouldStartLoadWithRequest={(request) =>
+          request.url.startsWith("about:") ||
+          /^https:\/\/([a-z0-9-]+\.)*cloudflare\.com\//.test(request.url)
+        }
+        // No legitimate reason for this widget to open a new window/tab —
+        // disabling it closes off window.open() as an escape from the
+        // navigation pin above.
+        setSupportMultipleWindows={false}
         style={styles.webview}
         scrollEnabled={false}
         // The widget's own background is transparent; without this the

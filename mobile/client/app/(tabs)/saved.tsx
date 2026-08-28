@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
@@ -9,6 +10,8 @@ import Logo from "../../components/Logo";
 import { fetchCompany } from "../../lib/companyDetail";
 import { toggleSaved, useSavedSlugs } from "../../lib/saved";
 import { useRequireAccount } from "../../lib/authGate";
+import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { assetUri } from "../../lib/assetUrl";
 
 /**
  * Saved companies — reads the device-local list (lib/saved.ts) and resolves
@@ -25,6 +28,9 @@ export default function Saved() {
   const customer = useRequireAccount("/saved");
   const slugs = useSavedSlugs();
   const [companies, setCompanies] = useState<Record<string, ApiCompany | null>>({});
+  // Missing before — the website's Saved.tsx filters the shortlist by
+  // name/category once there's more than a couple of entries.
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     slugs.forEach((slug) => {
@@ -36,9 +42,29 @@ export default function Saved() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugs]);
 
+  // The effect above only resolves slugs it has never seen — correct for
+  // adding one, useless for an edit. Coming back to this tab re-resolves the
+  // whole shortlist, so a company that changed name, logo, rating or
+  // availability on the website is current here too.
+  useRefreshOnFocus(() => {
+    slugs.forEach((slug) => {
+      fetchCompany(slug)
+        .then((c) => setCompanies((prev) => ({ ...prev, [slug]: c })))
+        // Unlike the first resolve, a failed REFRESH keeps the card that is
+        // already on screen instead of writing null and making it disappear.
+        .catch(() => {});
+    });
+  });
+
   if (!customer) return null;
 
   const rows = slugs.map((slug) => companies[slug]).filter((c): c is ApiCompany => Boolean(c));
+
+  // Same fields the website's Saved.tsx matches against (name, category).
+  const q = query.trim().toLowerCase();
+  const visibleRows = q
+    ? rows.filter((c) => [c.name, c.categoryLabel].some((v) => v.toLowerCase().includes(q)))
+    : rows;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -47,13 +73,27 @@ export default function Saved() {
           <Logo size={28} />
           <Text style={styles.title}>المفضلة</Text>
         </View>
-        <Pressable onPress={() => router.push("/search")} hitSlop={8}>
+        <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
           <Icon name="search" size={22} color={colors.onSurface} />
         </Pressable>
       </View>
 
+      {rows.length > 0 && (
+        <View style={styles.searchRow}>
+          <Icon name="search" size={18} color={colors.outline} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="دوّر في المفضلة"
+            placeholderTextColor={colors.outline}
+            style={styles.searchInput}
+            textAlign="right"
+          />
+        </View>
+      )}
+
       <FlatList
-        data={rows}
+        data={visibleRows}
         keyExtractor={(c) => c.slug}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
@@ -61,7 +101,15 @@ export default function Saved() {
             <View style={styles.empty}>
               <Icon name="favorite" size={40} color={colors.outline} />
               <Text style={styles.emptyTitle}>مفيش حاجة محفوظة لسه</Text>
-              <Text style={styles.emptyBody}>احفظ شركة من صفحتها عشان تلاقيها هنا بسرعة.</Text>
+              <Text style={styles.emptyBody}>
+                احفظ شركة من صفحتها عشان تلاقيها هنا بسرعة. المفضلة محفوظة على الجهاز ده بس، ومش
+                هتظهر لو دخلت من جهاز تاني.
+              </Text>
+            </View>
+          ) : rows.length > 0 && visibleRows.length === 0 ? (
+            <View style={styles.empty}>
+              <Icon name="search" size={40} color={colors.outline} />
+              <Text style={styles.emptyBody}>مفيش نتايج مطابقة.</Text>
             </View>
           ) : null
         }
@@ -70,7 +118,7 @@ export default function Saved() {
             onPress={() => router.push({ pathname: "/company/[slug]", params: { slug: item.slug } })}
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           >
-            <Image source={{ uri: item.logo }} style={styles.logo} />
+            <Image source={{ uri: assetUri(item.logo) }} style={styles.logo} />
             <View style={styles.cardText}>
               <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.category} numberOfLines={1}>{item.categoryLabel}</Text>
@@ -80,16 +128,33 @@ export default function Saved() {
                 <Text style={styles.reviewCount}>({item.reviewCount})</Text>
               </View>
             </View>
-            <Pressable
-              onPress={(e) => {
-                e.stopPropagation();
-                void toggleSaved(item.slug);
-              }}
-              hitSlop={10}
-              style={styles.unsaveBtn}
-            >
-              <Icon name="favorite" size={20} color={colors.error} />
-            </Pressable>
+            <View style={styles.cardActions}>
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  void toggleSaved(item.slug);
+                }}
+                hitSlop={10}
+                style={styles.unsaveBtn}
+                accessibilityRole="button"
+                accessibilityLabel="إزالة من المفضلة"
+              >
+                <Icon name="favorite" size={20} color={colors.error} />
+              </Pressable>
+              {/* Missing before — the website's Saved.tsx has a direct
+                  "request" button per card (common_request), this screen
+                  only let you open the company profile first. */}
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  router.push({ pathname: "/new-request/[slug]", params: { slug: item.slug, name: item.name } });
+                }}
+                hitSlop={6}
+                style={styles.requestBtn}
+              >
+                <Text style={styles.requestBtnText}>اطلب</Text>
+              </Pressable>
+            </View>
           </Pressable>
         )}
       />
@@ -102,6 +167,24 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12 },
   topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   title: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
+  searchRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontFamily: "Cairo_400Regular",
+    fontSize: type.body.fontSize,
+    color: colors.onSurface,
+  },
   listContent: { padding: 20, gap: 10, flexGrow: 1 },
   empty: { alignItems: "center", gap: 6, paddingTop: 80 },
   emptyTitle: { fontSize: type.subhead.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
@@ -116,5 +199,8 @@ const styles = StyleSheet.create({
   ratingText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
   ratingStar: { fontSize: type.caption.fontSize, color: "#f59e0b" },
   reviewCount: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
+  cardActions: { alignItems: "center", gap: 6 },
   unsaveBtn: { padding: 4 },
+  requestBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
+  requestBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimary },
 });

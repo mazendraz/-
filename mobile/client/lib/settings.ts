@@ -52,6 +52,43 @@ function load(): Promise<ApiPlatformSettings> {
   return inFlight;
 }
 
+/**
+ * Discard the cached copy and fetch again, notifying every mounted useSettings().
+ *
+ * The cache above is deliberately per-app-session, which was fine when nothing
+ * ever asked it to change — but "once per session" means an admin editing the
+ * site name, logo, hero copy or contact details on the website never reached a
+ * phone that had the app open, no matter how long it stayed open. Called from
+ * the screens that use useRefreshOnFocus, so branding follows the same
+ * refresh-when-you-come-back rule as the catalog itself.
+ *
+ * Never rejects — a failed refresh keeps the previous values on screen rather
+ * than blanking branding back to DEFAULTS.
+ */
+export function refreshSettings(): Promise<void> {
+  // `.catch` on BOTH branches, not just the one that starts a request.
+  //
+  // Joining an in-flight fetch used to return `inFlight.then(() => {})` bare,
+  // which inherits the rejection: the shared promise is already guarded for the
+  // caller that created it (load()'s own consumer catches), but this derived one
+  // is a NEW promise with no handler. The only caller is `void refreshSettings()`
+  // in the home screen, so nothing was left to catch it — an unhandled rejection,
+  // which React Native surfaces as a full-screen red box.
+  //
+  // It needed two things to line up, which is why it hid: a settings fetch
+  // already in flight (useSettings mounts one on app start, so the home screen's
+  // own call almost always lands in this branch) AND that fetch actually
+  // failing. On a reachable API it never fired; point the app at a dev machine
+  // whose LAN IP has changed and every cold start ends in "Request timed out".
+  if (inFlight) return inFlight.then(() => {}).catch(() => {});
+  return fetchPlatformSettings()
+    .then((s) => {
+      cached = s;
+      listeners.forEach((l) => l());
+    })
+    .catch(() => {});
+}
+
 /** Site-wide settings (branding, contact) — sensible defaults while loading,
  *  the real values once the first fetch (from any caller) resolves. */
 export function useSettings(): ApiPlatformSettings {
@@ -69,6 +106,14 @@ export function useSettings(): ApiPlatformSettings {
   }, []);
 
   return settings;
+}
+
+/** Split a newline-separated settings value into a trimmed list, or the
+ *  fallback when blank (admin hasn't overridden the built-in default) — the
+ *  mobile counterpart of the website's lib/settings.ts parseLines(). */
+export function parseLines(raw: string, fallback: readonly string[]): string[] {
+  const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
+  return lines.length > 0 ? lines : [...fallback];
 }
 
 // ── Maintenance (phase 10) ───────────────────────────────────────────────────
@@ -107,19 +152,29 @@ export function useMaintenance(): { status: ApiMaintenanceStatus; loading: boole
 
   useEffect(() => {
     alive.current = true;
+    // Ordering guard — same reasoning as the website's useMaintenance. `load`
+    // runs on mount, on every AppState "active", and on every refetch() from the
+    // maintenance screen's retry button, with nothing serialising them. Without
+    // a generation the last RESPONSE wins rather than the last REQUEST, so a
+    // slow earlier read landing late can reinstate a status that is no longer
+    // true — and this value decides whether the whole app is replaced by the
+    // maintenance screen.
+    let generation = 0;
     const load = () => {
+      const mine = ++generation;
+      const current = () => alive.current && mine === generation;
       fetchMaintenance()
         .then((s) => {
-          if (alive.current) setStatus(s);
+          if (current()) setStatus(s);
         })
         // A failed /status read must not take the app down — same as the
         // website, backend reachability is a separate concern (lib/api.ts's
         // reachability signal).
         .catch(() => {
-          if (alive.current) setStatus(MAINTENANCE_OFF);
+          if (current()) setStatus(MAINTENANCE_OFF);
         })
         .finally(() => {
-          if (alive.current) setLoading(false);
+          if (current()) setLoading(false);
         });
     };
     loadRef.current = load;

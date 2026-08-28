@@ -156,7 +156,7 @@ export default function SearchOverlay({ open, onClose }: Props) {
                         ${i === activeIndex ? "bg-primary/6" : "hover:bg-surface-container/60"}`}
                     >
                       {/* Icon / image */}
-                      {r.type === "service" ? (
+                      {r.type === "category" ? (
                         <span className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                           <span className="material-symbols-outlined text-primary text-title" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{r.icon}</span>
                         </span>
@@ -170,7 +170,10 @@ export default function SearchOverlay({ open, onClose }: Props) {
                       </span>
                       {/* Type chip */}
                       <span className="text-caption font-bold ltr:uppercase ltr:tracking-wider text-outline/70 bg-surface-container px-2 py-1 rounded-full flex-shrink-0">
-                        {r.type === "service" ? t(locale, "chip_category") : r.type === "company" ? t(locale, "chip_company") : t(locale, "chip_service")}
+                        {r.type === "category" ? t(locale, "chip_category")
+                          : r.type === "company" ? t(locale, "chip_company")
+                          : r.type === "product" ? t(locale, "chip_product")
+                          : t(locale, "chip_service")}
                       </span>
                     </button>
                   </li>

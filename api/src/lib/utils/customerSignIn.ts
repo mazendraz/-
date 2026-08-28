@@ -10,12 +10,14 @@ import type { NextResponse } from "next/server";
 import { ok } from "@/lib/utils/response";
 import {
   signCustomerToken,
-  SESSION_COOKIE,
+  CUSTOMER_SESSION_COOKIE,
   sessionCookieOptions,
   type CustomerAuthUser,
 } from "@/lib/auth";
 import * as sessions from "@/lib/services/customerSession.service";
 import type { ApiCustomerAuthResponse } from "@/lib/apiTypes";
+import { notifyCustomerNewDeviceLogin } from "@/lib/services/notifications.service";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 
 export interface DevicePayload {
   deviceName?: string;
@@ -35,18 +37,57 @@ export async function customerSignInResponse(
   outcome: ApiCustomerAuthResponse["outcome"],
   device?: DevicePayload,
 ): Promise<NextResponse> {
-  const token = await signCustomerToken({ sub: customer.id });
+  // Minted AFTER the device session below, when there is one, so it can carry
+  // that session's id — see signCustomerToken's `sid`. Ordering matters: a
+  // token signed before the session exists has nothing to bind to, and
+  // "revoke this device" would then only reach the refresh token.
+  let token: string;
 
-  const body: ApiCustomerAuthResponse = { token, customer, outcome };
+  const body = {} as ApiCustomerAuthResponse;
 
   if (device) {
+    // "New device" only means something once there's a device to compare
+    // against — check BEFORE issuing, since issue() always inserts a fresh
+    // CustomerSession row and would otherwise make every login look "new".
+    // Skipped for a brand-new account (outcome "created"): its first device
+    // isn't suspicious, it's just the first one, and the welcome email
+    // already covers that moment — two security-flavored emails for one
+    // signup would read as noise, not care.
+    const isNewDevice =
+      outcome !== "created" &&
+      device.deviceName != null &&
+      (await sessions.hasSeenDevice(customer.id, device)) === false;
+
     const issued = await sessions.issue(customer.id, device);
     body.refreshToken = issued.refreshToken;
+    token = await signCustomerToken({ sub: customer.id, sid: issued.sessionId });
+
+    if (isNewDevice) {
+      runAfterResponse(() =>
+        notifyCustomerNewDeviceLogin(customer.email, customer.name, {
+          deviceName: device.deviceName ?? null,
+          platform: device.platform ?? null,
+        }),
+      );
+    }
+  } else {
+    // The website: no device session to bind to, so no `sid`. Its revocation
+    // story is the account-wide floor (CustomerUser.tokensValidFrom), which a
+    // password reset and "sign out everywhere" both move.
+    token = await signCustomerToken({ sub: customer.id });
   }
+
+  body.token = token;
+  body.customer = customer;
+  body.outcome = outcome;
 
   const res = ok(body);
   // Set regardless: a mobile client has no cookie jar and simply ignores it,
   // while the website depends on it entirely.
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
+  //
+  // Its own cookie NAME, not the staff one — see CUSTOMER_SESSION_COOKIE. While
+  // the two shared a name, signing in here evicted an admin's dashboard session
+  // (and was evicted BY it) in the same browser.
+  res.cookies.set(CUSTOMER_SESSION_COOKIE, token, sessionCookieOptions());
   return res;
 }

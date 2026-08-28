@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import type { ApiCategory } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../components/Icon";
-import { fetchCategories } from "../lib/categories";
 import {
   addRecentSearch,
   clearRecentSearches,
@@ -13,11 +12,13 @@ import {
   searchRemote,
   type SearchResult,
 } from "../lib/search";
+import { assetUri } from "../lib/assetUrl";
 
 const TYPE_CHIP: Record<SearchResult["type"], string> = {
-  service: "فئة",
+  category: "فئة",
   company: "شركة",
-  serviceItem: "خدمة",
+  product: "منتج",
+  service: "خدمة",
 };
 
 /**
@@ -28,15 +29,14 @@ const TYPE_CHIP: Record<SearchResult["type"], string> = {
  * modal overlay provides on the web, with no extra plumbing.
  */
 export default function Search() {
-  const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    fetchCategories().then(setCategories).catch(() => setCategories([]));
     getRecentSearches().then(setRecent);
     const id = setTimeout(() => inputRef.current?.focus(), 150);
     return () => clearTimeout(id);
@@ -50,21 +50,33 @@ export default function Search() {
     if (!trimmed) {
       setResults([]);
       setSearching(false);
+      setSearchFailed(false);
       return;
     }
     const id = ++requestId.current;
     setSearching(true);
+    setSearchFailed(false);
     const timer = setTimeout(() => {
-      searchRemote(categories, query)
+      searchRemote(query)
         .then((r) => {
           if (id === requestId.current) setResults(r);
+        })
+        .catch(() => {
+          // A failed search used to leave `results` at whatever it was
+          // before (often []), rendering as an ordinary "no results" —
+          // indistinguishable from a genuine zero-match query, and an
+          // unhandled promise rejection besides.
+          if (id === requestId.current) {
+            setResults([]);
+            setSearchFailed(true);
+          }
         })
         .finally(() => {
           if (id === requestId.current) setSearching(false);
         });
     }, 300);
     return () => clearTimeout(timer);
-  }, [query, categories]);
+  }, [query]);
 
   function go(to: string, term: string) {
     void addRecentSearch(term);
@@ -86,7 +98,7 @@ export default function Search() {
           returnKeyType="search"
         />
         {query !== "" && (
-          <Pressable onPress={() => setQuery("")} hitSlop={8}>
+          <Pressable accessibilityRole="button" accessibilityLabel="مسح البحث" onPress={() => setQuery("")} hitSlop={8}>
             <Icon name="close" size={18} color={colors.outline} />
           </Pressable>
         )}
@@ -104,8 +116,10 @@ export default function Search() {
           ListEmptyComponent={
             !searching ? (
               <View style={styles.empty}>
-                <Icon name="search" size={40} color={colors.outline} />
-                <Text style={styles.emptyTitle}>لا توجد نتائج لـ «{query.trim()}»</Text>
+                <Icon name={searchFailed ? "link_off" : "search"} size={40} color={colors.outline} />
+                <Text style={styles.emptyTitle}>
+                  {searchFailed ? "تعذّر البحث. اتأكد من اتصالك وجرّب تاني." : `لا توجد نتائج لـ «${query.trim()}»`}
+                </Text>
                 <Pressable style={styles.browseBtn} onPress={() => go("/companies", query.trim())}>
                   <Text style={styles.browseBtnText}>تصفّح كل الشركات</Text>
                 </Pressable>
@@ -117,12 +131,12 @@ export default function Search() {
               style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
               onPress={() => go(item.to, item.label)}
             >
-              {item.type === "service" ? (
+              {item.type === "category" ? (
                 <View style={styles.serviceIcon}>
                   <Icon name="grid_view" size={18} color={colors.primary} />
                 </View>
               ) : (
-                <Image source={{ uri: item.image }} style={styles.rowImage} />
+                <Image source={{ uri: assetUri(item.image) }} style={styles.rowImage} />
               )}
               <View style={styles.rowText}>
                 <Text style={styles.rowLabel} numberOfLines={1}>{item.label}</Text>

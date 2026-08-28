@@ -15,6 +15,10 @@ export const upsertCategorySchema = z.object({
   pricingMode: z.enum(["QUOTE_ONLY", "FIXED_CATALOG"]).default("QUOTE_ONLY"),
   metaTitle: sanitizedOptionalText(120).optional(),
   metaDescription: sanitizedOptionalText(320).optional(),
+  // Optional Arabic companions to label/description — same optional-text
+  // convention as metaTitle/metaDescription above, not required on every save.
+  labelAr: sanitizedOptionalText(100).optional(),
+  descriptionAr: sanitizedOptionalText(1000).optional(),
 });
 
 export type UpsertCategoryInput = z.infer<typeof upsertCategorySchema>;

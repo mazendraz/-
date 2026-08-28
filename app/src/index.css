@@ -1,3 +1,7 @@
+/* Self-hosted @font-face rules. FIRST, before Tailwind's base layer, so the
+   families are declared before anything references them. */
+@import "./fonts.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

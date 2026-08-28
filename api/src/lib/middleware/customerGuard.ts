@@ -51,11 +51,29 @@ export async function resolveCustomerLead(request: NextRequest): Promise<Custome
   return { id: lead.id, refNumber: lead.refNumber, companyId: lead.companyId };
 }
 
-/** One (reference, secret) pair the customer is claiming to own. */
+/**
+ * One (reference, secret) pair the customer is claiming to own.
+ *
+ * ── Why there is no `phone` here, unlike the single-lead path ───────────────
+ * leadSecretMatches falls back to a phone-tail comparison for LEGACY leads
+ * (trackingToken == null). On a single lookup that is a fair trade: the caller
+ * still has to know the reference number, and the route is capped at 10-20
+ * attempts a minute.
+ *
+ * In a BATCH it stops being fair. This endpoint takes 50 pairs per request at
+ * 60 requests a minute, unauthenticated and with no CAPTCHA — 3,000 guesses a
+ * minute against a per-day reference space of 36^4. Against a target whose
+ * phone number the attacker already knows (which is the normal case: it is not
+ * a secret), that turns a rate-limited lookup into a practical enumeration of
+ * their requests, and from there their whole conversation with the provider.
+ *
+ * So the batch path accepts the high-entropy token ONLY. A legacy lead is still
+ * reachable one at a time through /api/leads/track and /api/chat; it simply
+ * cannot be found 50 references at a time.
+ */
 export interface LeadClaim {
   ref: string;
   token?: string;
-  phone?: string;
 }
 
 /** Hard cap — a customer with more open requests than this is not a real case. */
@@ -97,7 +115,9 @@ export async function resolveCustomerLeads(claims: LeadClaim[]): Promise<Custome
 
   return leads.flatMap((lead) => {
     const forRef = claimsByRef.get(lead.refNumber) ?? [];
-    const owns = forRef.some((c) => leadSecretMatches(lead, { token: c.token, phone: c.phone }));
+    // Token only — see LeadClaim. Passing no phone means a legacy lead simply
+    // never matches here, which is the intended outcome, not an oversight.
+    const owns = forRef.some((c) => leadSecretMatches(lead, { token: c.token }));
     if (!owns) return [];
     return [{ id: lead.id, refNumber: lead.refNumber, companyId: lead.companyId }];
   });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiCategory, ApiCompany } from "@alassema/core";
@@ -7,6 +8,7 @@ import { colors, type } from "@alassema/core";
 import Icon, { type IconName } from "../components/Icon";
 import { fetchCategories } from "../lib/categories";
 import { fetchCompanies } from "../lib/companies";
+import { assetUri } from "../lib/assetUrl";
 
 type Priority = "rating" | "projects" | "reviews";
 
@@ -36,6 +38,7 @@ export default function GuidedStart() {
   const [priority, setPriority] = useState<Priority | null>(null);
   const [matches, setMatches] = useState<ApiCompany[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(false);
+  const [matchesFailed, setMatchesFailed] = useState(false);
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => setCategories([]));
@@ -48,11 +51,22 @@ export default function GuidedStart() {
     if (!category) return;
     const requestId = ++lastRequest.current;
     setLoadingMatches(true);
+    setMatchesFailed(false);
     try {
       const page = await fetchCompanies(undefined, { category: category.slug, pageSize: 50 });
       const pool = page.data.length > 0 ? page.data : (await fetchCompanies(undefined, { pageSize: 50 })).data;
       if (requestId !== lastRequest.current) return;
       setMatches([...pool].sort(SORTERS[p]).slice(0, 3));
+    } catch {
+      // Previously fell straight through to the empty-matches state — "مفيش
+      // نتايج مطابقة" ("nothing matches you") is a wrong and worse message
+      // for a failed request than for a genuine empty catalogue: it reads as
+      // a verdict on the customer's answers rather than as the network
+      // problem it actually is.
+      if (requestId === lastRequest.current) {
+        setMatches([]);
+        setMatchesFailed(true);
+      }
     } finally {
       if (requestId === lastRequest.current) setLoadingMatches(false);
     }
@@ -69,11 +83,11 @@ export default function GuidedStart() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         {step > 0 ? (
-          <Pressable onPress={() => setStep((s) => s - 1)} hitSlop={12}>
+          <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => setStep((s) => s - 1)} hitSlop={12}>
             <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
           </Pressable>
         ) : (
-          <Pressable onPress={() => router.back()} hitSlop={12}>
+          <Pressable accessibilityRole="button" accessibilityLabel="إغلاق" onPress={() => router.back()} hitSlop={12}>
             <Icon name="close" size={22} color={colors.onSurface} />
           </Pressable>
         )}
@@ -140,8 +154,19 @@ export default function GuidedStart() {
             <>
               <Text style={styles.eyebrow}>أفضل ترشيحات</Text>
               <Text style={styles.question}>
-                {loadingMatches ? "بندوّر على أفضل شركات..." : matches.length > 0 ? "أفضل شركات ليك" : "مفيش نتايج مطابقة"}
+                {loadingMatches
+                  ? "بندوّر على أفضل شركات..."
+                  : matchesFailed
+                    ? "تعذّر تحميل الترشيحات"
+                    : matches.length > 0
+                      ? "أفضل شركات ليك"
+                      : "مفيش نتايج مطابقة"}
               </Text>
+              {matchesFailed && !loadingMatches && (
+                <Pressable style={styles.secondaryBtn} onPress={() => pickPriority(priority!)}>
+                  <Text style={styles.secondaryBtnText}>حاول تاني</Text>
+                </Pressable>
+              )}
             </>
           }
           renderItem={({ item, index }) => (
@@ -156,7 +181,7 @@ export default function GuidedStart() {
                 </View>
               )}
               <View style={styles.matchRow}>
-                <Image source={{ uri: item.logo }} style={styles.matchLogo} />
+                <Image source={{ uri: assetUri(item.logo) }} style={styles.matchLogo} />
                 <View style={styles.matchText}>
                   <Text style={styles.matchName} numberOfLines={1}>{item.name}</Text>
                   <Text style={styles.matchMeta}>★ {item.rating.toFixed(1)} · {item.reviewCount} تقييم</Text>

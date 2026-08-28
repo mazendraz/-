@@ -10,6 +10,7 @@ import {
 } from "./data";
 import { apiFetch, apiGet, apiPost, apiPut, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
+import { useAsyncData } from "../hooks/useAsyncData";
 
 export type { Company, ServiceCategory, Project, Review };
 
@@ -18,9 +19,36 @@ export type { Company, ServiceCategory, Project, Review };
 export const MAX_CATEGORIES_PER_COMPANY = 5;
 
 // ── Storage keys ────────────────────────────────────────────────────────────
+//
+// TWO sets, split by AUDIENCE, because the same cache used to hold two different
+// answers to the same question. An admin session hydrates from /admin/companies
+// (every company, INACTIVE and SUSPENDED included, in the admin shape); everyone
+// else hydrates from /companies (active only, public shape). Both wrote to one
+// key.
+//
+// The consequence was not theoretical: an admin who browsed the public site — or
+// simply signed out and left the browser to the next person — left the admin list
+// sitting in the slot the PUBLIC pages read, so suspended companies rendered on
+// the live site. Clearing on sign-out would only half-fix it, since the bad data
+// is already being read during the session that wrote it.
+//
+// Keying by audience fixes both halves at once and needs no cleanup step: the
+// public pages simply never look at the admin slot, and the moment a session ends
+// `isAdminSession()` goes false and reads fall back to the public one — correct
+// immediately, with no reload and no hydration round-trip in between.
 const COMPANIES_KEY = "al-assema-companies";
 const CATEGORIES_KEY = "al-assema-categories";
+const ADMIN_COMPANIES_KEY = "al-assema-companies-admin";
+const ADMIN_CATEGORIES_KEY = "al-assema-categories-admin";
 const EVENT = "al-assema-catalog-changed";
+
+function companiesKey(): string {
+  return isAdminSession() ? ADMIN_COMPANIES_KEY : COMPANIES_KEY;
+}
+
+function categoriesKey(): string {
+  return isAdminSession() ? ADMIN_CATEGORIES_KEY : CATEGORIES_KEY;
+}
 
 // ── Low-level read/write ────────────────────────────────────────────────────
 function readJSON<T>(key: string, seed: T): T {
@@ -40,12 +68,12 @@ function readJSON<T>(key: string, seed: T): T {
 }
 
 function writeCompanies(list: Company[]) {
-  localStorage.setItem(COMPANIES_KEY, JSON.stringify(list));
+  localStorage.setItem(companiesKey(), JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
 function writeCategories(list: ServiceCategory[]) {
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(list));
+  localStorage.setItem(categoriesKey(), JSON.stringify(list));
   window.dispatchEvent(new CustomEvent(EVENT));
 }
 
@@ -61,7 +89,7 @@ export type CatalogStatus = "loading" | "ready" | "error";
 
 function hasCachedCompanies(): boolean {
   try {
-    const raw = localStorage.getItem(COMPANIES_KEY);
+    const raw = localStorage.getItem(companiesKey());
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) && arr.length > 0;
   } catch {
@@ -100,26 +128,67 @@ async function fetchCatalog(): Promise<void> {
   const admin = isAdminSession();
   const companiesPath = admin ? "/admin/companies?pageSize=200" : "/companies?pageSize=100";
   const categoriesPath = admin ? "/admin/categories" : "/categories";
-  const [companiesPage, categories] = await Promise.all([
+
+  // allSettled, not all. These are two independent reads and `Promise.all`
+  // rejects on the first failure — throwing away the response that SUCCEEDED
+  // along with the one that didn't. A 429 on /categories (entirely plausible:
+  // this module hydrates on import, so a few quick navigations can bunch up
+  // against the rate limiter) therefore discarded a perfectly good company list
+  // and dropped the whole catalogue to "error" on a cold cache.
+  const [companiesResult, categoriesResult] = await Promise.allSettled([
     apiFetch<{ data: Company[] }>(companiesPath),
     apiFetch<ServiceCategory[]>(categoriesPath),
   ]);
-  localStorage.setItem(COMPANIES_KEY, JSON.stringify(companiesPage.data));
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+
+  if (companiesResult.status === "fulfilled") {
+    localStorage.setItem(companiesKey(), JSON.stringify(companiesResult.value.data));
+  }
+  if (categoriesResult.status === "fulfilled") {
+    localStorage.setItem(categoriesKey(), JSON.stringify(categoriesResult.value));
+  }
+
+  // Anything landed → the cache moved forward, so tell the hooks and call it
+  // ready. Only a TOTAL failure is a failure; rethrowing then keeps the existing
+  // contract with hydrateCatalogFromApi, which owns the retry flag and the
+  // "keep the stale cache visible" decision.
+  if (companiesResult.status === "rejected" && categoriesResult.status === "rejected") {
+    throw companiesResult.reason;
+  }
+
+  // A partial failure is still worth a line in the console — the page will look
+  // fine, and the missing half is otherwise invisible until someone notices a
+  // category is absent.
+  if (companiesResult.status === "rejected") {
+    reportHydrationFailure("Catalog companies (categories succeeded)", companiesResult.reason);
+  }
+  if (categoriesResult.status === "rejected") {
+    reportHydrationFailure("Catalog categories (companies succeeded)", categoriesResult.reason);
+  }
+
   setStatus("ready");
   notify();
 }
 
 let hydrated = false;
+// WHICH audience the current cache was filled for. Now that admin and public
+// reads live in different keys, "already hydrated" is not a single fact: signing
+// in as an admin switches every read to a slot that has never been filled, and a
+// plain boolean guard would leave the dashboard staring at an empty catalogue
+// until a manual reload. Signing out is the mirror case.
+let hydratedFor: "admin" | "public" | null = null;
 
 export async function hydrateCatalogFromApi(): Promise<void> {
-  if (hydrated || !isApiConfigured()) return;
+  if (!isApiConfigured()) return;
+  const audience = isAdminSession() ? "admin" : "public";
+  if (hydrated && hydratedFor === audience) return;
   hydrated = true;
+  hydratedFor = audience;
   if (!hasCachedCompanies()) setStatus("loading");
   try {
     await fetchCatalog();
   } catch (err) {
     hydrated = false; // allow a later retry
+    hydratedFor = null;
     // Keep any stale cache visible; only surface an error when we have nothing.
     setStatus(hasCachedCompanies() ? "ready" : "error");
     reportHydrationFailure("Catalog hydration from API", err);
@@ -130,7 +199,19 @@ export async function hydrateCatalogFromApi(): Promise<void> {
 export function retryHydration(): void {
   if (!isApiConfigured()) return;
   hydrated = false;
+  hydratedFor = null;
   void hydrateCatalogFromApi();
+}
+
+// Signing in or out changes which cache key every read resolves to (see the
+// storage-key comment at the top), so it has to trigger a hydration for the new
+// audience — otherwise an admin lands on a dashboard reading a slot nothing has
+// ever written to. hydrateCatalogFromApi's own audience check makes this a no-op
+// when the change didn't cross the admin boundary (a provider signing in, say).
+if (typeof window !== "undefined") {
+  window.addEventListener("al-assema-auth-changed", () => {
+    void hydrateCatalogFromApi();
+  });
 }
 
 /** Force a re-fetch from the API (used to reconcile after an admin write). */
@@ -165,6 +246,7 @@ function companyPayload(c: CompanyDraft): Record<string, unknown> {
     categoryIds: categoryIdsForSlugs(c.categories.map((cc) => cc.slug)),
     primaryCategoryId: primary ? categoryIdForSlug(primary.slug) : undefined,
     name: c.name,
+    nameAr: c.nameAr?.trim() || undefined,
     tagline: c.tagline,
     about: c.about,
     logo: c.logo,
@@ -226,7 +308,7 @@ export function slugify(s: string): string {
 
 // ── Companies: read ─────────────────────────────────────────────────────────
 export function getCompanies(): Company[] {
-  return readJSON<Company[]>(COMPANIES_KEY, SEED_COMPANIES);
+  return readJSON<Company[]>(companiesKey(), SEED_COMPANIES);
 }
 
 export function getCompany(slug: string): Company | undefined {
@@ -243,6 +325,7 @@ export type CompanyDraft = Omit<Company, "id">;
 const EMPTY_COMPANY: CompanyDraft = {
   slug: "",
   name: "",
+  nameAr: "",
   tagline: "",
   about: "",
   logo: "",
@@ -375,7 +458,7 @@ export function deleteReview(companyId: string, index: number) {
 
 // ── Categories ──────────────────────────────────────────────────────────────
 export function getCategories(): ServiceCategory[] {
-  return readJSON<ServiceCategory[]>(CATEGORIES_KEY, SEED_CATEGORIES);
+  return readJSON<ServiceCategory[]>(categoriesKey(), SEED_CATEGORIES);
 }
 
 export function getCategory(slug: string): ServiceCategory | undefined {
@@ -490,8 +573,8 @@ export async function deleteCategory(slug: string): Promise<void> {
 
 // ── Reset / export / import ─────────────────────────────────────────────────
 export function resetCatalog() {
-  localStorage.setItem(COMPANIES_KEY, JSON.stringify(SEED_COMPANIES));
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(SEED_CATEGORIES));
+  localStorage.setItem(companiesKey(), JSON.stringify(SEED_COMPANIES));
+  localStorage.setItem(categoriesKey(), JSON.stringify(SEED_CATEGORIES));
   notify();
 }
 
@@ -506,8 +589,8 @@ export function exportCatalog(): string {
 export function importCatalog(json: string): boolean {
   try {
     const data = JSON.parse(json);
-    if (Array.isArray(data.companies)) localStorage.setItem(COMPANIES_KEY, JSON.stringify(data.companies));
-    if (Array.isArray(data.categories)) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(data.categories));
+    if (Array.isArray(data.companies)) localStorage.setItem(companiesKey(), JSON.stringify(data.companies));
+    if (Array.isArray(data.categories)) localStorage.setItem(categoriesKey(), JSON.stringify(data.categories));
     notify();
     return true;
   } catch {
@@ -556,28 +639,46 @@ export function useCompany(slug: string): Company | undefined {
  * it lands. In demo mode (no API) the cache already holds full seed data, so it's
  * used directly. `loading` is true only while fetching with nothing yet to show.
  */
-export function useCompanyDetail(slug: string): { company: Company | undefined; loading: boolean } {
+export function useCompanyDetail(slug: string): {
+  company: Company | undefined;
+  loading: boolean;
+  /**
+   * The detail fetch failed AND there is no cached card to fall back on.
+   *
+   * Callers must branch on this BEFORE rendering "not found". Previously the
+   * hook swallowed the error and returned `company: undefined`, which is exactly
+   * what a genuinely missing slug looks like — so a 500, a timeout or an
+   * unreachable backend all rendered "this company doesn't exist" and sent the
+   * visitor away from a page that was perfectly fine.
+   */
+  error: boolean;
+  /** Re-run the detail fetch — for a Retry control on the error state. */
+  refetch: () => void;
+} {
   const cached = useCompany(slug);
-  const [detail, setDetail] = useState<Company | undefined>(undefined);
-  const [loading, setLoading] = useState<boolean>(isApiConfigured() && Boolean(slug));
+  const apiMode = isApiConfigured();
 
-  useEffect(() => {
-    if (!isApiConfigured() || !slug) {
-      setLoading(false);
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    setDetail(undefined);
-    apiGet<Company>(`/companies/${encodeURIComponent(slug)}`)
-      .then((full) => { if (active) setDetail(full); })
-      .catch(() => { /* keep the cached card as a fallback */ })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [slug]);
+  // Migrated to useAsyncData (the shared hook) — it brings real cancellation
+  // (this used an `active` flag, so navigating between companies left the old
+  // request running) and the staleness guard that stops a slow earlier response
+  // overwriting a newer one, which is reachable here just by clicking through
+  // two profiles quickly.
+  const { data, loading, error, refetch } = useAsyncData<Company>(
+    slug,
+    (signal) => apiGet<Company>(`/companies/${encodeURIComponent(slug)}`, signal),
+    { enabled: apiMode && Boolean(slug) },
+  );
 
-  const company = !isApiConfigured() ? cached : (detail ?? cached);
-  return { company, loading: loading && !company };
+  const company = !apiMode ? cached : (data ?? cached);
+  return {
+    company,
+    // Only a loading state when there is genuinely nothing to paint: the cached
+    // card (name, cover, rating) renders immediately and the fetched detail
+    // replaces it when it lands.
+    loading: loading && !company,
+    error: Boolean(error) && !company,
+    refetch,
+  };
 }
 
 /** Reactive hydration status (loading/ready/error) for loading & error UI. */
@@ -619,23 +720,47 @@ export function useMyCompany(): {
       return;
     }
     let alive = true;
+    // EVENT fires on EVERY catalogue write — every writeCompanies, every
+    // writeCategories, every notify() — so a single provider action (an
+    // availability save calls refreshCatalogFromApi, which fires it again on
+    // completion) could put several of these in the air at once. With no
+    // ordering, the LAST response to arrive won regardless of which was newest,
+    // so a slow earlier read could overwrite the state a later one had already
+    // corrected. A generation counter makes staleness decidable: only the most
+    // recently issued request is allowed to write.
+    let generation = 0;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+
     const load = () => {
+      const mine = ++generation;
       apiGet<{ company: Company }>("/provider/profile")
         .then((res) => {
-          if (alive) setState({ company: res.company, loading: false, error: false });
+          if (alive && mine === generation) {
+            setState({ company: res.company, loading: false, error: false });
+          }
         })
         .catch(() => {
-          if (alive) setState((s) => ({ ...s, loading: false, error: true }));
+          if (alive && mine === generation) {
+            setState((s) => ({ ...s, loading: false, error: true }));
+          }
         });
     };
-    load();
+
     // Availability saves and approved change requests both call
     // refreshCatalogFromApi(), which fires EVENT. Re-read on it so this copy
-    // can't sit stale behind a write the provider just made.
-    window.addEventListener(EVENT, load);
+    // can't sit stale behind a write the provider just made — but coalesce a
+    // burst into one request rather than issuing a round trip per write.
+    const scheduleLoad = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(load, 50);
+    };
+
+    load();
+    window.addEventListener(EVENT, scheduleLoad);
     return () => {
       alive = false;
-      window.removeEventListener(EVENT, load);
+      if (debounce) clearTimeout(debounce);
+      window.removeEventListener(EVENT, scheduleLoad);
     };
   }, [apiMode]);
 

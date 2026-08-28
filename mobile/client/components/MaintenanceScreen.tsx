@@ -9,10 +9,11 @@ import { useSettings } from "../lib/settings";
 
 /**
  * Full-screen maintenance notice — the mobile counterpart of the website's
- * StatusScreen.tsx (maintenance variant only; this app has no equivalent of
- * the website's separate "backend unreachable" state to render here — see
- * app/_layout.tsx's comment on why). Rendered in place of the whole Stack
- * while maintenance is enabled (see lib/settings.ts's useMaintenance).
+ * StatusScreen.tsx (maintenance variant). The "backend unreachable" variant
+ * is OfflineScreen.tsx — a separate component, not a variant of this one,
+ * checked after this in app/_layout.tsx's priority order. Rendered in place
+ * of the whole Stack while maintenance is enabled (see lib/settings.ts's
+ * useMaintenance).
  */
 export default function MaintenanceScreen({ status, onRetry }: { status: ApiMaintenanceStatus; onRetry: () => void }) {
   const settings = useSettings();

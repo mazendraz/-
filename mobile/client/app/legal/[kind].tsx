@@ -11,6 +11,31 @@ import { fetchLegalPages } from "../../lib/pages";
  *  Content is admin-managed Markdown; rendered with react-native-markdown-display
  *  (the website uses its own DOM-based Markdown.tsx, which can't be reused as-is
  *  for React Native — see the phase-9 parity notes for why this library specifically). */
+/**
+ * Schemes a link inside admin-authored Markdown may open.
+ *
+ * `Linking.openURL` will hand ANY scheme to the OS — `tel:`, `sms:`,
+ * `intent:` on Android, or another installed app's private scheme — and this
+ * content is CMS text, not something reviewed line by line before every
+ * render. An allowlist keeps a legal page to the three things a legal page
+ * legitimately links to, so a bad (or compromised) edit cannot turn it into a
+ * launcher for arbitrary app-to-app navigation.
+ */
+const ALLOWED_LINK_SCHEMES = ["https:", "mailto:", "tel:"];
+
+function openExternalLink(url: string): boolean {
+  let scheme: string;
+  try {
+    scheme = new URL(url).protocol.toLowerCase();
+  } catch {
+    return false; // not a URL at all — nothing to open
+  }
+  if (ALLOWED_LINK_SCHEMES.includes(scheme)) void Linking.openURL(url);
+  // Always false: the library must never do its own default navigation, whether
+  // or not we opened the link ourselves.
+  return false;
+}
+
 export default function LegalPage() {
   const { kind } = useLocalSearchParams<{ kind: "terms" | "privacy" }>();
   const title = kind === "terms" ? "الشروط والأحكام" : "سياسة الخصوصية";
@@ -25,7 +50,7 @@ export default function LegalPage() {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12}>
+        <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
           <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
@@ -36,7 +61,7 @@ export default function LegalPage() {
         {content === null ? (
           <ActivityIndicator color={colors.primary} style={styles.loading} />
         ) : content.trim() ? (
-          <Markdown style={markdownStyles} onLinkPress={(url) => { Linking.openURL(url); return false; }}>
+          <Markdown style={markdownStyles} onLinkPress={openExternalLink}>
             {content}
           </Markdown>
         ) : (

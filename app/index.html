@@ -8,6 +8,8 @@
          guesses (inverted form controls, dark scrollbars) on top of a page
          that has no dark palette to match them. -->
     <meta name="color-scheme" content="light" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
     <!-- Arabic is the default language (see LocaleContext.tsx / locale-init.js) — these
          are the pre-hydration defaults a crawler or an unfurled share link sees before
          hooks/usePageMeta.ts overwrites them per-route/per-locale after mount. -->
@@ -19,41 +21,45 @@
     <meta property="og:description" content="دوّر على شركات ديكور، لاندسكيب، سمارت هوم، وتشطيبات موثّقة في العاصمة الإدارية الجديدة." />
     <meta property="og:locale" content="ar_EG" />
     <meta property="og:locale:alternate" content="en_US" />
-    <meta property="og:url" content="https://alassema.com/?lang=ar" />
-    <meta property="og:image" content="https://alassema.com/logo.png" />
+    <meta property="og:url" content="https://al-assema.tech/?lang=ar" />
+    <meta property="og:image" content="https://al-assema.tech/logo.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="العاصمة — كل خدمة موثوقة في العاصمة الإدارية الجديدة" />
     <meta name="twitter:description" content="دوّر على شركات ديكور، لاندسكيب، سمارت هوم، وتشطيبات موثّقة في العاصمة الإدارية الجديدة." />
-    <meta name="twitter:image" content="https://alassema.com/logo.png" />
-    <link rel="canonical" href="https://alassema.com/?lang=ar" />
-    <link rel="alternate" hreflang="ar" href="https://alassema.com/?lang=ar" />
-    <link rel="alternate" hreflang="en" href="https://alassema.com/?lang=en" />
-    <link rel="alternate" hreflang="x-default" href="https://alassema.com/?lang=ar" />
+    <meta name="twitter:image" content="https://al-assema.tech/logo.png" />
+    <link rel="canonical" href="https://al-assema.tech/?lang=ar" />
+    <link rel="alternate" hreflang="ar" href="https://al-assema.tech/?lang=ar" />
+    <link rel="alternate" hreflang="en" href="https://al-assema.tech/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://al-assema.tech/?lang=ar" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#005578" />
     <link rel="preload" as="image" href="/img/seed-16.jpg" />
     <!-- Locale init: apply saved dir/lang before React hydrates to prevent FOUC.
          External (not inline) so the CSP can drop 'unsafe-inline' from script-src. -->
     <script src="/locale-init.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Alexandria:wght@300;400;600;700;800&family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <!-- display=BLOCK, not swap — and the difference is not cosmetic.
-         `swap` renders the fallback font immediately, which is right for the
-         text faces above. This is a LIGATURE font: with the fallback showing,
-         every icon renders as its own name in plain words — "favorite",
-         "search", "receipt_long" — which is both wrong to look at and wider
-         than the fixed-size button holding it. Measured with the font
-         unavailable: the bottom nav overflowed a 320px phone by 53px and icon
-         buttons overflowed their own 40px box by 17px.
+    <!-- ── Fonts are SELF-HOSTED. Do not re-add a fonts.googleapis.com <link>. ──
+         Two external stylesheets used to sit here, and a stylesheet in <head> is
+         render-blocking. Against a host that is blackholed rather than refused
+         (DNS resolves, packets are dropped — how Google-domain filtering
+         commonly behaves on some carrier and corporate networks) that stalls the
+         FIRST PAINT until the browser's connection timeout: tens of seconds of
+         blank white page, on every route, before any JS has run. No error
+         boundary, no offline screen, no telemetry — and it only affects some
+         networks, so it never reproduces on a machine you test from.
+
+         The @font-face rules now live in src/fonts.css, bundled into the app's
+         own hashed stylesheet and served from this origin. The WOFF2 files are
+         the exact subsets Google was serving, unicode-range and all, so users
+         download no more bytes than before.
+
+         `font-display` is preserved per family there, and the icon font's
+         `block` is load-bearing rather than cosmetic: Material Symbols is a
+         LIGATURE font, so with a fallback showing, every icon renders as its own
+         name in plain words — "favorite", "search", "receipt_long" — which is
+         both wrong to look at and wider than the fixed-size button holding it.
+         Measured with the font unavailable: the bottom nav overflowed a 320px
+         phone by 53px and icon buttons overflowed their own 40px box by 17px.
          `block` keeps the glyph slot invisible until the real font arrives. -->
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=block"
-      rel="stylesheet"
-    />
   </head>
   <body>
     <div id="root"></div>

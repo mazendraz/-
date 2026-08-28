@@ -7,6 +7,19 @@
 #   docker compose -f docker-compose.dev.yml down -v      # إيقاف + مسح البيانات
 #
 # api/.env مأشّر عليها بالفعل: postgresql://postgres:postgres@localhost:5433/alassema
+#
+# ⚠️ تعارض بورت 5433 على أجهزة فيها Postgres مثبّت native (اتلاقى في تدقيق
+# 2026-08-20): بعض أجهزة التطوير عليها PostgreSQL 16 مثبّت كـ Windows service
+# ومظبوط على بورت 5433 (`C:\Program Files\PostgreSQL\16\data\postgresql.conf`).
+# الـ Windows service ده بيقلع مع الجهاز *قبل* Docker، فبياخد البورت الأول —
+# يعني `localhost:5433` بيوصّلك بيه هو، مش بالكونتينر ده، حتى لو الكونتينر
+# شغّال، من غير أي رسالة خطأ. النتيجة: `docker exec alassema-db-dev psql ...`
+# بيوريك قاعدة فاضية، بينما `psql -h localhost -p 5433` (أو الـ API نفسه)
+# بيوصّل لقاعدة تانية فيها داتا حقيقية — تلبيس خطير لو حد افترض إنه بيتصرف في
+# نفس القاعدة اللي الـ API شغّال عليها.
+# لو عندك الموقف ده: امسح الكونتينر ده (`docker compose down`) واستخدم
+# الـ native install مباشرة، أو غيّر بورت الكونتينر هنا (`"5434:5432"`) وحدّث
+# DATABASE_URL بدل ما تسيب البورتين متعارضين.
 services:
   db-dev:
     image: postgres:16

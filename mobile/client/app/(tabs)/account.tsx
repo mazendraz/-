@@ -14,6 +14,7 @@ import {
   type CustomerSession,
 } from "../../lib/customerAuth";
 import { useRequireAccount } from "../../lib/authGate";
+import { ApiError } from "../../lib/api";
 
 /**
  * The customer's account: profile, signed-in devices, and the way out — the
@@ -76,8 +77,17 @@ export default function Account() {
     try {
       await deleteAccount(typedEmail);
       router.replace("/sign-in");
-    } catch {
-      setError("مش مطابق. اكتب بريدك الإلكتروني بالظبط.");
+    } catch (err) {
+      // The server only 400s for an actual email mismatch (see api's
+      // /customer/delete route) — every other failure (timeout, offline, a
+      // 500) used to show the same "you typed it wrong" message on an
+      // IRREVERSIBLE action, telling someone they made a mistake they
+      // didn't make.
+      setError(
+        err instanceof ApiError && err.status === 400
+          ? "مش مطابق. اكتب بريدك الإلكتروني بالظبط."
+          : "حصلت مشكلة ومقدرناش نمسح الحساب. جرّب تاني.",
+      );
       setBusy(false);
     }
   }
@@ -99,7 +109,7 @@ export default function Account() {
                 <Logo size={28} />
                 <Text style={styles.title}>حسابك</Text>
               </View>
-              <Pressable onPress={() => router.push("/search")} hitSlop={8}>
+              <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
                 <Icon name="search" size={22} color={colors.onSurface} />
               </Pressable>
             </View>
@@ -119,6 +129,29 @@ export default function Account() {
                 <Text style={styles.email}>{customer.email}</Text>
               </View>
             </View>
+
+            {/* المفضلة lost its tab slot in the five-tab redesign (see
+                (tabs)/_layout.tsx) — this row and the heart button in the
+                Search header are the two doors that replaced it. */}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/saved")}
+              style={({ pressed }) => [styles.settingsRow, styles.settingsRowStacked, pressed && styles.settingsRowPressed]}
+            >
+              <Icon name="chevron_right" size={20} color={colors.outline} style={{ transform: [{ scaleX: -1 }] }} />
+              <Text style={styles.settingsRowLabel}>المفضلة</Text>
+              <Icon name="favorite" size={20} color={colors.onSurfaceVariant} />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/notifications")}
+              style={({ pressed }) => [styles.settingsRow, pressed && styles.settingsRowPressed]}
+            >
+              <Icon name="chevron_right" size={20} color={colors.outline} style={{ transform: [{ scaleX: -1 }] }} />
+              <Text style={styles.settingsRowLabel}>الإشعارات</Text>
+              <Icon name="notifications" size={20} color={colors.onSurfaceVariant} />
+            </Pressable>
 
             <Text style={styles.sectionTitle}>الأجهزة المسجّل دخولها</Text>
             <Text style={styles.sectionSub}>أي جهاز هنا يقدر يفتح حسابك دلوقتي.</Text>
@@ -150,8 +183,6 @@ export default function Account() {
             )}
 
             <View style={styles.linksRow}>
-              <Text style={styles.link} onPress={() => router.push("/about")}>عن العاصمة</Text>
-              <Text style={styles.link} onPress={() => router.push("/contact")}>تواصل معنا</Text>
               <Text style={styles.link} onPress={() => router.push({ pathname: "/legal/[kind]", params: { kind: "terms" } })}>الشروط والأحكام</Text>
               <Text style={styles.link} onPress={() => router.push({ pathname: "/legal/[kind]", params: { kind: "privacy" } })}>سياسة الخصوصية</Text>
             </View>
@@ -240,6 +271,24 @@ const styles = StyleSheet.create({
   profileText: { flex: 1 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   email: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", writingDirection: "ltr" },
+  settingsRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+  },
+  // A row with another row directly under it: settingsRow's marginBottom is
+  // the gap to the NEXT SECTION, which reads as a hole between two members of
+  // one list.
+  settingsRowStacked: { marginBottom: 10 },
+  settingsRowPressed: { opacity: 0.7 },
+  settingsRowLabel: { flex: 1, fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   sectionTitle: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   sectionSub: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", marginBottom: 8 },
   deviceRow: {

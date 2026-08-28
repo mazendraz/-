@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useSaved } from "../hooks/useSaved";
 import { useMyLeads, useMyLeadClaims } from "../lib/requests";
 import { useCustomerThreads } from "../lib/chat";
+import { useCustomerAuth } from "../lib/customerAuth";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
 
@@ -15,7 +16,8 @@ export default function PersonalTabs({ active }: { active: PersonalTab }) {
   // Unread replies, not thread count: a number next to "Messages" should mean
   // "this many are waiting for you", the same as every other badge in the app.
   const claims = useMyLeadClaims();
-  const { totalUnread } = useCustomerThreads(claims);
+  const { customer } = useCustomerAuth();
+  const { totalUnread } = useCustomerThreads(claims, Boolean(customer));
 
   const tabs: { key: PersonalTab; labelKey: StringKey; icon: string; to: string; count: number }[] = [
     { key: "saved", labelKey: "saved_tab", icon: "favorite", to: "/saved", count: savedCount },

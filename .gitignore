@@ -80,3 +80,17 @@ desktop/
 # لو عايزهم يتجاهلهم git، شيل التعليق عن السطرين دول:
 # deliverables/
 # app/inspect.mjs
+
+# ── مفاتيح التوقيع والنشر (Apple / Google) ──
+# المفاتيح الحقيقية متخزّنة **بره الريبو** في C:\Users\CM\.alassema-secrets\.
+# القواعد دي خط دفاع تاني: `ship.sh` بيعمل `git add -A`، فأي مفتاح يتنسخ جوه
+# الشجرة بالغلط كان هيتنشر على GitHub من غير ما حد ياخد باله — نفس الطريقة
+# اللي اتسرب بيها api/.env جوه أرشيف في 2026-07-20.
+*.p8
+*.jks
+*.keystore
+*.mobileprovision
+*.cer
+*.certSigningRequest
+google-play-service-account*.json
+fcm-service-account*.json

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiCategory, ApiCompany } from "@alassema/core";
@@ -20,6 +20,8 @@ import Logo from "../../components/Logo";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies, type CompanySort } from "../../lib/companies";
 import { ApiError } from "../../lib/api";
+import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { assetUri, firstAssetUri } from "../../lib/assetUrl";
 
 const PAGE_SIZE = 20;
 
@@ -62,7 +64,7 @@ export default function Companies() {
   const [minRating, setMinRating] = useState(0);
   const [availableOnly, setAvailableOnly] = useState(false);
   const [sort, setSort] = useState<CompanySort>("recommended");
-  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [categories, setCategories] = useState<ApiCategory[]>([]);
   const [companies, setCompanies] = useState<ApiCompany[]>([]);
@@ -133,6 +135,21 @@ export default function Companies() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
+  // Coming back to this tab re-reads the catalog, so an edit made on the
+  // website (a new company, a renamed category, a company deactivated) shows
+  // up without force-closing the app — this tab stays mounted for the whole
+  // session, so the mount effects above would otherwise never run again.
+  //
+  // Deliberately skipped once the customer has paged past the first page:
+  // load(1, false) REPLACES the list, so refreshing a 60-item infinite scroll
+  // would silently throw away everything below the fold and drop them back to
+  // the top. Whatever they do next (a filter tap, a search) refetches anyway.
+  useRefreshOnFocus(() => {
+    if (page !== 1) return;
+    fetchCategories().then(setCategories).catch(() => {});
+    load(1, false);
+  });
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const canLoadMore = page < pageCount && !loading && !loadingMore;
   function loadMore() {
@@ -144,6 +161,17 @@ export default function Companies() {
   // show fewer cards than that count says.
   const visibleList = availableOnly ? companies.filter((c) => !c.busy) : companies;
   const activeFilterCount = (category !== "all" ? 1 : 0) + (minRating > 0 ? 1 : 0) + (availableOnly ? 1 : 0);
+  // Falls back to the slug: the chip must never render as an empty pill if
+  // the category list hasn't come back yet (or lost that slug).
+  const categoryLabel = categories.find((c) => c.slug === category)?.label ?? category;
+  const ratingLabel = RATINGS.find((r) => r.value === minRating)?.label ?? "";
+
+  function clearAll() {
+    setQuery("");
+    setCategory("all");
+    setMinRating(0);
+    setAvailableOnly(false);
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -152,9 +180,18 @@ export default function Companies() {
           <Logo size={28} />
           <Text style={styles.title}>الشركات</Text>
         </View>
-        <Pressable onPress={() => router.push("/search")} hitSlop={8}>
-          <Icon name="search" size={22} color={colors.onSurface} />
-        </Pressable>
+        <View style={styles.topBarActions}>
+          {/* المفضلة lost its tab slot in the five-tab redesign (see
+              (tabs)/_layout.tsx). This is its primary door: this screen is
+              where a company gets saved, so it is where people come back to
+              look for what they saved. */}
+          <Pressable accessibilityRole="button" accessibilityLabel="المفضلة" onPress={() => router.push("/saved")} hitSlop={8}>
+            <Icon name="favorite" size={22} color={colors.onSurface} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
+            <Icon name="search" size={22} color={colors.onSurface} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchRow}>
@@ -169,39 +206,63 @@ export default function Companies() {
         />
       </View>
 
+      {/* One box that opens every filter, instead of the long horizontal chip
+          scroll this used to be: rating and availability sat off the edge of
+          the screen where nobody scrolls, and every new service category
+          pushed them further out of sight. The bar now carries only what is
+          actually ACTIVE — a fixed, short row no matter how many categories
+          the catalog grows to. */}
       <View style={styles.filterRow}>
+        <Pressable
+          style={styles.filterBtn}
+          onPress={() => setFiltersOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="الفلاتر والترتيب"
+        >
+          <Icon name="tune" size={18} color={colors.onSurface} />
+          <Text style={styles.filterBtnText}>الفلاتر والترتيب</Text>
+          {activeFilterCount > 0 ? (
+            <View style={styles.filterBtnBadge}>
+              <Text style={styles.filterBtnBadgeText}>{activeFilterCount}</Text>
+            </View>
+          ) : null}
+          <View style={styles.filterBtnGrow} />
+          <Icon name="expand_more" size={18} color={colors.outline} />
+        </Pressable>
+      </View>
+
+      {activeFilterCount > 0 ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
+          style={styles.activeRow}
+          contentContainerStyle={styles.activeScroll}
         >
-          <FilterChip active={category === "all"} onPress={() => setCategory("all")}>
-            الكل
-          </FilterChip>
-          {categories.map((c) => (
-            <FilterChip key={c.slug} active={category === c.slug} onPress={() => setCategory(c.slug)}>
-              {c.label}
-            </FilterChip>
-          ))}
-          {RATINGS.map((r) => (
-            <FilterChip key={r.value} active={minRating === r.value} onPress={() => setMinRating(r.value)}>
-              {r.label}
-            </FilterChip>
-          ))}
-          <FilterChip active={availableOnly} onPress={() => setAvailableOnly((v) => !v)}>
-            المتاحين دلوقتي
-          </FilterChip>
+          {category !== "all" ? (
+            <ActiveChip label={categoryLabel} onRemove={() => setCategory("all")} />
+          ) : null}
+          {minRating > 0 ? (
+            <ActiveChip label={ratingLabel} onRemove={() => setMinRating(0)} />
+          ) : null}
+          {availableOnly ? (
+            <ActiveChip label="المتاحين دلوقتي" onRemove={() => setAvailableOnly(false)} />
+          ) : null}
         </ScrollView>
+      ) : null}
 
-        <Pressable style={styles.sortBtn} onPress={() => setSortSheetOpen(true)} hitSlop={8}>
-          <Icon name="tune" size={18} color={colors.onSurface} />
-          {activeFilterCount > 0 && (
-            <View style={styles.sortBadge}>
-              <Text style={styles.sortBadgeText}>{activeFilterCount}</Text>
-            </View>
+      {/* Missing before — the website shows a result count and a one-tap
+          "clear all filters" once any filter/search is active
+          (companies_remove_filter / common_clear_all). */}
+      {!loading && (
+        <View style={styles.resultsRow}>
+          <Text style={styles.resultsText}>{total} شركة</Text>
+          {(query.trim() || activeFilterCount > 0) && (
+            <Pressable onPress={clearAll}>
+              <Text style={styles.clearAllText}>امسح كل الفلاتر</Text>
+            </Pressable>
           )}
-        </Pressable>
-      </View>
+        </View>
+      )}
 
       {error !== "" && (
         <View style={styles.errorBanner}>
@@ -230,39 +291,132 @@ export default function Companies() {
             }
             style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
           >
-            <Image source={{ uri: item.logo }} style={styles.logo} />
-            <View style={styles.cardText}>
+            {/* Cover + badges — the website's own card leads with a cover
+                photo and verified/busy badges; this list used to skip
+                straight to a small logo + two lines of text. */}
+            <View style={styles.coverWrap}>
+              <Image source={{ uri: firstAssetUri(item.cover, item.logo) }} style={styles.cover} />
+              <View style={styles.coverLogoWrap}>
+                <Image source={{ uri: assetUri(item.logo) }} style={styles.coverLogo} />
+              </View>
+              {item.verified ? (
+                <View style={styles.verifiedBadge}>
+                  <Icon name="verified" size={11} color={colors.primary} />
+                  <Text style={styles.verifiedBadgeText}>موثّقة</Text>
+                </View>
+              ) : null}
+              {item.busy ? (
+                <View style={styles.busyBadge}>
+                  <Icon name="event_busy" size={11} color="#fff" />
+                  <Text style={styles.busyBadgeText}>مشغولة</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.cardBody}>
               <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.category} numberOfLines={1}>{item.categoryLabel}</Text>
+              <View style={styles.ratingRow}>
+                <Text style={styles.ratingStar}>★</Text>
+                <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+                <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+              </View>
+              {item.tagline ? (
+                <Text style={styles.tagline} numberOfLines={2}>{item.tagline}</Text>
+              ) : null}
+              <View style={styles.cardFooter}>
+                <Text style={styles.projectsText}>{item.completedProjects} مشروع</Text>
+                <View style={styles.viewRow}>
+                  <Text style={styles.viewText}>عرض</Text>
+                  <Icon name="arrow_back" size={12} color={colors.primary} />
+                </View>
+              </View>
             </View>
-            <Icon name="arrow_back" size={18} color={colors.outline} />
           </Pressable>
         )}
       />
 
+      {/* Every filter in one sheet — category (wrapped, so a growing catalog
+          adds rows instead of pushing options off-screen), rating,
+          availability and sort. Choices apply live behind the sheet; the
+          footer button just closes it and reads back the count. */}
       <Modal
-        visible={sortSheetOpen}
+        visible={filtersOpen}
         transparent
         animationType="slide"
-        onRequestClose={() => setSortSheetOpen(false)}
+        onRequestClose={() => setFiltersOpen(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setSortSheetOpen(false)}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>الترتيب حسب</Text>
-            {SORTS.map((s) => (
+        <Pressable style={styles.modalBackdrop} onPress={() => setFiltersOpen(false)}>
+          {/* Swallows taps inside the sheet so they don't reach the backdrop's
+              dismiss handler underneath. */}
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>الفلاتر والترتيب</Text>
               <Pressable
-                key={s.key}
-                style={styles.sheetRow}
-                onPress={() => {
-                  setSort(s.key);
-                  setSortSheetOpen(false);
-                }}
+                onPress={() => setFiltersOpen(false)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="إغلاق"
               >
-                <Text style={styles.sheetRowText}>{s.label}</Text>
-                {sort === s.key && <Icon name="check" size={18} color={colors.primary} />}
+                <Icon name="close" size={20} color={colors.onSurfaceVariant} />
               </Pressable>
-            ))}
-          </View>
+            </View>
+
+            <ScrollView style={styles.sheetScroll} contentContainerStyle={styles.sheetScrollContent}>
+              <Text style={styles.sheetSection}>الفئة</Text>
+              <View style={styles.chipWrap}>
+                <FilterChip active={category === "all"} onPress={() => setCategory("all")}>
+                  الكل
+                </FilterChip>
+                {categories.map((c) => (
+                  <FilterChip key={c.slug} active={category === c.slug} onPress={() => setCategory(c.slug)}>
+                    {c.label}
+                  </FilterChip>
+                ))}
+              </View>
+
+              <Text style={styles.sheetSection}>التقييم</Text>
+              <View style={styles.chipWrap}>
+                {RATINGS.map((r) => (
+                  <FilterChip key={r.value} active={minRating === r.value} onPress={() => setMinRating(r.value)}>
+                    {r.label}
+                  </FilterChip>
+                ))}
+              </View>
+
+              <Text style={styles.sheetSection}>التوفّر</Text>
+              <View style={styles.chipWrap}>
+                <FilterChip active={availableOnly} onPress={() => setAvailableOnly((v) => !v)}>
+                  المتاحين دلوقتي
+                </FilterChip>
+              </View>
+
+              <Text style={styles.sheetSection}>الترتيب حسب</Text>
+              {SORTS.map((s) => (
+                <Pressable key={s.key} style={styles.sheetRow} onPress={() => setSort(s.key)}>
+                  <Text style={styles.sheetRowText}>{s.label}</Text>
+                  {sort === s.key && <Icon name="check" size={18} color={colors.primary} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={styles.sheetFooter}>
+              <Pressable
+                style={styles.sheetClear}
+                onPress={clearAll}
+                accessibilityRole="button"
+              >
+                <Text style={styles.sheetClearText}>مسح الكل</Text>
+              </Pressable>
+              <Pressable
+                style={styles.sheetApply}
+                onPress={() => setFiltersOpen(false)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.sheetApplyText}>عرض {total} شركة</Text>
+              </Pressable>
+            </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -288,6 +442,21 @@ function FilterChip({
   );
 }
 
+/** A filter that IS applied, shown on the bar with a one-tap way off. */
+function ActiveChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <Pressable
+      style={styles.activeChip}
+      onPress={onRemove}
+      accessibilityRole="button"
+      accessibilityLabel={`شيل فلتر ${label}`}
+    >
+      <Text style={styles.activeChipText}>{label}</Text>
+      <Icon name="close" size={13} color={colors.onPrimary} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   topBar: {
@@ -298,6 +467,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  topBarActions: { flexDirection: "row-reverse", alignItems: "center", gap: 18 },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",
@@ -322,76 +492,198 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     color: colors.onSurface,
   },
-  filterRow: {
+  filterRow: { marginTop: 8, paddingHorizontal: 20 },
+  filterBtn: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    marginTop: 8,
-    paddingStart: 20,
     gap: 8,
-  },
-  filterScroll: { flexDirection: "row-reverse", gap: 8, paddingEnd: 20 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.surfaceContainer },
-  filterChipActive: { backgroundColor: colors.primary },
-  filterChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },
-  filterChipTextActive: { color: colors.onPrimary },
-  sortBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     backgroundColor: colors.surfaceContainer,
-    alignItems: "center",
-    justifyContent: "center",
-    marginEnd: 20,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  sortBadge: {
-    position: "absolute",
-    top: -2,
-    left: -2,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+  filterBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface },
+  filterBtnGrow: { flex: 1 },
+  filterBtnBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
   },
-  sortBadgeText: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.onPrimary },
+  filterBtnBadgeText: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.onPrimary },
+  activeRow: { flexGrow: 0, marginTop: 8 },
+  activeScroll: { flexDirection: "row-reverse", gap: 8, paddingHorizontal: 20 },
+  activeChip: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.primary,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  activeChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimary },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surfaceContainer },
+  filterChipActive: { backgroundColor: colors.primary },
+  filterChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },
+  filterChipTextActive: { color: colors.onPrimary },
   errorBanner: { backgroundColor: colors.errorContainer, marginHorizontal: 20, marginTop: 10, borderRadius: 12, padding: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
+  resultsRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  resultsText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline },
+  clearAllText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary },
   listContent: { padding: 20, gap: 10, flexGrow: 1 },
   empty: { textAlign: "center", color: colors.outline, fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, paddingTop: 60 },
   footerSpinner: { paddingVertical: 20 },
   card: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 12,
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 16,
-    padding: 12,
+    overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.outlineVariant,
   },
-  cardPressed: { opacity: 0.7 },
-  logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.surfaceContainer },
-  cardText: { flex: 1 },
+  cardPressed: { opacity: 0.85 },
+  coverWrap: { height: 130, backgroundColor: colors.surfaceContainer },
+  cover: { width: "100%", height: "100%" },
+  coverLogoWrap: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#fff",
+    backgroundColor: "#fff",
+  },
+  coverLogo: { width: "100%", height: "100%" },
+  verifiedBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  verifiedBadgeText: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.primary },
+  busyBadge: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: "#d97706",
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  busyBadgeText: { fontFamily: "Cairo_700Bold", fontSize: 10, color: "#fff" },
+  cardBody: { padding: 12, gap: 2 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   category: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right" },
+  ratingRow: { flexDirection: "row-reverse", alignItems: "center", gap: 3, marginTop: 3 },
+  ratingStar: { fontSize: type.caption.fontSize, color: "#f59e0b" },
+  ratingText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
+  reviewCount: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
+  tagline: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right", marginTop: 4, lineHeight: 17 },
+  cardFooter: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.outlineVariant,
+  },
+  projectsText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
+  viewRow: { flexDirection: "row-reverse", alignItems: "center", gap: 3 },
+  viewText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: colors.surfaceContainerLowest, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingVertical: 8, paddingBottom: 24 },
+  sheet: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+    // Caps the sheet at most of the screen so a long category list scrolls
+    // inside it instead of pushing the footer button off the bottom.
+    maxHeight: "85%",
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.outlineVariant,
+    marginBottom: 4,
+  },
+  sheetHeader: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
   sheetTitle: {
     fontFamily: "Cairo_700Bold",
     fontSize: type.body.fontSize,
     color: colors.onSurface,
     textAlign: "right",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
   },
+  sheetScroll: { flexGrow: 0 },
+  sheetScrollContent: { paddingBottom: 12 },
+  sheetSection: {
+    fontFamily: "Cairo_700Bold",
+    fontSize: type.caption.fontSize,
+    color: colors.outline,
+    textAlign: "right",
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 8,
+  },
+  chipWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, paddingHorizontal: 20 },
+  sheetFooter: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.outlineVariant,
+  },
+  sheetApply: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  sheetApplyText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
+  sheetClear: { paddingVertical: 12, paddingHorizontal: 6 },
+  sheetClearText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },
   sheetRow: {
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   sheetRowText: { fontFamily: "Cairo_500Medium", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right" },
 });

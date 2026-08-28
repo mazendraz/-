@@ -32,8 +32,18 @@ export const fonts = {
   displayExtraBold: "Alexandria_800ExtraBold",
 } as const;
 
+/**
+ * Ready to render — either the real fonts loaded, or loading them FAILED and
+ * there's nothing left to wait for. app/_layout.tsx gates the entire app's
+ * first paint on this (`if (!fontsLoaded) return null`), and `useFonts`
+ * returns `[loaded, error]`: reading only `loaded` meant a load failure —
+ * no network, a corrupted cache, anything `expo-font` itself throws on —
+ * left `loaded` false forever, with no error path and no fallback, so the
+ * splash screen never hid. Text in a system font for the rare case that
+ * happens is a far better outcome than an app that never starts.
+ */
 export function useAppFonts(): boolean {
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     Cairo_400Regular,
     Cairo_500Medium,
     Cairo_600SemiBold,
@@ -42,5 +52,5 @@ export function useAppFonts(): boolean {
     Alexandria_700Bold,
     Alexandria_800ExtraBold,
   });
-  return loaded;
+  return loaded || Boolean(error);
 }

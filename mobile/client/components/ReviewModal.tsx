@@ -53,7 +53,14 @@ export default function ReviewModal({
 
           <View style={styles.stars}>
             {[1, 2, 3, 4, 5].map((n) => (
-              <Pressable key={n} onPress={() => setRating(n)} hitSlop={6}>
+              <Pressable
+                key={n}
+                onPress={() => setRating(n)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={`قيّم ${n} نجوم`}
+                accessibilityState={{ selected: n <= rating }}
+              >
                 <Text style={[styles.star, n <= rating && styles.starFilled]}>★</Text>
               </Pressable>
             ))}

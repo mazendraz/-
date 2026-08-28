@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useProvider } from "../context";
 import type { Lead } from "../../../lib/requests";
 import { useLocale } from "../../../context/LocaleContext";
 import { useToast } from "../../../context/ToastContext";
 import { t } from "../../../lib/i18n";
-import { submitLeadCompletion } from "../../../lib/requests";
+import { fetchProviderLead, submitLeadCompletion } from "../../../lib/requests";
 import { ApiError } from "../../../lib/api";
 import { formatEgp } from "../../../lib/pricing";
 import StepIndicator from "../../../components/StepIndicator";
 import EmptyState from "../../../components/EmptyState";
+import { Loading } from "../../admin/components/Loading";
 import OrderSummary from "./OrderSummary";
 import FinalAmountInput from "./FinalAmountInput";
 import AdditionalWorkSelector from "./AdditionalWorkSelector";
@@ -33,14 +34,53 @@ export default function CompleteServicePage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Prefer the lead handed over via navigate() state (set when this route is
-  // opened from an already-loaded row, e.g. LeadModal — see LeadsPage.tsx /
-  // OverviewPage.tsx). Falls back to the outlet's capped local cache for a
-  // direct URL open/refresh; `leads` is explicitly "fine for previews, NOT for
-  // totals" (see ProviderOutletContext), so a lead outside that ~100-row cap
-  // would otherwise show as "not found" even though it's real.
+  // Whatever this page can show immediately: the lead handed over via navigate()
+  // state (set when the route is opened from an already-loaded row — see
+  // LeadsPage.tsx / OverviewPage.tsx), else the outlet's local cache.
+  //
+  // Both are opportunistic. State is gone the moment the page is reloaded or the
+  // URL is opened directly, and `leads` is explicitly "fine for previews, NOT for
+  // totals" (see ProviderOutletContext) — one capped ~100-row page, fetched when
+  // the dashboard loaded and not refilled on an in-app navigation. A lead the
+  // provider accepted off the waiting list minutes ago is in NEITHER: it was
+  // created after that page was fetched. Treating them as the only sources is
+  // what made this page report "not found" for a lead that plainly exists,
+  // right after the one action most likely to lead here.
   const stateLead = (location.state as { lead?: Lead } | null)?.lead;
-  const lead = (stateLead?.id === id ? stateLead : undefined) ?? leads.find((l) => l.id === id);
+  const cached = (stateLead?.id === id ? stateLead : undefined) ?? leads.find((l) => l.id === id);
+
+  const [fetched, setFetched] = useState<Lead | null>(null);
+  // Only ever "the request for this lead came back empty-handed" — never the
+  // reason a lead is merely absent from the caches above, which is what the old
+  // not-found screen actually reported.
+  const [missing, setMissing] = useState(false);
+
+  // Always ask, even when a cached copy is already on screen — never "ask only
+  // if the cache came up empty".
+  //
+  // `cached` is not stable for the life of this page: `leads` is one shared
+  // localStorage list that background hydration rewrites wholesale (see
+  // hydrateLeadsFromApi), so a lead present on the first render can be gone two
+  // renders later. Gating the request on it meant the one render that mattered
+  // decided, forever, that no request was needed — and when the cache was then
+  // replaced the page had nothing left to show and sat on the spinner until it
+  // was reloaded by hand.
+  //
+  // Asking unconditionally also keeps this page honest about the number it is
+  // built around: the amount below is pre-filled from the lead's own estimate,
+  // and a cached lead can be arbitrarily old.
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    fetchProviderLead(id)
+      .then((l) => { if (alive) setFetched(l); })
+      .catch(() => { if (alive) setMissing(true); });
+    return () => { alive = false; };
+  }, [id]);
+
+  // The server's copy wins once it lands; the cached one renders in the
+  // meantime so opening this page from a dashboard row stays instant.
+  const lead = fetched ?? cached;
 
   // The lead's own catalog total, when the order was booked with real priced
   // items (not "quoted after inspection", where no single number is known
@@ -50,6 +90,17 @@ export default function CompleteServicePage() {
 
   const [step, setStep] = useState<Step>(1);
   const [providerAmount, setProviderAmount] = useState<string>(() => (knownAmount != null ? String(knownAmount) : ""));
+  // The initialiser above only fires on the first render, which is enough when
+  // the lead arrived with the navigation and too early when it arrives from the
+  // fetch — that page would open with an empty amount and lose the pre-fill
+  // entirely. Seed it once the lead lands, and only while the field is still
+  // untouched, so this can never overwrite a number the provider typed.
+  const seededAmount = useRef(knownAmount != null);
+  useEffect(() => {
+    if (seededAmount.current || knownAmount == null) return;
+    seededAmount.current = true;
+    setProviderAmount((current) => (current === "" ? String(knownAmount) : current));
+  }, [knownAmount]);
   const [hasExtra, setHasExtra] = useState<boolean | null>(null);
   const [extraDescription, setExtraDescription] = useState("");
   const [extraAmount, setExtraAmount] = useState("");
@@ -60,6 +111,9 @@ export default function CompleteServicePage() {
   const [sending, setSending] = useState(false);
 
   if (!lead) {
+    // Still asking. Saying "not found" here is what made a lead that exists look
+    // deleted; the answer simply had not arrived yet.
+    if (!missing) return <Loading msg={t(locale, "prov_wl_loading")} />;
     return (
       <EmptyState
         icon="search_off"

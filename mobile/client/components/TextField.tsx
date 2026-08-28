@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { colors, type } from "@alassema/core";
+import Icon from "./Icon";
 
 /**
  * A labeled text input. `secure` swaps in a show/hide toggle — the mobile
@@ -64,9 +65,14 @@ export default function TextField({
             onPress={() => setVisible((v) => !v)}
             accessibilityRole="button"
             accessibilityLabel={visible ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+            hitSlop={12}
             style={styles.toggle}
           >
-            <Text style={styles.toggleText}>{visible ? "إخفاء" : "إظهار"}</Text>
+            {/* Eye / Eye-off — never mirrored for RTL (no scaleX transform
+                here, unlike the directional chevrons elsewhere in the app):
+                the glyph itself has no inherent reading direction, so
+                flipping it would just be wrong, not "RTL-correct". */}
+            <Icon name={visible ? "visibility_off" : "visibility"} size={20} color={colors.outline} />
           </Pressable>
         )}
       </View>
@@ -105,10 +111,12 @@ const styles = StyleSheet.create({
   // the website's PasswordField); React Native has no per-subtree direction
   // override, so the fixed side is spelled out explicitly instead, on both the
   // padding and the toggle's position, so they can't point opposite ways again.
-  inputWithToggle: { paddingRight: 64 },
+  inputWithToggle: { paddingRight: 48 },
   ltrText: { writingDirection: "ltr" },
-  toggle: { position: "absolute", right: 12, paddingVertical: 4, paddingHorizontal: 4 },
-  toggleText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.primary },
+  // hitSlop (see the Pressable above) covers the 44×44px touch-target floor
+  // without needing to inflate the visible box — a bigger *visible* icon
+  // button here would read as its own field, not a tuck-in toggle.
+  toggle: { position: "absolute", right: 12, padding: 4 },
   hint: {
     fontSize: type.caption.fontSize,
     fontFamily: "Cairo_400Regular",

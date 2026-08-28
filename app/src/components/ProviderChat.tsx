@@ -11,6 +11,7 @@ import ChatThread from "./ChatThread";
 import ConversationListItem from "./ConversationListItem";
 import Pagination from "./Pagination";
 import MobileChatOverlay from "./MobileChatOverlay";
+import { useAtLeast } from "../hooks/useBreakpoint";
 import Icon from "./Icon";
 
 /**
@@ -46,6 +47,14 @@ export default function ProviderChat() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeId = searchParams.get("c");
   const active = items.find((c) => c.id === activeId) ?? null;
+
+  // Which of the two panes below actually gets the ChatThread. Both were
+  // rendered unconditionally and hidden from each other with CSS, which hides a
+  // component without unmounting it — so every open conversation ran TWO initial
+  // fetches, TWO poll loops and TWO read-marking calls, on every device. The
+  // breakpoint here must stay in step with the `md:` classes on the panes; see
+  // hooks/useBreakpoint.ts.
+  const isDesktop = useAtLeast("md");
   const selectedByUsRef = useRef(false);
   function selectConversation(c: Conversation) {
     selectedByUsRef.current = true;
@@ -156,7 +165,10 @@ export default function ProviderChat() {
             over the whole screen instead, fixed to the viewport so it can't
             scroll away with the rest of the dashboard. */}
         <div className="hidden md:block bg-surface-container-lowest rounded-2xl shadow-bloom p-4">
-          {active ? (
+          {/* The wrapper keeps its CSS visibility (it is a grid cell and the
+              layout depends on it); only the THREAD is gated on `isDesktop`, so
+              exactly one instance is ever mounted. */}
+          {active && isDesktop ? (
             <ChatThread
               key={active.id}
               viewer="provider"
@@ -177,7 +189,7 @@ export default function ProviderChat() {
       {/* Below md: — WhatsApp-style full-screen takeover, pinned to the
           viewport (not the page) so the input bar can never scroll out of
           view and rides above the on-screen keyboard. */}
-      {active && (
+      {active && !isDesktop && (
         <MobileChatOverlay
           hiddenFrom="md"
           header={
