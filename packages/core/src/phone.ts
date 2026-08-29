@@ -10,7 +10,7 @@
  */
 import {
   AsYouType, getCountryCallingCode, parsePhoneNumberFromString, isValidPhoneNumber, type CountryCode,
-} from "libphonenumber-js/min";
+} from "libphonenumber-js";
 
 export type { CountryCode };
 

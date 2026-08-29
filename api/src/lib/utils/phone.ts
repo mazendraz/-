@@ -1,4 +1,4 @@
-import { isValidPhoneNumber } from "libphonenumber-js/min";
+import { isValidPhoneNumber } from "libphonenumber-js";
 
 // Canonicalize an Egyptian mobile to its last 10 significant digits, so the
 // local (01…), country-code (201…) and E.164 (+201…) forms all compare equal.
