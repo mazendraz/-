@@ -13,6 +13,22 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WEB_ROOT="${WEB_ROOT:-/var/www/alassema/dist}"
 export VITE_API_URL="${VITE_API_URL:-/api}"
 
+# ── Shared workspace: packages/core ─────────────────────────────────────────
+# api/ and app/ both consume @alassema/core through a tsconfig path alias
+# (@alassema/core → ../packages/core/src), so `next build` (api) and `tsc -b`
+# (app) type-check packages/core/src/*.ts IN PLACE. Those files import runtime
+# deps (e.g. libphonenumber-js/min) that only resolve if this workspace's
+# node_modules exist. packages/core is an npm workspace of the repo root;
+# install ONLY it — the web deploy has no use for mobile/*. Without this the
+# build fails with `TS2307: Cannot find module 'libphonenumber-js/min'`.
+# api/ and app/ node_modules are untouched (they are not workspaces).
+# Guarded so a rollback to a commit that predates this (no root lockfile /
+# no packages/core) is a clean no-op rather than a hard failure.
+if [[ -f "$ROOT/package-lock.json" && -d "$ROOT/packages/core" ]]; then
+  echo "→ Installing shared workspace deps (packages/core)…"
+  ( cd "$ROOT" && npm ci --workspace packages/core )
+fi
+
 echo "→ Building backend (api/)…"
 cd "$ROOT/api"
 npm ci
@@ -89,6 +105,16 @@ mkdir -p "$WEB_ROOT"
 # index.html and the files served from app/public (favicon, manifest, sw.js,
 # locale-init.js, /img/*, /.well-known/*) the moment a build did not touch them.
 cp -r dist/* "$WEB_ROOT/"
+
+# `dist/*` above does NOT match dot-directories — most importantly
+# dist/.well-known/ (apple-app-site-association, assetlinks.json), which the
+# comment above explicitly lists among the files that must be published.
+# Without this, both association files fall through to the SPA and Universal
+# Links / App Links silently fail to verify. Guarded: older builds may not
+# emit a .well-known/ directory.
+if [[ -d dist/.well-known ]]; then
+  cp -r dist/.well-known "$WEB_ROOT/"
+fi
 
 if [[ -d "$WEB_ROOT/assets" ]]; then
   PRUNED="$(find "$WEB_ROOT/assets" -type f -mtime +14 -print -delete | wc -l)"
