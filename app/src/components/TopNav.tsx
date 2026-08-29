@@ -225,14 +225,18 @@ export default function TopNav({ onOpenSearch }: Props) {
           <Icon name="menu" className="text-headline" />
         </button>
 
-        {/* Logo — absolutely centered so it stays centered regardless of side widths */}
+        {/* Logo — absolutely centered so it stays centered regardless of side
+            widths. Being out of flow, it can be overlapped rather than pushed:
+            the icon row on the end side has to stay narrow (hence the icon-only
+            AccountButton below), and pointer-events-none on the wrapper keeps a
+            near-miss from stealing taps meant for those icons. */}
         <Link
           to="/"
-          className="absolute left-1/2 -translate-x-1/2 flex items-center"
+          className="absolute left-1/2 -translate-x-1/2 flex items-center pointer-events-none"
           aria-label={t(locale, "nav_home_aria")}
         >
           <Logo
-            className="object-contain"
+            className="object-contain pointer-events-auto"
             style={{ height: "44px", width: "auto" }}
             width={66}
             height={44}
@@ -240,7 +244,7 @@ export default function TopNav({ onOpenSearch }: Props) {
         </Link>
 
         {/* Right: search + saved */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             onClick={onOpenSearch}
             className={`flex items-center justify-center w-10 h-10 rounded-full transition-colors duration-base touch-press
@@ -265,7 +269,7 @@ export default function TopNav({ onOpenSearch }: Props) {
               )}
             </Link>
           )}
-          <AccountButton onDark={!solidBg} />
+          <AccountButton onDark={!solidBg} compact />
         </div>
       </nav>
 

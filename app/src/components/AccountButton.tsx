@@ -12,8 +12,13 @@ import { customerLogout, useCustomerAuth } from "../lib/customerAuth";
  * Signed out it is a plain "Sign in" link; signed in it is the avatar with a menu.
  * Both states matter: a sign-in page nothing links to is a page nobody finds, and
  * a session with no visible way to end it reads as the site having trapped you.
+ *
+ * `compact` drops the signed-out label and leaves the icon alone. The mobile bar
+ * centres its logo absolutely, so the icon row on the far side is free to grow
+ * straight over it — and the labelled pill was wide enough to do exactly that,
+ * beside search and saved on a 360px screen.
  */
-export default function AccountButton({ onDark }: { onDark: boolean }) {
+export default function AccountButton({ onDark, compact = false }: { onDark: boolean; compact?: boolean }) {
   const { locale } = useLocale();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
@@ -46,22 +51,30 @@ export default function AccountButton({ onDark }: { onDark: boolean }) {
 
   // Reserve the slot while the session is still being checked, so the bar's
   // controls don't jump sideways the moment it resolves.
-  if (loading) return <div className="w-11 h-11" aria-hidden="true" />;
+  if (loading) return <div className={compact ? "w-10 h-10" : "w-11 h-11"} aria-hidden="true" />;
 
   if (!customer) {
     // Come back to where they were, not to the home page — signing in is almost
     // always something you do on the way to something else.
     const next = encodeURIComponent(`${pathname}${search}`);
+    const label = t(locale, "account_sign_in");
     return (
       <Link
         to={`/signin?next=${next}`}
-        className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-label font-semibold transition-colors duration-base
+        // The compact form is icon-only, so it carries the label for assistive
+        // tech instead of showing it.
+        aria-label={compact ? label : undefined}
+        title={compact ? label : undefined}
+        className={`flex items-center justify-center transition-colors duration-base
+          ${compact
+            ? "w-10 h-10 rounded-full touch-press"
+            : "gap-1.5 px-3 py-2 rounded-full text-label font-semibold"}
           ${onDark
             ? "text-white/80 hover:text-white hover:bg-white/12"
             : "text-on-surface-variant hover:text-primary hover:bg-primary/8"}`}
       >
-        <Icon name="account_circle" className="text-subhead" />
-        {t(locale, "account_sign_in")}
+        <Icon name="account_circle" className={compact ? "text-title" : "text-subhead"} />
+        {!compact && label}
       </Link>
     );
   }
