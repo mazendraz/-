@@ -28,6 +28,8 @@ export default function MoreScreen() {
         { label: "قائمة الانتظار", href: "/waitlist" },
         { label: "التوفر وفترات الانشغال", href: "/availability" },
         { label: "معرض الأعمال", href: "/projects" },
+        { label: "قائمة الأسعار", href: "/offerings" },
+        { label: "خصومات الباقات", href: "/bundle-rules" },
         { label: "بيانات الشركة", href: "/profile" },
       ]
     : [];

@@ -275,8 +275,13 @@ export function apiPut<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) });
 }
 
-export function apiDelete(path: string, body?: unknown): Promise<void> {
-  return apiFetch<void>(path, {
+/** Generic, defaulting to `void`: most DELETE routes return 204 with
+ *  nothing to read, but some (e.g. api's provider/offerings/[id], whose
+ *  DELETE tells the caller whether the row was removed outright or a
+ *  change request was filed instead) return a real body — pass the
+ *  expected shape explicitly at the call site when that's the case. */
+export function apiDelete<T = void>(path: string, body?: unknown): Promise<T> {
+  return apiFetch<T>(path, {
     method: "DELETE",
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
