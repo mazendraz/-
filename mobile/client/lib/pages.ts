@@ -1,4 +1,4 @@
-import type { ApiLegalPages, ApiMaintenanceStatus, ApiPlatformSettings } from "@alassema/core";
+import type { ApiLegalPages, ApiPlatformSettings } from "@alassema/core";
 import { apiGet } from "@alassema/mobile-shared";
 
 /** Terms + Privacy content — admin-managed HTML/text, rendered as-is. */
@@ -11,9 +11,6 @@ export function fetchPlatformSettings(): Promise<ApiPlatformSettings> {
   return apiGet<ApiPlatformSettings>("/settings");
 }
 
-/** Public: current maintenance state. `no-store` on the server (see
- *  useMaintenance's comment in lib/settings.ts for why this is a separate
- *  endpoint from /settings, not folded into ApiPlatformSettings). */
-export function fetchMaintenance(): Promise<ApiMaintenanceStatus> {
-  return apiGet<ApiMaintenanceStatus>("/status");
-}
+// Maintenance state moved to @alassema/mobile-shared's maintenance.ts (phase
+// 2 of the mobile plan) — /status is public and role-agnostic, and the
+// Business App needs the identical fetch + gating logic this app already had.

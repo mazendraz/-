@@ -7,10 +7,9 @@
  * screen triggers the first fetch, every other <Logo> on screen updates the
  * moment it resolves, same as the website's event-driven useSettings().
  */
-import { useEffect, useRef, useState } from "react";
-import { AppState } from "react-native";
-import type { ApiMaintenanceStatus, ApiPlatformSettings } from "@alassema/core";
-import { fetchMaintenance, fetchPlatformSettings } from "./pages";
+import { useEffect, useState } from "react";
+import type { ApiPlatformSettings } from "@alassema/core";
+import { fetchPlatformSettings } from "./pages";
 
 const DEFAULTS: ApiPlatformSettings = {
   site_name: "العاصمة",
@@ -114,81 +113,4 @@ export function useSettings(): ApiPlatformSettings {
 export function parseLines(raw: string, fallback: readonly string[]): string[] {
   const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
   return lines.length > 0 ? lines : [...fallback];
-}
-
-// ── Maintenance (phase 10) ───────────────────────────────────────────────────
-// Deliberately its own /status call, not folded into ApiPlatformSettings —
-// same reasoning as the website's useMaintenance: /settings is served with a
-// max-age=30/s-maxage=60 cache, so routing maintenance through it could delay
-// taking the app's traffic down by up to five minutes. /status is `no-store`.
-
-export const MAINTENANCE_OFF: ApiMaintenanceStatus = {
-  enabled: false,
-  title_en: "",
-  title_ar: "",
-  message_en: "",
-  message_ar: "",
-  eta: null,
-};
-
-/**
- * Maintenance state for the app shell (see app/_layout.tsx, which renders
- * MaintenanceScreen in place of the whole Stack while `enabled`).
- *
- * `loading` matters the same way it does on the website: the real app must
- * not flash for a moment before the maintenance screen lands, so the caller
- * holds the splash screen until this resolves.
- *
- * Re-checks when the app returns to the foreground (the mobile equivalent of
- * the website's `visibilitychange` re-check) — otherwise a customer already
- * inside the app when maintenance is flipped on wouldn't see it until they
- * force-quit and reopen.
- */
-export function useMaintenance(): { status: ApiMaintenanceStatus; loading: boolean; refetch: () => void } {
-  const [status, setStatus] = useState<ApiMaintenanceStatus>(MAINTENANCE_OFF);
-  const [loading, setLoading] = useState(true);
-  const alive = useRef(true);
-  const loadRef = useRef<() => void>(() => {});
-
-  useEffect(() => {
-    alive.current = true;
-    // Ordering guard — same reasoning as the website's useMaintenance. `load`
-    // runs on mount, on every AppState "active", and on every refetch() from the
-    // maintenance screen's retry button, with nothing serialising them. Without
-    // a generation the last RESPONSE wins rather than the last REQUEST, so a
-    // slow earlier read landing late can reinstate a status that is no longer
-    // true — and this value decides whether the whole app is replaced by the
-    // maintenance screen.
-    let generation = 0;
-    const load = () => {
-      const mine = ++generation;
-      const current = () => alive.current && mine === generation;
-      fetchMaintenance()
-        .then((s) => {
-          if (current()) setStatus(s);
-        })
-        // A failed /status read must not take the app down — same as the
-        // website, backend reachability is a separate concern (lib/api.ts's
-        // reachability signal).
-        .catch(() => {
-          if (current()) setStatus(MAINTENANCE_OFF);
-        })
-        .finally(() => {
-          if (current()) setLoading(false);
-        });
-    };
-    loadRef.current = load;
-    load();
-
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") load();
-    });
-
-    return () => {
-      alive.current = false;
-      sub.remove();
-    };
-  }, []);
-
-  return { status, loading, refetch: () => loadRef.current() };
 }

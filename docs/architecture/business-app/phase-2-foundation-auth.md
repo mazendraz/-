@@ -15,7 +15,7 @@ the tab bar for their role.
 ## Scope
 
 **In:** project scaffold, shared-package wiring, RTL, fonts, session store,
-permissions helper, sign-in screen, root layout with all four gates, role-branched
+permissions helper, sign-in screen, root layout with all three gates, role-branched
 route groups, sign-out.
 
 **Out:** every feature screen. This phase ends with two empty tab groups.
@@ -107,13 +107,22 @@ Presentation only. `isAdmin`, `isProvider`, `canCompleteLeads`, `canModerate`,
 | Screen | Purpose | APIs |
 |--------|---------|------|
 | `sign-in` | Email + password. The only entry point — no social sign-in, no self-registration. | `POST /auth/login` |
-| `_layout` (root) | RTL → fonts → session bootstrap → **update gate → maintenance gate → offline gate** → `ErrorBoundary`. | `GET /app-version`, `GET /settings`, `GET /ready`, `GET /auth/me` |
+| `_layout` (root) | RTL → fonts → session bootstrap → **update gate → offline gate** → `ErrorBoundary`. | `GET /app-version`, `GET /ready`, `GET /auth/me` |
 | `(provider)/_layout` | 4-tab bar: Overview · Leads · Messages · More | — |
 | `(admin)/_layout` | 5-tab bar: Overview · Leads · Approvals · Messages · More | — |
 
-Gate order matters and matches the client app: a build below `minimum` must be
-blocked **even if** the site is otherwise up; maintenance beats offline because it
-is deliberate and has real copy.
+**Three gates, not four — no blocking maintenance screen.** Confirmed against
+`api/src/lib/middleware/maintenance.ts`'s own comment: *"Anything under admin/
+or provider/ — those dashboards stay usable during maintenance (that is the
+point of taking the public site down)."* `withMaintenance` is applied only to
+public write endpoints; every `/provider/*` and `/admin/*` route this app
+calls is unaffected. Blocking staff out during maintenance would be a real
+lockout bug — the admin who needs to turn maintenance back off (phase 11)
+would be the one person the gate stops. A build below `minimum` still blocks
+**even if** the site is otherwise up — that lever is about a broken client
+build, not the server's maintenance flag, so it stays. Maintenance state
+becomes an informational banner in phase 11 instead (`MaintenanceBanner`),
+not a full-screen replace.
 
 Export `ErrorBoundary` from the root layout — expo-router's own crash net. Without
 it an unhandled render error is a permanent blank screen.
@@ -156,7 +165,7 @@ sign-out:  DELETE /push/device  →  POST /auth/logout  →  clearTokens()  → 
 | 2.6 | Write `lib/staffAuth.ts` with the snapshot store, `signIn`, `signOut`, `bootstrapSession`, `useStaffAuth`. |
 | 2.7 | Write `lib/permissions.ts`. |
 | 2.8 | Build the sign-in screen: field validation, 401 copy, 429 retry copy, in-flight submit lock. |
-| 2.9 | Build the root layout with all four gates, **every gate fetch timeout-bounded**. |
+| 2.9 | Build the root layout with all three gates, **every gate fetch timeout-bounded**. |
 | 2.10 | Build both tab-group layouts; redirect a stale cross-role deep link to the correct overview. |
 | 2.11 | Wire sign-out in the documented order. |
 | 2.12 | Add a `typecheck` script; confirm `tsc --noEmit` is clean. |

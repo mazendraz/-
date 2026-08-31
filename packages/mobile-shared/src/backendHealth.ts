@@ -1,6 +1,13 @@
+/**
+ * Shared by both mobile apps — no app-specific coupling. Extracted alongside
+ * the phase-1 modules but a beat later, discovered while wiring the Business
+ * App's own root layout in phase 2 (docs/architecture/business-app/
+ * phase-2-foundation-auth.md), which needs the identical offline-detection
+ * behavior mobile/client already had.
+ */
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { isApiConfigured, onReachabilityChange, probeReady } from "@alassema/mobile-shared";
+import { isApiConfigured, onReachabilityChange, probeReady } from "./api";
 
 // How long between probes once we already suspect the backend is down.
 const PROBE_INTERVAL_MS = 10_000;

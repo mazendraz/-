@@ -15,11 +15,11 @@ import {
   fetchAppVersion,
   isUpdateNudgeDismissed,
   isVersionBelow,
+  useMaintenance,
+  useBackendHealth,
 } from "@alassema/mobile-shared";
 import { bootstrapSession, useCustomerAuth } from "../lib/customerAuth";
 import { fetchAccountLeads } from "../lib/customerLeads";
-import { useMaintenance } from "../lib/settings";
-import { useBackendHealth } from "../lib/useBackendHealth";
 import PriceVerificationGate from "../components/PriceVerificationGate";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import OfflineScreen from "../components/OfflineScreen";
@@ -63,7 +63,7 @@ export default function RootLayout() {
   // let through, only customers.
   const { status: maintenance, loading: maintenanceLoading, refetch: recheckMaintenance } = useMaintenance();
 
-  // ── Backend reachability (mirrors OfflineScreen.tsx / lib/useBackendHealth.ts) ──
+  // ── Backend reachability (mirrors OfflineScreen.tsx / @alassema/mobile-shared's useBackendHealth) ──
   // Checked right alongside maintenance — same priority as the website's
   // RootLayout: maintenance wins over offline since it's deliberate and has
   // real copy/an ETA, "offline" is just "we can't reach the server at all".
