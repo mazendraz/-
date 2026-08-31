@@ -1,5 +1,18 @@
 # Al Assema — Mobile Apps Execution Plan (Provider/Admin + Client)
 
+> ## ⚠️ SUPERSEDED — kept for history only. Do not build from this file.
+>
+> Written before the client app shipped. Several of its locked-in decisions are
+> now contradicted by the code: the client app is at `mobile/client/` (not
+> `mobile-client/`), customers **do** have accounts, push uses one `PushDevice`
+> table (not `DeviceToken` + `LeadDeviceToken`), realtime is **SSE** (Supabase
+> Realtime was explicitly rejected — see `api/src/lib/services/realtime.service.ts`),
+> and `@alassema/core` is a live shared workspace package.
+>
+> **The current plan for the provider/admin app is
+> [`business-app/README.md`](business-app/README.md)** — one file per phase,
+> derived from an audit of the code on 2026-08-31.
+
 > Execution-ready build plan for two React Native (Expo) apps that talk to the
 > **existing** `api/` backend and the **existing** Supabase Postgres database —
 > no separate backend, no sync job, no second database. Same data source as
