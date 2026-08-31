@@ -79,7 +79,15 @@ export type AuthAuditAction =
   // Account deletion. Written BEFORE the row is removed, because afterwards
   // there is nothing left to name it by — and this is the event most likely to
   // be asked about months later.
-  | "auth.customer.deleted";
+  | "auth.customer.deleted"
+  // Staff (Business App) counterpart of auth.customer.session.reuse — a
+  // retired staff refresh token presented after its grace window. Kept as
+  // its own action, distinct from the customer one, for the same reason the
+  // rest of this staff/customer split exists: a run of these on an admin or
+  // provider account is a compromised device on a population that can do
+  // real damage (delete leads, message as a company), not the same severity
+  // as a customer's.
+  | "auth.staff.session.reuse";
 
 /**
  * Record an AUTHENTICATION event.

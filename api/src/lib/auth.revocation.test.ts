@@ -24,11 +24,19 @@ interface SessionRow {
   expiresAt: Date;
 }
 
+interface StaffSessionRow {
+  id: string;
+  userId: string;
+  revokedAt: Date | null;
+  expiresAt: Date;
+}
+
 const HOUR = 3_600_000;
 
 let staffRow: Record<string, unknown>;
 let customerRow: Record<string, unknown>;
 let sessions: Record<string, SessionRow>;
+let staffSessions: Record<string, StaffSessionRow>;
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -36,6 +44,9 @@ vi.mock("@/lib/prisma", () => ({
     customerUser: { findUnique: async () => customerRow },
     customerSession: {
       findUnique: async ({ where }: { where: { id: string } }) => sessions[where.id] ?? null,
+    },
+    staffSession: {
+      findUnique: async ({ where }: { where: { id: string } }) => staffSessions[where.id] ?? null,
     },
   },
 }));
@@ -70,6 +81,14 @@ beforeEach(() => {
     "sess-1": {
       id: "sess-1",
       customerId: "cust-1",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 30 * 24 * HOUR),
+    },
+  };
+  staffSessions = {
+    "staff-sess-1": {
+      id: "staff-sess-1",
+      userId: "staff-1",
       revokedAt: null,
       expiresAt: new Date(Date.now() + 30 * 24 * HOUR),
     },
@@ -163,6 +182,85 @@ describe("account-wide floor — customers", () => {
     customerRow.tokensValidFrom = null;
     const token = await signCustomerToken({ sub: "cust-1" });
     await expect(getCustomerUser(bearer(token))).resolves.toBeTruthy();
+  });
+});
+
+// Staff (Business App) mirror of "per-device revocation via the sid claim"
+// above. Phase 0 of the mobile plan: staff had no equivalent of this at all —
+// only the account-wide isActive/tokensValidFrom floor, which meant "sign out
+// this one lost phone" required deactivating the whole account.
+describe("per-device revocation via the sid claim — staff", () => {
+  it("accepts a token whose session is live", async () => {
+    const token = await signToken({
+      sub: "staff-1",
+      role: "ADMIN",
+      companyId: null,
+      sid: "staff-sess-1",
+    });
+    await expect(getAuthUser(bearer(token))).resolves.toMatchObject({ id: "staff-1" });
+  });
+
+  it("refuses the access token the moment its session is revoked", async () => {
+    const token = await signToken({
+      sub: "staff-1",
+      role: "ADMIN",
+      companyId: null,
+      sid: "staff-sess-1",
+    });
+    await expect(getAuthUser(bearer(token))).resolves.toBeTruthy();
+
+    staffSessions["staff-sess-1"]!.revokedAt = new Date();
+
+    await expect(getAuthUser(bearer(token))).rejects.toThrow(/sign in again/i);
+  });
+
+  it("refuses a token whose session has expired", async () => {
+    staffSessions["staff-sess-1"]!.expiresAt = new Date(Date.now() - HOUR);
+    const token = await signToken({
+      sub: "staff-1",
+      role: "ADMIN",
+      companyId: null,
+      sid: "staff-sess-1",
+    });
+    await expect(getAuthUser(bearer(token))).rejects.toThrow(/sign in again/i);
+  });
+
+  it("refuses a token naming a session that does not exist", async () => {
+    const token = await signToken({
+      sub: "staff-1",
+      role: "ADMIN",
+      companyId: null,
+      sid: "staff-sess-does-not-exist",
+    });
+    await expect(getAuthUser(bearer(token))).rejects.toThrow(/sign in again/i);
+  });
+
+  // A hand-edited token pointing at somebody else's live session must not
+  // borrow it — the subject and the session have to agree.
+  it("refuses a session belonging to a different staff account", async () => {
+    staffSessions["staff-sess-other"] = {
+      id: "staff-sess-other",
+      userId: "staff-2",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + HOUR),
+    };
+    const token = await signToken({
+      sub: "staff-1",
+      role: "ADMIN",
+      companyId: null,
+      sid: "staff-sess-other",
+    });
+    await expect(getAuthUser(bearer(token))).rejects.toThrow(/sign in again/i);
+  });
+
+  // The web dashboard has no session row — its credential is the httpOnly
+  // cookie and its revocation story is the account floor below. A token with
+  // no `sid` at all (every token minted by the website, and every token
+  // minted before this feature existed) must keep working unchanged, or this
+  // change signs every admin and provider out of the web dashboard.
+  it("still accepts a token with no sid at all — the website's shape, unchanged", async () => {
+    const token = await signToken({ sub: "staff-1", role: "ADMIN", companyId: null });
+    await expect(getAuthUser(bearer(token))).resolves.toMatchObject({ id: "staff-1" });
   });
 });
 

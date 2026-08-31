@@ -4,10 +4,11 @@ import { ok } from "@/lib/utils/response";
 import { RateLimitError, UnauthorizedError } from "@/lib/utils/errors";
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
-import { loginSchema } from "@/lib/validation/auth";
+import { loginSchema, deviceSchema } from "@/lib/validation/auth";
 import { signToken, verifyPasswordSafe, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import * as audit from "@/lib/services/audit.service";
+import * as staffSessions from "@/lib/services/staffSession.service";
 import type { ApiAuthResponse } from "@/lib/apiTypes";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,12 @@ export const POST = withErrors(async (request: NextRequest) => {
 
   // Bounded read (a login body is tiny): reject oversized payloads before parsing,
   // consistent with the other public POST endpoints.
-  const { email, password } = loginSchema.parse(await readJsonObject(request, 4096));
+  const raw = await readJsonObject(request, 4096);
+  const { email, password } = loginSchema.parse(raw);
+  // Present only from the Business App mobile client — see customerSignIn.ts's
+  // identical pattern. Its presence is what asks for a long-lived refresh
+  // token instead of just the (still-issued) httpOnly cookie.
+  const device = raw.device ? deviceSchema.parse(raw.device) : undefined;
 
   const user = await prisma.user.findUnique({ where: { email } });
   // Run a bcrypt compare even when there's no active user (verifyPasswordSafe uses
@@ -92,14 +98,30 @@ export const POST = withErrors(async (request: NextRequest) => {
     meta: { role: user.role },
   });
 
+  // A device session — and therefore a refresh token — is opened ONLY when the
+  // caller sent `device`. Minted BEFORE the token below, when there is one, so
+  // the token can carry its id (`sid`) — see customerSignIn.ts's identical
+  // ordering note for why: a token signed before the session exists has
+  // nothing to bind to, and "revoke this device" would then only reach the
+  // refresh token, not the access token it already handed out.
+  let sessionId: string | undefined;
+  let refreshToken: string | undefined;
+  if (device) {
+    const issued = await staffSessions.issue(user.id, device);
+    sessionId = issued.sessionId;
+    refreshToken = issued.refreshToken;
+  }
+
   const token = await signToken({
     sub: user.id,
     role: user.role,
     companyId: user.companyId,
+    sid: sessionId,
   });
 
   const body: ApiAuthResponse = {
     token,
+    ...(refreshToken ? { refreshToken } : {}),
     user: {
       id: user.id,
       name: user.name,
@@ -112,7 +134,9 @@ export const POST = withErrors(async (request: NextRequest) => {
     },
   };
   // Deliver the token as an httpOnly cookie (primary, same-origin) AND in the body
-  // (transition — the frontend will stop reading it once fully on cookies).
+  // (transition — the frontend will stop reading it once fully on cookies). The
+  // cookie is set regardless: a mobile client has no cookie jar and ignores it,
+  // while the website depends on it entirely.
   const res = ok(body);
   res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions());
   return res;

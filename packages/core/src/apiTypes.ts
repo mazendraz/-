@@ -477,6 +477,16 @@ export interface ApiLoginPayload {
 /** POST /auth/login — response (token stored in localStorage as al-assema-token) */
 export interface ApiAuthResponse {
   token: string;
+  /**
+   * Long-lived refresh token — present ONLY when the client sent `device` at
+   * sign-in, i.e. the Business App mobile client. Store it in the platform
+   * keystore and exchange it at /auth/refresh when `token` expires.
+   *
+   * Absent for the website on purpose: it has an httpOnly cookie JavaScript
+   * cannot read, and a 30-day credential in localStorage would be a downgrade.
+   * Mirrors ApiCustomerAuthResponse.refreshToken exactly.
+   */
+  refreshToken?: string;
   user: ApiUser;
 }
 

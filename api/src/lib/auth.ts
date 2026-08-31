@@ -177,6 +177,17 @@ export interface TokenClaims {
   sub: string; // user id
   role: UserRole;
   companyId: string | null;
+  /**
+   * The StaffSession this token was minted for, when there is one.
+   *
+   * Present on tokens issued to the Business App mobile client (which sends
+   * `device` and gets a refresh token); absent for the website, which has no
+   * session row — its credential is the httpOnly cookie and its revocation
+   * story is the account floor (`tokensValidFrom`), not a per-device row.
+   * Mirrors CustomerTokenClaims.sid exactly — see that field's comment for
+   * why this is what makes revoking one device mean something.
+   */
+  sid?: string;
   /** Seconds since epoch, from the token's own `iat`. Absent on a token minted
    *  before that claim was read here — treated as "no issue time known". */
   issuedAt?: number;
@@ -202,7 +213,12 @@ export interface CustomerTokenClaims {
 }
 
 export function signToken(claims: TokenClaims): Promise<string> {
-  return new SignJWT({ typ: "staff", role: claims.role, companyId: claims.companyId })
+  return new SignJWT({
+    typ: "staff",
+    role: claims.role,
+    companyId: claims.companyId,
+    ...(claims.sid ? { sid: claims.sid } : {}),
+  })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)
     .setIssuedAt()
@@ -261,6 +277,7 @@ async function verifyToken(token: string): Promise<TokenClaims> {
     sub: String(payload.sub),
     role: payload.role as UserRole,
     companyId: (payload.companyId as string | null) ?? null,
+    sid: typeof payload.sid === "string" ? payload.sid : undefined,
     issuedAt: typeof payload.iat === "number" ? payload.iat : undefined,
   };
 }
@@ -393,6 +410,25 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser> {
   // the holder of a dead token needs to learn.
   if (isBeforeFloor(claims.issuedAt, user.tokensValidFrom)) {
     throw new UnauthorizedError("Account is inactive or no longer exists");
+  }
+
+  // ── Per-device: was THIS session revoked? ──────────────────────────────────
+  // Only for a token that names one — mirrors getCustomerUser's identical
+  // block exactly. A website token has no `sid` and is governed by the floor
+  // above; a Business App mobile token has one, which is what lets "sign out
+  // this device" end a single lost phone without ending every other session
+  // or the web dashboard.
+  if (claims.sid) {
+    const session = await prisma.staffSession.findUnique({
+      where: { id: claims.sid },
+      select: { userId: true, revokedAt: true, expiresAt: true },
+    });
+    const dead =
+      !session ||
+      session.userId !== user.id ||
+      session.revokedAt !== null ||
+      session.expiresAt <= new Date();
+    if (dead) throw new UnauthorizedError("Session expired. Please sign in again.");
   }
 
   return {

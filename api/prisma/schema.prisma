@@ -589,9 +589,58 @@ model User {
   company           Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
   pushSubscriptions PushSubscription[]
   pushDevices       PushDevice[]
+  staffSessions     StaffSession[]
 
   @@index([email])
   @@index([companyId])
+}
+
+// Long-lived device sessions for the staff (Business App) mobile client —
+// the PROVIDER/ADMIN counterpart of CustomerSession above this model. See
+// that model's own comments for the full reasoning on rotation and reuse
+// detection; this mirrors it exactly except for one number.
+//
+// ── Why 30 days, not CustomerSession's 60 ───────────────────────────────────
+// A staff credential carries more authority than a customer's — it can delete
+// leads, message on a company's behalf, and (for an admin) deactivate other
+// accounts. Staff turnover is also a real, ordinary revocation event in a way
+// a customer's isn't. Halving the window costs a signed-in provider nothing
+// (the app refreshes silently in the background) and meaningfully shortens
+// how long a departed employee's device stays trusted if offboarding is late.
+//
+// Nothing here is used by the website — it keeps the plain httpOnly cookie
+// session exactly as before. A `device` field on POST /auth/login (only ever
+// sent by the mobile app) is what opts a login into creating one of these.
+model StaffSession {
+  id     String @id @default(uuid())
+  userId String
+
+  // sha256 of the refresh token — never the token itself. Same reasoning as
+  // CustomerSession.tokenHash: a database read must not yield a working key.
+  tokenHash String @unique
+
+  // Rotation grace window — see CustomerSession.previousTokenHash for why this
+  // exists at all (a dropped mobile response must not sign anyone out).
+  previousTokenHash String?   @unique
+  previousUsableTo  DateTime?
+
+  // Shown on the "your devices" screen. Client-supplied and therefore
+  // untrusted: a label for a human, never something authorization reads.
+  deviceName String?
+  platform   String? // "ios" | "android"
+
+  lastUsedAt DateTime  @default(now())
+  expiresAt  DateTime
+  // Set instead of deleting the row: a revoked session is evidence, and a
+  // presented-after-revocation token is worth being able to see in the log.
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  // Serves the periodic sweep of dead rows.
+  @@index([expiresAt])
 }
 
 // Web Push subscription for a user's browser/device. One row per device (a user
