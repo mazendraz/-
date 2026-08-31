@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { withErrors } from "@/lib/utils/withErrors";
 import { withAuth } from "@/lib/middleware/withAuth";
 import { ADMIN_CHANNEL, channelForCompany } from "@/lib/services/realtime.service";
-import { sseResponse } from "@/lib/utils/sseStream";
+import { sseResponse, type SseChannel } from "@/lib/utils/sseStream";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,9 +18,20 @@ export const runtime = "nodejs";
 // another company's activity.
 export const GET = withErrors(
   withAuth(async (request: NextRequest, _context, user) => {
-    const channels: string[] = [];
-    if (user.companyId) channels.push(channelForCompany(user.companyId));
-    if (user.role === "ADMIN") channels.push(ADMIN_CHANNEL);
+    const channels: SseChannel[] = [];
+    if (user.companyId) channels.push({ channel: channelForCompany(user.companyId) });
+    if (user.role === "ADMIN") {
+      // Every admin subscribes to the SAME channel, so capping by channel
+      // alone would split one shared budget of 8 connections across every
+      // admin account on the platform — the Business App mobile phase found
+      // this live (docs/architecture/business-app/phase-4-realtime-push.md,
+      // B3): a few web dashboards left open already ate most of the budget,
+      // and an admin's phone was refused with "close a tab" — advice that
+      // makes no sense on a phone. capKey scopes the cap to THIS admin
+      // while every admin still receives every event published to the real
+      // `admins` channel — see sseStream.ts's SseChannel for the mechanism.
+      channels.push({ channel: ADMIN_CHANNEL, capKey: `admins:${user.id}` });
+    }
     return sseResponse(request, channels);
   }),
 );

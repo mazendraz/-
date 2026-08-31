@@ -743,18 +743,31 @@ export async function updateStatus(
     include: leadInclude,
   });
 
-  // Live fan-out to the OWNING CUSTOMER, if any — a guest-submitted lead
-  // (optionalCustomerId) has none, and there is no channel to tell. This was
-  // declared on RealtimeEvent (realtime.service.ts) from the start but never
-  // actually published anywhere: the customer app's Requests tab and its
-  // mandatory price-verification gate both listen for exactly this event to
-  // notice a change while the app is already open (see the mobile client's
-  // lib/liveEvents.ts), and without it neither ever fires until the next
-  // cold start. Synchronous and outside runAfterResponse, same reasoning as
-  // the "lead" event on creation just above: this is an in-memory Set write,
-  // not I/O, so there's nothing to gain by deferring it.
+  // Live fan-out. Company + admins ALWAYS (a provider's own second device,
+  // or an admin who changed it, must see the update land on the phone that
+  // didn't make the change — added for the Business App mobile phase; see
+  // docs/architecture/business-app/phase-4-realtime-push.md's B4. The OWNING
+  // CUSTOMER only when there is one — a guest-submitted lead
+  // (optionalCustomerId) has none, and there is no channel to tell. The
+  // customer channel was declared on RealtimeEvent (realtime.service.ts)
+  // from the start but never actually published anywhere: the customer
+  // app's Requests tab and its mandatory price-verification gate both
+  // listen for exactly this event to notice a change while the app is
+  // already open (see the mobile client's lib/liveEvents.ts), and without
+  // it neither ever fires until the next cold start. Synchronous and
+  // outside runAfterResponse, same reasoning as the "lead" event on
+  // creation just above: this is an in-memory Set write, not I/O, so
+  // there's nothing to gain by deferring it.
+  publishAll(
+    [
+      channelForCompany(lead.companyId),
+      ADMIN_CHANNEL,
+      ...(lead.customerId ? [channelForCustomer(lead.customerId)] : []),
+    ],
+    { type: "lead-status", leadId: lead.id },
+  );
+
   if (lead.customerId) {
-    publishAll([channelForCustomer(lead.customerId)], { type: "lead-status", leadId: lead.id });
     // Push, on top of the live event above: SSE only reaches an app that's
     // already open. "Completed" is deliberately excluded — submitCompletion
     // already pushes its own, more specific "confirm the final amount"

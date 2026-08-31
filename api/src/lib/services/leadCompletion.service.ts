@@ -15,7 +15,7 @@ import { serializeLead, type LeadWithCompany } from "@/lib/utils/serialize";
 // restated here, so the completion form and PATCH /leads/:id can never disagree
 // about when a job may be closed out.
 import { COMPLETABLE_FROM, leadInclude, leadSecretMatches } from "@/lib/services/leads.service";
-import { channelForCustomer, publishAll } from "@/lib/services/realtime.service";
+import { ADMIN_CHANNEL, channelForCompany, channelForCustomer, publishAll } from "@/lib/services/realtime.service";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import {
   notifyProviderAmountConfirmed,
@@ -102,15 +102,27 @@ export async function submitCompletion(
     });
   });
 
-  // Live fan-out to the owning customer, if any (a guest-submitted lead has
-  // no account/channel to tell — see leads.service.optionalCustomerId). This
-  // is what makes the mandatory price-verification gate (the website's
-  // RootLayout.tsx, and the mobile client's app/_layout.tsx) catch a
-  // completion that lands WHILE the app is already open, rather than only on
-  // the next cold start. Synchronous and outside runAfterResponse: an
+  // Live fan-out. Company + admins ALWAYS — a provider completing a lead on
+  // one device (or an admin reviewing it) should see it land everywhere else
+  // that's watching, same as leads.service.updateStatus's identical fan-out;
+  // see docs/architecture/business-app/phase-4-realtime-push.md's B4. The
+  // owning customer only when there is one (a guest-submitted lead has no
+  // account/channel to tell — see leads.service.optionalCustomerId). The
+  // customer event is what makes the mandatory price-verification gate (the
+  // website's RootLayout.tsx, and the mobile client's app/_layout.tsx) catch
+  // a completion that lands WHILE the app is already open, rather than only
+  // on the next cold start. Synchronous and outside runAfterResponse: an
   // in-memory Set write, not I/O — nothing to gain by deferring it.
+  publishAll(
+    [
+      channelForCompany(lead.companyId),
+      ADMIN_CHANNEL,
+      ...(lead.customerId ? [channelForCustomer(lead.customerId)] : []),
+    ],
+    { type: "lead-status", leadId: lead.id },
+  );
+
   if (lead.customerId) {
-    publishAll([channelForCustomer(lead.customerId)], { type: "lead-status", leadId: lead.id });
     // The gate above only catches an app that's already open. Most customers
     // aren't staring at the app the moment a provider finishes — without a
     // push, the mandatory verification (and the commission it unlocks, see

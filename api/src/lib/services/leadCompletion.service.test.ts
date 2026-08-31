@@ -152,6 +152,8 @@ vi.mock("@/lib/utils/afterResponse", () => ({ runAfterResponse: (fn: () => unkno
 vi.mock("@/lib/services/realtime.service", () => ({
   publishAll: vi.fn(),
   channelForCustomer: (id: string) => `customer:${id}`,
+  channelForCompany: (id: string) => `company:${id}`,
+  ADMIN_CHANNEL: "admins",
 }));
 vi.mock("@/lib/services/notifications.customer.service", () => ({ notifyCustomer: vi.fn(async () => {}) }));
 vi.mock("@/lib/services/push.service", () => ({
