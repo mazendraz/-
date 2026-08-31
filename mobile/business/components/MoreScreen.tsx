@@ -1,20 +1,36 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
+import { textStart } from "@alassema/mobile-shared";
 import Button from "./Button";
 import { signOut, useStaffAuth } from "../lib/staffAuth";
+import { isProvider } from "../lib/permissions";
+
+interface MenuItem {
+  label: string;
+  href: string;
+}
 
 /**
- * Account + sign-out — the one real, non-placeholder screen phase 2 ships
- * beyond the shell itself. Phases 6 (provider ops) and 11 (admin platform)
- * turn this into a real menu (waitlist/availability/profile for a provider;
- * team/settings/maintenance for an admin) — this is the seed both grow from,
- * not a screen either phase replaces wholesale.
+ * Account + sign-out, plus a role-branched menu. Provider items land in
+ * phase 6; admin items (team/settings/maintenance) land in phase 11 — this
+ * screen is the shared shell both grow into, not a screen either phase
+ * replaces wholesale.
  */
 export default function MoreScreen() {
   const { user } = useStaffAuth();
   const [signingOut, setSigningOut] = useState(false);
+
+  const menu: MenuItem[] = isProvider(user)
+    ? [
+        { label: "قائمة الانتظار", href: "/waitlist" },
+        { label: "التوفر وفترات الانشغال", href: "/availability" },
+        { label: "معرض الأعمال", href: "/projects" },
+        { label: "بيانات الشركة", href: "/profile" },
+      ]
+    : [];
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -40,6 +56,16 @@ export default function MoreScreen() {
         <Text style={styles.role}>{user?.role === "ADMIN" ? "أدمن" : "مقدّم خدمة"}</Text>
       </View>
 
+      {menu.length > 0 ? (
+        <View style={styles.menu}>
+          {menu.map((item) => (
+            <Pressable key={item.href} style={styles.menuItem} onPress={() => router.push(item.href as never)}>
+              <Text style={styles.menuLabel}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       <Button
         label="تسجيل الخروج"
         variant="danger"
@@ -52,7 +78,7 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 24 },
+  container: { flex: 1, padding: 20, gap: 20 },
   card: {
     backgroundColor: colors.surfaceContainer,
     borderRadius: 16,
@@ -62,5 +88,23 @@ const styles = StyleSheet.create({
   name: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface },
   email: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant },
   role: { fontSize: type.label.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.primary, marginTop: 4 },
+  menu: {
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  menuItem: {
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.outlineVariant,
+  },
+  menuLabel: {
+    fontSize: type.body.fontSize,
+    fontFamily: "Cairo_600SemiBold",
+    color: colors.onSurface,
+    textAlign: textStart,
+  },
   signOut: { marginTop: "auto" },
 });

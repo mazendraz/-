@@ -267,6 +267,14 @@ export function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
+/** Full-representation update — several routes use PUT rather than PATCH for
+ *  exactly that reason (e.g. api's admin/companies/[id], admin/categories/
+ *  [id]): the body replaces the whole resource, so a caller must send every
+ *  field, not just the changed ones, or the server blanks what's omitted. */
+export function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: "PUT", body: JSON.stringify(body) });
+}
+
 export function apiDelete(path: string, body?: unknown): Promise<void> {
   return apiFetch<void>(path, {
     method: "DELETE",
@@ -320,4 +328,74 @@ export async function probeReady(): Promise<boolean> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ── File upload ─────────────────────────────────────────────────────────────
+// A longer budget than REQUEST_TIMEOUT_MS's 12s — a photo upload over a real
+// mobile connection routinely takes longer than any JSON request this app
+// makes, and timing one out mid-upload is a worse failure than waiting.
+const UPLOAD_TIMEOUT_MS = 45_000;
+
+/**
+ * Upload a file as `multipart/form-data`. NOT built on apiFetch: that
+ * function's buildHeaders unconditionally sets `Content-Type:
+ * application/json`, which would corrupt a multipart body — the browser/RN
+ * runtime has to set its own `Content-Type: multipart/form-data;
+ * boundary=...` from the FormData object, which only happens when this
+ * function does NOT set Content-Type at all. Otherwise mirrors apiFetch:
+ * same Bearer/X-Api-Key headers, same single-flight 401→refresh→retry, same
+ * ApiError shape on failure.
+ */
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const { baseUrl, refreshPath } = getConfig();
+  if (!baseUrl) throw new ApiError(0, "EXPO_PUBLIC_API_URL is not configured");
+
+  const attempt = async (token: string | null): Promise<Response> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+    try {
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const apiKey = getConfig().apiKey;
+      if (apiKey) headers["X-Api-Key"] = apiKey;
+
+      return await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        body: formData,
+        headers,
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (isAbort(err)) throw new ApiError(0, "Upload timed out");
+      throw new ApiError(0, err instanceof Error ? err.message : "Network request failed");
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  let token = await getAccessToken();
+  let res = await attempt(token);
+
+  if (res.status === 401 && path !== refreshPath) {
+    const fresh = await refreshAccessToken();
+    if (fresh) {
+      token = fresh;
+      res = await attempt(token);
+    }
+  }
+
+  if (!res.ok) {
+    let message = res.statusText;
+    let code: string | undefined;
+    try {
+      const body = await res.json();
+      message = body.message ?? message;
+      code = typeof body.code === "string" ? body.code : undefined;
+    } catch {
+      /* body wasn't JSON — keep statusText */
+    }
+    throw new ApiError(res.status, message, code);
+  }
+
+  return (await res.json()) as T;
 }

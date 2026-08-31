@@ -47,6 +47,13 @@
         {
           "color": "#005578"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "يحتاج التطبيق للوصول لصورك عشان ترفع صور معرض الأعمال.",
+          "cameraPermission": "يحتاج التطبيق للكاميرا عشان تصوّر صور معرض الأعمال."
+        }
       ]
     ],
     "scheme": "alassemabiz",
