@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiLead, ApiLeadStats } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchLeads, fetchProviderStats } from "../../lib/leads";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { hasCompany } from "../../lib/permissions";
@@ -44,6 +44,12 @@ export default function ProviderOverview() {
 
   useRefreshOnFocus(() => {
     if (hasCompany(user)) void load(true);
+  });
+
+  useLiveEvents((event) => {
+    if ((event.type === "lead" || event.type === "lead-status") && hasCompany(user)) {
+      void load(true);
+    }
   });
 
   function onRefresh() {

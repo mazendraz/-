@@ -8,6 +8,7 @@
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiGet } from "./api";
+import { getConfig } from "./config";
 
 export interface ApiAppVersion {
   minimum: string;
@@ -17,8 +18,13 @@ export interface ApiAppVersion {
   message: string | null;
 }
 
+/** `config.appVersionQuery` (see config.ts) picks which env-var set the
+ *  server reads — absent for the client app, "business" for the Business
+ *  App, each a fully independent kill switch. */
 export function fetchAppVersion(): Promise<ApiAppVersion> {
-  return apiGet<ApiAppVersion>("/app-version");
+  const { appVersionQuery } = getConfig();
+  const qs = appVersionQuery ? `?app=${encodeURIComponent(appVersionQuery)}` : "";
+  return apiGet<ApiAppVersion>(`/app-version${qs}`);
 }
 
 /** This build's own version — same string app.json's `expo.version` sets. */

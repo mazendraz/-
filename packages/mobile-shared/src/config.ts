@@ -42,6 +42,16 @@ export interface MobileConfig {
    * nowhere and land on a blank screen.
    */
   mapNotificationUrl?: (url: string) => string;
+  /**
+   * Sent as `?app=` on GET /app-version — see api's own route.ts B5. Absent
+   * for the client app (its own call, unchanged); "business" for the
+   * Business App, which reads a fully separate set of
+   * APP_MIN_VERSION_BUSINESS-suffixed env vars server-side rather than
+   * falling back onto the client's thresholds. See
+   * docs/architecture/business-app/phase-4-realtime-push.md's B5 for why a
+   * fallback would be wrong: the two apps ship unrelated version numbers.
+   */
+  appVersionQuery?: string;
 }
 
 let config: MobileConfig | null = null;

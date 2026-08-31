@@ -12,6 +12,7 @@ import {
   fetchAppVersion,
   isVersionBelow,
   useBackendHealth,
+  usePushNotifications,
 } from "@alassema/mobile-shared";
 import { bootstrapSession, useStaffAuth } from "../lib/staffAuth";
 import OfflineScreen from "../components/OfflineScreen";
@@ -42,6 +43,14 @@ export default function RootLayout() {
   const fontsLoaded = useAppFonts();
   const [sessionReady, setSessionReady] = useState(false);
   const { loading: authLoading } = useStaffAuth();
+
+  // Registers for push once signed in (no-ops until then — see its own
+  // useAuthSubject() check) and wires notification-tap routing through
+  // config's mapNotificationUrl. Called unconditionally, ahead of every
+  // early return below, same as every other hook in this component — React
+  // hooks must run in the same order on every render regardless of which
+  // gate is currently active.
+  usePushNotifications();
 
   // ── Backend reachability ───────────────────────────────────────────────
   const backendOffline = useBackendHealth();

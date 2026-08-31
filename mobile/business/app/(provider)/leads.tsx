@@ -3,7 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiLead, ApiLeadStatus } from "@alassema/core";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchLeads } from "../../lib/leads";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { hasCompany } from "../../lib/permissions";
@@ -52,6 +52,17 @@ export default function ProviderLeads() {
 
   useRefreshOnFocus(() => {
     void load({ page: 1, append: false, silent: true });
+  });
+
+  // Live updates: a new lead, or one changing status, invalidates and
+  // refetches page 1 — the event never carries data, only "something
+  // changed" (api's realtime.service.ts). useRefreshOnFocus above stays
+  // wired as the fallback for when the stream is reconnecting; this doesn't
+  // replace it, it's just faster while connected.
+  useLiveEvents((event) => {
+    if (event.type === "lead" || event.type === "lead-status") {
+      void load({ page: 1, append: false, silent: true });
+    }
   });
 
   function onRefresh() {

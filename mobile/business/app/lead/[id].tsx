@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiLead, ApiLeadStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, textStart, useLiveEvents } from "@alassema/mobile-shared";
 import { fetchLead, updateLeadStatus } from "../../lib/leads";
 import { isAdmin } from "../../lib/permissions";
 import { useStaffAuth } from "../../lib/staffAuth";
@@ -39,6 +39,16 @@ export default function LeadDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Catches a status change (an admin acting on the same lead, or this
+  // provider's own other device) landing WHILE this screen is already open —
+  // scoped to THIS lead's id so an unrelated lead's event doesn't cause a
+  // pointless refetch.
+  useLiveEvents((event) => {
+    if (event.type === "lead-status" && event.leadId === id) {
+      void load();
+    }
+  });
 
   async function handleStatusSelect(status: ApiLeadStatus) {
     if (!lead) return;

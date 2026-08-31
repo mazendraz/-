@@ -29,6 +29,7 @@ import "@formatjs/intl-pluralrules/locale-data/en.js";
 // precisely so this line runs first.
 import Constants from "expo-constants";
 import { configure } from "@alassema/mobile-shared";
+import { mapNotificationUrl } from "./lib/deepLinks";
 
 configure({
   // Expo only inlines env vars prefixed EXPO_PUBLIC_ into the client bundle.
@@ -48,11 +49,13 @@ configure({
   // The route api's own comment calls "the BUSINESS app (staff)" —
   // see api/src/app/api/push/device/route.ts.
   devicePath: "/push/device",
-  // mapNotificationUrl is wired in phase 4 (docs/architecture/business-app/
-  // phase-4-realtime-push.md) once push registration and deep-link routing
-  // are actually built. Until then this app doesn't call
-  // usePushNotifications() at all, so the default (identity) is never
-  // exercised.
+  // Server payloads still name web dashboard paths ("/provider",
+  // "/admin?tab=chat") — see lib/deepLinks.ts for why, and why "/" is the
+  // correct fallback for anything unmapped.
+  mapNotificationUrl,
+  // A fully independent version-gate kill switch from the client app's —
+  // see api's app-version/route.ts B5 and config.ts's own comment.
+  appVersionQuery: "business",
 });
 
 import "expo-router/entry";

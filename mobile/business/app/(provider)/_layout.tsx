@@ -1,7 +1,10 @@
-import { Redirect, Tabs } from "expo-router";
+import { useEffect } from "react";
+import { Redirect, Tabs, usePathname } from "expo-router";
 import { colors, type } from "@alassema/core";
+import { useLiveEvents } from "@alassema/mobile-shared";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { isAdmin, isProvider } from "../../lib/permissions";
+import { bumpLeadsBadge, clearLeadsBadge, useLeadsBadge, badgeLabel } from "../../lib/liveBadges";
 
 /**
  * Provider tab group: Overview · Leads · Messages · More.
@@ -11,9 +14,29 @@ import { isAdmin, isProvider } from "../../lib/permissions";
  * on all of them. This layout is what keeps an admin from ever mounting a
  * screen that can only fail: it redirects to the admin group instead of
  * rendering anything here.
+ *
+ * One useLiveEvents subscription for the whole tab bar (not one per screen)
+ * bumps the Leads badge on a new `lead` event — but only while the Leads
+ * tab genuinely isn't the one on screen; a badge on the tab the person is
+ * already looking at, which is already refetching live, would just be
+ * visual noise.
  */
 export default function ProviderTabsLayout() {
   const { user } = useStaffAuth();
+  const pathname = usePathname();
+  const leadsBadge = useLeadsBadge();
+  const onLeadsTab = pathname.includes("/leads");
+
+  useLiveEvents((event) => {
+    if (event.type === "lead" && !onLeadsTab) bumpLeadsBadge();
+  });
+
+  // A side-effecting call (it notifies other subscribers of this store)
+  // belongs in an effect, not the render body — calling it directly here
+  // would fire a state update while THIS component is still rendering.
+  useEffect(() => {
+    if (onLeadsTab) clearLeadsBadge();
+  }, [onLeadsTab]);
 
   if (!user) return <Redirect href="/sign-in" />;
   if (isAdmin(user)) return <Redirect href="/(admin)/overview" />;
@@ -30,7 +53,7 @@ export default function ProviderTabsLayout() {
       }}
     >
       <Tabs.Screen name="overview" options={{ title: "الرئيسية" }} />
-      <Tabs.Screen name="leads" options={{ title: "الطلبات" }} />
+      <Tabs.Screen name="leads" options={{ title: "الطلبات", tabBarBadge: badgeLabel(leadsBadge) }} />
       <Tabs.Screen name="messages" options={{ title: "الرسائل" }} />
       <Tabs.Screen name="more" options={{ title: "المزيد" }} />
     </Tabs>
