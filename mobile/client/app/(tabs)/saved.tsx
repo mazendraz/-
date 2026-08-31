@@ -10,7 +10,7 @@ import Logo from "../../components/Logo";
 import { fetchCompany } from "../../lib/companyDetail";
 import { toggleSaved, useSavedSlugs } from "../../lib/saved";
 import { useRequireAccount } from "../../lib/authGate";
-import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { useRefreshOnFocus } from "@alassema/mobile-shared";
 import { assetUri } from "../../lib/assetUrl";
 
 /**

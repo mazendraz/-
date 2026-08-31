@@ -19,8 +19,7 @@ import Icon from "../../components/Icon";
 import Logo from "../../components/Logo";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies, type CompanySort } from "../../lib/companies";
-import { ApiError } from "@alassema/mobile-shared";
-import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { assetUri, firstAssetUri } from "../../lib/assetUrl";
 
 const PAGE_SIZE = 20;

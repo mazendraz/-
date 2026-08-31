@@ -8,8 +8,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCategories, recordCategoryView } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
-import { ApiError } from "@alassema/mobile-shared";
-import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { assetUri } from "../../lib/assetUrl";
 import { useCustomerAuth } from "../../lib/customerAuth";
 

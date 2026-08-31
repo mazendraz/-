@@ -7,8 +7,7 @@ import type { ApiCategory } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCategories } from "../../lib/categories";
-import { ApiError } from "@alassema/mobile-shared";
-import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
+import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { assetUri } from "../../lib/assetUrl";
 
 /** All service categories to browse — the mobile counterpart of Services.tsx. */

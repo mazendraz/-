@@ -22,12 +22,11 @@ import SiteReviewModal from "../../components/SiteReviewModal";
 import ReviewsMarquee from "../../components/ReviewsMarquee";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
-import { isApiConfigured, rowStart } from "@alassema/mobile-shared";
+import { isApiConfigured, rowStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
 import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
 import { refreshSettings, useSettings } from "../../lib/settings";
 import { useCountUp } from "../../lib/useCountUp";
-import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
 import { assetUri, firstAssetUri } from "../../lib/assetUrl";
 
 // The mobile app's own hero photo — a tall tower render, bundled into the
