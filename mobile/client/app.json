@@ -14,7 +14,6 @@
         "applinks:al-assema.tech"
       ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSAllowsLocalNetworking": true,
@@ -24,8 +23,7 @@
             }
           }
         }
-      },
-      "buildNumber": "2"
+      }
     },
     "android": {
       "adaptiveIcon": {
