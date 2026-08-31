@@ -4,7 +4,15 @@ import { colors, type } from "@alassema/core";
 import { useLiveEvents } from "@alassema/mobile-shared";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { isAdmin, isProvider } from "../../lib/permissions";
-import { bumpLeadsBadge, clearLeadsBadge, useLeadsBadge, badgeLabel } from "../../lib/liveBadges";
+import {
+  bumpLeadsBadge,
+  clearLeadsBadge,
+  useLeadsBadge,
+  bumpMessagesBadge,
+  clearMessagesBadge,
+  useMessagesBadge,
+  badgeLabel,
+} from "../../lib/liveBadges";
 
 /**
  * Provider tab group: Overview · Leads · Messages · More.
@@ -16,27 +24,35 @@ import { bumpLeadsBadge, clearLeadsBadge, useLeadsBadge, badgeLabel } from "../.
  * rendering anything here.
  *
  * One useLiveEvents subscription for the whole tab bar (not one per screen)
- * bumps the Leads badge on a new `lead` event — but only while the Leads
- * tab genuinely isn't the one on screen; a badge on the tab the person is
- * already looking at, which is already refetching live, would just be
- * visual noise.
+ * bumps a badge on a new `lead`/`message` event — but only while the
+ * matching tab genuinely isn't the one on screen; a badge on the tab
+ * someone is already looking at, which is already refetching live, would
+ * just be visual noise. (Known gap, accepted: viewing a specific open
+ * thread at /chat/[id] still bumps Messages for an event on THAT SAME
+ * conversation, since this check only knows about the tab routes, not the
+ * detail routes layered above them. Low-harm — the badge is mildly
+ * redundant there, never wrong.)
  */
 export default function ProviderTabsLayout() {
   const { user } = useStaffAuth();
   const pathname = usePathname();
   const leadsBadge = useLeadsBadge();
+  const messagesBadge = useMessagesBadge();
   const onLeadsTab = pathname.includes("/leads");
+  const onMessagesTab = pathname.includes("/messages");
 
   useLiveEvents((event) => {
     if (event.type === "lead" && !onLeadsTab) bumpLeadsBadge();
+    if (event.type === "message" && !onMessagesTab) bumpMessagesBadge();
   });
 
-  // A side-effecting call (it notifies other subscribers of this store)
-  // belongs in an effect, not the render body — calling it directly here
+  // Side-effecting calls (they notify other subscribers of these stores)
+  // belong in an effect, not the render body — calling them directly here
   // would fire a state update while THIS component is still rendering.
   useEffect(() => {
     if (onLeadsTab) clearLeadsBadge();
-  }, [onLeadsTab]);
+    if (onMessagesTab) clearMessagesBadge();
+  }, [onLeadsTab, onMessagesTab]);
 
   if (!user) return <Redirect href="/sign-in" />;
   if (isAdmin(user)) return <Redirect href="/(admin)/overview" />;
@@ -54,7 +70,7 @@ export default function ProviderTabsLayout() {
     >
       <Tabs.Screen name="overview" options={{ title: "الرئيسية" }} />
       <Tabs.Screen name="leads" options={{ title: "الطلبات", tabBarBadge: badgeLabel(leadsBadge) }} />
-      <Tabs.Screen name="messages" options={{ title: "الرسائل" }} />
+      <Tabs.Screen name="messages" options={{ title: "الرسائل", tabBarBadge: badgeLabel(messagesBadge) }} />
       <Tabs.Screen name="more" options={{ title: "المزيد" }} />
     </Tabs>
   );

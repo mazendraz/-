@@ -9,6 +9,7 @@ import { hashPassword, signToken } from "@/lib/auth";
 import { GET as customerGET, POST as customerPOST } from "@/app/api/chat/route";
 import { POST as summariesPOST } from "@/app/api/chat/summaries/route";
 import { GET as providerListGET } from "@/app/api/provider/chat/route";
+import { GET as providerConversationForLeadGET } from "@/app/api/provider/leads/[id]/conversation/route";
 import { GET as adminListGET } from "@/app/api/admin/chat/route";
 import { GET as providerGET, POST as providerPOST } from "@/app/api/provider/chat/[conversationId]/route";
 import { GET as adminGET, POST as adminPOST, PATCH as adminPATCH } from "@/app/api/admin/chat/[conversationId]/route";
@@ -426,6 +427,43 @@ describe("provider access", () => {
     const row = page.data.find((c: { id: string }) => c.id === conversationId);
     expect(row.lastMessagePreview).toBe("We can start Sunday.");
     expect(row.lastMessageSender).toBe("PROVIDER");
+  });
+});
+
+// GET /provider/leads/[id]/conversation — added for the Business App mobile
+// phase (docs/architecture/business-app/phase-5-provider-chat.md): the list
+// above is paged, so a provider on a lead's detail screen had no route to
+// jump straight to that lead's own thread.
+describe("GET /provider/leads/[id]/conversation", () => {
+  it("resolves the SAME conversation the threads list already has", async () => {
+    const c = await prisma.conversation.findUnique({ where: { leadId } });
+    const res = await providerConversationForLeadGET(
+      req({ token: providerToken, url: `/api/provider/leads/${leadId}/conversation` }),
+      ctx({ id: leadId }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.id).toBe(c!.id);
+    expect(body.leadId).toBe(leadId);
+  });
+
+  // Same 404-not-403 reasoning as reading the conversation directly by id —
+  // this route resolves by leadId, so ownership has to be enforced here too,
+  // not just on the conversationId-keyed route.
+  it("REFUSES a lead belonging to another company", async () => {
+    const res = await providerConversationForLeadGET(
+      req({ token: otherProviderToken, url: `/api/provider/leads/${leadId}/conversation` }),
+      ctx({ id: leadId }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("404s an id that is not a lead at all", async () => {
+    const res = await providerConversationForLeadGET(
+      req({ token: providerToken, url: `/api/provider/leads/not-a-real-id/conversation` }),
+      ctx({ id: "not-a-real-id" }),
+    );
+    expect(res.status).toBe(404);
   });
 });
 

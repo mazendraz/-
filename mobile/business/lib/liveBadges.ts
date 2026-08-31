@@ -11,30 +11,42 @@
  */
 import { useSyncExternalStore } from "react";
 
-let leadsBadge = 0;
-const leadsListeners = new Set<() => void>();
-
-export function bumpLeadsBadge(): void {
-  leadsBadge += 1;
-  leadsListeners.forEach((l) => l());
-}
-
-export function clearLeadsBadge(): void {
-  if (leadsBadge === 0) return;
-  leadsBadge = 0;
-  leadsListeners.forEach((l) => l());
-}
-
-export function useLeadsBadge(): number {
-  return useSyncExternalStore(
-    (listener) => {
-      leadsListeners.add(listener);
-      return () => leadsListeners.delete(listener);
+function makeBadge() {
+  let count = 0;
+  const listeners = new Set<() => void>();
+  return {
+    bump(): void {
+      count += 1;
+      listeners.forEach((l) => l());
     },
-    () => leadsBadge,
-    () => leadsBadge,
-  );
+    clear(): void {
+      if (count === 0) return;
+      count = 0;
+      listeners.forEach((l) => l());
+    },
+    use(): number {
+      return useSyncExternalStore(
+        (listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        () => count,
+        () => count,
+      );
+    },
+  };
 }
+
+const leads = makeBadge();
+const messages = makeBadge();
+
+export const bumpLeadsBadge = leads.bump;
+export const clearLeadsBadge = leads.clear;
+export const useLeadsBadge = leads.use;
+
+export const bumpMessagesBadge = messages.bump;
+export const clearMessagesBadge = messages.clear;
+export const useMessagesBadge = messages.use;
 
 /** undefined (not 0) hides expo-router's Tabs badge entirely — a visible
  *  "0" would read as "zero new leads", which is worse than no badge. */

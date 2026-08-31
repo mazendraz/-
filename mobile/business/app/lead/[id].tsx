@@ -6,6 +6,7 @@ import type { ApiLead, ApiLeadStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, textStart, useLiveEvents } from "@alassema/mobile-shared";
 import { fetchLead, updateLeadStatus } from "../../lib/leads";
+import { fetchConversationForLead } from "../../lib/chat";
 import { isAdmin } from "../../lib/permissions";
 import { useStaffAuth } from "../../lib/staffAuth";
 import StatusPill from "../../components/StatusPill";
@@ -23,6 +24,7 @@ export default function LeadDetail() {
   const [error, setError] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -71,6 +73,21 @@ export default function LeadDetail() {
     if (lead) Linking.openURL(`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`).catch(() => {});
   }
 
+  async function openChat() {
+    if (!lead || openingChat) return;
+    setOpeningChat(true);
+    try {
+      // Every lead already has exactly one conversation, created eagerly at
+      // submission — this can only fail if the lead id itself is wrong.
+      const conversation = await fetchConversationForLead(lead.id);
+      router.push(`/chat/${conversation.id}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "تعذّر فتح المحادثة. جرّب تاني.");
+    } finally {
+      setOpeningChat(false);
+    }
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: "تفاصيل الطلب" }} />
@@ -97,6 +114,9 @@ export default function LeadDetail() {
                 </Pressable>
                 <Pressable style={styles.contactBtn} onPress={whatsapp}>
                   <Text style={styles.contactBtnLabel}>واتساب</Text>
+                </Pressable>
+                <Pressable style={styles.contactBtn} onPress={openChat} disabled={openingChat}>
+                  <Text style={styles.contactBtnLabel}>{openingChat ? "..." : "رسالة"}</Text>
                 </Pressable>
               </View>
             </Section>

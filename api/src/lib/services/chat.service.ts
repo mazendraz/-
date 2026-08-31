@@ -135,6 +135,20 @@ export async function getOrCreateConversation(leadId: string): Promise<Conversat
   });
 }
 
+/**
+ * Serialized counterpart of getOrCreateConversation — added for the Business
+ * App mobile phase (docs/architecture/business-app/phase-5-provider-chat.md):
+ * `GET /provider/chat` is a PAGED list, so "open the thread for the lead I'm
+ * looking at" had no route to call — a provider could only reach a thread by
+ * scrolling the list until they found it. The route wrapping this
+ * (`GET /provider/leads/[id]/conversation`) is ownership-checked the same
+ * way `GET /provider/leads/[id]` already is, since this fetches by leadId
+ * directly rather than going through a company-scoped query.
+ */
+export async function getConversationForLead(leadId: string): Promise<ApiConversation> {
+  return serializeConversation(await getOrCreateConversation(leadId));
+}
+
 // ── Reads ────────────────────────────────────────────────────────────────────
 
 export interface ThreadResult {

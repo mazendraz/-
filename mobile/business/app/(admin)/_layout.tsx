@@ -4,7 +4,15 @@ import { colors, type } from "@alassema/core";
 import { useLiveEvents } from "@alassema/mobile-shared";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { isAdmin } from "../../lib/permissions";
-import { bumpLeadsBadge, clearLeadsBadge, useLeadsBadge, badgeLabel } from "../../lib/liveBadges";
+import {
+  bumpLeadsBadge,
+  clearLeadsBadge,
+  useLeadsBadge,
+  bumpMessagesBadge,
+  clearMessagesBadge,
+  useMessagesBadge,
+  badgeLabel,
+} from "../../lib/liveBadges";
 
 /**
  * Admin tab group: Overview · Leads · Approvals · Messages · More.
@@ -14,23 +22,27 @@ import { bumpLeadsBadge, clearLeadsBadge, useLeadsBadge, badgeLabel } from "../.
  * provider group rather than mounting a screen that can only fail. See
  * lib/permissions.ts's header comment for why there is no "either" case.
  *
- * Shares liveBadges' single counter with the provider layout — the two tab
+ * Shares liveBadges' counters with the provider layout — the two tab
  * groups are never mounted at the same time for one signed-in account (a
- * staff member is exactly one role), so one module-level counter is enough.
+ * staff member is exactly one role), so module-level state is enough.
  */
 export default function AdminTabsLayout() {
   const { user } = useStaffAuth();
   const pathname = usePathname();
   const leadsBadge = useLeadsBadge();
+  const messagesBadge = useMessagesBadge();
   const onLeadsTab = pathname.includes("/leads");
+  const onMessagesTab = pathname.includes("/messages");
 
   useLiveEvents((event) => {
     if (event.type === "lead" && !onLeadsTab) bumpLeadsBadge();
+    if (event.type === "message" && !onMessagesTab) bumpMessagesBadge();
   });
 
   useEffect(() => {
     if (onLeadsTab) clearLeadsBadge();
-  }, [onLeadsTab]);
+    if (onMessagesTab) clearMessagesBadge();
+  }, [onLeadsTab, onMessagesTab]);
 
   if (!user) return <Redirect href="/sign-in" />;
   if (!isAdmin(user)) return <Redirect href="/(provider)/overview" />;
@@ -48,7 +60,7 @@ export default function AdminTabsLayout() {
       <Tabs.Screen name="overview" options={{ title: "الرئيسية" }} />
       <Tabs.Screen name="leads" options={{ title: "الطلبات", tabBarBadge: badgeLabel(leadsBadge) }} />
       <Tabs.Screen name="approvals" options={{ title: "الموافقات" }} />
-      <Tabs.Screen name="messages" options={{ title: "الرسائل" }} />
+      <Tabs.Screen name="messages" options={{ title: "الرسائل", tabBarBadge: badgeLabel(messagesBadge) }} />
       <Tabs.Screen name="more" options={{ title: "المزيد" }} />
     </Tabs>
   );
