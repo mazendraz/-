@@ -3,7 +3,7 @@ import Icon from "../../components/Icon";
 import TabBar, { tabIconLift } from "../../components/TabBar";
 import { useCustomerAuth } from "../../lib/customerAuth";
 import { showGuestPrompt } from "../../lib/authGate";
-import { usePushNotifications } from "../../lib/push";
+import { usePushNotifications } from "@alassema/mobile-shared";
 
 /**
  * The tab shell: Home, Search, Messages, Requests, Account — five tabs, each

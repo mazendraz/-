@@ -29,7 +29,7 @@ import { useIsSaved } from "../../lib/saved";
 import { formatPrice } from "../../lib/pricing";
 import { splitByKind } from "../../lib/offerings";
 import { availableAgainAt, formatReopenDate } from "../../lib/availability";
-import { ApiError } from "../../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 import { useCustomerAuth } from "../../lib/customerAuth";
 import { requireAccount } from "../../lib/authGate";
 import { assetUri, firstAssetUri } from "../../lib/assetUrl";

@@ -12,9 +12,8 @@ import {
   markNotificationRead,
   updateNotificationPreferences,
 } from "../lib/notifications";
-import { useLiveEvents } from "../lib/liveEvents";
+import { useLiveEvents, rowStart, textStart } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../lib/authGate";
-import { rowStart, textStart } from "../lib/rtl";
 
 const DAY_MS = 86_400_000;
 

@@ -1,5 +1,5 @@
 import type { ApiCustomerNotificationPreferences, ApiCustomerNotificationsResponse } from "@alassema/core";
-import { apiGet, apiPatch, apiPost } from "./api";
+import { apiGet, apiPatch, apiPost } from "@alassema/mobile-shared";
 
 /** This account's notification center: latest rows + unread count. */
 export function fetchNotifications(): Promise<ApiCustomerNotificationsResponse> {

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
-import { ApiError } from "../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 import { submitReview } from "../lib/reviews";
 
 /**

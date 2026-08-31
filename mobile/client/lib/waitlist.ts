@@ -1,5 +1,5 @@
 import type { ApiWaitlistEntry } from "@alassema/core";
-import { apiGet } from "./api";
+import { apiGet } from "@alassema/mobile-shared";
 
 /** This account's own waitlist joins — merged into the Requests tab, same
  *  idea as the website's MyRequests.tsx combining leads and waitlist entries. */

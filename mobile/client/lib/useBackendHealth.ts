@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { isApiConfigured, onReachabilityChange, probeReady } from "./api";
+import { isApiConfigured, onReachabilityChange, probeReady } from "@alassema/mobile-shared";
 
 // How long between probes once we already suspect the backend is down.
 const PROBE_INTERVAL_MS = 10_000;

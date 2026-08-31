@@ -8,8 +8,9 @@ import Icon from "./Icon";
  * of UpdateRequiredScreen. That screen exists for `minimum` (a broken
  * contract or security fix: the app CANNOT continue); this exists for
  * `latest` (there's a nicer build available, no urgency) — see
- * app/_layout.tsx for how the two are told apart and lib/appVersion.ts's
- * dismissal helpers for why dismissing this one doesn't suppress it forever.
+ * app/_layout.tsx for how the two are told apart and @alassema/mobile-shared's
+ * appVersion.ts dismissal helpers for why dismissing this one doesn't
+ * suppress it forever.
  *
  * Floats over the top of whatever screen is showing rather than taking a
  * layout slot, so it can appear/disappear without reflowing the screen

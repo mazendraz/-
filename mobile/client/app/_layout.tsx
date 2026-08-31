@@ -6,20 +6,20 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { ApiLead } from "@alassema/core";
 import { colors } from "@alassema/core";
-import { ensureRTL } from "../lib/rtl";
-import { useAppFonts } from "../lib/fonts";
-import { bootstrapSession, useCustomerAuth } from "../lib/customerAuth";
-import { fetchAccountLeads } from "../lib/customerLeads";
-import { useLiveEvents } from "../lib/liveEvents";
-import { useMaintenance } from "../lib/settings";
-import { useBackendHealth } from "../lib/useBackendHealth";
 import {
+  ensureRTL,
+  useAppFonts,
+  useLiveEvents,
   currentAppVersion,
   dismissUpdateNudge,
   fetchAppVersion,
   isUpdateNudgeDismissed,
   isVersionBelow,
-} from "../lib/appVersion";
+} from "@alassema/mobile-shared";
+import { bootstrapSession, useCustomerAuth } from "../lib/customerAuth";
+import { fetchAccountLeads } from "../lib/customerLeads";
+import { useMaintenance } from "../lib/settings";
+import { useBackendHealth } from "../lib/useBackendHealth";
 import PriceVerificationGate from "../components/PriceVerificationGate";
 import MaintenanceScreen from "../components/MaintenanceScreen";
 import OfflineScreen from "../components/OfflineScreen";

@@ -1,5 +1,5 @@
 import type { ApiCompany, ApiWaitlistEntry } from "@alassema/core";
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost } from "@alassema/mobile-shared";
 
 /** Full company profile — about, gallery, projects, reviews, availability. */
 export function fetchCompany(slug: string): Promise<ApiCompany> {

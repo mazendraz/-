@@ -1,5 +1,5 @@
 /**
- * Native push registration for the CUSTOMER app.
+ * Native push registration — shared by both mobile apps.
  *
  * ── Why every function below was checked against the installed package ──────
  * expo-notifications' handler shape changed across SDK versions — this
@@ -12,10 +12,18 @@
  * docs page over the package actually installed.
  *
  * ── Where the token goes ──────────────────────────────────────────────────
- * POST /api/v1/customer/push-device (built in phase 0.5, unexercised by any
- * client until now) upserts on the token, so re-registering on every launch
- * is free and is what keeps a re-signed-in-as-someone-else phone from still
- * notifying the previous account — see that route's comment.
+ * `devicePath` (from configure() — see config.ts) upserts on the token, so
+ * re-registering on every launch is free and is what keeps a re-signed-in-as-
+ * someone-else phone from still notifying the previous account — see that
+ * route's comment on api's side (expoPush.service.registerDevice). The client
+ * app registers at "/customer/push-device"; the Business App at
+ * "/push/device" — the one route api's own comments describe as "the
+ * BUSINESS app (staff)".
+ *
+ * ── Who's signed in ────────────────────────────────────────────────────────
+ * Same as liveEvents.ts: this module reads the signed-in subject id from
+ * session.ts's useAuthSubject(), kept current by each app's own auth-state
+ * module, rather than importing customerAuth.ts or staffAuth.ts directly.
  */
 import { useEffect } from "react";
 import { AppState, Platform } from "react-native";
@@ -23,14 +31,15 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { router } from "expo-router";
+import { getConfig } from "./config";
 import { apiPost, apiDelete } from "./api";
-import { useCustomerAuth } from "./customerAuth";
+import { useAuthSubject } from "./session";
 
 // Foreground behavior: show the banner and add it to the notification list,
-// no sound (a reply from a provider is not an alarm, matching the website's
-// Notification API — a visible toast, not an audible alert), but DO apply
-// the server-set badge count (see expoPush.service.ts's `badge: 1`) so the
-// app icon reflects "something's waiting" even while the app is open.
+// no sound (a reply is not an alarm, matching the website's Notification API
+// — a visible toast, not an audible alert), but DO apply the server-set badge
+// count (see expoPush.service.ts's `badge: 1`) so the app icon reflects
+// "something's waiting" even while the app is open.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -48,7 +57,7 @@ function projectId(): string | undefined {
  * Ask for permission (if not already asked) and register this device's Expo
  * push token with the account. Never throws — matches every other
  * notification path in this codebase (web-push, Telegram) failing open: a
- * customer who declines notifications, or a simulator with no push
+ * person who declines notifications, or a simulator with no push
  * capability, must not see an error over a feature that's allowed to be
  * silently unavailable.
  */
@@ -56,10 +65,10 @@ async function registerForPush(): Promise<void> {
   // Native push has no web equivalent here (the website's Web Push flow is a
   // separate, already-shipped path — push.service.ts on the API side, keyed
   // on browser subscriptions, not Expo tokens). Guarded explicitly rather
-  // than discovered by another synchronous throw: this session already found
-  // expo-notifications' useLastNotificationResponse() crash outright on web
-  // rather than degrade, so the other calls in this function get the same
-  // preemptive guard instead of being trusted one by one.
+  // than discovered by another synchronous throw: expo-notifications'
+  // useLastNotificationResponse() crashes outright on web rather than
+  // degrade, so the other calls in this function get the same preemptive
+  // guard instead of being trusted one by one.
   if (Platform.OS === "web") return;
 
   // Physical devices only — a push token requires real APNs/FCM registration
@@ -82,7 +91,7 @@ async function registerForPush(): Promise<void> {
 
   try {
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id });
-    await apiPost("/customer/push-device", {
+    await apiPost(getConfig().devicePath, {
       token,
       platform: Platform.OS as "ios" | "android",
       deviceName: Constants.deviceName ?? undefined,
@@ -99,11 +108,9 @@ async function registerForPush(): Promise<void> {
  * separately, so there is nothing to keep in sync between the two.
  *
  * Never prompts: if permission was never granted there was nothing to
- * unregister, and asking a user who's in the middle of signing OUT to grant
+ * unregister, and asking someone in the middle of signing OUT to grant
  * notification permission would be bizarre. Never throws — same fail-open
- * contract as registerForPush; a sign-out must complete even if this fails
- * (the DELETE route also accepts no auth's-worth of scoping, see its own
- * comment, but the caller here still has to run before tokens are cleared).
+ * contract as registerForPush; a sign-out must complete even if this fails.
  */
 export async function unregisterPush(): Promise<void> {
   if (Platform.OS === "web" || !Device.isDevice) return;
@@ -113,7 +120,7 @@ export async function unregisterPush(): Promise<void> {
     const id = projectId();
     if (!id) return;
     const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId: id });
-    await apiDelete("/customer/push-device", { token });
+    await apiDelete(getConfig().devicePath, { token });
   } catch (err) {
     console.warn("Push unregistration failed:", err);
   }
@@ -121,27 +128,26 @@ export async function unregisterPush(): Promise<void> {
 
 /**
  * Registers for push once per signed-in session, and wires a tap on a
- * notification to open the request it's about — mirrors the website's
+ * notification to open the screen it's about — mirrors the website's
  * notificationclick handler in sw.js reading the same `data.url`.
  *
- * Mounted once, high in the tree (see app/(tabs)/_layout.tsx) rather than per-
- * screen: registration and tap-handling are account-level concerns, not
+ * Mounted once, high in the tree (each app's own root/tab layout) rather than
+ * per-screen: registration and tap-handling are account-level concerns, not
  * screen-level ones, and mounting it per-screen would mean re-registering on
  * every tab switch for no benefit.
  */
 export function usePushNotifications(): void {
-  const { customer } = useCustomerAuth();
+  const subjectId = useAuthSubject();
 
   useEffect(() => {
-    if (customer) registerForPush();
-  }, [customer]);
+    if (subjectId) registerForPush();
+  }, [subjectId]);
 
   // Badge clears when the app comes to the foreground — "you're looking at
   // it now" is the simplest honest reset point without a server-side unread
-  // count to reconcile against (there's no Notification/read-state table
-  // yet — see the notifications blueprint's phase 2). Runs once on mount too
-  // (AppState's listener only fires on a SUBSEQUENT transition), so a cold
-  // launch also clears whatever badge was showing before the app opened.
+  // count to reconcile against. Runs once on mount too (AppState's listener
+  // only fires on a SUBSEQUENT transition), so a cold launch also clears
+  // whatever badge was showing before the app opened.
   useEffect(() => {
     if (Platform.OS === "web") return;
     Notifications.setBadgeCountAsync(0).catch(() => {});
@@ -161,7 +167,7 @@ export function usePushNotifications(): void {
   // doesn't degrade gracefully on web the way expo-secure-store's functions
   // do — it throws synchronously ("ExpoNotifications.getLastNotificationResponse
   // is not available on web"), which took the whole authenticated shell down
-  // with it, caught only because web is one of this app's real render
+  // with it, caught only because web is one of these apps' real render
   // targets (see liveEvents.ts's comment on the same point).
   if (Platform.OS === "web") return;
 
@@ -170,10 +176,11 @@ export function usePushNotifications(): void {
   useEffect(() => {
     const url = response?.notification.request.content.data?.url;
     if (typeof url === "string" && url.startsWith("/")) {
-      // Same shape api's push payloads already send for the web (a relative
-      // path like "/provider/leads") — expo-router's `router.push` accepts it
-      // directly, no parsing needed.
-      router.push(url as never);
+      // mapNotificationUrl defaults to identity (see config.ts) — the client
+      // app's own routes already match what the server sends, so this is a
+      // no-op there. The Business App supplies a real mapper.
+      const mapped = (getConfig().mapNotificationUrl ?? ((u: string) => u))(url);
+      router.push(mapped as never);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [response]);

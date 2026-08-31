@@ -25,7 +25,7 @@ import {
 } from "../lib/customerAuth";
 import { isGoogleSignInConfigured, useGoogleSignIn } from "../lib/googleAuth";
 import { isAppleSignInAvailable, signInWithApple as runAppleSheet } from "../lib/appleAuth";
-import { ApiError } from "../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 
 type Mode = "signin" | "register";
 

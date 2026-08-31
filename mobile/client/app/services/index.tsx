@@ -7,7 +7,7 @@ import type { ApiCategory } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCategories } from "../../lib/categories";
-import { ApiError } from "../../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
 import { assetUri } from "../../lib/assetUrl";
 

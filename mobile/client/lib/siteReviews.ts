@@ -1,5 +1,5 @@
 import type { ApiSiteReview, ApiSiteReviewSettings } from "@alassema/core";
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost } from "@alassema/mobile-shared";
 
 /** Homepage testimonials — general site reviews, not tied to one company. */
 export function fetchSiteReviews(): Promise<ApiSiteReview[]> {

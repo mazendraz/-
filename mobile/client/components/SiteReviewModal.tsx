@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
 import Captcha from "./Captcha";
-import { ApiError } from "../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 import { captchaConfigured } from "../lib/captcha";
 import { submitSiteReview } from "../lib/siteReviews";
 

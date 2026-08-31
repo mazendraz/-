@@ -1,0 +1,33 @@
+{
+  "name": "@alassema/mobile-shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared mobile infrastructure: HTTP client, token storage, live-event SSE, native push, app-version gate, RTL, fonts. Consumed by mobile/client and mobile/business.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": ["src"],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@expo-google-fonts/alexandria": "^0.4.2",
+    "@expo-google-fonts/cairo": "^0.4.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "^54.0.0",
+    "expo-constants": "~18.0.14",
+    "expo-device": "~8.0.10",
+    "expo-notifications": "~0.32.17",
+    "expo-router": "~6.0.24",
+    "expo-secure-store": "~15.0.8",
+    "expo-updates": "~29.0.20",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.2"
+  }
+}

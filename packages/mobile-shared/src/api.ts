@@ -1,6 +1,6 @@
 /**
- * HTTP client for the Al Assema API — the mobile counterpart of app's
- * lib/api.ts.
+ * HTTP client for the Al Assema API — shared by both mobile apps, and the
+ * mobile counterpart of app's lib/api.ts.
  *
  * The shape (ApiError, apiGet/apiPost/apiPatch/apiDelete) deliberately mirrors
  * the website's client: anyone who has read one can read the other. What
@@ -8,44 +8,32 @@
  * attaches automatically; a phone has no cookie jar, so this attaches a Bearer
  * token from SecureStore instead, and — the piece the web client doesn't need
  * at all — refreshes it when the server says it expired.
+ *
+ * `baseUrl`/`apiKey`/`refreshPath` come from configure() (see config.ts), not
+ * from `process.env.EXPO_PUBLIC_*` directly: each app's `EXPO_PUBLIC_*` value
+ * is still read in that app's own file (so Metro's env-inlining still sees
+ * the literal it needs to replace at build time) and handed in here — the
+ * client app refreshes at "/auth/customer/refresh", the Business App at
+ * "/auth/refresh", and this module has no business knowing which population
+ * it's talking to.
  */
-import Constants from "expo-constants";
+import { getConfig } from "./config";
 import {
   getAccessToken,
   getRefreshToken,
   invalidateSession,
-  saveAccessToken,
   saveTokens,
 } from "./session";
 
-// Expo only inlines env vars prefixed EXPO_PUBLIC_ into the client bundle —
-// the direct counterpart of Vite's VITE_ prefix, and for the same reason
-// (anything without it could be a server-only secret, so the bundler refuses
-// to ship it to the device).
-const BASE_URL = (
-  process.env.EXPO_PUBLIC_API_URL ??
-  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ??
-  ""
-).replace(/\/$/, "");
-
-// Mirrors the website's VITE_API_KEY (app/src/lib/api.ts) — same optional
-// shared-secret gate (api's proxy.ts: when API_KEY is set server-side, every
-// /api request without a matching X-Api-Key 401s). Currently unset on the
-// server, so this is a no-op today — but without it wired here, turning that
-// env var on would 401 every request this app makes while leaving the
-// website untouched, since the website already sends it and this client
-// never did.
-const API_KEY = (process.env.EXPO_PUBLIC_API_KEY ?? "").trim();
-
 export function isApiConfigured(): boolean {
-  return Boolean(BASE_URL);
+  return Boolean(getConfig().baseUrl);
 }
 
 /** For the one caller that can't go through apiFetch's buildHeaders — the
  *  raw SSE fetch in liveEvents.ts, which needs the same header this module
  *  attaches to every other request. */
 export function apiKeyHeader(): string {
-  return API_KEY;
+  return getConfig().apiKey;
 }
 
 export class ApiError extends Error {
@@ -137,24 +125,25 @@ export async function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
 
   refreshInFlight = (async () => {
+    const { baseUrl, refreshPath } = getConfig();
     const refreshToken = await getRefreshToken();
     if (!refreshToken) return null;
 
     try {
-      const res = await fetch(`${BASE_URL}/auth/customer/refresh`, {
+      const res = await fetch(`${baseUrl}${refreshPath}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
       });
       if (!res.ok) {
         // The refresh token itself is dead (expired, revoked, or reuse was
-        // detected server-side — see customerSession.service). No amount of
-        // retrying fixes that; only signing in again does. invalidateSession
-        // (not plain clearTokens) so customerAuth's in-memory `customer`
-        // snapshot is told too — see that function's comment for the bug
-        // this closes: a stale token cleared here but never reported left
-        // the tab bar rendering the signed-in shell over a session that no
-        // longer worked.
+        // detected server-side — see customerSession.service /
+        // staffSession.service). No amount of retrying fixes that; only
+        // signing in again does. invalidateSession (not plain clearTokens)
+        // so the app's own in-memory auth snapshot is told too — see that
+        // function's comment for the bug this closes: a stale token cleared
+        // here but never reported left the tab bar rendering the signed-in
+        // shell over a session that no longer worked.
         await invalidateSession();
         return null;
       }
@@ -181,7 +170,8 @@ export async function refreshAccessToken(): Promise<string | null> {
 function buildHeaders(token: string | null, extra: Record<string, string>): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
   if (token) h.Authorization = `Bearer ${token}`;
-  if (API_KEY) h["X-Api-Key"] = API_KEY;
+  const apiKey = getConfig().apiKey;
+  if (apiKey) h["X-Api-Key"] = apiKey;
   return h;
 }
 
@@ -194,12 +184,13 @@ export async function apiFetch<T>(
   options: RequestInit = {},
   extraHeaders: Record<string, string> = {},
 ): Promise<T> {
-  if (!BASE_URL) throw new ApiError(0, "EXPO_PUBLIC_API_URL is not configured");
+  const { baseUrl, refreshPath } = getConfig();
+  if (!baseUrl) throw new ApiError(0, "EXPO_PUBLIC_API_URL is not configured");
 
   const attempt = async (token: string | null): Promise<Response> => {
     const { signal, finish, isOurTimeout } = withTimeout(options.signal);
     try {
-      const res = await fetch(`${BASE_URL}${path}`, {
+      const res = await fetch(`${baseUrl}${path}`, {
         ...options,
         signal,
         headers: buildHeaders(token, extraHeaders),
@@ -228,8 +219,8 @@ export async function apiFetch<T>(
 
   // One retry, only on 401, only if a refresh token exists. A 401 on the
   // refresh call itself is handled inside refreshAccessToken and never loops
-  // back here — this path calls /auth/customer/refresh, not this function.
-  if (res.status === 401 && path !== "/auth/customer/refresh") {
+  // back here — this path calls refreshPath, not this function.
+  if (res.status === 401 && path !== refreshPath) {
     const fresh = await refreshAccessToken();
     if (fresh) {
       token = fresh;
@@ -283,9 +274,11 @@ export function apiDelete(path: string, body?: unknown): Promise<void> {
   });
 }
 
-/** Absolute URL for the SSE stream — see api's customer/stream route. */
+/** Absolute URL for the SSE stream — see api's customer/stream and
+ *  provider/stream routes. */
 export function streamUrl(path: string): string | null {
-  return BASE_URL ? `${BASE_URL}${path}` : null;
+  const { baseUrl } = getConfig();
+  return baseUrl ? `${baseUrl}${path}` : null;
 }
 
 /**
@@ -298,7 +291,8 @@ export function streamUrl(path: string): string | null {
  * probe feed its own listeners instead of reporting an independent result.
  */
 export async function probeReady(): Promise<boolean> {
-  if (!BASE_URL) return true; // unconfigured — nothing to probe
+  const { baseUrl } = getConfig();
+  if (!baseUrl) return true; // unconfigured — nothing to probe
 
   // Bypassing apiFetch also meant bypassing withTimeout, which mattered more
   // here than anywhere else: this is the probe the OFFLINE screen's retry button
@@ -316,7 +310,7 @@ export async function probeReady(): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    const res = await fetch(`${BASE_URL}/ready`, {
+    const res = await fetch(`${baseUrl}/ready`, {
       headers: { "Content-Type": "application/json" },
       signal: controller.signal,
     });

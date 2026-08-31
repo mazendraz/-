@@ -34,7 +34,7 @@ import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchCompany, joinWaitlist } from "../../lib/companyDetail";
 import { formatLeadEstimate } from "../../lib/pricing";
 import { captchaConfigured } from "../../lib/captcha";
-import { ApiError } from "../../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
 import { parseLines, useSettings } from "../../lib/settings";
 

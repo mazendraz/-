@@ -41,7 +41,7 @@ import { useFocusEffect } from "expo-router";
 import type { ApiSiteReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
-import { rowStart, textStart } from "../lib/rtl";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 const CARD_WIDTH = 280;
 const CARD_GAP = 14;

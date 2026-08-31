@@ -1,5 +1,5 @@
 import type { ApiCategory } from "@alassema/core";
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost } from "@alassema/mobile-shared";
 
 /** Active categories with live company counts — for Home and Services. */
 export function fetchCategories(): Promise<ApiCategory[]> {

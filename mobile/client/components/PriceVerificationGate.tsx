@@ -8,7 +8,7 @@ import Icon from "./Icon";
 import ReviewModal from "./ReviewModal";
 import { verifyLeadAmount } from "../lib/leads";
 import { formatEgp } from "../lib/pricing";
-import { ApiError } from "../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 import { useSettings } from "../lib/settings";
 
 type Phase = "amount" | "discrepancy" | "confirmed" | "rating";

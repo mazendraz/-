@@ -5,7 +5,7 @@
  * screen's own comment on what it deliberately doesn't do).
  */
 import type { ApiCompany, ApiPage } from "@alassema/core";
-import { apiGet } from "./api";
+import { apiGet } from "@alassema/mobile-shared";
 
 /** Matches the website's SORTS in Companies.tsx — same query param, same values. */
 export type CompanySort = "recommended" | "rating" | "projects" | "reviews" | "name";

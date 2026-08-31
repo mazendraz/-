@@ -2,7 +2,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { TextStyle } from "react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { colors, type } from "@alassema/core";
-import { rowStart } from "../lib/rtl";
+import { rowStart } from "@alassema/mobile-shared";
 
 /**
  * The bottom tab bar, drawn by hand instead of by react-navigation's default

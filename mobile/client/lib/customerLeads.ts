@@ -20,7 +20,7 @@
  * the website already has rather than trusting that it can't happen.
  */
 import type { ApiLead } from "@alassema/core";
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost } from "@alassema/mobile-shared";
 import { allLeadTokens } from "./leadTokens";
 
 /** Every request on the signed-in account, newest first — server-sorted. */

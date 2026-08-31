@@ -22,14 +22,13 @@ import SiteReviewModal from "../../components/SiteReviewModal";
 import ReviewsMarquee from "../../components/ReviewsMarquee";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
-import { isApiConfigured } from "../../lib/api";
+import { isApiConfigured, rowStart } from "@alassema/mobile-shared";
 import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
 import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
 import { refreshSettings, useSettings } from "../../lib/settings";
 import { useCountUp } from "../../lib/useCountUp";
 import { useRefreshOnFocus } from "../../lib/useRefreshOnFocus";
 import { assetUri, firstAssetUri } from "../../lib/assetUrl";
-import { rowStart } from "../../lib/rtl";
 
 // The mobile app's own hero photo — a tall tower render, bundled into the
 // binary. Used whenever the admin hasn't set a custom hero_image_url, same

@@ -6,7 +6,7 @@
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { ApiCatalogSearchResponse, ApiCatalogSearchResult } from "@alassema/core";
-import { apiGet } from "./api";
+import { apiGet } from "@alassema/mobile-shared";
 
 export type SearchResult =
   | { type: "category"; key: string; label: string; sub: string; icon: string; to: string }

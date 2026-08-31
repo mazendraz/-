@@ -8,7 +8,7 @@
  * {offeringId, qty, tierId}; the server reads real prices from the catalogue.
  */
 import type { ApiLead } from "@alassema/core";
-import { apiPost } from "./api";
+import { apiPost } from "@alassema/mobile-shared";
 import { rememberLeadToken } from "./leadTokens";
 
 export interface NewLeadInput {

@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@alassema/core": "*",
+    "@alassema/mobile-shared": "*",
     "@expo-google-fonts/alexandria": "^0.4.2",
     "@expo-google-fonts/cairo": "^0.4.2",
     "@expo/metro-runtime": "~6.1.2",

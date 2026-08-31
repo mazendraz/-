@@ -15,8 +15,7 @@ import type { ApiMessage } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchThread, sendMessage } from "../../lib/chat";
-import { useLiveEvents } from "../../lib/liveEvents";
-import { ApiError } from "../../lib/api";
+import { useLiveEvents, ApiError } from "@alassema/mobile-shared";
 
 /**
  * A conversation about one request — reached from a chat icon on its card in

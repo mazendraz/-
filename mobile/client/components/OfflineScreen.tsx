@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
-import { probeReady } from "../lib/api";
+import { probeReady } from "@alassema/mobile-shared";
 
 /**
  * Full-screen "can't reach the server" notice — the mobile counterpart of

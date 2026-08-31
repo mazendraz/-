@@ -1,5 +1,5 @@
 import type { ApiMessage, ApiThreadSummary } from "@alassema/core";
-import { apiGet, apiPost } from "./api";
+import { apiGet, apiPost } from "@alassema/mobile-shared";
 
 interface ThreadResult {
   conversation: { id: string; refNumber?: string; companyName?: string };

@@ -17,10 +17,19 @@ import { Platform } from "react-native";
 import { router } from "expo-router";
 import Constants from "expo-constants";
 import type { ApiCustomer } from "@alassema/core";
-import { apiGet, apiPost, isApiConfigured, ApiError } from "./api";
-import { clearTokens, getRefreshToken, onAuthInvalidated, saveTokens } from "./session";
+import {
+  apiGet,
+  apiPost,
+  isApiConfigured,
+  ApiError,
+  clearTokens,
+  getRefreshToken,
+  onAuthInvalidated,
+  saveTokens,
+  setAuthSubject,
+  unregisterPush,
+} from "@alassema/mobile-shared";
 import { claimDeviceLeads } from "./customerLeads";
-import { unregisterPush } from "./push";
 
 export type Customer = ApiCustomer;
 export type SignInOutcome = "created" | "linked" | "returning";
@@ -53,6 +62,10 @@ function setSnapshot(next: Partial<Snapshot>) {
 
 function setCustomer(next: Customer | null) {
   setSnapshot({ customer: next });
+  // Tells @alassema/mobile-shared's liveEvents.ts and push.ts who (if anyone)
+  // is signed in — see session.ts's own comment on why that dependency runs
+  // this direction rather than the shared package importing this module.
+  setAuthSubject(next?.id ?? null);
 }
 
 function setLoading(next: boolean) {

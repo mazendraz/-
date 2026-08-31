@@ -8,10 +8,8 @@ import Icon from "../../components/Icon";
 import Logo from "../../components/Logo";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchThreadSummaries } from "../../lib/chat";
-import { useLiveEvents } from "../../lib/liveEvents";
-import { ApiError } from "../../lib/api";
+import { useLiveEvents, ApiError, rowStart, textStart, uiIsRTL } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
-import { rowStart, textStart, uiIsRTL } from "../../lib/rtl";
 
 interface Row {
   leadId: string;

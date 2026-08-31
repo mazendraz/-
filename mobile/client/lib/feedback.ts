@@ -1,4 +1,4 @@
-import { apiPost } from "./api";
+import { apiPost } from "@alassema/mobile-shared";
 
 export type FeedbackType = "problem" | "suggestion" | "inquiry";
 

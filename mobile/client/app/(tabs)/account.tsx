@@ -14,7 +14,7 @@ import {
   type CustomerSession,
 } from "../../lib/customerAuth";
 import { useRequireAccount } from "../../lib/authGate";
-import { ApiError } from "../../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 
 /**
  * The customer's account: profile, signed-in devices, and the way out — the

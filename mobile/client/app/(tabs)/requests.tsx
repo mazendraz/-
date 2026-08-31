@@ -10,9 +10,8 @@ import WaitlistStatusPill from "../../components/WaitlistStatusPill";
 import { router } from "expo-router";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchMyWaitlistEntries } from "../../lib/waitlist";
-import { useLiveEvents } from "../../lib/liveEvents";
+import { useLiveEvents, ApiError } from "@alassema/mobile-shared";
 import ReviewModal from "../../components/ReviewModal";
-import { ApiError } from "../../lib/api";
 import { useRequireAccount } from "../../lib/authGate";
 import { formatLeadEstimate } from "../../lib/pricing";
 

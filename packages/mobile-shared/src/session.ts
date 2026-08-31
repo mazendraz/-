@@ -1,20 +1,26 @@
 /**
  * Where the tokens live on-device.
  *
- * expo-secure-store, not AsyncStorage: it's backed by iOS Keychain and Android
- * Keystore — hardware-backed on most devices — rather than a plain file any
- * app with storage access could in principle read. The refresh token lives
- * here for up to 60 days (see api's customerSession.service comment on
- * REFRESH_TTL_MS); AsyncStorage is the wrong tier of trust for that.
+ * Shared by both apps — the customer client and the staff Business App both
+ * hold a refresh token that can live for weeks (60 days for a customer, 30 for
+ * staff; see api's customerSession.service / staffSession.service for why the
+ * two differ). expo-secure-store, not AsyncStorage: it's backed by iOS
+ * Keychain and Android Keystore — hardware-backed on most devices — rather
+ * than a plain file any app with storage access could in principle read.
+ * AsyncStorage is the wrong tier of trust for a credential that long-lived.
  *
- * Mirrors the website's customerAuth.ts one level down: that module owns
- * SESSION STATE (what customer is signed in, broadcasting changes to
- * useCustomerAuth); this owns STORAGE (getting bytes on and off the device).
- * The split matters here in a way it doesn't on the web, because the web has
- * exactly one storage primitive and the app has two — SecureStore for secrets,
- * a plain key for the non-secret cached profile — and mixing that concern into
- * the state module would make it non-obvious which write needs which.
+ * Mirrors each app's own auth-state module (the website's customerAuth.ts,
+ * this app's own customerAuth.ts / staffAuth.ts) one level down: that module
+ * owns SESSION STATE (who is signed in, broadcasting changes to its own hook);
+ * this owns STORAGE (getting bytes on and off the device) plus the small
+ * cross-cutting pub/sub below that every consumer shares regardless of which
+ * population it authenticates. The split matters here in a way it doesn't on
+ * the web, because the web has exactly one storage primitive and a phone has
+ * two — SecureStore for secrets, a plain key for the non-secret cached profile
+ * — and mixing that concern into the state module would make it non-obvious
+ * which write needs which.
  */
+import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
@@ -140,16 +146,16 @@ export async function clearTokens(): Promise<void> {
 // customer state gets cleared from a dead session — but only at the NEXT
 // cold start).
 //
-// session.ts is the one module both api.ts and customerAuth.ts already
-// import, so it's the natural place for the pub/sub between them — same
-// shape as api.ts's own onReachabilityChange, one level down the dependency
-// graph.
+// session.ts is the one module both api.ts and each app's own auth-state
+// module (customerAuth.ts / staffAuth.ts) already import, so it's the natural
+// place for the pub/sub between them — same shape as api.ts's own
+// onReachabilityChange, one level down the dependency graph.
 type AuthInvalidatedListener = () => void;
 const invalidatedListeners = new Set<AuthInvalidatedListener>();
 
 /** Subscribe to "the stored session was invalidated by the SERVER" — never
  *  fired by an intentional sign-out or account deletion, which already
- *  update customerAuth's state directly at their own call sites. */
+ *  update the app's own auth state at their own call sites. */
 export function onAuthInvalidated(listener: AuthInvalidatedListener): () => void {
   invalidatedListeners.add(listener);
   return () => invalidatedListeners.delete(listener);
@@ -162,4 +168,54 @@ export function onAuthInvalidated(listener: AuthInvalidatedListener): () => void
 export async function invalidateSession(): Promise<void> {
   await clearTokens();
   invalidatedListeners.forEach((l) => l());
+}
+
+// ── The signed-in subject, shared across every module in this package ──────
+//
+// liveEvents.ts and push.ts both need to know WHO is signed in — to point the
+// SSE stream and the push-device registration at the right account — but
+// neither can import the app's own auth-state module (customerAuth.ts in one
+// app, staffAuth.ts in the other) without coupling this shared package to one
+// specific population. That coupling is exactly what phase 1 of the mobile
+// plan (docs/architecture/business-app/phase-1-shared-package.md) set out to
+// remove.
+//
+// So the dependency runs the other way: each app's own auth-state module
+// calls setAuthSubject() whenever its signed-in id changes (on sign-in,
+// sign-out, and session bootstrap), and this package's own hooks read it back
+// via useAuthSubject() — the same useSyncExternalStore shape every store in
+// these apps already uses. Neither side needs to know the other's population;
+// both just agree on "the current subject id, or null."
+let authSubjectId: string | null = null;
+const authSubjectListeners = new Set<() => void>();
+
+/** Called by the app's own auth-state module whenever who's signed in
+ *  changes. A no-op when nothing actually changed, so re-deriving this from
+ *  a snapshot on every render costs nothing beyond the first call. */
+export function setAuthSubject(id: string | null): void {
+  if (id === authSubjectId) return;
+  authSubjectId = id;
+  authSubjectListeners.forEach((l) => l());
+}
+
+/** The current subject id outside a component — for the rare case a plain
+ *  function needs it rather than a hook (mirrors getAccessToken's shape). */
+export function getAuthSubject(): string | null {
+  return authSubjectId;
+}
+
+function subscribeAuthSubject(listener: () => void): () => void {
+  authSubjectListeners.add(listener);
+  return () => authSubjectListeners.delete(listener);
+}
+
+/** The signed-in subject id (customer or staff, whichever app this is),
+ *  reactive. liveEvents.ts and push.ts subscribe through this instead of
+ *  importing either app's auth-state module directly. */
+export function useAuthSubject(): string | null {
+  return useSyncExternalStore(
+    subscribeAuthSubject,
+    () => authSubjectId,
+    () => authSubjectId,
+  );
 }

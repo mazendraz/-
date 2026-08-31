@@ -1,5 +1,5 @@
 import type { ApiLegalPages, ApiMaintenanceStatus, ApiPlatformSettings } from "@alassema/core";
-import { apiGet } from "./api";
+import { apiGet } from "@alassema/mobile-shared";
 
 /** Terms + Privacy content — admin-managed HTML/text, rendered as-is. */
 export function fetchLegalPages(): Promise<ApiLegalPages> {

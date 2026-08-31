@@ -1,6 +1,6 @@
 /**
- * Live events from /customer/stream — the mobile counterpart of the website's
- * useLiveEvents.ts.
+ * Live events from the server's SSE stream — shared by both mobile apps, and
+ * the mobile counterpart of the website's useLiveEvents.ts.
  *
  * ── Why this is hand-parsed instead of `new EventSource(...)` ────────────────
  * The website's hook uses the browser's native EventSource. React Native has
@@ -16,40 +16,47 @@
  * Same case the website's version documents: a held-open connection delivers a
  * reply in under a second and costs nothing while idle, where polling is a
  * request every N seconds against the radio and stops entirely the moment the
- * app is backgrounded — exactly when a provider's reply arrives. See api's
+ * app is backgrounded — exactly when a reply arrives. See api's
  * realtime.service.ts for the server side of this (in-process pub/sub, single
  * PM2 instance).
  *
  * ── Why this is ONE connection, not one per useLiveEvents() call ────────────
  * This used to open a fresh `expo/fetch` stream inside every component's own
- * useEffect. Four call sites mount it — app/_layout.tsx, (tabs)/requests,
- * (tabs)/messages, chat/[leadId] — and expo-router keeps tab screens mounted
- * once visited, so a customer with the Requests tab ever opened was holding
- * 2–4 simultaneous SSE connections to the same account for the rest of the
- * session, against a server with no per-user connection cap
- * (customer/stream/route.ts) running as a single PM2 fork. All of it below
- * module scope now: one real connection, fanned out in-process to however
- * many components asked for events, the same way the SERVER's own
+ * useEffect in the client app, before this module was shared. Several call
+ * sites mount it — the root layout, both list screens, a chat thread screen —
+ * and expo-router keeps tab screens mounted once visited, so an account with a
+ * list tab ever opened was holding 2–4 simultaneous SSE connections for the
+ * rest of the session, against a server with no per-user connection cap on
+ * the customer stream running as a single PM2 fork (the staff stream's
+ * `admins` channel DOES cap — see api's sseStream.ts). All of it below module
+ * scope now: one real connection, fanned out in-process to however many
+ * components asked for events, the same way the SERVER's own
  * realtime.service.ts fans one event out to multiple listeners.
  *
  * ── Why this reconnects on its own now ───────────────────────────────────────
- * The previous version only ever reconnected on a foreground TRANSITION
+ * An earlier version only ever reconnected on a foreground TRANSITION
  * (backgrounded → active). A drop for any other reason — a proxy idle
  * timeout, a network blip, the API process restarting — ended the read loop,
  * set `connected` to false, and then nothing: the app stayed foregrounded, so
- * no foreground transition was coming to trigger a retry. A customer could
- * sit with the app open indefinitely, price-verification gate included, and
- * never learn anything changed. Losing and regaining the connection is a
- * normal, not exceptional, outcome of holding one open for an entire session
- * — it needs its own retry loop, not a retry loop borrowed from an unrelated
- * lifecycle event.
+ * no foreground transition was coming to trigger a retry. An account could
+ * sit with the app open indefinitely and never learn anything changed.
+ * Losing and regaining the connection is a normal, not exceptional, outcome
+ * of holding one open for an entire session — it needs its own retry loop,
+ * not a retry loop borrowed from an unrelated lifecycle event.
+ *
+ * ── Who's signed in ────────────────────────────────────────────────────────
+ * This module has no idea whether it's running in the customer client or the
+ * staff Business App — it reads the signed-in subject id from session.ts's
+ * useAuthSubject()/getAuthSubject(), which each app's own auth-state module
+ * (customerAuth.ts / staffAuth.ts) keeps updated. See session.ts's own
+ * comment on that pub/sub for why the dependency runs this direction.
  */
 import { useEffect, useRef, useState } from "react";
 import { AppState, type AppStateStatus } from "react-native";
 import { fetch as expoFetch } from "expo/fetch";
-import { getAccessToken } from "./session";
+import { getConfig } from "./config";
+import { getAccessToken, useAuthSubject } from "./session";
 import { apiKeyHeader, refreshAccessToken, streamUrl } from "./api";
-import { useCustomerAuth } from "./customerAuth";
 
 export interface LiveEvent {
   type: "message" | "lead" | "lead-status";
@@ -62,7 +69,7 @@ export interface LiveEvent {
 // A long-lived singleton by design, same lifetime as the app process — see
 // the module comment above for why this replaced one connection per hook
 // call.
-let currentCustomerId: string | null = null;
+let currentSubjectId: string | null = null;
 let generation = 0;
 let controller: AbortController | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -97,10 +104,10 @@ function scheduleReconnect(forGeneration: number): void {
     reconnectTimer = null;
     // Stale if disconnect() or a newer connect() ran since this was scheduled
     // (generation bumps on both), or if there's no longer a session/foreground
-    // to reconnect for — the AppState/customerId handlers below own those
+    // to reconnect for — the AppState/subject handlers below own those
     // transitions and will call connect() themselves when relevant again.
     if (forGeneration !== generation) return;
-    if (!currentCustomerId || AppState.currentState !== "active") return;
+    if (!currentSubjectId || AppState.currentState !== "active") return;
     connect();
   }, delay);
 }
@@ -119,8 +126,8 @@ function openStream(url: string, token: string, signal: AbortSignal) {
 }
 
 async function connect(): Promise<void> {
-  if (!currentCustomerId) return;
-  const url = streamUrl("/customer/stream");
+  if (!currentSubjectId) return;
+  const url = streamUrl(getConfig().streamPath);
   if (!url) return;
 
   const myGeneration = ++generation;
@@ -143,9 +150,9 @@ async function connect(): Promise<void> {
     // bypassed apiFetch's 401→refresh retry. The result: once the access token
     // expired, every reconnect presented the same dead token, got another 401,
     // and backed off — up to the 30s ceiling, forever. Live updates were simply
-    // gone for the rest of the session, silently, because the interval polling
-    // in requests.tsx/messages.tsx quietly covered for it. It healed only if
-    // some unrelated request happened to trigger a refresh first.
+    // gone for the rest of the session, silently, because interval polling
+    // elsewhere in the app quietly covered for it. It healed only if some
+    // unrelated request happened to trigger a refresh first.
     //
     // refreshAccessToken() is shared with apiFetch, so concurrent 401s across
     // the app still collapse into ONE refresh call.
@@ -154,8 +161,8 @@ async function connect(): Promise<void> {
       if (myGeneration !== generation) return;
       if (!fresh) {
         // The refresh token is dead too (invalidateSession has already told
-        // customerAuth). Reconnecting cannot help; the customerId change that
-        // follows will tear this down.
+        // the app's own auth-state module). Reconnecting cannot help; the
+        // subject-id change that follows will tear this down.
         setConnected(false);
         return;
       }
@@ -237,7 +244,7 @@ function handleAppStateChange(state: AppStateStatus): void {
   // a notification pull-down — none of which is backgrounding, and after all of
   // them the app returns straight to "active". So a two-second glance at Control
   // Centre tore the stream down and rebuilt it; if the rebuild happened to fail
-  // it entered backoff, costing up to 30s of realtime for a gesture the customer
+  // it entered backoff, costing up to 30s of realtime for a gesture the person
   // wouldn't connect to anything.
   //
   // The OS has not suspended the socket in "inactive", so holding it is free and
@@ -249,26 +256,26 @@ function handleAppStateChange(state: AppStateStatus): void {
     // a perfectly healthy connection and reintroduce exactly the churn the
     // branch above exists to stop. When the stream really is down this still
     // fires immediately, which is better than waiting out the backoff — the
-    // customer just came back and is looking at the screen.
+    // person just came back and is looking at the screen.
     backoffAttempt = 0;
-    if (currentCustomerId && !sharedConnected) connect();
+    if (currentSubjectId && !sharedConnected) connect();
   } else if (state === "background") {
     disconnect();
   }
 }
 
-/** Point the shared connection at (or away from) a signed-in customer. A
+/** Point the shared connection at (or away from) a signed-in account. A
  *  no-op when nothing changed, so N mounted consumers calling this with the
  *  same id cost nothing beyond the first. */
-function setLiveEventsCustomer(customerId: string | null): void {
-  if (customerId === currentCustomerId) return;
-  currentCustomerId = customerId;
+function setLiveEventsSubject(subjectId: string | null): void {
+  if (subjectId === currentSubjectId) return;
+  currentSubjectId = subjectId;
   disconnect();
-  if (customerId && AppState.currentState === "active") connect();
+  if (subjectId && AppState.currentState === "active") connect();
 }
 
 /**
- * Subscribe to the customer's live event stream while the app is foregrounded.
+ * Subscribe to the account's live event stream while the app is foregrounded.
  * Reconnects on returning to foreground, on an unexpected drop (with capped
  * backoff), and disconnects on backgrounding rather than holding a socket the
  * OS is going to suspend anyway.
@@ -279,23 +286,22 @@ function setLiveEventsCustomer(customerId: string | null): void {
  *
  * `connected` mirrors the website's hook: polling elsewhere is only ever
  * SLOWED when this is true, never switched off — a stream that silently died
- * must not freeze the screen with no fallback (see requests.tsx's own
- * interval refetch, which exists for exactly the case this hook is still
- * reconnecting).
+ * must not freeze the screen with no fallback (see each app's own list
+ * screens, which keep an interval refetch for exactly the case this hook is
+ * still reconnecting).
  */
 export function useLiveEvents(onEvent: (event: LiveEvent) => void): { connected: boolean } {
   const [connected, setConnectedState] = useState(sharedConnected);
   const handler = useRef(onEvent);
   handler.current = onEvent;
 
-  // ── Why this depends on the signed-in customer ────────────────────────────
-  // connect() bails out when there's no customer id. Re-deriving it from
-  // useCustomerAuth() (rather than reading it once) is what lets a FRESH
+  // ── Why this depends on the signed-in subject ─────────────────────────────
+  // connect() bails out when there's no subject id. Re-deriving it from
+  // useAuthSubject() (rather than reading it once) is what lets a FRESH
   // sign-in — the store starts out signed-out because bootstrapSession is
   // async — pick the connection back up the moment the session resolves,
   // instead of the bail-out being permanent for the rest of the app session.
-  const { customer } = useCustomerAuth();
-  const customerId = customer?.id ?? null;
+  const subjectId = useAuthSubject();
 
   useEffect(() => {
     if (!appStateSubscribed) {
@@ -305,8 +311,8 @@ export function useLiveEvents(onEvent: (event: LiveEvent) => void): { connected:
       // — it deliberately outlives any single component, same as the shared
       // connection it drives. There is exactly one for the life of the app.
     }
-    setLiveEventsCustomer(customerId);
-  }, [customerId]);
+    setLiveEventsSubject(subjectId);
+  }, [subjectId]);
 
   useEffect(() => {
     const wrapped = (event: LiveEvent) => handler.current(event);

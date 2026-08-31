@@ -1,4 +1,4 @@
-import { apiGet } from "./api";
+import { apiGet } from "@alassema/mobile-shared";
 
 export interface FeaturedProject {
   title: string;

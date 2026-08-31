@@ -8,7 +8,7 @@ import Button from "../components/Button";
 import TextField from "../components/TextField";
 import Logo from "../components/Logo";
 import { resetPassword } from "../lib/customerAuth";
-import { ApiError } from "../lib/api";
+import { ApiError } from "@alassema/mobile-shared";
 
 /**
  * Landing screen for the emailed password-reset link — the mobile counterpart
