@@ -13,6 +13,9 @@ import {
   isVersionBelow,
   useBackendHealth,
   usePushNotifications,
+  initErrorReporting,
+  reportError,
+  setReportingRole,
 } from "@alassema/mobile-shared";
 import { bootstrapSession, useStaffAuth } from "../lib/staffAuth";
 import OfflineScreen from "../components/OfflineScreen";
@@ -22,8 +25,11 @@ import CrashScreen from "../components/CrashScreen";
 // expo-router's own top-level crash net: exporting `ErrorBoundary` from the
 // root layout catches anything thrown by the route tree below it
 // (https://docs.expo.dev/router/error-handling/#error-boundaries) — mirrors
-// mobile/client's identical export.
+// mobile/client's identical export. Sentry reporting lives HERE, not inside
+// CrashScreen itself — see that component's own header comment on why it
+// stays dependency-free.
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  reportError(error);
   return <CrashScreen error={error} retry={retry} />;
 }
 
@@ -31,6 +37,14 @@ export function ErrorBoundary({ error, retry }: { error: Error; retry: () => voi
 // @alassema/mobile-shared's rtl.ts for why this can't be deferred to a
 // component effect.
 ensureRTL();
+
+// No-ops until EXPO_PUBLIC_SENTRY_DSN is set (see .env.example) — see
+// @alassema/mobile-shared's errorReporting.ts for the scrubbing rule.
+initErrorReporting({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  app: "business",
+  appVersion: currentAppVersion(),
+});
 
 // Held until fonts are loaded and the stored session is resolved, so the
 // very first frame is already correct — no flash of system-font text, no
@@ -42,7 +56,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 export default function RootLayout() {
   const fontsLoaded = useAppFonts();
   const [sessionReady, setSessionReady] = useState(false);
-  const { loading: authLoading } = useStaffAuth();
+  const { user, loading: authLoading } = useStaffAuth();
+
+  useEffect(() => {
+    setReportingRole(user?.role ?? null);
+  }, [user?.role]);
 
   // Registers for push once signed in (no-ops until then — see its own
   // useAuthSubject() check) and wires notification-tap routing through

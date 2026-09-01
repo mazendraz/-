@@ -12,6 +12,7 @@
     "@formatjs/intl-getcanonicallocales": "^3.2.11",
     "@formatjs/intl-pluralrules": "^6.3.13",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@sentry/react-native": "~7.2.0",
     "expo": "^54.0.0",
     "expo-apple-authentication": "~8.0.8",
     "expo-auth-session": "~7.0.11",

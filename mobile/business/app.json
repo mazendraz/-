@@ -54,7 +54,8 @@
           "photosPermission": "يحتاج التطبيق للوصول لصورك عشان ترفع صور معرض الأعمال.",
           "cameraPermission": "يحتاج التطبيق للكاميرا عشان تصوّر صور معرض الأعمال."
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "scheme": "alassemabiz",
     "extra": {

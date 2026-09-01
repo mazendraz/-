@@ -36,6 +36,7 @@ export default function MoreScreen() {
         { label: "قائمة الأسعار", href: "/offerings" },
         { label: "خصومات الباقات", href: "/bundle-rules" },
         { label: "بيانات الشركة", href: "/profile" },
+        { label: "الأجهزة والجلسات", href: "/sessions" },
       ]
     : [
         { label: "بحث شامل", href: "/search" },
@@ -46,6 +47,7 @@ export default function MoreScreen() {
         { label: "الصفحات القانونية", href: "/content/pages" },
         { label: "قوالب البريد الإلكتروني", href: "/content/email-templates" },
         { label: "سجل الإجراءات", href: "/audit-log" },
+        { label: "الأجهزة والجلسات", href: "/sessions" },
         // Only shown at all when the admin holds at least one desktop
         // permission grant (phase-12's own instruction — "hide the whole
         // Control Center section when the permission array is empty").

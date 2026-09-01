@@ -17,6 +17,9 @@ import {
   isVersionBelow,
   useMaintenance,
   useBackendHealth,
+  initErrorReporting,
+  reportError,
+  setReportingRole,
 } from "@alassema/mobile-shared";
 import { bootstrapSession, useCustomerAuth } from "../lib/customerAuth";
 import { fetchAccountLeads } from "../lib/customerLeads";
@@ -34,14 +37,25 @@ import CrashScreen from "../components/CrashScreen";
 // mobile counterpart of the website's <ErrorBoundary> class mounted above
 // <RouterProvider> in main.tsx. Before this existed, an unhandled render
 // error anywhere in the app meant a permanent blank/white screen with no way
-// back short of force-quitting.
+// back short of force-quitting. Sentry reporting lives HERE, not inside
+// CrashScreen itself — see that component's own header comment on why it
+// stays dependency-free.
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => void }) {
+  reportError(error);
   return <CrashScreen error={error} retry={retry} />;
 }
 
 // RTL must be forced before the FIRST screen mounts — see lib/rtl.ts for why
 // this can't be deferred to a component effect.
 ensureRTL();
+
+// No-ops until EXPO_PUBLIC_SENTRY_DSN is set (see .env.example) — see
+// @alassema/mobile-shared's errorReporting.ts for the scrubbing rule.
+initErrorReporting({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  app: "client",
+  appVersion: currentAppVersion(),
+});
 
 // Held until fonts are loaded and the stored session is resolved, so the very
 // first frame the user sees is already correct — no flash of system-font text,
@@ -54,6 +68,10 @@ export default function RootLayout() {
   const fontsLoaded = useAppFonts();
   const [sessionReady, setSessionReady] = useState(false);
   const { customer } = useCustomerAuth();
+
+  useEffect(() => {
+    setReportingRole(customer ? "customer" : "guest");
+  }, [customer]);
 
   // ── Maintenance mode (phase 10) ───────────────────────────────────────────
   // Checked FIRST, ahead of the price-verification gate below — same

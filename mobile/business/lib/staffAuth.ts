@@ -197,6 +197,25 @@ export async function revokeSessions(sessionId?: string): Promise<number> {
   return revoked;
 }
 
+/**
+ * "End all sessions" from the devices/sessions screen (task 13.3). Unlike
+ * ending ONE other device, this also revokes THIS device's own session —
+ * see api's /auth/sessions route.ts: an empty body ends them all, no
+ * "except the caller" carve-out exists server-side. So the screen must be
+ * honest that it signs the current device out too, and this function
+ * mirrors signOut()'s local cleanup afterward rather than leaving the app
+ * believing it's still signed in until the access token happens to expire.
+ * Skips /auth/logout (unlike signOut()) since /auth/sessions already
+ * revoked this device's row — calling both would be redundant.
+ */
+export async function revokeAllSessions(): Promise<number> {
+  await unregisterPush().catch(() => {});
+  const revoked = await revokeSessions();
+  await clearTokens();
+  setUser(null);
+  return revoked;
+}
+
 /** Subscribe to the staff session. */
 export function useStaffAuth(): Snapshot {
   return useSyncExternalStore(

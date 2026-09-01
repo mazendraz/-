@@ -23,3 +23,4 @@ export * from "./fonts";
 export * from "./backendHealth";
 export * from "./maintenance";
 export * from "./useRefreshOnFocus";
+export * from "./errorReporting";
