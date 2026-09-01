@@ -94,7 +94,26 @@ by actor and action.
 | GET | `/admin/telegram/link` | Produce a link URL |
 | GET | `/admin/audit-logs` | `ApiPage<ApiAuditLog>` |
 
-All `adminOnly`. `PUT` routes take a **full representation**.
+All `adminOnly`.
+
+> **Correction (found live): the "PUT routes take a full representation"
+> line above does NOT apply to any route in this phase.** Checked every one
+> of `updateSettingsSchema`/`updateMaintenanceSchema`/
+> `updateAdminNotificationSettingsSchema`/`updateLegalPagesSchema`/
+> `updateEmailTemplatesSchema` (`validation/settings.ts`) before writing a
+> single screen against them, precisely because phase 10 had just found a
+> real data-loss bug behind an identical-sounding claim for the company/
+> category PUTs. All five are hand-written with plain `.optional()` fields
+> and — unlike `updateCompanySchema`/`updateCategorySchema` — **no Zod
+> `.default(...)` anywhere**, so `.partial()`'s "still applies a default
+> when a field is omitted" hazard (phase 10's actual bug) can't occur here.
+> Their own route comments already say "partial update" — that framing is
+> correct for this phase's five routes; phase 10's company/category PUTs
+> were the one place it wasn't. `PATCH /admin/users/[id]`
+> (`updateUserSchema`) is separately hand-written the same safe way, not
+> derived via `.partial()` at all. Net effect: these screens can send just
+> the one changed field and don't need CompanyForm/CategoryForm's
+> always-send-the-full-record discipline.
 
 ### One route to verify before building on it
 
@@ -103,6 +122,19 @@ with no backing table — the admin notification bell was never given a real fee
 **Confirm its current behaviour before building any screen on it.** If it is still
 a stub, the admin's notification surface is push plus the SSE badge from phase 8,
 and that is the honest answer.
+
+> **Confirmed (found live): still a stub, and out of scope for another
+> reason too.** Read the actual route file: it reuses `recentActivity()`
+> (the desktop Control Center's own activity feed) and filters every event
+> through `hasDesktopPermission(user, ...)` against desktop-only
+> permissions (`operations:read`/`finance:read`/`business:read`) — and each
+> event's `path` is a **desktop route** (`/operations/requests`,
+> `/finance/transactions`, etc.), not anything this app has a screen for.
+> An admin with no desktop-permission grants (the default — see phase-9's
+> identical finding for `/admin/search`) gets an empty list regardless. No
+> screen built for this in this phase, per the plan's own "honest answer":
+> push (phase 4) plus the "الموافقات" tab's badge (phase 9) is the admin's
+> real notification surface on mobile.
 
 ---
 

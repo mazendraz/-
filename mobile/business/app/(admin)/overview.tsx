@@ -6,14 +6,17 @@ import type { ApiLead, ApiLeadStats } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAdminLeads, fetchAdminStats } from "../../lib/adminLeads";
+import { fetchMaintenanceStatus } from "../../lib/adminSettings";
 import KpiTile from "../../components/KpiTile";
 import LeadRow from "../../components/LeadRow";
 import LeadsChart from "../../components/LeadsChart";
+import MaintenanceBanner from "../../components/MaintenanceBanner";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 export default function AdminOverview() {
   const [stats, setStats] = useState<ApiLeadStats | null>(null);
   const [recentLeads, setRecentLeads] = useState<ApiLead[] | null>(null);
+  const [maintenanceOn, setMaintenanceOn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,12 +24,14 @@ export default function AdminOverview() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setError(null);
     try {
-      const [statsResult, leadsResult] = await Promise.all([
+      const [statsResult, leadsResult, maintenance] = await Promise.all([
         fetchAdminStats(),
         fetchAdminLeads({ page: 1, pageSize: 5 }),
+        fetchMaintenanceStatus().catch(() => null),
       ]);
       setStats(statsResult);
       setRecentLeads(leadsResult.data);
+      if (maintenance) setMaintenanceOn(maintenance.enabled);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل البيانات. جرّب تاني.");
     } finally {
@@ -72,6 +77,8 @@ export default function AdminOverview() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {maintenanceOn ? <MaintenanceBanner /> : null}
+
         <View style={styles.kpiRow}>
           <KpiTile
             label="إجمالي الطلبات"

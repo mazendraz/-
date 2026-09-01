@@ -17,9 +17,11 @@ interface MenuItem {
  * Account + sign-out, plus a role-branched menu. Provider items land in
  * phase 6; admin's global search lands in phase 8, categories/platform
  * waitlist in phase 10 (companies themselves have their own tab —
- * (admin)/companies.tsx), team/settings/maintenance in phase 11 — this
- * screen is the shared shell every phase grows into, not a screen any one
- * phase replaces wholesale.
+ * (admin)/companies.tsx), team/settings/legal-pages/email-templates/audit-
+ * log in phase 11 (maintenance/notifications/telegram nest under
+ * /settings's own section nav, not listed separately here) — this screen
+ * is the shared shell every phase grows into, not a screen any one phase
+ * replaces wholesale.
  */
 export default function MoreScreen() {
   const { user } = useStaffAuth();
@@ -38,6 +40,11 @@ export default function MoreScreen() {
         { label: "بحث شامل", href: "/search" },
         { label: "التصنيفات", href: "/categories" },
         { label: "قائمة الانتظار (كل الشركات)", href: "/platform-waitlist" },
+        { label: "الفريق", href: "/team" },
+        { label: "إعدادات المنصة", href: "/settings" },
+        { label: "الصفحات القانونية", href: "/content/pages" },
+        { label: "قوالب البريد الإلكتروني", href: "/content/email-templates" },
+        { label: "سجل الإجراءات", href: "/audit-log" },
       ];
 
   async function handleSignOut() {
