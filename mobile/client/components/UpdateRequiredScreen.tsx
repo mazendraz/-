@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
+import { rowStart } from "@alassema/mobile-shared";
 
 /**
  * Blocking "you must update" screen — same rendered-instead-of-the-whole-app
@@ -71,7 +72,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   updateBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.primary,

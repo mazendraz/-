@@ -3,7 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { colors, type } from "@alassema/core";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, assetUri } from "@alassema/mobile-shared";
 import { uploadAdminImage } from "../lib/adminUpload";
 
 /**
@@ -55,7 +55,13 @@ export default function GalleryManager({ images, onChange }: { images: string[];
     <View style={styles.wrap}>
       {images.map((uri, i) => (
         <View key={`${uri}-${i}`} style={styles.row}>
-          <Image source={{ uri }} style={styles.thumb} contentFit="cover" />
+          {/* assetUri: a seeded company's gallery can still hold a root-
+              relative path ("/img/seed-15.jpg") — RN has no origin to
+              resolve that against, unlike a browser. The raw `uri` stays
+              in `images`/`onChange` untouched; only the rendered source is
+              resolved, so reordering/removing never writes back a resolved
+              absolute URL over what may still be a relative one. */}
+          <Image source={{ uri: assetUri(uri) }} style={styles.thumb} contentFit="cover" />
           <View style={styles.actions}>
             <Pressable style={styles.actionBtn} disabled={i === 0} onPress={() => move(i, -1)}>
               <Text style={[styles.actionText, i === 0 && styles.actionTextDisabled]}>▲</Text>

@@ -6,6 +6,7 @@ import Markdown from "react-native-markdown-display";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchLegalPages } from "../../lib/pages";
+import { rowStart } from "@alassema/mobile-shared";
 
 /** Terms / Privacy — the mobile counterpart of the website's LegalPage.tsx.
  *  Content is admin-managed Markdown; rendered with react-native-markdown-display
@@ -51,7 +52,7 @@ export default function LegalPage() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
-          <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
+          <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
         <View style={{ width: 22 }} />
@@ -74,7 +75,7 @@ export default function LegalPage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 8 },
+  header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 8 },
   headerTitle: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface },
   scroll: { padding: 20, paddingTop: 4 },
   loading: { marginTop: 40 },
@@ -94,7 +95,7 @@ const markdownStyles = {
   em: { fontStyle: "italic" as const },
   bullet_list: { marginBottom: 12 },
   ordered_list: { marginBottom: 12 },
-  list_item: { flexDirection: "row-reverse" as const, marginBottom: 4 },
+  list_item: { flexDirection: rowStart, marginBottom: 4 },
   link: { color: colors.primary, fontFamily: "Cairo_600SemiBold" },
   hr: { backgroundColor: colors.outlineVariant, height: 1, marginVertical: 16 },
 };

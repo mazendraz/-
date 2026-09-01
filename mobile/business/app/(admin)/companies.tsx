@@ -7,6 +7,7 @@ import { colors, type } from "@alassema/core";
 import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAdminCompanies, type CompanyStatusValue } from "../../lib/adminCompanies";
 import Button from "../../components/Button";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -92,6 +93,7 @@ export default function AdminCompanies() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الشركات" />
       <View style={styles.filterWrap}>
         <TextInput
           style={styles.search}

@@ -8,7 +8,7 @@ import { colors, type } from "@alassema/core";
 import Icon, { type IconName } from "../components/Icon";
 import { fetchCategories } from "../lib/categories";
 import { fetchCompanies } from "../lib/companies";
-import { assetUri } from "../lib/assetUrl";
+import { assetUri, rowStart } from "@alassema/mobile-shared";
 
 type Priority = "rating" | "projects" | "reviews";
 
@@ -84,7 +84,7 @@ export default function GuidedStart() {
       <View style={styles.header}>
         {step > 0 ? (
           <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => setStep((s) => s - 1)} hitSlop={12}>
-            <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
+            <Icon name="arrow_forward" size={22} color={colors.onSurface} />
           </Pressable>
         ) : (
           <Pressable accessibilityRole="button" accessibilityLabel="إغلاق" onPress={() => router.back()} hitSlop={12}>
@@ -210,8 +210,8 @@ export default function GuidedStart() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12 },
-  progressRow: { flexDirection: "row-reverse", gap: 6, flex: 1, marginHorizontal: 16 },
+  header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 12 },
+  progressRow: { flexDirection: rowStart, gap: 6, flex: 1, marginHorizontal: 16 },
   progressDot: { height: 5, borderRadius: 3, flex: 1, backgroundColor: colors.surfaceContainerHigh },
   progressDotActive: { backgroundColor: colors.primary },
   stepBody: { paddingHorizontal: 20, paddingBottom: 24 },
@@ -223,15 +223,15 @@ const styles = StyleSheet.create({
   optionTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
   optionMeta: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
   priorityList: { gap: 10 },
-  priorityCard: { flexDirection: "row-reverse", alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.outlineVariant },
+  priorityCard: { flexDirection: rowStart, alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: colors.outlineVariant },
   priorityIcon: { width: 40, height: 40, borderRadius: 10, backgroundColor: colors.primaryContainer, alignItems: "center", justifyContent: "center" },
   priorityText: { flex: 1 },
   priorityTitle: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right" },
   priorityDesc: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
   matchCard: { backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, marginBottom: 10, overflow: "hidden", borderWidth: 1, borderColor: colors.outlineVariant },
-  bestBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 4, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 5, alignSelf: "flex-end" },
+  bestBadge: { flexDirection: rowStart, alignItems: "center", gap: 4, backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 5, alignSelf: "flex-end" },
   bestBadgeText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimary },
-  matchRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12, padding: 12 },
+  matchRow: { flexDirection: rowStart, alignItems: "center", gap: 12, padding: 12 },
   matchLogo: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.surfaceContainer },
   matchText: { flex: 1 },
   matchName: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right" },

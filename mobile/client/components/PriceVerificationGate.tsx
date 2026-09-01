@@ -8,8 +8,7 @@ import Icon from "./Icon";
 import ReviewModal from "./ReviewModal";
 import { verifyLeadAmount } from "../lib/leads";
 import { formatEgp } from "../lib/pricing";
-import { ApiError } from "@alassema/mobile-shared";
-import { useSettings } from "../lib/settings";
+import { ApiError, useSettings, rowStart } from "@alassema/mobile-shared";
 
 type Phase = "amount" | "discrepancy" | "confirmed" | "rating";
 
@@ -359,7 +358,7 @@ const styles = StyleSheet.create({
   footerNote: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "center", marginTop: 6 },
   discTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" },
   reportedRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: colors.surfaceContainer,
@@ -371,7 +370,7 @@ const styles = StyleSheet.create({
   reportedValue: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, color: colors.onSurface },
   fieldLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
   amountRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     borderWidth: 2,

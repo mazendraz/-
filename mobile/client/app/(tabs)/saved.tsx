@@ -10,8 +10,7 @@ import Logo from "../../components/Logo";
 import { fetchCompany } from "../../lib/companyDetail";
 import { toggleSaved, useSavedSlugs } from "../../lib/saved";
 import { useRequireAccount } from "../../lib/authGate";
-import { useRefreshOnFocus } from "@alassema/mobile-shared";
-import { assetUri } from "../../lib/assetUrl";
+import { useRefreshOnFocus, assetUri, rowStart } from "@alassema/mobile-shared";
 
 /**
  * Saved companies — reads the device-local list (lib/saved.ts) and resolves
@@ -164,11 +163,11 @@ export default function Saved() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12 },
-  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  topBar: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12 },
+  topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
   title: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
   searchRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     marginHorizontal: 20,
@@ -189,13 +188,13 @@ const styles = StyleSheet.create({
   empty: { alignItems: "center", gap: 6, paddingTop: 80 },
   emptyTitle: { fontSize: type.subhead.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
   emptyBody: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "center" },
-  card: { flexDirection: "row-reverse", alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.outlineVariant },
+  card: { flexDirection: rowStart, alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.outlineVariant },
   cardPressed: { opacity: 0.7 },
   logo: { width: 44, height: 44, borderRadius: 10, backgroundColor: colors.surfaceContainer },
   cardText: { flex: 1 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   category: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right" },
-  ratingRow: { flexDirection: "row-reverse", alignItems: "center", gap: 3, marginTop: 4 },
+  ratingRow: { flexDirection: rowStart, alignItems: "center", gap: 3, marginTop: 4 },
   ratingText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
   ratingStar: { fontSize: type.caption.fontSize, color: "#f59e0b" },
   reviewCount: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },

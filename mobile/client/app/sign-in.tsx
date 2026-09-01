@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,7 +26,7 @@ import {
 } from "../lib/customerAuth";
 import { isGoogleSignInConfigured, useGoogleSignIn } from "../lib/googleAuth";
 import { isAppleSignInAvailable, signInWithApple as runAppleSheet } from "../lib/appleAuth";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, rowStart } from "@alassema/mobile-shared";
 
 type Mode = "signin" | "register";
 
@@ -273,6 +274,24 @@ export default function SignIn() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* A way out. This screen is most often PUSHED — a guest taps a locked
+          tab, or an action asks them to sign in first — and until now it had
+          no back affordance at all, so the only escape was the tab bar it
+          was covering. Hidden when there is genuinely nowhere to go back to
+          (a cold start that lands here directly), rather than showing an
+          arrow that does nothing. */}
+      {router.canGoBack() && (
+        <View style={styles.backRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="رجوع"
+            onPress={() => router.back()}
+            hitSlop={12}
+          >
+            <Icon name="arrow_forward" size={22} color={colors.onSurface} />
+          </Pressable>
+        </View>
+      )}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.flex}
@@ -390,6 +409,9 @@ export default function SignIn() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surfaceContainer },
+  // `rowStart` puts the arrow on the reading-start edge — the right, in
+  // Arabic — which is where a back control belongs in an RTL UI.
+  backRow: { flexDirection: rowStart, paddingHorizontal: 16, paddingTop: 4 },
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: "center", padding: 20 },
   card: {
@@ -476,7 +498,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 2,
   },
-  stepRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  stepRow: { flexDirection: rowStart, alignItems: "center", gap: 10 },
   stepNum: {
     width: 24,
     height: 24,
@@ -503,7 +525,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   registeredActions: { gap: 12, marginTop: 2 },
-  resentRow: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 6 },
+  resentRow: { flexDirection: rowStart, alignItems: "center", justifyContent: "center", gap: 6 },
   forgotLink: {
     fontSize: type.caption.fontSize,
     fontFamily: "Cairo_600SemiBold",

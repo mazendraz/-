@@ -19,6 +19,15 @@ export interface MobileConfig {
   baseUrl: string;
   /** Optional shared-secret header value (X-Api-Key) — empty string when unset. */
   apiKey: string;
+  /**
+   * Origin that serves root-relative media ("/img/seed-15.jpg") — see
+   * assetUrl.ts's own header comment. Empty string (the default) means
+   * "derive it from baseUrl", which is correct for the production
+   * single-origin deploy; only local dev (API and images on different
+   * ports) needs this set explicitly, same as each app's own
+   * EXPO_PUBLIC_ASSET_URL .env.example entry already documents.
+   */
+  assetUrl: string;
   /** Exchanges a refresh token for a new pair. Client: "/auth/customer/refresh".
    *  Business App: "/auth/refresh". */
   refreshPath: string;

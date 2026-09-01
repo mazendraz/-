@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Icon from "../components/Icon";
+import { assetUri, rowStart } from "@alassema/mobile-shared";
 import {
   addRecentSearch,
   clearRecentSearches,
@@ -12,7 +13,6 @@ import {
   searchRemote,
   type SearchResult,
 } from "../lib/search";
-import { assetUri } from "../lib/assetUrl";
 
 const TYPE_CHIP: Record<SearchResult["type"], string> = {
   category: "فئة",
@@ -203,7 +203,7 @@ export default function Search() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 16,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   cancel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },
   listContent: { padding: 16, gap: 8, flexGrow: 1 },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 12,
     backgroundColor: colors.surfaceContainerLowest,
@@ -243,12 +243,12 @@ const styles = StyleSheet.create({
   browseBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
   emptyState: { padding: 16, gap: 24 },
   section: { gap: 10 },
-  sectionHead: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  sectionHead: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   sectionTitle: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline },
   sectionClear: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: colors.outline },
-  chipWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
+  chipWrap: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
   recentChip: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.surfaceContainer,
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   },
   recentChipText: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, color: colors.onSurfaceVariant },
   quickLinkWide: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 12,
     backgroundColor: colors.surfaceContainerLowest,
@@ -268,10 +268,10 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
   },
   quickLinkTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
-  quickLinkRow: { flexDirection: "row-reverse", gap: 8 },
+  quickLinkRow: { flexDirection: rowStart, gap: 8 },
   quickLinkHalf: {
     flex: 1,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     backgroundColor: colors.surfaceContainer,

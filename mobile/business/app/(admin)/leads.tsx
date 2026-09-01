@@ -9,6 +9,7 @@ import { fetchAdminLeads } from "../../lib/adminLeads";
 import { fetchAdminCompanies } from "../../lib/adminCompanies";
 import LeadRow from "../../components/LeadRow";
 import FilterBar from "../../components/FilterBar";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -159,6 +160,7 @@ export default function AdminLeads() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الطلبات" />
       <FilterBar status={status} onStatusChange={setStatus} search={search} onSearchChange={setSearch} />
       <CompanyFilter
         companyId={companyId}

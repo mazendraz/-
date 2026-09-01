@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import type { ApiProject } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { assetUri, textStart } from "@alassema/mobile-shared";
 
 const STATUS_LABEL: Record<NonNullable<ApiProject["status"]>, { label: string; tone: "pending" | "approved" | "rejected" }> = {
   PENDING: { label: "بانتظار المراجعة", tone: "pending" },
@@ -17,8 +17,9 @@ export default function ProjectCard({ project, onDelete }: { project: ApiProject
     <View style={styles.card}>
       {/* expo-image, not RN's Image — uploaded photos are WebP, and RN's own
           Image has no iOS WebP decoder (a hard-learned lesson elsewhere in
-          this codebase — see mobile/client's own comments on the same). */}
-      <Image source={{ uri: project.img }} style={styles.thumb} contentFit="cover" />
+          this codebase — see mobile/client's own comments on the same).
+          assetUri: a seeded project's img can still be root-relative. */}
+      <Image source={{ uri: assetUri(project.img) }} style={styles.thumb} contentFit="cover" />
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{project.title}</Text>
         <Text style={styles.year}>{project.year}</Text>

@@ -19,8 +19,7 @@ import Icon from "../../components/Icon";
 import Logo from "../../components/Logo";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies, type CompanySort } from "../../lib/companies";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
-import { assetUri, firstAssetUri } from "../../lib/assetUrl";
+import { ApiError, useRefreshOnFocus, assetUri, firstAssetUri, rowStart } from "@alassema/mobile-shared";
 
 const PAGE_SIZE = 20;
 
@@ -459,14 +458,14 @@ function ActiveChip({ label, onRemove }: { label: string; onRemove: () => void }
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   topBar: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 12,
   },
-  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
-  topBarActions: { flexDirection: "row-reverse", alignItems: "center", gap: 18 },
+  topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
+  topBarActions: { flexDirection: rowStart, alignItems: "center", gap: 18 },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",
@@ -474,7 +473,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   searchRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     marginHorizontal: 20,
@@ -493,7 +492,7 @@ const styles = StyleSheet.create({
   },
   filterRow: { marginTop: 8, paddingHorizontal: 20 },
   filterBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     backgroundColor: colors.surfaceContainer,
@@ -516,9 +515,9 @@ const styles = StyleSheet.create({
   },
   filterBtnBadgeText: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.onPrimary },
   activeRow: { flexGrow: 0, marginTop: 8 },
-  activeScroll: { flexDirection: "row-reverse", gap: 8, paddingHorizontal: 20 },
+  activeScroll: { flexDirection: rowStart, gap: 8, paddingHorizontal: 20 },
   activeChip: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 5,
     backgroundColor: colors.primary,
@@ -534,7 +533,7 @@ const styles = StyleSheet.create({
   errorBanner: { backgroundColor: colors.errorContainer, marginHorizontal: 20, marginTop: 10, borderRadius: 12, padding: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
   resultsRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -572,7 +571,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     left: 10,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 3,
     backgroundColor: "rgba(255,255,255,0.92)",
@@ -585,7 +584,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 10,
     right: 10,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 3,
     backgroundColor: "#d97706",
@@ -597,13 +596,13 @@ const styles = StyleSheet.create({
   cardBody: { padding: 12, gap: 2 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   category: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right" },
-  ratingRow: { flexDirection: "row-reverse", alignItems: "center", gap: 3, marginTop: 3 },
+  ratingRow: { flexDirection: rowStart, alignItems: "center", gap: 3, marginTop: 3 },
   ratingStar: { fontSize: type.caption.fontSize, color: "#f59e0b" },
   ratingText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
   reviewCount: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
   tagline: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right", marginTop: 4, lineHeight: 17 },
   cardFooter: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: 8,
@@ -612,7 +611,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.outlineVariant,
   },
   projectsText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
-  viewRow: { flexDirection: "row-reverse", alignItems: "center", gap: 3 },
+  viewRow: { flexDirection: rowStart, alignItems: "center", gap: 3 },
   viewText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   sheet: {
@@ -634,7 +633,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sheetHeader: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
@@ -657,9 +656,9 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 8,
   },
-  chipWrap: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8, paddingHorizontal: 20 },
+  chipWrap: { flexDirection: rowStart, flexWrap: "wrap", gap: 8, paddingHorizontal: 20 },
   sheetFooter: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 10,
     paddingHorizontal: 20,
@@ -678,7 +677,7 @@ const styles = StyleSheet.create({
   sheetClear: { paddingVertical: 12, paddingHorizontal: 6 },
   sheetClearText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },
   sheetRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,

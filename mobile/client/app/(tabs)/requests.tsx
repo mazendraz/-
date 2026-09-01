@@ -10,7 +10,7 @@ import WaitlistStatusPill from "../../components/WaitlistStatusPill";
 import { router } from "expo-router";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchMyWaitlistEntries } from "../../lib/waitlist";
-import { useLiveEvents, ApiError } from "@alassema/mobile-shared";
+import { useLiveEvents, ApiError, rowStart } from "@alassema/mobile-shared";
 import ReviewModal from "../../components/ReviewModal";
 import { useRequireAccount } from "../../lib/authGate";
 import { formatLeadEstimate } from "../../lib/pricing";
@@ -349,14 +349,14 @@ function WaitlistCard({ entry }: { entry: ApiWaitlistEntry }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   topBar: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 4,
   },
-  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   searchRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     marginHorizontal: 20,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
   },
   filterRow: { flexGrow: 0, marginTop: 8 },
-  filterContent: { flexDirection: "row-reverse", paddingHorizontal: 20, gap: 8 },
+  filterContent: { flexDirection: rowStart, paddingHorizontal: 20, gap: 8 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.surfaceContainer },
   filterChipActive: { backgroundColor: colors.primary },
   filterChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },
@@ -396,20 +396,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.outlineVariant,
   },
-  cardHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  cardHeader: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   company: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, flexShrink: 1, textAlign: "right" },
   service: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right" },
-  estimateRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 6, backgroundColor: colors.surfaceContainer, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  estimateRow: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", marginTop: 6, backgroundColor: colors.surfaceContainer, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   estimateLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.outline },
   estimateValue: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   note: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", backgroundColor: colors.surfaceContainer, borderRadius: 8, padding: 8 },
   queueNote: { fontFamily: "Cairo_500Medium", fontSize: type.caption.fontSize, color: "#92400e", textAlign: "right", lineHeight: 20 },
   queueNoteDone: { color: colors.onSuccessContainer },
-  waitlistBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 4, alignSelf: "flex-end" },
+  waitlistBadge: { flexDirection: rowStart, alignItems: "center", gap: 4, alignSelf: "flex-end" },
   waitlistBadgeText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: "#92400e" },
-  cardFooter: { flexDirection: "row-reverse", justifyContent: "space-between", marginTop: 4 },
-  cardActions: { flexDirection: "row-reverse", gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.outlineVariant },
-  actionBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  cardFooter: { flexDirection: rowStart, justifyContent: "space-between", marginTop: 4 },
+  cardActions: { flexDirection: rowStart, gap: 16, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.outlineVariant },
+  actionBtn: { flexDirection: rowStart, alignItems: "center", gap: 4 },
   viewCompanyBtn: { alignSelf: "flex-end", marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.outlineVariant, width: "100%", alignItems: "center" },
   actionText: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: colors.primary },
   ref: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.outline, writingDirection: "ltr" },

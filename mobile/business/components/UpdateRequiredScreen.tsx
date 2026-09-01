@@ -1,6 +1,7 @@
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
+import Logo from "./Logo";
 
 /**
  * Blocking "you must update" screen — same rendered-instead-of-the-whole-app
@@ -20,7 +21,7 @@ export default function UpdateRequiredScreen({
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.brand}>العاصمة</Text>
+        <Logo size={64} />
         <Text style={styles.title}>فيه تحديث لازم تنزّله</Text>
         <Text style={styles.message}>
           {status.message?.trim() ||
@@ -46,17 +47,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: { width: "100%", maxWidth: 380, alignItems: "center", gap: 10 },
-  brand: {
-    fontSize: type.title.fontSize,
-    fontFamily: "Alexandria_700Bold",
-    color: colors.primary,
-    marginBottom: 8,
-  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",
+    marginTop: 8,
   },
   message: {
     fontSize: type.body.fontSize,

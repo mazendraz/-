@@ -47,7 +47,20 @@ const MATERIAL_ICON_NAME = {
   mark_email_unread: "mark-email-unread",
   check_circle: "check-circle",
   search: "search",
+  // Both directions are real glyphs in the bundled set. They used to be faked
+  // by rendering the opposite one under `transform: [{ scaleX: -1 }]`, which
+  // is how the app ended up with back arrows pointing BOTH ways: every screen
+  // that remembered the transform mirrored correctly for Arabic and every
+  // screen that forgot it pointed the wrong way. A directional icon is picked
+  // by NAME here now, so there is nothing left to forget.
+  //
+  // Which is which, in an Arabic (right-to-left) UI: "back"/"up a level"
+  // points RIGHT (arrow_forward, chevron_right); "onward"/"into this" points
+  // LEFT (arrow_back, chevron_left). That is the reading direction, not the
+  // engine's, so it does not vary by platform.
   arrow_back: "arrow-back",
+  arrow_forward: "arrow-forward",
+  chevron_left: "chevron-left",
   close: "close",
   send: "send",
   forum: "forum",
@@ -122,7 +135,20 @@ const MATERIAL_ICON_NAME = {
   rate_review: "rate-review",
 } as const;
 
+/** What a CALL SITE may write. Deliberately just the hand-written map's keys,
+ *  so an unmapped name typed into JSX stays a compile error rather than a
+ *  blank icon on a phone. */
 export type IconName = keyof typeof MATERIAL_ICON_NAME;
+
+declare const RESOLVED: unique symbol;
+/**
+ * What `toIconName` returns: either one of the names above, or a MaterialIcons
+ * glyph name it verified against the bundled set at runtime. The branded arm
+ * is unforgeable by a string literal, so widening `Icon`'s prop to accept this
+ * does NOT reopen the "any string compiles" hole `IconName` exists to close —
+ * a raw string still has to come through toIconName to get here.
+ */
+export type ResolvedIconName = IconName | (string & { readonly [RESOLVED]?: true });
 
 /**
  * Narrow a Material Symbols name that came from DATA rather than from a call
@@ -136,8 +162,32 @@ export type IconName = keyof typeof MATERIAL_ICON_NAME;
  * the generic `category` glyph — the same default the website's own
  * CategoryEditor writes for a category with no icon chosen.
  */
-export function toIconName(name: string | null | undefined, fallback: IconName = "category"): IconName {
-  return name != null && name in MATERIAL_ICON_NAME ? (name as IconName) : fallback;
+export function toIconName(
+  name: string | null | undefined,
+  fallback: IconName = "category",
+): ResolvedIconName {
+  if (name == null) return fallback;
+  const symbols = name.trim().toLowerCase();
+  if (symbols in MATERIAL_ICON_NAME) return symbols as IconName;
+
+  // The map above only ever listed the handful of category glyphs the seeded
+  // catalogue shipped with, so EVERY icon an admin has picked since — the
+  // `plumbing` on the plumbing category, the `sensor_door` on armoured doors —
+  // fell through to the generic `category` glyph, and the whole services grid
+  // rendered as the same square. That is the "the category icons are not the
+  // ones I set" report.
+  //
+  // The two families' names differ by exactly one rule for the overwhelming
+  // majority of glyphs — Material Symbols writes `local_shipping`, Material
+  // Icons writes `local-shipping` — so applying that rule and then checking
+  // the bundled glyph map covers all ~2,200 icons in the set instead of the
+  // ~90 written out by hand. The check is what keeps the old guarantee: a
+  // name with no glyph still degrades to `category` rather than rendering a
+  // blank box.
+  const kebab = symbols.replace(/_/g, "-");
+  if (kebab in MaterialIcons.glyphMap) return kebab as ResolvedIconName;
+
+  return fallback;
 }
 
 export default function Icon({
@@ -146,7 +196,7 @@ export default function Icon({
   color = colors.onSurface,
   style,
 }: {
-  name: IconName;
+  name: ResolvedIconName;
   size?: number;
   // ColorValue, not string: react-navigation's Tabs.Screen `tabBarIcon` callback
   // hands back a ColorValue (it supports PlatformColor()), and a plain
@@ -156,5 +206,9 @@ export default function Icon({
    *  a directional icon for RTL, which RN's layout flip does not do for you. */
   style?: StyleProp<TextStyle>;
 }) {
-  return <MaterialIcons name={MATERIAL_ICON_NAME[name]} size={size} color={color} style={style} />;
+  // `?? name`: toIconName above can resolve a data-supplied glyph that is real
+  // in the bundled set but absent from the hand-written map, in which case the
+  // name it returns is ALREADY the MaterialIcons spelling.
+  const glyph = (MATERIAL_ICON_NAME as Record<string, string>)[name] ?? name;
+  return <MaterialIcons name={glyph as keyof typeof MaterialIcons.glyphMap} size={size} color={color} style={style} />;
 }

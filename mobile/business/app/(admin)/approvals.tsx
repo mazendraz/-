@@ -18,6 +18,7 @@ import {
 } from "../../lib/approvalsStore";
 import QueueSegments from "../../components/QueueSegments";
 import ApprovalRow from "../../components/ApprovalRow";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const EMPTY_COPY: Record<ApprovalQueue, { title: string; message: string }> = {
@@ -76,6 +77,7 @@ export default function AdminApprovals() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الموافقات" />
       <QueueSegments active={current} counts={counts} onSelect={setActive} />
 
       {current === "siteReview" ? (

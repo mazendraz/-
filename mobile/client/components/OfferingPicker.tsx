@@ -4,6 +4,7 @@ import type { ApiBundleRule, ApiOffering } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
 import { calculateRequest, formatEstimate, formatPrice, formatQtyRange, isQuoteOnly } from "../lib/pricing";
+import { rowStart } from "@alassema/mobile-shared";
 
 export interface CartItem {
   offeringId: string;
@@ -200,7 +201,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     backgroundColor: `${colors.primary}12`,
   },
-  topRow: { flexDirection: "row-reverse", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  topRow: { flexDirection: rowStart, alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
   name: { flex: 1, fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right" },
   dot: {
     width: 20,
@@ -224,7 +225,7 @@ const styles = StyleSheet.create({
   // A single pill housing all three segments (rather than three separate
   // floating circles) — compact, touch-friendly, and reads as one control.
   stepper: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     backgroundColor: colors.surfaceContainer,
     borderRadius: 999,
@@ -236,7 +237,7 @@ const styles = StyleSheet.create({
   stepperDivider: { width: 1, height: 16, backgroundColor: colors.outlineVariant, marginHorizontal: 2 },
   stepperValue: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onSurface, minWidth: 28, textAlign: "center" },
 
-  tierRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6, justifyContent: "flex-end" },
+  tierRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 6, justifyContent: "flex-end" },
   tierChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: colors.surfaceContainer },
   tierChipActive: { backgroundColor: colors.primary },
   tierChipText: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },
@@ -252,7 +253,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   summaryTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right", marginBottom: 4 },
-  summaryCountRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  summaryCountRow: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   summaryCountLabel: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },
   summaryCountBadge: { backgroundColor: colors.surfaceContainer, borderRadius: 999, minWidth: 24, height: 24, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   summaryCountValue: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface },

@@ -7,6 +7,7 @@ import { colors, type } from "@alassema/core";
 import { ApiError, textStart, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAdminThreads } from "../../lib/adminChat";
 import ThreadRow from "../../components/ThreadRow";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -65,6 +66,7 @@ export default function AdminMessages() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الرسائل" />
       <View style={styles.searchWrap}>
         <TextInput
           style={styles.search}

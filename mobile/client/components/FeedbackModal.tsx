@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-nativ
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
 import Captcha from "./Captcha";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, rowStart } from "@alassema/mobile-shared";
 import { captchaConfigured } from "../lib/captcha";
 import { submitFeedback, type FeedbackType } from "../lib/feedback";
 
@@ -48,7 +48,7 @@ export default function FeedbackModal({
   async function onSubmit() {
     if (!message.trim()) return;
     if (captchaConfigured() && !captchaToken) {
-      setError("استنى ثانية لحد ما التحقق يخلص وبعدين جرّب تاني.");
+      setError("استنى لحد ما التحقق يخلص. لو فضل واقف، اضغط «أعد المحاولة» تحت.");
       return;
     }
     setBusy(true);
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 20 },
   card: { backgroundColor: colors.surfaceContainerLowest, borderRadius: 20, padding: 20, gap: 14 },
   title: { fontSize: type.subhead.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "center" },
-  typeRow: { flexDirection: "row-reverse", gap: 8 },
+  typeRow: { flexDirection: rowStart, gap: 8 },
   typeChip: { flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: 10, backgroundColor: colors.surfaceContainer },
   typeChipActive: { backgroundColor: colors.primary },
   typeChipText: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },

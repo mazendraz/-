@@ -8,6 +8,7 @@ import { fetchThreads } from "../../lib/chat";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { hasCompany } from "../../lib/permissions";
 import ThreadRow from "../../components/ThreadRow";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -68,20 +69,16 @@ export default function ProviderMessages() {
     void load({ page: page + 1, append: true, silent: true });
   }
 
-  if (!hasCompany(user)) {
-    return (
-      <SafeAreaView style={styles.container}>
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الرسائل" />
+
+      {!hasCompany(user) ? (
         <EmptyCard
           title="حسابك لسه مش مربوط بشركة"
           message="كلّم الأدمن عشان يربط حسابك بشركتك — بعدها هتلاقي محادثاتك هنا."
         />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      {loading ? (
+      ) : loading ? (
         <ListSkeleton />
       ) : error ? (
         <ErrorCard message={error} onRetry={() => load({ page: 1, append: false })} />

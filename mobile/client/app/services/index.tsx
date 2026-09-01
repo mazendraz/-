@@ -7,8 +7,7 @@ import type { ApiCategory } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCategories } from "../../lib/categories";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
-import { assetUri } from "../../lib/assetUrl";
+import { ApiError, useRefreshOnFocus, assetUri, rowStart } from "@alassema/mobile-shared";
 
 /** All service categories to browse — the mobile counterpart of Services.tsx. */
 export default function Services() {
@@ -42,7 +41,7 @@ export default function Services() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
-          <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
+          <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title}>الخدمات</Text>
         <View style={{ width: 22 }} />
@@ -88,9 +87,9 @@ export default function Services() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 },
+  header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 },
   title: { fontFamily: "Alexandria_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface },
-  searchBox: { flexDirection: "row-reverse", alignItems: "center", gap: 8, backgroundColor: colors.surfaceContainer, borderRadius: 12, marginHorizontal: 20, paddingHorizontal: 14, marginBottom: 12 },
+  searchBox: { flexDirection: rowStart, alignItems: "center", gap: 8, backgroundColor: colors.surfaceContainer, borderRadius: 12, marginHorizontal: 20, paddingHorizontal: 14, marginBottom: 12 },
   searchInput: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.onSurface, paddingVertical: 10 },
   errorText: { fontFamily: "Cairo_500Medium", fontSize: type.label.fontSize, color: colors.error, textAlign: "center", marginBottom: 8 },
   list: { padding: 20, gap: 14 },

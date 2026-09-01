@@ -5,7 +5,7 @@ import type { ApiMaintenanceStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
-import { useSettings } from "../lib/settings";
+import { useSettings, rowStart } from "@alassema/mobile-shared";
 
 /**
  * Full-screen maintenance notice — the mobile counterpart of the website's
@@ -129,13 +129,13 @@ const styles = StyleSheet.create({
   backSoon: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary, marginTop: 8 },
   countdown: { alignItems: "center", gap: 6, marginTop: 10 },
   countdownLabel: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline },
-  countdownRow: { flexDirection: "row-reverse", alignItems: "flex-end", gap: 10 },
+  countdownRow: { flexDirection: rowStart, alignItems: "flex-end", gap: 10 },
   countdownPart: { alignItems: "center" },
   countdownValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.headline.fontSize, color: colors.onSurface },
   countdownUnit: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline },
-  actions: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 16 },
+  actions: { flexDirection: rowStart, flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 16 },
   retryBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.primary,
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   },
   retryText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
   contactBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     borderWidth: 1,

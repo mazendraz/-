@@ -24,14 +24,13 @@ import AvailabilityBadge from "../../components/AvailabilityBadge";
 import CompanyGallery from "../../components/CompanyGallery";
 import OfferingGroup from "../../components/OfferingGroup";
 import { fetchCompany } from "../../lib/companyDetail";
-import { useRefreshOnFocus, ApiError } from "@alassema/mobile-shared";
+import { useRefreshOnFocus, ApiError, assetUri, firstAssetUri, rowStart } from "@alassema/mobile-shared";
 import { useIsSaved } from "../../lib/saved";
 import { formatPrice } from "../../lib/pricing";
 import { splitByKind } from "../../lib/offerings";
 import { availableAgainAt, formatReopenDate } from "../../lib/availability";
 import { useCustomerAuth } from "../../lib/customerAuth";
 import { requireAccount } from "../../lib/authGate";
-import { assetUri, firstAssetUri } from "../../lib/assetUrl";
 
 const SCROLL_SOLID_THRESHOLD = 60;
 const HEADER_H = 46;
@@ -250,7 +249,7 @@ export default function CompanyProfile() {
                   fonts on its own, so "back" (toward where you came from, in
                   RTL reading direction) has to be flipped explicitly to
                   actually point right, matching the reference screenshots. */}
-              <Icon name="arrow_back" size={16} color="#fff" style={{ transform: [{ scaleX: -1 }] }} />
+              <Icon name="arrow_forward" size={16} color="#fff" />
             </Pressable>
           </View>
 
@@ -587,7 +586,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     minHeight: HEADER_H,
-    flexDirection: "row",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -595,7 +594,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   topBarSolid: { backgroundColor: colors.surfaceContainerLowest, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant },
-  topBarGroup: { flexDirection: "row", alignItems: "center", gap: 16, minWidth: 22 },
+  topBarGroup: { flexDirection: rowStart, alignItems: "center", gap: 16, minWidth: 22 },
   topBarLogoWrap: { position: "absolute", bottom: 0, left: 0, right: 0, alignItems: "center", justifyContent: "center" },
 
   // ── Cover + back pill ──
@@ -605,7 +604,7 @@ const styles = StyleSheet.create({
   backPill: {
     position: "absolute",
     right: 16,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -617,36 +616,36 @@ const styles = StyleSheet.create({
 
   // ── Identity ──
   identity: { padding: 20, gap: 12, backgroundColor: colors.surfaceContainerLowest, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant },
-  logoRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
+  logoRow: { flexDirection: rowStart, alignItems: "center", gap: 12 },
   logo: { width: 60, height: 60, borderRadius: 16, backgroundColor: colors.surfaceContainer, borderWidth: 3, borderColor: colors.surfaceContainerLowest },
   identityText: { flex: 1, gap: 6 },
-  nameRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  nameRow: { flexDirection: rowStart, alignItems: "center", gap: 8, flexWrap: "wrap" },
   name: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" },
-  verifiedBadge: { flexDirection: "row-reverse", alignItems: "center", gap: 4, backgroundColor: `${colors.primary}1a`, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
+  verifiedBadge: { flexDirection: rowStart, alignItems: "center", gap: 4, backgroundColor: `${colors.primary}1a`, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   verifiedText: { fontFamily: "Cairo_700Bold", fontSize: 11, color: colors.primary },
   category: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.outline, textAlign: "right" },
-  statsRow: { flexDirection: "row-reverse", alignItems: "center", flexWrap: "wrap", gap: 6 },
+  statsRow: { flexDirection: rowStart, alignItems: "center", flexWrap: "wrap", gap: 6 },
   ratingStars: { color: "#f59e0b", fontSize: type.label.fontSize },
   ratingValue: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface },
   statMuted: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline },
   statDot: { color: colors.outline },
-  trustRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
-  trustPill: { flexDirection: "row-reverse", alignItems: "center", gap: 5, backgroundColor: colors.surfaceContainer, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  trustRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
+  trustPill: { flexDirection: rowStart, alignItems: "center", gap: 5, backgroundColor: colors.surfaceContainer, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   trustPillGreen: { backgroundColor: "#dcfce7" },
   trustPillText: { fontFamily: "Cairo_700Bold", fontSize: 11, color: colors.onSurfaceVariant },
   trustPillGreenText: { color: "#15803d" },
-  busyBanner: { flexDirection: "row-reverse", alignItems: "flex-start", gap: 10, backgroundColor: colors.warningContainer, borderRadius: 14, padding: 12 },
+  busyBanner: { flexDirection: rowStart, alignItems: "flex-start", gap: 10, backgroundColor: colors.warningContainer, borderRadius: 14, padding: 12 },
   busyTextWrap: { flex: 1, gap: 2 },
   busyTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onWarningContainer, textAlign: "right" },
   busyText: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.onWarningContainer, textAlign: "right" },
-  actionsRow: { flexDirection: "row-reverse", gap: 10, marginTop: 4 },
-  primaryAction: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 13 },
+  actionsRow: { flexDirection: rowStart, gap: 10, marginTop: 4 },
+  primaryAction: { flex: 1, flexDirection: rowStart, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 13 },
   primaryActionText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
-  saveAction: { flexDirection: "row-reverse", alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13 },
+  saveAction: { flexDirection: rowStart, alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13 },
   saveActionText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface },
 
   // ── Sticky tabs ──
-  tabsBar: { flexDirection: "row-reverse", backgroundColor: colors.surfaceContainerLowest, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant, paddingHorizontal: 12 },
+  tabsBar: { flexDirection: rowStart, backgroundColor: colors.surfaceContainerLowest, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant, paddingHorizontal: 12 },
   tab: { paddingHorizontal: 12, paddingVertical: 12, alignItems: "center" },
   tabText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.outline },
   tabTextActive: { color: colors.primary },
@@ -659,18 +658,18 @@ const styles = StyleSheet.create({
   about: { fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 24 },
   credentials: { marginTop: 16 },
   credentialsLabel: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right", marginBottom: 8 },
-  credentialsRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
-  credentialChip: { flexDirection: "row-reverse", alignItems: "center", gap: 5, backgroundColor: `${colors.primary}14`, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  credentialsRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
+  credentialChip: { flexDirection: rowStart, alignItems: "center", gap: 5, backgroundColor: `${colors.primary}14`, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
   credentialChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary },
 
   offeringGroup: { marginBottom: 20 },
   offeringList: { gap: 12 },
-  legacyChips: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
-  legacyChip: { flexDirection: "row-reverse", alignItems: "center", gap: 6, backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  legacyChips: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
+  legacyChip: { flexDirection: rowStart, alignItems: "center", gap: 6, backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   legacyChipText: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, color: colors.onSurface },
 
   projectCard: { backgroundColor: colors.surfaceContainer, borderRadius: 14, marginBottom: 8, overflow: "hidden" },
-  projectHeader: { flexDirection: "row-reverse", alignItems: "center", gap: 10, padding: 10 },
+  projectHeader: { flexDirection: rowStart, alignItems: "center", gap: 10, padding: 10 },
   projectThumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.surfaceContainerHigh },
   projectHeaderText: { flex: 1, gap: 2 },
   projectTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
@@ -681,28 +680,28 @@ const styles = StyleSheet.create({
   projectDesc: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 20 },
   projectServiceChip: { backgroundColor: `${colors.primary}14`, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
   projectServiceChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary },
-  projectLocationRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  projectLocationRow: { flexDirection: rowStart, alignItems: "center", gap: 4 },
   projectLocation: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline },
   projectsCta: { marginTop: 16, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 20, alignItems: "center", gap: 12, borderWidth: 1, borderColor: colors.outlineVariant },
   projectsCtaText: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, color: colors.outline, textAlign: "center" },
-  projectsCtaBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
+  projectsCtaBtn: { flexDirection: rowStart, alignItems: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
   projectsCtaBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
 
   reviewCard: { backgroundColor: colors.surfaceContainer, borderRadius: 14, padding: 14, marginBottom: 8, gap: 8 },
   reviewRating: { color: "#f59e0b", fontSize: type.body.fontSize, textAlign: "right" },
   reviewText: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 20 },
-  reviewFooter: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  reviewFooter: { flexDirection: rowStart, alignItems: "center", gap: 10 },
   reviewAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: `${colors.primary}1a`, alignItems: "center", justifyContent: "center" },
   reviewAvatarText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },
-  reviewAuthorRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  reviewAuthorRow: { flexDirection: rowStart, alignItems: "center", gap: 4 },
   reviewAuthor: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface },
   reviewMeta: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline },
 
   contactCard: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 16, padding: 16, gap: 14 },
-  contactRow: { flexDirection: "row-reverse", alignItems: "center", gap: 12 },
+  contactRow: { flexDirection: rowStart, alignItems: "center", gap: 12 },
   contactLabel: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
   contactValue: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
-  reportBtn: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: `${colors.error}4d`, borderRadius: 12, paddingVertical: 12 },
+  reportBtn: { flexDirection: rowStart, alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: `${colors.error}4d`, borderRadius: 12, paddingVertical: 12 },
   reportBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.error },
 
   finalCta: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 18, padding: 22, alignItems: "flex-end", gap: 8 },
@@ -717,7 +716,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     gap: 10,
     paddingHorizontal: 16,
     paddingTop: 10,
@@ -726,6 +725,6 @@ const styles = StyleSheet.create({
     borderTopColor: colors.outlineVariant,
   },
   stickyFavorite: { width: 48, height: 48, borderRadius: 12, borderWidth: 1, borderColor: colors.outlineVariant, alignItems: "center", justifyContent: "center" },
-  stickyPrimary: { flex: 1, flexDirection: "row-reverse", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12 },
+  stickyPrimary: { flex: 1, flexDirection: rowStart, alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 12 },
   stickyPrimaryText: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onPrimary },
 });

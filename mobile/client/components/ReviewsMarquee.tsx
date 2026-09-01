@@ -127,6 +127,10 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
   const running = animate && !paused && focused;
 
   const x = useRef(new Animated.Value(0)).current;
+  // The running loop, so it can be stopped on pause/blur. Animated.loop's
+  // handle is not the same object as the timing it wraps — stopping the inner
+  // timing leaves the loop free to start the next iteration.
+  const anim = useRef<Animated.CompositeAnimation | null>(null);
   // How far into the loop the track was when it last stopped, so pausing
   // and resuming picks up mid-card instead of snapping back to the start.
   //
@@ -149,26 +153,52 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
     const startedAt = Date.now();
     const startedFrom = progress.current;
 
-    const run = (from: number) => {
-      x.setValue(-from);
+    const oneLoop = () =>
       Animated.timing(x, {
         toValue: -loopWidth,
-        // Remaining distance, not a whole loop — resuming after a pause
-        // must not spend a full loop's time covering what's left of one.
-        duration: ((loopWidth - from) / SPEED_PX_PER_SEC) * 1000,
+        duration: (loopWidth / SPEED_PX_PER_SEC) * 1000,
         easing: Easing.linear,
         useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (cancelled || !finished) return;
-        run(0); // the seam: copy two is now exactly where copy one began
       });
+
+    // Two phases. The first finishes whatever is LEFT of the loop the strip
+    // was on when it last stopped (resuming a pause must not spend a full
+    // loop's time covering half of one). Only then does the endless part
+    // start, and it is a real `Animated.loop` rather than a timing that
+    // restarts itself from its own completion callback: the old hand-rolled
+    // recursion is what left the strip empty after one pass — one dropped
+    // callback (a re-render, a stop that lands between the last frame and
+    // the callback) and nothing ever scheduled the next lap, so the cards
+    // slid off and the band just sat there blank. Animated.loop owns that
+    // restart natively and cannot miss it; `resetBeforeIteration` (its
+    // default) snaps back to 0 each lap, which is exactly the seam — copy
+    // two is by then sitting where copy one began.
+    const startEndlessLoop = () => {
+      if (cancelled) return;
+      x.setValue(0);
+      anim.current = Animated.loop(oneLoop());
+      anim.current.start();
     };
 
-    run(startedFrom);
+    if (startedFrom > 0) {
+      x.setValue(-startedFrom);
+      anim.current = Animated.timing(x, {
+        toValue: -loopWidth,
+        duration: ((loopWidth - startedFrom) / SPEED_PX_PER_SEC) * 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      });
+      anim.current.start(({ finished }) => {
+        if (finished) startEndlessLoop();
+      });
+    } else {
+      startEndlessLoop();
+    }
 
     return () => {
       cancelled = true;
-      x.stopAnimation();
+      anim.current?.stop();
+      anim.current = null;
       const travelled = ((Date.now() - startedAt) / 1000) * SPEED_PX_PER_SEC;
       progress.current = (startedFrom + travelled) % loopWidth;
     };
@@ -221,7 +251,9 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
           accessibilityLabel={paused ? "تشغيل عرض الآراء" : "إيقاف عرض الآراء"}
           style={styles.clip}
         >
-          <Animated.View style={[styles.track, { transform: [{ translateX: x }] }]}>
+          <Animated.View
+            style={[styles.track, { width: loopWidth * 2 }, { transform: [{ translateX: x }] }]}
+          >
             {track.map((r, i) => (
               <ReviewCard
                 key={`${r.id}-${i}`}
@@ -378,8 +410,16 @@ const styles = StyleSheet.create({
   // Explicit height: the track's cards are absolutely positioned, so they
   // contribute nothing to their parent's own size.
   clip: { overflow: "hidden", height: CARD_HEIGHT + CLIP_PAD * 2 },
+  // Absolutely pinned to the clip's own top-left with an EXPLICIT width (set
+  // inline, since it depends on the review count) wide enough to hold both
+  // copies. A `flex: 1` track was only ever as wide as the screen, leaving
+  // every card past the first one positioned outside its own parent's box —
+  // a state RN is free to skip drawing. Pinning it with `left: 0` also keeps
+  // it off flex alignment, which under an RTL engine would have parked an
+  // explicitly-sized track against the RIGHT edge instead.
+  //
   // No padding of its own — the cards are absolute, positioned at CLIP_PAD.
-  track: { flex: 1 },
+  track: { position: "absolute", top: 0, bottom: 0, left: 0 },
   fade: { position: "absolute", top: 0, bottom: 0, width: FADE_WIDTH },
   fadeLeft: { left: 0 },
   fadeRight: { right: 0 },

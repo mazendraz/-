@@ -32,7 +32,7 @@ export default function SiteReviewModal({
   async function onSubmit() {
     if (!canSubmit) return;
     if (captchaConfigured() && !captchaToken) {
-      setError("استنى ثانية لحد ما التحقق يخلص وبعدين جرّب تاني.");
+      setError("استنى لحد ما التحقق يخلص. لو فضل واقف، اضغط «أعد المحاولة» تحت.");
       return;
     }
     setBusy(true);

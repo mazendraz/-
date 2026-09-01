@@ -9,6 +9,7 @@ import { useStaffAuth } from "../../lib/staffAuth";
 import { hasCompany } from "../../lib/permissions";
 import LeadRow from "../../components/LeadRow";
 import FilterBar from "../../components/FilterBar";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -77,45 +78,45 @@ export default function ProviderLeads() {
     void load({ page: page + 1, append: true, silent: true });
   }
 
-  // A provider with no company linked has no leads — legal state, not an
-  // error. Same explanatory treatment as the overview screen.
-  if (!hasCompany(user)) {
-    return (
-      <SafeAreaView style={styles.container}>
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الطلبات" />
+
+      {/* A provider with no company linked has no leads — legal state, not
+          an error. Same explanatory treatment as the overview screen. */}
+      {!hasCompany(user) ? (
         <EmptyCard
           title="حسابك لسه مش مربوط بشركة"
           message="كلّم الأدمن عشان يربط حسابك بشركتك — بعدها هتلاقي طلباتك هنا."
         />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <FilterBar status={status} onStatusChange={setStatus} search={search} onSearchChange={setSearch} />
-
-      {loading ? (
-        <ListSkeleton />
-      ) : error ? (
-        <ErrorCard message={error} onRetry={() => load({ page: 1, append: false })} />
-      ) : leads && leads.length > 0 ? (
-        <FlatList
-          data={leads}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <LeadRow lead={item} onPress={() => router.push(`/lead/${item.id}`)} />
-          )}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          onEndReachedThreshold={0.4}
-          onEndReached={onEndReached}
-        />
       ) : (
-        <EmptyCard
-          title={status || search ? "مفيش طلبات مطابقة" : "لسه مفيش طلبات"}
-          message={status || search ? "جرّب تغيّر الفلتر أو البحث." : "أول طلب جديد هيظهر هنا أول ما يوصل."}
-        />
+        <>
+          <FilterBar status={status} onStatusChange={setStatus} search={search} onSearchChange={setSearch} />
+
+          {loading ? (
+            <ListSkeleton />
+          ) : error ? (
+            <ErrorCard message={error} onRetry={() => load({ page: 1, append: false })} />
+          ) : leads && leads.length > 0 ? (
+            <FlatList
+              data={leads}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.list}
+              renderItem={({ item }) => (
+                <LeadRow lead={item} onPress={() => router.push(`/lead/${item.id}`)} />
+              )}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+              onEndReachedThreshold={0.4}
+              onEndReached={onEndReached}
+            />
+          ) : (
+            <EmptyCard
+              title={status || search ? "مفيش طلبات مطابقة" : "لسه مفيش طلبات"}
+              message={status || search ? "جرّب تغيّر الفلتر أو البحث." : "أول طلب جديد هيظهر هنا أول ما يوصل."}
+            />
+          )}
+        </>
       )}
     </SafeAreaView>
   );

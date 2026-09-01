@@ -1,16 +1,19 @@
 /**
  * Turn a server-supplied image/media reference into something React Native can
- * actually load.
+ * actually load. Shared by both mobile apps — see settings.ts's own header
+ * comment for why this moved here alongside it (the Business App's <Logo>
+ * needs it exactly as much as the client app's does, and every other
+ * root-relative media reference either app renders needs the identical
+ * resolution, not a second copy of it).
  *
  * ── Why this is needed at all ────────────────────────────────────────────────
  * The API stores media as EITHER an absolute URL (Supabase Storage — what every
- * admin upload produces) OR a site-root-relative path like "/img/seed-15.jpg"
- * (the seeded catalogue, and any legacy record). A browser resolves the second
- * form against the page's own origin for free, so the website never had to
- * think about it. React Native has no origin: `<Image source={{uri:"/img/x.jpg"}}>`
- * is not a resolvable URI, and RN fails it SILENTLY — no error, no warning,
- * just a permanently blank box. Every seeded company logo/cover in the app was
- * blank for exactly this reason.
+ * admin/provider upload produces) OR a site-root-relative path like
+ * "/img/seed-15.jpg" (the seeded catalogue, and any legacy record). A browser
+ * resolves the second form against the page's own origin for free, so the
+ * website never had to think about it. React Native has no origin:
+ * `<Image source={{uri:"/img/x.jpg"}}>` is not a resolvable URI, and RN fails
+ * it SILENTLY — no error, no warning, just a permanently blank box.
  *
  * ── What it resolves against ────────────────────────────────────────────────
  * In production the deployment is single-origin (see deploy/Caddyfile): the
@@ -25,19 +28,26 @@
  * derived origin is wrong. EXPO_PUBLIC_ASSET_URL exists for that case — point
  * it at the running website dev server and relative paths resolve again.
  */
-
-const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
-const ASSET_OVERRIDE = (process.env.EXPO_PUBLIC_ASSET_URL ?? "").trim().replace(/\/$/, "");
+import { getConfig } from "./config";
 
 /**
  * The origin that serves root-relative media. Explicit override wins; otherwise
  * derive it from the API URL by dropping a trailing "/api/…" segment, which is
  * what makes the same-origin production deploy work with zero config.
+ *
+ * Reads straight from getConfig() rather than its own env vars: both apps
+ * already call configure() with these at startup (index.ts), and reading
+ * process.env directly here (as the pre-move, per-app copy of this file did)
+ * would silently pick up whichever app's own EXPO_PUBLIC_ASSET_URL Metro
+ * happened to inline into THIS bundle — never actually wrong per-app since
+ * each app only ever imports its own bundle, but two independent sources of
+ * truth for the same values getConfig() already carries.
  */
 function assetBase(): string {
-  if (ASSET_OVERRIDE) return ASSET_OVERRIDE;
-  if (!API_URL) return "";
-  return API_URL.replace(/\/api(\/v\d+)?$/, "");
+  const { assetUrl, baseUrl } = getConfig();
+  if (assetUrl) return assetUrl;
+  if (!baseUrl) return "";
+  return baseUrl.replace(/\/api(\/v\d+)?$/, "");
 }
 
 /**
@@ -82,10 +92,6 @@ export function firstAssetUri(...refs: (string | null | undefined)[]): string | 
  * extension check with the query string ignored. Gallery videos are stored
  * as uploaded (there is no transcoding step anywhere in the repo), so the
  * upload's own extension is a reliable signal.
- *
- * The gallery is a single `string[]` of mixed photos and videos, and RN's
- * image components render a video URI as a permanently blank box — so every
- * place that maps over gallery items has to branch on this.
  */
 export function isVideoUrl(ref: string | null | undefined): boolean {
   const path = (ref ?? "").split(/[?#]/)[0];

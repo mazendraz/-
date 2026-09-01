@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import { probeReady } from "@alassema/mobile-shared";
+import Logo from "./Logo";
 
 /**
  * Full-screen "can't reach the server" notice — rendered in place of the
@@ -31,7 +32,7 @@ export default function OfflineScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.brand}>العاصمة</Text>
+        <Logo size={64} />
         <Text style={styles.title}>مقدرش نوصل للسيرفر</Text>
         <Text style={styles.message}>
           فيه مشكلة في الاتصال بالسيرفر دلوقتي. اتأكد إنك متصل بالنت، وإن
@@ -57,17 +58,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: { width: "100%", maxWidth: 380, alignItems: "center", gap: 10 },
-  brand: {
-    fontSize: type.title.fontSize,
-    fontFamily: "Alexandria_700Bold",
-    color: colors.primary,
-    marginBottom: 8,
-  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",
+    marginTop: 8,
   },
   message: {
     fontSize: type.body.fontSize,

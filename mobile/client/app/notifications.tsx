@@ -125,7 +125,7 @@ export default function Notifications() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={[styles.header, { flexDirection: rowStart }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
-          <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
+          <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>الإشعارات</Text>
         {unreadCount > 0 ? (
@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
   emptyBody: { fontFamily: "Cairo_400Regular", fontSize: 13.5, color: colors.outline, textAlign: "center", lineHeight: 19 },
 
   errorBanner: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.errorContainer,

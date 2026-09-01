@@ -11,6 +11,7 @@ import KpiTile from "../../components/KpiTile";
 import LeadRow from "../../components/LeadRow";
 import LeadsChart from "../../components/LeadsChart";
 import MaintenanceBanner from "../../components/MaintenanceBanner";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 export default function AdminOverview() {
@@ -55,24 +56,15 @@ export default function AdminOverview() {
     void load(true);
   }
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ListSkeleton />
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <ErrorCard message={error} onRetry={() => load()} />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الرئيسية" />
+
+      {loading ? (
+        <ListSkeleton />
+      ) : error ? (
+        <ErrorCard message={error} onRetry={() => load()} />
+      ) : (
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -129,6 +121,7 @@ export default function AdminOverview() {
           <EmptyCard title="لسه مفيش طلبات" message="أول طلب جديد هيظهر هنا أول ما يوصل." />
         )}
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

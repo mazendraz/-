@@ -14,7 +14,7 @@ import {
   type CustomerSession,
 } from "../../lib/customerAuth";
 import { useRequireAccount } from "../../lib/authGate";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, rowStart } from "@alassema/mobile-shared";
 
 /**
  * The customer's account: profile, signed-in devices, and the way out — the
@@ -138,7 +138,7 @@ export default function Account() {
               onPress={() => router.push("/saved")}
               style={({ pressed }) => [styles.settingsRow, styles.settingsRowStacked, pressed && styles.settingsRowPressed]}
             >
-              <Icon name="chevron_right" size={20} color={colors.outline} style={{ transform: [{ scaleX: -1 }] }} />
+              <Icon name="chevron_left" size={20} color={colors.outline} />
               <Text style={styles.settingsRowLabel}>المفضلة</Text>
               <Icon name="favorite" size={20} color={colors.onSurfaceVariant} />
             </Pressable>
@@ -148,7 +148,7 @@ export default function Account() {
               onPress={() => router.push("/notifications")}
               style={({ pressed }) => [styles.settingsRow, pressed && styles.settingsRowPressed]}
             >
-              <Icon name="chevron_right" size={20} color={colors.outline} style={{ transform: [{ scaleX: -1 }] }} />
+              <Icon name="chevron_left" size={20} color={colors.outline} />
               <Text style={styles.settingsRowLabel}>الإشعارات</Text>
               <Icon name="notifications" size={20} color={colors.onSurfaceVariant} />
             </Pressable>
@@ -251,12 +251,12 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     textAlign: "right",
   },
-  topBar: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  topBar: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
   errorBox: { backgroundColor: colors.errorContainer, borderRadius: 12, padding: 12, marginBottom: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
   card: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 14,
     backgroundColor: colors.surfaceContainerLowest,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   email: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", writingDirection: "ltr" },
   settingsRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 10,
     backgroundColor: colors.surfaceContainerLowest,
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   sectionSub: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", marginBottom: 8 },
   deviceRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 12,
     backgroundColor: colors.surfaceContainer,
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
   revoke: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.error },
   emptyDevices: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "center", paddingVertical: 12 },
   revokeAll: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.error, textAlign: "center", marginTop: 4, marginBottom: 16 },
-  linksRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 14, marginBottom: 20, marginTop: 4 },
+  linksRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 14, marginBottom: 20, marginTop: 4 },
   link: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.outline, textDecorationLine: "underline" },
   signOutBtn: { marginBottom: 24 },
   dangerCard: { borderWidth: 1, borderColor: `${colors.error}33`, borderRadius: 16, padding: 16, gap: 10 },

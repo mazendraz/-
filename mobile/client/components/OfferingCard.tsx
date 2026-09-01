@@ -4,7 +4,7 @@ import type { ApiOffering } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
 import { formatPrice, formatQtyRange, isQuoteOnly } from "../lib/pricing";
-import { assetUri } from "../lib/assetUrl";
+import { assetUri, rowStart } from "@alassema/mobile-shared";
 
 /**
  * A single priced service/product card — the mobile counterpart of the
@@ -105,20 +105,20 @@ const styles = StyleSheet.create({
   image: { width: "100%", height: 140, backgroundColor: colors.surfaceContainer },
   zoomHint: { position: "absolute", bottom: 8, left: 8, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 8, padding: 4 },
   body: { padding: 14, gap: 8 },
-  headerRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  headerRow: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
   name: { flex: 1, fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right" },
   quoteBadge: { backgroundColor: colors.secondaryContainer, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   quoteBadgeText: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.onSecondaryContainer },
   desc: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 20 },
   tiers: { gap: 4, backgroundColor: colors.surfaceContainer, borderRadius: 10, padding: 8 },
-  tierRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  tierRow: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   tierLabel: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant, textAlign: "right" },
   tierPrice: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface },
-  footer: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginTop: 2 },
+  footer: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginTop: 2 },
   price: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.subhead.fontSize, color: colors.primary },
   priceQuote: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.secondary },
   minQty: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, marginTop: 2 },
-  addBtn: { flexDirection: "row-reverse", alignItems: "center", gap: 4, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  addBtn: { flexDirection: rowStart, alignItems: "center", gap: 4, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   addBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimary },
   note: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, fontStyle: "italic", textAlign: "right" },
 });

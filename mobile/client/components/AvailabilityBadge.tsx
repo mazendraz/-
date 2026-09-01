@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Icon, { type IconName } from "./Icon";
 import { availabilityLabel } from "../lib/availability";
+import { rowStart } from "@alassema/mobile-shared";
 
 const STYLE: Record<"busy" | "upcoming" | "free", { bg: string; fg: string; icon: IconName }> = {
   busy: { bg: "#fef3c7", fg: "#92400e", icon: "event_busy" },
@@ -39,6 +40,6 @@ export default function AvailabilityBadge({
 }
 
 const styles = StyleSheet.create({
-  badge: { flexDirection: "row-reverse", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: "flex-start" },
+  badge: { flexDirection: rowStart, alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: "flex-start" },
   text: { fontFamily: "Cairo_700Bold", fontSize: 11 },
 });

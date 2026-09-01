@@ -43,6 +43,9 @@ configure({
   // Mirrors the website's VITE_API_KEY — same optional shared-secret gate.
   // Currently unset on the server, so this is a no-op today.
   apiKey: (process.env.EXPO_PUBLIC_API_KEY ?? "").trim(),
+  // See .env.example's own explanation — blank in production (derived from
+  // baseUrl), a LAN IP pointing at the website dev server in local dev.
+  assetUrl: (process.env.EXPO_PUBLIC_ASSET_URL ?? "").trim().replace(/\/$/, ""),
   refreshPath: "/auth/customer/refresh",
   streamPath: "/customer/stream",
   devicePath: "/customer/push-device",

@@ -15,7 +15,7 @@ import type { ApiMessage } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchThread, sendMessage } from "../../lib/chat";
-import { useLiveEvents, ApiError } from "@alassema/mobile-shared";
+import { useLiveEvents, ApiError, rowStart } from "@alassema/mobile-shared";
 
 /**
  * A conversation about one request — reached from a chat icon on its card in
@@ -82,7 +82,7 @@ export default function Chat() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
-          <Icon name="arrow_back" size={22} color={colors.onSurface} />
+          <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{companyName || "المحادثة"}</Text>
         <View style={{ width: 22 }} />
@@ -149,7 +149,7 @@ export default function Chat() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
-  header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
+  header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 12 },
   headerTitle: { fontSize: type.subhead.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, flex: 1, textAlign: "center" },
   list: { padding: 16, gap: 8, flexGrow: 1 },
   empty: { textAlign: "center", color: colors.outline, fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, paddingTop: 60 },
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   errorBanner: { backgroundColor: colors.errorContainer, marginHorizontal: 16, marginBottom: 6, borderRadius: 10, padding: 10 },
   errorText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
   composer: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "flex-end",
     gap: 8,
     padding: 12,

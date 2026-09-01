@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image } from "expo-image";
-import { useSettings } from "../lib/settings";
-import { assetUri } from "../lib/assetUrl";
+import { useSettings, assetUri } from "@alassema/mobile-shared";
 
 // The site's actual default mark (app/public/logo.png on the website),
 // bundled into the binary — matches the website's own `src={logo_url ||

@@ -90,3 +90,27 @@ export const rowStart: "row" | "row-reverse" = I18nManager.isRTL === uiIsRTL ? "
  *  (unlike flexDirection), so this needs no isRTL term — only the UI's own
  *  direction. */
 export const textStart: "left" | "right" = uiIsRTL ? "right" : "left";
+
+/**
+ * `flexDirection` laying children END → START — the mirror of `rowStart`, for
+ * the handful of rows whose order is PHYSICAL rather than linguistic: a phone
+ * number's dial code and its digits (the website spells that same row
+ * `dir="ltr"`, see PhoneInput.tsx), a "N / total" counter, a row of stars.
+ * Hardcoding `"row"` for those is the same trap `rowStart` exists to close —
+ * it means left-to-right only while the engine is LTR, and silently flips on a
+ * phone that has restarted since forceRTL took effect.
+ */
+export const rowLtr: "row" | "row-reverse" = I18nManager.isRTL ? "row-reverse" : "row";
+
+/**
+ * Is the LAYOUT ENGINE itself right-to-left right now? Not the same question
+ * as `uiIsRTL` (which is about the language) — on react-native-web these two
+ * disagree, which is exactly why `rowStart` needs both.
+ *
+ * Needed wherever a PHYSICAL measurement has to be read back or written: a
+ * horizontal ScrollView's `contentOffset.x` is measured from the left edge in
+ * both engines, but under an RTL engine item 0 sits at the RIGHT, so deriving
+ * a page index from it without this constant gets the mirror image of the
+ * page the customer is actually looking at (see MediaLightbox.tsx).
+ */
+export const engineIsRTL: boolean = I18nManager.isRTL;

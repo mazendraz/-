@@ -3,17 +3,17 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ApiMaintenanceStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
+import Logo from "./Logo";
 
 /**
  * Full-screen maintenance notice. Rendered in place of the whole app while
  * maintenance is enabled — see @alassema/mobile-shared's useMaintenance and
  * app/_layout.tsx's gate order.
  *
- * Leaner than mobile/client's own MaintenanceScreen (no Logo, no branding
- * fetch, no icon glyphs) — this app has no equivalent of the client's
- * public-facing <Logo>/useSettings branding layer, and adding one only to
- * decorate a rarely-seen screen isn't worth it. Visual parity is a phase-13
- * hardening concern, not a phase-2 one.
+ * Now at visual parity with mobile/client's own MaintenanceScreen (real
+ * <Logo>, no icon glyphs otherwise) — this app previously had no equivalent
+ * of the client's public-facing <Logo>/useSettings branding layer, deferred
+ * from phase 2 to phase 13/14's branding pass, which is what built it.
  */
 export default function MaintenanceScreen({
   status,
@@ -30,7 +30,7 @@ export default function MaintenanceScreen({
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.brand}>العاصمة</Text>
+        <Logo size={64} />
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.message}>{message}</Text>
 
@@ -81,17 +81,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   card: { width: "100%", maxWidth: 380, alignItems: "center", gap: 10 },
-  brand: {
-    fontSize: type.title.fontSize,
-    fontFamily: "Alexandria_700Bold",
-    color: colors.primary,
-    marginBottom: 8,
-  },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",
+    marginTop: 8,
   },
   message: {
     fontSize: type.body.fontSize,

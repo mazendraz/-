@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
-import { probeReady } from "@alassema/mobile-shared";
+import { probeReady, rowStart } from "@alassema/mobile-shared";
 
 /**
  * Full-screen "can't reach the server" notice — the mobile counterpart of
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   stillDown: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: colors.error, marginTop: 4 },
   retryBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.primary,

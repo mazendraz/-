@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import { textStart } from "@alassema/mobile-shared";
 import Button from "./Button";
+import ScreenHeader from "./ScreenHeader";
 import { signOut, useStaffAuth } from "../lib/staffAuth";
 import { isProvider, hasAnyDesktopPermission } from "../lib/permissions";
 
@@ -74,35 +75,39 @@ export default function MoreScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.name}>{user?.name}</Text>
-        <Text style={styles.email}>{user?.email}</Text>
-        <Text style={styles.role}>{user?.role === "ADMIN" ? "أدمن" : "مقدّم خدمة"}</Text>
-      </View>
-
-      {menu.length > 0 ? (
-        <View style={styles.menu}>
-          {menu.map((item) => (
-            <Pressable key={item.href} style={styles.menuItem} onPress={() => router.push(item.href as never)}>
-              <Text style={styles.menuLabel}>{item.label}</Text>
-            </Pressable>
-          ))}
+      <ScreenHeader title="المزيد" />
+      <View style={styles.body}>
+        <View style={styles.card}>
+          <Text style={styles.name}>{user?.name}</Text>
+          <Text style={styles.email}>{user?.email}</Text>
+          <Text style={styles.role}>{user?.role === "ADMIN" ? "أدمن" : "مقدّم خدمة"}</Text>
         </View>
-      ) : null}
 
-      <Button
-        label="تسجيل الخروج"
-        variant="danger"
-        onPress={handleSignOut}
-        busy={signingOut}
-        style={styles.signOut}
-      />
+        {menu.length > 0 ? (
+          <View style={styles.menu}>
+            {menu.map((item) => (
+              <Pressable key={item.href} style={styles.menuItem} onPress={() => router.push(item.href as never)}>
+                <Text style={styles.menuLabel}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        <Button
+          label="تسجيل الخروج"
+          variant="danger"
+          onPress={handleSignOut}
+          busy={signingOut}
+          style={styles.signOut}
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, gap: 20 },
+  container: { flex: 1 },
+  body: { flex: 1, padding: 20, gap: 20 },
   card: {
     backgroundColor: colors.surfaceContainer,
     borderRadius: 16,

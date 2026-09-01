@@ -22,12 +22,18 @@ import SiteReviewModal from "../../components/SiteReviewModal";
 import ReviewsMarquee from "../../components/ReviewsMarquee";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
-import { isApiConfigured, rowStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import {
+  isApiConfigured,
+  rowStart,
+  useRefreshOnFocus,
+  refreshSettings,
+  useSettings,
+  assetUri,
+  firstAssetUri,
+} from "@alassema/mobile-shared";
 import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
 import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
-import { refreshSettings, useSettings } from "../../lib/settings";
 import { useCountUp } from "../../lib/useCountUp";
-import { assetUri, firstAssetUri } from "../../lib/assetUrl";
 
 // The mobile app's own hero photo — a tall tower render, bundled into the
 // binary. Used whenever the admin hasn't set a custom hero_image_url, same
@@ -287,9 +293,10 @@ export default function Home() {
               </Pressable>
               <Pressable style={styles.heroCtaOutline} onPress={() => router.push("/companies")}>
                 <Text style={styles.heroCtaOutlineText}>تصفح الشركات</Text>
-                {/* Website uses arrow_forward + rtl-flip AFTER the text;
-                    Icon.tsx has no arrow_forward glyph, so arrow_back
-                    (unmirrored) is the closest available substitute. */}
+                {/* Points ONWARD, which in an Arabic UI is leftward — the
+                    same thing the website draws as arrow_forward under its
+                    rtl-flip. `arrow_back` is that glyph unmirrored, so it is
+                    the name to use here, not the mirror of the back arrow. */}
                 <Icon name="arrow_back" size={16} color="#fff" />
               </Pressable>
             </View>
@@ -617,7 +624,7 @@ function GuidedCard() {
           <Text style={styles.guidedTitle} numberOfLines={1}>مش عارف تختار مين؟</Text>
           <Text style={styles.guidedDesc} numberOfLines={1}>جاوب على سؤالين ونرشّحلك أفضل شركة</Text>
         </View>
-        <Icon name="chevron_right" size={18} color={colors.outline} style={{ transform: [{ scaleX: -1 }] }} />
+        <Icon name="chevron_left" size={18} color={colors.outline} />
       </Animated.View>
     </Pressable>
   );
@@ -635,7 +642,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     minHeight: 46,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "flex-start",
     alignItems: "center",
     paddingHorizontal: 20,
@@ -713,7 +720,7 @@ const styles = StyleSheet.create({
   // Secondary/ghost pill — "تصفح الشركات".
   heroCtaOutline: {
     width: "85%",
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
@@ -728,7 +735,7 @@ const styles = StyleSheet.create({
   // Primary/solid pill — "استكشف الخدمات". DOM-first, matching the website.
   heroCta: {
     width: "85%",
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
@@ -741,7 +748,7 @@ const styles = StyleSheet.create({
   heroScrollHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, alignSelf: "center", marginTop: 16 },
   heroScrollHintText: { fontFamily: "Cairo_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.85)" },
   statsRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 20,
     marginHorizontal: 20,
@@ -753,18 +760,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   statItem: { flex: 1, alignItems: "center", gap: 4 },
-  statValueRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  statValueRow: { flexDirection: rowStart, alignItems: "center", gap: 4 },
   statValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: 22, color: colors.primary },
   statLabel: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.outline, textAlign: "center" },
   // 2×2 grid, not a 4-across row (website's own mobile breakpoint is
   // grid-cols-1 for this same section) — 4 cards squeezed into one row left
   // almost no room for the description text to breathe.
-  reasonsRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 10, padding: 20 },
+  reasonsRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 10, padding: 20 },
   reasonCard: { width: "47%", backgroundColor: colors.surfaceContainerLowest, borderRadius: 14, padding: 12, gap: 4, borderWidth: 1, borderColor: colors.outlineVariant },
   reasonTitle: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface, textAlign: "right" },
   reasonDesc: { fontFamily: "Cairo_400Regular", fontSize: 10, color: colors.outline, textAlign: "right" },
   demoBanner: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     marginHorizontal: 20,
@@ -780,10 +787,10 @@ const styles = StyleSheet.create({
     color: colors.onWarningContainer,
     textAlign: "right",
   },
-  sectionHead: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginTop: 8, marginBottom: 10 },
+  sectionHead: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginTop: 8, marginBottom: 10 },
   sectionTitle: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface },
   sectionLink: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, color: colors.primary },
-  categoryRow: { flexDirection: "row-reverse", paddingHorizontal: 20 },
+  categoryRow: { flexDirection: rowStart, paddingHorizontal: 20 },
   // Photo-first card — matches the website's `<Link>` card (full-bleed
   // `cover` image, bottom scrim, glass icon badge, label+count overlaid)
   // instead of the old generic icon+label+count chip.
@@ -809,7 +816,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   categoryCardCount: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize, color: "rgba(255,255,255,0.85)", textAlign: "right" },
-  companyRow: { flexDirection: "row-reverse", paddingHorizontal: 20 },
+  companyRow: { flexDirection: rowStart, paddingHorizontal: 20 },
   // Photo-first card — cover image + logo badge + verified/busy badges,
   // matching the website's Companies card instead of the old small-logo row.
   companyCard: { width: 250, borderRadius: 18, overflow: "hidden", marginStart: 12, backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant },
@@ -835,7 +842,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 8,
     left: 8,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 3,
     backgroundColor: "rgba(255,255,255,0.92)",
@@ -849,7 +856,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 8,
     right: 8,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 3,
     backgroundColor: "#f59e0b",
@@ -861,16 +868,16 @@ const styles = StyleSheet.create({
   companyCardBody: { padding: 12, gap: 3 },
   companyCardName: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: "right" },
   companyCardCategory: { fontFamily: "Cairo_600SemiBold", fontSize: 11, color: colors.outline, textAlign: "right" },
-  companyCardRatingRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4, marginTop: 2 },
+  companyCardRatingRow: { flexDirection: rowStart, alignItems: "center", gap: 4, marginTop: 2 },
   companyCardReviewCount: { fontFamily: "Cairo_400Regular", fontSize: 11, color: colors.outline },
   companyCardTagline: { fontFamily: "Cairo_400Regular", fontSize: 11, color: colors.onSurfaceVariant, textAlign: "right", marginTop: 4, lineHeight: 16 },
-  companyCardFooter: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant },
+  companyCardFooter: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant },
   companyCardProjects: { fontFamily: "Cairo_400Regular", fontSize: 11, color: colors.outline },
-  companyCardView: { flexDirection: "row-reverse", alignItems: "center", gap: 3 },
+  companyCardView: { flexDirection: rowStart, alignItems: "center", gap: 3 },
   companyCardViewText: { fontFamily: "Cairo_700Bold", fontSize: 11, color: colors.primary },
   ratingText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface },
   ratingStar: { color: "#f59e0b", fontSize: type.caption.fontSize },
-  projectRow: { flexDirection: "row-reverse", paddingHorizontal: 20 },
+  projectRow: { flexDirection: rowStart, paddingHorizontal: 20 },
   projectCard: { width: 220, height: 140, borderRadius: 14, overflow: "hidden", marginStart: 10, backgroundColor: colors.surfaceContainer },
   projectImage: { width: "100%", height: "100%" },
   projectOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 10, backgroundColor: "rgba(0,0,0,0.45)" },
@@ -926,7 +933,7 @@ const styles = StyleSheet.create({
   guidedTouchable: { marginHorizontal: 20, marginTop: 24, borderRadius: 20 },
   guidedTouchablePressed: { opacity: 0.97 },
   guidedCard: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 12,
     backgroundColor: colors.surfaceContainerLowest,

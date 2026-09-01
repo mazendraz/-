@@ -34,9 +34,8 @@ import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchCompany, joinWaitlist } from "../../lib/companyDetail";
 import { formatLeadEstimate } from "../../lib/pricing";
 import { captchaConfigured } from "../../lib/captcha";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, parseLines, useSettings, rowStart, rowLtr } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
-import { parseLines, useSettings } from "../../lib/settings";
 
 /**
  * Submit a request to one company — a standalone route (outside the tab
@@ -226,7 +225,7 @@ export default function NewRequest() {
   async function onSubmit() {
     if (!canSubmit || !phoneE164) return;
     if (captchaConfigured() && !captchaToken) {
-      setError("استنى ثانية لحد ما التحقق يخلص وبعدين جرّب تاني.");
+      setError("استنى لحد ما التحقق يخلص. لو فضل واقف، اضغط «أعد المحاولة» تحت.");
       return;
     }
     setBusy(true);
@@ -353,7 +352,7 @@ export default function NewRequest() {
           onPress={() => router.back()}
           hitSlop={12}
         >
-          <Icon name="arrow_back" size={22} color={colors.onSurface} />
+          <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Logo size={26} />
         {/* Balances the back button so the logo is optically centered. */}
@@ -560,7 +559,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
 
   header: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     height: 52,
@@ -577,7 +576,7 @@ const styles = StyleSheet.create({
   contextCompany: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" },
   contextSubtitle: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right" },
 
-  busyBox: { flexDirection: "row-reverse", alignItems: "flex-start", gap: 10, backgroundColor: colors.warningContainer, borderRadius: 14, padding: 12 },
+  busyBox: { flexDirection: rowStart, alignItems: "flex-start", gap: 10, backgroundColor: colors.warningContainer, borderRadius: 14, padding: 12 },
   busyText: { flex: 1, fontFamily: "Cairo_500Medium", fontSize: type.caption.fontSize, color: colors.onWarningContainer, textAlign: "right", lineHeight: 20 },
   errorBox: { backgroundColor: colors.errorContainer, borderRadius: 12, padding: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
@@ -587,7 +586,7 @@ const styles = StyleSheet.create({
   // edge, "Clear" on the leading/left) — same convention as errorBox's
   // siblings elsewhere in this screen, which are all textAlign: "right".
   prefillBox: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     backgroundColor: colors.successContainer,
@@ -615,8 +614,15 @@ const styles = StyleSheet.create({
 
   field: { gap: 6 },
   label: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurfaceVariant, textAlign: "right" },
+  // A phone number is a PHYSICAL left-to-right run — the dial code sits to
+  // the left of the digits and the divider between them, exactly as the
+  // website spells it (`dir="ltr"` on PhoneInput.tsx's field wrapper). A
+  // hardcoded "row" only means that while the engine is LTR: on the phone,
+  // where forceRTL has taken effect, it put the dial code on the RIGHT with
+  // its divider on the outer edge. `rowLtr` is left-to-right under either
+  // engine.
   phoneRow: {
-    flexDirection: "row",
+    flexDirection: rowLtr,
     alignItems: "center",
     borderWidth: 1,
     borderColor: colors.outlineVariant,
@@ -628,6 +634,8 @@ const styles = StyleSheet.create({
     fontFamily: "Cairo_600SemiBold",
     fontSize: type.body.fontSize,
     color: colors.outline,
+    // Physical right edge, not `borderEnd`: this row is pinned left-to-right
+    // above, so the divider belongs on the dial code's right in both engines.
     borderRightWidth: 1,
     borderRightColor: colors.outlineVariant,
   },
@@ -641,7 +649,7 @@ const styles = StyleSheet.create({
     writingDirection: "ltr",
   },
   districtButton: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
@@ -701,7 +709,7 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
-  estimateRow: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  estimateRow: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   estimateLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.outline },
   estimateValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.primary },
   estimateNote: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary, textAlign: "right" },

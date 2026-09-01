@@ -39,6 +39,9 @@ configure({
     ""
   ).replace(/\/$/, ""),
   apiKey: (process.env.EXPO_PUBLIC_API_KEY ?? "").trim(),
+  // See .env.example's own explanation — blank in production (derived from
+  // baseUrl), a LAN IP pointing at the website dev server in local dev.
+  assetUrl: (process.env.EXPO_PUBLIC_ASSET_URL ?? "").trim().replace(/\/$/, ""),
   // Staff routes — see api's src/app/api/auth/{refresh,sessions}/route.ts
   // and docs/architecture/business-app/phase-0-backend-sessions.md.
   refreshPath: "/auth/refresh",

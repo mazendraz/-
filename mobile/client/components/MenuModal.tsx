@@ -3,6 +3,7 @@ import { router, type Href } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Icon, { type IconName } from "./Icon";
 import { customerLogout, useCustomerAuth } from "../lib/customerAuth";
+import { rowStart } from "@alassema/mobile-shared";
 
 const PUBLIC_LINKS: { label: string; href: Href; icon: IconName }[] = [
   { label: "الرئيسية", href: "/", icon: "home" },
@@ -77,7 +78,7 @@ export default function MenuModal({ visible, onClose }: { visible: boolean; onCl
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 20 },
   card: { backgroundColor: colors.surfaceContainerLowest, borderRadius: 20, padding: 12, gap: 2 },
-  row: { flexDirection: "row-reverse", alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 12, borderRadius: 12 },
+  row: { flexDirection: rowStart, alignItems: "center", gap: 12, paddingVertical: 13, paddingHorizontal: 12, borderRadius: 12 },
   rowText: { fontFamily: "Cairo_600SemiBold", fontSize: type.body.fontSize, color: colors.onSurface },
   logoutText: { color: colors.error },
   divider: { height: 1, backgroundColor: colors.outlineVariant, marginVertical: 8, marginHorizontal: 4 },

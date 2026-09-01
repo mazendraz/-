@@ -10,6 +10,7 @@ import { useStaffAuth } from "../../lib/staffAuth";
 import { hasCompany } from "../../lib/permissions";
 import KpiTile from "../../components/KpiTile";
 import LeadRow from "../../components/LeadRow";
+import ScreenHeader from "../../components/ScreenHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 export default function ProviderOverview() {
@@ -57,63 +58,49 @@ export default function ProviderOverview() {
     void load(true);
   }
 
-  if (!hasCompany(user)) {
-    return (
-      <SafeAreaView style={styles.container}>
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScreenHeader title="الرئيسية" />
+
+      {!hasCompany(user) ? (
         <EmptyCard
           title="حسابك لسه مش مربوط بشركة"
           message="كلّم الأدمن عشان يربط حسابك بشركتك — بعدها هتلاقي طلباتك وإحصائياتك هنا."
         />
-      </SafeAreaView>
-    );
-  }
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
+      ) : loading ? (
         <ListSkeleton />
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container}>
+      ) : error ? (
         <ErrorCard message={error} onRetry={() => load()} />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <View style={styles.kpiRow}>
-          <KpiTile
-            label="إجمالي الطلبات"
-            value={stats?.total ?? 0}
-            deltaPercent={stats?.recent ? deltaPercent(stats.recent.current, stats.recent.previous) : undefined}
-          />
-          <KpiTile label="جديد" value={stats?.byStatus.New ?? 0} />
-        </View>
-        <View style={styles.kpiRow}>
-          <KpiTile label="قيد التنفيذ" value={stats?.byStatus["In Progress"] ?? 0} />
-          <KpiTile label="مكتمل" value={stats?.byStatus.Completed ?? 0} />
-        </View>
-
-        <Text style={styles.sectionTitle}>أحدث الطلبات</Text>
-        {recentLeads && recentLeads.length > 0 ? (
-          <View style={styles.recentList}>
-            {recentLeads.map((lead) => (
-              <LeadRow key={lead.id} lead={lead} onPress={() => router.push(`/lead/${lead.id}`)} />
-            ))}
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <View style={styles.kpiRow}>
+            <KpiTile
+              label="إجمالي الطلبات"
+              value={stats?.total ?? 0}
+              deltaPercent={stats?.recent ? deltaPercent(stats.recent.current, stats.recent.previous) : undefined}
+            />
+            <KpiTile label="جديد" value={stats?.byStatus.New ?? 0} />
           </View>
-        ) : (
-          <EmptyCard title="لسه مفيش طلبات" message="أول طلب جديد هيظهر هنا أول ما يوصل." />
-        )}
-      </ScrollView>
+          <View style={styles.kpiRow}>
+            <KpiTile label="قيد التنفيذ" value={stats?.byStatus["In Progress"] ?? 0} />
+            <KpiTile label="مكتمل" value={stats?.byStatus.Completed ?? 0} />
+          </View>
+
+          <Text style={styles.sectionTitle}>أحدث الطلبات</Text>
+          {recentLeads && recentLeads.length > 0 ? (
+            <View style={styles.recentList}>
+              {recentLeads.map((lead) => (
+                <LeadRow key={lead.id} lead={lead} onPress={() => router.push(`/lead/${lead.id}`)} />
+              ))}
+            </View>
+          ) : (
+            <EmptyCard title="لسه مفيش طلبات" message="أول طلب جديد هيظهر هنا أول ما يوصل." />
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

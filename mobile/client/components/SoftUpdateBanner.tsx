@@ -2,6 +2,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-nati
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
+import { rowStart } from "@alassema/mobile-shared";
 
 /**
  * Dismissible "an update is available" banner — the non-blocking counterpart
@@ -54,7 +55,7 @@ export default function SoftUpdateBanner({
 const styles = StyleSheet.create({
   wrap: { position: "absolute", left: 12, right: 12, zIndex: 20 },
   card: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     backgroundColor: colors.surfaceContainerLowest,

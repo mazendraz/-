@@ -5,7 +5,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
 import GalleryVideo from "./GalleryVideo";
 import MediaLightbox from "./MediaLightbox";
-import { assetUri, isVideoUrl } from "../lib/assetUrl";
+import { assetUri, isVideoUrl, rowStart } from "@alassema/mobile-shared";
 
 const PREVIEW_COUNT = 7;
 
@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface, textAlign: "right", marginBottom: 12 },
   feature: { borderRadius: 16, overflow: "hidden", backgroundColor: colors.surfaceContainer, marginBottom: 8 },
   featureImage: { width: "100%", height: 200 },
-  grid: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
+  grid: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
   tile: { width: "31.5%", aspectRatio: 1, borderRadius: 12, overflow: "hidden", backgroundColor: colors.surfaceContainer },
   tileImage: { width: "100%", height: "100%" },
   // A <VideoView> has no intrinsic size, and its wrapper fills the tile via
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   moreBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,

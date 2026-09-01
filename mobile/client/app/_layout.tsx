@@ -223,6 +223,22 @@ export default function RootLayout() {
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.surface },
+          // ── Swipe-back ────────────────────────────────────────────────
+          // Every screen in this app draws its own header, so `headerShown`
+          // is false everywhere — and on iOS that ALSO silently kills the
+          // system back gesture, because UIKit's interactivePopGestureRecognizer
+          // is wired to the navigation bar it is being told to hide. The app
+          // was left with no way back except finding the one small arrow in
+          // the corner, which is exactly the "I get into things easily but
+          // can't get out, and swiping back does nothing" report.
+          //
+          // `gestureEnabled` alone does not bring it back for a hidden
+          // header. `fullScreenGestureEnabled` does: react-native-screens
+          // installs its own pan recogniser across the whole screen instead
+          // of relying on UIKit's edge one, so the swipe works from anywhere
+          // and from the correct (right-hand, under RTL) edge.
+          gestureEnabled: true,
+          fullScreenGestureEnabled: true,
         }}
       />
       {/* Only reachable here — never during maintenance/offline/forced-update/

@@ -8,8 +8,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import { fetchCategories, recordCategoryView } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
-import { assetUri } from "../../lib/assetUrl";
+import { ApiError, useRefreshOnFocus, assetUri, rowStart } from "@alassema/mobile-shared";
 import { useCustomerAuth } from "../../lib/customerAuth";
 
 const PAGE_SIZE = 20;
@@ -111,7 +110,7 @@ export default function ServiceCategory() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Pressable accessibilityRole="button" accessibilityLabel="رجوع" onPress={() => router.back()} hitSlop={12}>
-          <Icon name="arrow_back" size={22} color={colors.onSurface} style={{ transform: [{ scaleX: -1 }] }} />
+          <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>{category?.label ?? "الشركات"}</Text>
         <View style={{ width: 22 }} />
@@ -201,11 +200,11 @@ export default function ServiceCategory() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
-  header: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 4 },
+  header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 4 },
   title: { fontFamily: "Alexandria_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface, flex: 1, textAlign: "center" },
   sub: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.outline, textAlign: "right", paddingHorizontal: 20, marginBottom: 8 },
   searchRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 8,
     marginHorizontal: 20,
@@ -223,7 +222,7 @@ const styles = StyleSheet.create({
   },
   errorText: { fontFamily: "Cairo_500Medium", fontSize: type.label.fontSize, color: colors.error, textAlign: "center", marginBottom: 8 },
   list: { padding: 20, gap: 12 },
-  card: { flexDirection: "row-reverse", alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.outlineVariant },
+  card: { flexDirection: rowStart, alignItems: "center", gap: 12, backgroundColor: colors.surfaceContainerLowest, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: colors.outlineVariant },
   logo: { width: 52, height: 52, borderRadius: 12, backgroundColor: colors.surfaceContainer },
   verifiedBadge: {
     position: "absolute",
@@ -239,15 +238,15 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
   },
   cardBody: { flex: 1, gap: 2 },
-  nameRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  nameRow: { flexDirection: rowStart, alignItems: "center", gap: 6 },
   name: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right", flexShrink: 1 },
   verifiedLabel: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.primary },
   tagline: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant, textAlign: "right" },
-  metaRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4, marginTop: 2 },
+  metaRow: { flexDirection: rowStart, alignItems: "center", gap: 4, marginTop: 2 },
   rating: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: "#f59e0b" },
   metaDot: { color: colors.outline },
   reviewCount: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline },
-  chipsRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 4, marginTop: 6 },
+  chipsRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 4, marginTop: 6 },
   chip: { backgroundColor: colors.surfaceContainer, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: colors.outlineVariant },
   chipText: { fontFamily: "Cairo_600SemiBold", fontSize: 10, color: colors.onSurfaceVariant },
   empty: { alignItems: "center", gap: 8, paddingTop: 60 },

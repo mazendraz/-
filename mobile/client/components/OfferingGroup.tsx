@@ -6,6 +6,7 @@ import Icon from "./Icon";
 import MediaLightbox from "./MediaLightbox";
 import OfferingCard from "./OfferingCard";
 import { formatPrice, isQuoteOnly } from "../lib/pricing";
+import { rowStart } from "@alassema/mobile-shared";
 
 /**
  * One titled block of the price list (الخدمات / المنتجات) — the mobile
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
   title: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface, textAlign: "right" },
   list: { gap: 12 },
   footer: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     gap: 14,
@@ -119,7 +120,7 @@ const styles = StyleSheet.create({
   footerPriceQuote: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: "rgba(255,255,255,0.85)" },
   footerMinQty: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: "rgba(255,255,255,0.6)", textAlign: "right", marginTop: 2 },
   addBtn: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 6,
     backgroundColor: colors.primary,

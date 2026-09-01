@@ -6,6 +6,7 @@ import { colors, type } from "@alassema/core";
 import { ApiError } from "@alassema/mobile-shared";
 import Button from "../components/Button";
 import TextField from "../components/TextField";
+import Logo from "../components/Logo";
 import { signIn, useStaffAuth } from "../lib/staffAuth";
 import { isAdmin } from "../lib/permissions";
 
@@ -63,7 +64,7 @@ export default function SignIn() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>العاصمة</Text>
+          <Logo size={56} />
           <Text style={styles.subtitle}>تطبيق الموظفين</Text>
 
           <View style={styles.form}>
@@ -115,19 +116,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", padding: 24 },
-  title: {
-    fontSize: type.headline.fontSize,
-    lineHeight: type.headline.lineHeight,
-    fontFamily: "Alexandria_800ExtraBold",
-    color: colors.primary,
-    textAlign: "center",
-  },
   subtitle: {
     fontSize: type.subhead.fontSize,
     fontFamily: "Cairo_500Medium",
     color: colors.onSurfaceVariant,
     textAlign: "center",
-    marginTop: 4,
+    marginTop: 12,
     marginBottom: 36,
   },
   form: { gap: 16 },

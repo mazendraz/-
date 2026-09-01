@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type } from "@alassema/core";
 import Icon from "./Icon";
 import GalleryVideo from "./GalleryVideo";
-import { assetUri, isVideoUrl } from "../lib/assetUrl";
+import { assetUri, isVideoUrl, rowStart, engineIsRTL } from "@alassema/mobile-shared";
 
 export interface LightboxItem {
   src: string;
@@ -78,12 +78,28 @@ export default function MediaLightbox({
     listRef.current?.scrollToIndex({ index, animated: true });
   }, [index]);
 
+  // `contentOffset.x` is PHYSICAL — measured from the left edge — in both
+  // engines, but under an RTL engine a horizontal list lays item 0 at the
+  // RIGHT. So `contentOffset.x / width` is the MIRROR of the page on screen:
+  // swiping to photo 2 of 5 reported photo 4, the counter jumped, and the
+  // effect above then scrolled the pager to that wrong photo — the "the
+  // arrows/paging go the opposite way to where I'm going" report. Converting
+  // to a logical offset first is what RN's own VirtualizedList does
+  // internally for the same reason (see its _offsetFromScrollEvent).
   function onScrollEnd(e: NativeSyntheticEvent<NativeScrollEvent>) {
-    const i = Math.round(e.nativeEvent.contentOffset.x / width);
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    const offset = engineIsRTL
+      ? contentSize.width - (contentOffset.x + layoutMeasurement.width)
+      : contentOffset.x;
+    const i = Math.min(Math.max(Math.round(offset / width), 0), total - 1);
     if (i === index) return;
     settledAt.current = i;
     onIndex(i);
   }
+
+  // Which physical edge each arrow hangs off — see the arrows themselves.
+  const prevSide = engineIsRTL ? styles.arrowRight : styles.arrowLeft;
+  const nextSide = engineIsRTL ? styles.arrowLeft : styles.arrowRight;
 
   // Room for the footer bar, so a tall photo doesn't sit under it.
   const barSpace = current?.footer || current?.caption ? 132 : 40;
@@ -165,27 +181,35 @@ export default function MediaLightbox({
         </View>
 
         {/* Arrows as well as swipe: the swipe is the native gesture, but a
-            visible arrow is what tells someone there IS another photo. */}
+            visible arrow is what tells someone there IS another photo.
+
+            Each arrow must sit on the side the photo it leads to actually
+            LIVES on, and point that way — under an RTL engine the pager lays
+            photo 1 at the right and the last one at the left, so "previous"
+            is to the RIGHT and "next" to the LEFT, the mirror of the LTR
+            arrangement. Hardcoding prev-left/next-right (which is what the
+            website can do, since its arrows drive no swipe surface) made
+            every arrow here point away from the direction it moved you. */}
         {index > 0 && (
           <Pressable
-            style={[styles.arrow, styles.arrowStart, { top: height / 2 - 22 }]}
+            style={[styles.arrow, prevSide, { top: height / 2 - 22 }]}
             accessibilityRole="button"
             accessibilityLabel="الصورة السابقة"
             onPress={() => onIndex(index - 1)}
             hitSlop={12}
           >
-            <Icon name="navigate_before" size={26} color="#fff" />
+            <Icon name={engineIsRTL ? "navigate_next" : "navigate_before"} size={26} color="#fff" />
           </Pressable>
         )}
         {index < total - 1 && (
           <Pressable
-            style={[styles.arrow, styles.arrowEnd, { top: height / 2 - 22 }]}
+            style={[styles.arrow, nextSide, { top: height / 2 - 22 }]}
             accessibilityRole="button"
             accessibilityLabel="الصورة التالية"
             onPress={() => onIndex(index + 1)}
             hitSlop={12}
           >
-            <Icon name="navigate_next" size={26} color="#fff" />
+            <Icon name={engineIsRTL ? "navigate_before" : "navigate_next"} size={26} color="#fff" />
           </Pressable>
         )}
 
@@ -214,16 +238,21 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: "row-reverse",
-    justifyContent: "flex-end",
+    // The website pins close to the physical top-RIGHT (`top-4 right-4` in
+    // MediaLightbox.tsx, both physical in Tailwind). `rowStart` starts at the
+    // right under RTL, so flex-START is what keeps it there — flex-end was
+    // only landing on the right because the hardcoded row-reverse it used to
+    // pair with had silently flipped the row itself.
+    flexDirection: rowStart,
+    justifyContent: "flex-start",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 12,
   },
   roundBtn: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 999, padding: 6 },
   arrow: { position: "absolute", backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 999, padding: 8 },
-  arrowStart: { left: 12 },
-  arrowEnd: { right: 12 },
+  arrowLeft: { left: 12 },
+  arrowRight: { right: 12 },
   page: { justifyContent: "center", alignItems: "center" },
   missing: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: "rgba(255,255,255,0.7)" },
   bottom: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center", gap: 10, paddingHorizontal: 16 },
