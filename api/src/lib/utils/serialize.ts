@@ -215,6 +215,7 @@ export function serializeProjectAdmin(p: Project): ApiProject {
     ...serializeProject(p),
     id: p.id,
     status: p.status,
+    createdAt: toEpochMs(p.createdAt),
   };
 }
 
@@ -236,7 +237,7 @@ export function serializeReview(r: Review): ApiReview {
 
 /** Admin/provider review shape: the public fields PLUS `id` for management. */
 export function serializeReviewAdmin(r: Review): ApiReview {
-  return { ...serializeReview(r), id: r.id };
+  return { ...serializeReview(r), id: r.id, createdAt: toEpochMs(r.createdAt) };
 }
 
 /** count = number of ACTIVE companies, computed live by the caller. */

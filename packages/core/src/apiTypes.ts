@@ -58,6 +58,10 @@ export interface ApiProject {
   featured?: boolean; // curated for the homepage showcase
   // Moderation state — surfaced to admin/provider so they can see/manage approval.
   status?: ApiProjectStatus;
+  /** Epoch ms. Admin/provider payloads only, same gating as `id`/`status` —
+   *  added for the business-app admin moderation queue (phase 9), which
+   *  needs a submission's real age, not just its position in a list. */
+  createdAt?: number;
 }
 
 /** GET /api/projects/featured — flattened showcase items for the homepage. */
@@ -77,6 +81,10 @@ export interface ApiReview {
   date: string;
   district: string;
   verified: boolean; // true = real customer on a completed lead; false = curated
+  /** Epoch ms. Admin payloads only — same gating as `id`. `date` above is a
+   *  display string, not necessarily sortable; added for the business-app
+   *  admin moderation queue (phase 9). */
+  createdAt?: number;
 }
 
 /** POST /reviews — public, customer-submitted review for a completed lead. */

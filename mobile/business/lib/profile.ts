@@ -25,6 +25,13 @@ export interface ApiChangeRequest {
   reviewNote: string | null;
   createdAt: number;
   updatedAt: number;
+  /** Present only on the admin detail read (GET /admin/change-requests/[id]) —
+   *  fields whose live value drifted from `snapshot` since submission, i.e.
+   *  an admin edited them directly while the request waited. See
+   *  lib/approvals.ts, which is the only caller that ever sees these. */
+  conflicts?: string[];
+  /** Admin detail read only — true when the target row no longer exists. */
+  entityMissing?: boolean;
 }
 
 export interface ProfileResponse {
