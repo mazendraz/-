@@ -31,6 +31,11 @@ function req(url: string, opts: { method?: string; body?: unknown; token?: strin
   });
 }
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+// The five list routes (change-requests/projects/reviews/site-reviews/
+// feedback) have no dynamic segment at all — their GET handlers still take
+// a second `ctx` positionally (adminOnly<Ctx>'s wrapper type), just an
+// empty-params one.
+const noParamsCtx = { params: Promise.resolve({}) };
 
 let categoryId = "";
 let companyId = "";
@@ -118,7 +123,7 @@ describe("change requests", () => {
 
 describe("projects", () => {
   it("lists PENDING projects with an admin-only createdAt", async () => {
-    const res = await projectsGET(req("/api/admin/projects", { token: adminToken }));
+    const res = await projectsGET(req("/api/admin/projects", { token: adminToken }), noParamsCtx);
     expect(res.status).toBe(200);
     const body = await res.json();
     const row = body.data.find((p: { id: string }) => p.id === projectId);
@@ -143,7 +148,7 @@ describe("projects", () => {
 
 describe("reviews", () => {
   it("lists pending reviews with an admin-only createdAt", async () => {
-    const res = await reviewsGET(req("/api/admin/reviews?status=pending", { token: adminToken }));
+    const res = await reviewsGET(req("/api/admin/reviews?status=pending", { token: adminToken }), noParamsCtx);
     expect(res.status).toBe(200);
     const body = await res.json();
     const row = body.data.find((r: { id: string }) => r.id === reviewId);
@@ -164,18 +169,18 @@ describe("reviews", () => {
 
 describe("a PROVIDER token is 403 on every moderation route", () => {
   it("change requests", async () => {
-    expect((await changeRequestsGET(req("/api/admin/change-requests", { token: providerToken }))).status).toBe(403);
+    expect((await changeRequestsGET(req("/api/admin/change-requests", { token: providerToken }), noParamsCtx)).status).toBe(403);
   });
   it("projects", async () => {
-    expect((await projectsGET(req("/api/admin/projects", { token: providerToken }))).status).toBe(403);
+    expect((await projectsGET(req("/api/admin/projects", { token: providerToken }), noParamsCtx)).status).toBe(403);
   });
   it("reviews", async () => {
-    expect((await reviewsGET(req("/api/admin/reviews", { token: providerToken }))).status).toBe(403);
+    expect((await reviewsGET(req("/api/admin/reviews", { token: providerToken }), noParamsCtx)).status).toBe(403);
   });
   it("site reviews", async () => {
-    expect((await siteReviewsGET(req("/api/admin/site-reviews", { token: providerToken }))).status).toBe(403);
+    expect((await siteReviewsGET(req("/api/admin/site-reviews", { token: providerToken }), noParamsCtx)).status).toBe(403);
   });
   it("feedback", async () => {
-    expect((await feedbackGET(req("/api/admin/feedback", { token: providerToken }))).status).toBe(403);
+    expect((await feedbackGET(req("/api/admin/feedback", { token: providerToken }), noParamsCtx)).status).toBe(403);
   });
 });

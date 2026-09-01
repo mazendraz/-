@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAdminCompanies, type CompanyStatusValue } from "../../lib/adminCompanies";
+import Button from "../../components/Button";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -16,9 +18,9 @@ const STATUSES: { value: CompanyStatusValue | undefined; label: string }[] = [
   { value: "SUSPENDED", label: "موقوفة" },
 ];
 
-function CompanyCard({ company }: { company: ApiCompany }) {
+function CompanyCard({ company, onPress }: { company: ApiCompany; onPress: () => void }) {
   return (
-    <View style={styles.card}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
       <Text style={styles.name} numberOfLines={1}>{company.name}</Text>
       <Text style={styles.meta}>{company.categoryLabel} · {company.location}</Text>
       <View style={styles.statsRow}>
@@ -27,15 +29,17 @@ function CompanyCard({ company }: { company: ApiCompany }) {
         {company.leadCount != null ? <Text style={styles.stat}>{company.leadCount} طلب</Text> : null}
         {company.busy ? <Text style={styles.busyTag}>مشغول</Text> : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
 /**
- * Read-only directory (phase 8's scope — editing is phase 10). The status
- * filter narrows results server-side, but a row can't show WHICH status it
- * matched: `ApiCompany` doesn't serialize a `status` field at all, even in
- * the admin payload — see phase-8-admin-core.md's own correction on this.
+ * Directory (phase 8) plus navigation into the full company editor
+ * (phase 10). The status filter narrows results server-side, but a row
+ * can't show WHICH status it matched: `ApiCompany` doesn't serialize a
+ * `status` field at all, even in the admin payload — see phase-8-admin-
+ * core.md's own correction on this; the detail screen reads/sets it via
+ * its own dedicated section instead.
  */
 export default function AdminCompanies() {
   const [companies, setCompanies] = useState<ApiCompany[] | null>(null);
@@ -108,6 +112,7 @@ export default function AdminCompanies() {
             </Pressable>
           ))}
         </ScrollView>
+        <Button label="+ إضافة شركة" variant="secondary" onPress={() => router.push("/company/new")} />
       </View>
 
       {loading ? (
@@ -119,7 +124,7 @@ export default function AdminCompanies() {
           data={companies}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => <CompanyCard company={item} />}
+          renderItem={({ item }) => <CompanyCard company={item} onPress={() => router.push(`/company/${item.id}`)} />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           onEndReachedThreshold={0.4}
@@ -154,6 +159,7 @@ const styles = StyleSheet.create({
   list: { padding: 16, paddingTop: 12 },
   separator: { height: 10 },
   card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  cardPressed: { opacity: 0.7 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   meta: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },
   statsRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap", marginTop: 4 },

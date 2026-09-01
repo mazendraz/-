@@ -19,7 +19,7 @@ function priceRange(tier: ApiOfferingTier): string {
   return formatEgp(tier.priceMin);
 }
 
-export default function TierRow({ tier, onDelete }: { tier: ApiOfferingTier; onDelete: () => void }) {
+export default function TierRow({ tier, onDelete }: { tier: ApiOfferingTier; onDelete?: () => void }) {
   return (
     <View style={styles.row}>
       <View style={styles.info}>
@@ -31,9 +31,14 @@ export default function TierRow({ tier, onDelete }: { tier: ApiOfferingTier; onD
           {!tier.isPublished ? " · مسودة" : ""}
         </Text>
       </View>
-      <Pressable style={styles.deleteBtn} onPress={onDelete}>
-        <Text style={styles.deleteLabel}>حذف</Text>
-      </Pressable>
+      {/* Admin's read-only display (no tier route exists on that side —
+          see lib/adminCompanies.ts's own note) omits onDelete entirely
+          rather than rendering a button that would fail on tap. */}
+      {onDelete ? (
+        <Pressable style={styles.deleteBtn} onPress={onDelete}>
+          <Text style={styles.deleteLabel}>حذف</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

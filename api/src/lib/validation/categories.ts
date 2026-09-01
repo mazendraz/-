@@ -23,5 +23,20 @@ export const upsertCategorySchema = z.object({
 
 export type UpsertCategoryInput = z.infer<typeof upsertCategorySchema>;
 
-export const updateCategorySchema = upsertCategorySchema.partial();
+/**
+ * All fields optional for PUT updates. Same fix as updateCompanySchema
+ * (validation/companies.ts) and for the identical reason: `.partial()`
+ * alone doesn't stop Zod applying a field's `.default(...)` when it's
+ * omitted, and categories.service.ts's `update()` writes whatever the
+ * parsed value is (`input.X ?? undefined`) — so a partial PUT that leaves
+ * out `description`/`isActive`/`pricingMode` would silently reset them to
+ * "", true, and QUOTE_ONLY respectively. `pricingMode` is the dangerous one
+ * here: resetting it would silently disable every company's catalog in the
+ * category. Re-declared here with no default for the same three fields.
+ */
+export const updateCategorySchema = upsertCategorySchema.partial().extend({
+  description: z.string().transform(stripHtml).pipe(z.string().max(1000)).optional(),
+  isActive: z.boolean().optional(),
+  pricingMode: z.enum(["QUOTE_ONLY", "FIXED_CATALOG"]).optional(),
+});
 export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;

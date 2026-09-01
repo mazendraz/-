@@ -88,8 +88,35 @@ const primaryRefineOptions = {
 export const upsertCompanySchema = baseCompanySchema.refine(primaryInCategoryIds, primaryRefineOptions);
 export type UpsertCompanyInput = z.infer<typeof upsertCompanySchema>;
 
-// All fields optional for PATCH/PUT updates.
-export const updateCompanySchema = baseCompanySchema.partial().refine(primaryInCategoryIds, primaryRefineOptions);
+/**
+ * All fields optional for PATCH/PUT updates.
+ *
+ * `.partial()` alone is NOT enough for the six fields above that carry a
+ * Zod `.default(...)` (services/gallery/badges/featured/verified/
+ * completedProjects): Zod applies a field's default whenever it's absent
+ * from the input, `.partial()` or not — so omitting one of these from an
+ * update body doesn't leave it `undefined` (which companies.service.ts's
+ * `update()` correctly reads as "don't touch this column"), it substitutes
+ * the DEFAULT, which then gets written and silently wipes the real value.
+ *
+ * Found live (business-app phase 10): a PUT with only `{ tagline }` reset a
+ * real company's 6-image gallery to `[]`. The business-app's own admin
+ * editor was never at risk — it always sends the complete record — but any
+ * other partial-PUT caller (present or future) would hit this. Re-declaring
+ * these six here with no default closes it at the schema level, for every
+ * caller, not just this one client.
+ */
+export const updateCompanySchema = baseCompanySchema
+  .partial()
+  .extend({
+    services: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
+    gallery: z.array(imageRef).max(60).optional(),
+    badges: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+    featured: z.boolean().optional(),
+    verified: z.boolean().optional(),
+    completedProjects: z.number().int().min(0).optional(),
+  })
+  .refine(primaryInCategoryIds, primaryRefineOptions);
 export type UpdateCompanyInput = z.infer<typeof updateCompanySchema>;
 
 export const companyStatusSchema = z.object({
