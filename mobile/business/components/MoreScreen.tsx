@@ -6,7 +6,7 @@ import { colors, type } from "@alassema/core";
 import { textStart } from "@alassema/mobile-shared";
 import Button from "./Button";
 import { signOut, useStaffAuth } from "../lib/staffAuth";
-import { isProvider } from "../lib/permissions";
+import { isProvider, hasAnyDesktopPermission } from "../lib/permissions";
 
 interface MenuItem {
   label: string;
@@ -19,9 +19,10 @@ interface MenuItem {
  * waitlist in phase 10 (companies themselves have their own tab —
  * (admin)/companies.tsx), team/settings/legal-pages/email-templates/audit-
  * log in phase 11 (maintenance/notifications/telegram nest under
- * /settings's own section nav, not listed separately here) — this screen
- * is the shared shell every phase grows into, not a screen any one phase
- * replaces wholesale.
+ * /settings's own section nav, not listed separately here), the Control
+ * Center hub in phase 12 (only shown to an admin holding at least one
+ * desktop permission) — this screen is the shared shell every phase grows
+ * into, not a screen any one phase replaces wholesale.
  */
 export default function MoreScreen() {
   const { user } = useStaffAuth();
@@ -45,6 +46,12 @@ export default function MoreScreen() {
         { label: "الصفحات القانونية", href: "/content/pages" },
         { label: "قوالب البريد الإلكتروني", href: "/content/email-templates" },
         { label: "سجل الإجراءات", href: "/audit-log" },
+        // Only shown at all when the admin holds at least one desktop
+        // permission grant (phase-12's own instruction — "hide the whole
+        // Control Center section when the permission array is empty").
+        // The individual modules inside are further filtered by which
+        // permission each one needs — see control/index.tsx.
+        ...(hasAnyDesktopPermission(user) ? [{ label: "لوحة التحكم", href: "/control" }] : []),
       ];
 
   async function handleSignOut() {

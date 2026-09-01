@@ -112,12 +112,23 @@ read as everything.
 
 ## Components
 
-`KpiTrendTile` (with the `null` → "جديد" rule), `SeriesChart`, `FunnelBar`,
-`ActivityRow`, `TransactionRow`, `StatusTransitionSheet`, `FilterSheet`,
-`ReportTable` (horizontally scrollable), `TruncatedNotice`, `PermissionGate`.
+`SeriesChart`, `FunnelBar`, `ActivityRow`, `TransactionRow`,
+`StatusTransitionSheet`, `ReportTable` (horizontally scrollable),
+`TruncatedNotice`, `PermissionGate`.
 
 Charts should be simple and legible on a phone — a sparkline-grade area chart with
 an emphasized endpoint beats a dense desktop chart shrunk down.
+
+> **Note (found while building):** no separate `KpiTrendTile` was built —
+> phase 8's `KpiTile` (components/KpiTile.tsx) already implements the exact
+> `null` → "جديد" rule this phase needs (its own header comment already
+> anticipated this: "Shared between the provider overview (phase 3) and the
+> admin overview (phase 8)... this component never assumes either is
+> present"). Reused as-is. `FilterSheet` also wasn't built as a generic
+> component — the two screens with real filters (operations reuses phase
+> 8's `FilterBar`; transactions has its own inline type/status chips + a
+> server-side search box) didn't share enough shape to justify one, and the
+> plan's own "no data entry" boundary keeps every filter set small.
 
 ## State
 
@@ -153,6 +164,20 @@ Integration: an ADMIN **without** the permission gets 403 (and the app never
 renders the screen); a PROVIDER with a hand-set `desktopPermissions` array is
 still 403 — `desktopOnly` checks role too; `COMMISSION_INCOME` cannot be created
 through any exposed path.
+
+> **Found while building:** none of this had any integration coverage
+> anywhere in the suite before this phase — confirmed by searching for
+> `desktopOnly`/permission-slug references across `tests/`. Added
+> `api/tests/integration/controlCenterPermissions.int.test.ts`, covering
+> exactly the three cases above plus the ANY-of grant behavior
+> (`finance:read`/`analytics:read` both independently unlocking
+> `/admin/finance/overview`, but `analytics:read` alone NOT unlocking
+> `/admin/finance/cash-flow`, which has no ANY-of) and a scoping check
+> (an admin with only `finance:read` still 403s on a `business:read` route
+> — a grant doesn't broaden past what it names). This wasn't new backend
+> behavior — the desktop Tauri app has relied on `desktopOnly()` since
+> before this mobile phase existed — just previously-unverified behavior
+> this phase's mobile screens now also depend on.
 
 Device: an admin with only `finance:read` sees finance and nothing else, with no
 dead nav entries.
