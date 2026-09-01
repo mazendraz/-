@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { ApiConversation, ApiMessage } from "@alassema/core";
-import { colors } from "@alassema/core";
-import { ApiError, useLiveEvents } from "@alassema/mobile-shared";
+import { colors, type } from "@alassema/core";
+import { ApiError, textStart, useLiveEvents } from "@alassema/mobile-shared";
 import { fetchThread, sendMessage } from "../../lib/chat";
+import { fetchAdminThread, sendAdminMessage, setThreadClosed, setMessageHidden } from "../../lib/adminChat";
+import { isAdmin } from "../../lib/permissions";
+import { useStaffAuth } from "../../lib/staffAuth";
 import MessageBubble from "../../components/MessageBubble";
 import Composer from "../../components/Composer";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
@@ -22,14 +25,24 @@ interface PendingMessage extends ApiMessage {
   failed?: boolean;
 }
 
+/**
+ * Shared between the provider and admin tab groups (both link here as
+ * `/chat/${conversationId}`) — same swap-the-data-module pattern as
+ * lead/[id].tsx. Admin gets two extra controls neither other viewer may
+ * see: hiding a message and closing/reopening the thread (lib/permissions.ts
+ * canModerateChat).
+ */
 export default function ChatThread() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useStaffAuth();
+  const admin = isAdmin(user);
   const [conversation, setConversation] = useState<ApiConversation | null>(null);
   const [messages, setMessages] = useState<PendingMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [togglingClosed, setTogglingClosed] = useState(false);
   const listRef = useRef<FlatList>(null);
   const lastMessageAt = useRef<number | undefined>(undefined);
 
@@ -59,7 +72,7 @@ export default function ChatThread() {
     if (!id) return;
     setError(null);
     try {
-      const result = await fetchThread(id);
+      const result = await (admin ? fetchAdminThread(id) : fetchThread(id));
       setConversation(result.conversation);
       setMessages(result.messages);
       lastMessageAt.current = result.messages.at(-1)?.createdAt;
@@ -69,7 +82,7 @@ export default function ChatThread() {
     } finally {
       setLoading(false);
     }
-  }, [id, scrollToEnd]);
+  }, [id, admin, scrollToEnd]);
 
   /** Delta fetch — does NOT mark read. Merges by server id so a message this
    *  screen just sent (already reconciled from the optimistic bubble) is
@@ -77,7 +90,7 @@ export default function ChatThread() {
   const loadDelta = useCallback(async () => {
     if (!id) return;
     try {
-      const result = await fetchThread(id, lastMessageAt.current);
+      const result = await (admin ? fetchAdminThread(id, lastMessageAt.current) : fetchThread(id, lastMessageAt.current));
       if (result.messages.length === 0) return;
       lastMessageAt.current = result.messages.at(-1)!.createdAt;
       setMessages((prev) => {
@@ -91,7 +104,7 @@ export default function ChatThread() {
       // A missed delta tick is not worth surfacing — the next focus does a
       // full fetch regardless, and useLiveEvents retries on reconnect.
     }
-  }, [id, scrollToEnd]);
+  }, [id, admin, scrollToEnd]);
 
   useFocusEffect(
     useCallback(() => {
@@ -113,7 +126,7 @@ export default function ChatThread() {
     const optimistic: PendingMessage = {
       id: localId,
       localId,
-      sender: "PROVIDER",
+      sender: admin ? "ADMIN" : "PROVIDER",
       body,
       attachment: null,
       createdAt: Date.now(),
@@ -126,7 +139,7 @@ export default function ChatThread() {
     setSending(true);
 
     try {
-      const sent = await sendMessage(id, body);
+      const sent = await (admin ? sendAdminMessage(id, body) : sendMessage(id, body));
       // Replace the optimistic bubble with the server's real one — never
       // appended beside it, or the message would appear twice.
       setMessages((prev) => prev.map((m) => (m.localId === localId ? sent : m)));
@@ -150,6 +163,29 @@ export default function ChatThread() {
     setDraft(failedMessage.body);
   }
 
+  async function toggleClosed() {
+    if (!id || !conversation || togglingClosed) return;
+    setTogglingClosed(true);
+    try {
+      const updated = await setThreadClosed(id, !conversation.closed);
+      setConversation(updated);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "تعذّر تحديث حالة المحادثة.");
+    } finally {
+      setTogglingClosed(false);
+    }
+  }
+
+  async function toggleHide(message: PendingMessage) {
+    if (!id) return;
+    try {
+      const updated = await setMessageHidden(id, message.id, !message.hidden);
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "تعذّر تحديث الرسالة.");
+    }
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: true, title: conversation?.customerName ?? "المحادثة" }} />
@@ -159,6 +195,17 @@ export default function ChatThread() {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
+          {admin && conversation ? (
+            <View style={styles.closedBar}>
+              <Text style={styles.closedBarText}>{conversation.closed ? "المحادثة مقفولة" : "المحادثة مفتوحة"}</Text>
+              <Pressable onPress={toggleClosed} disabled={togglingClosed} style={styles.closedBarBtn}>
+                <Text style={styles.closedBarBtnText}>
+                  {togglingClosed ? "..." : conversation.closed ? "إعادة الفتح" : "قفل المحادثة"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {loading ? (
             <ListSkeleton rows={4} />
           ) : error && messages.length === 0 ? (
@@ -174,16 +221,26 @@ export default function ChatThread() {
                   body={item.body}
                   sender={item.sender}
                   createdAt={item.createdAt}
-                  mine={item.sender === "PROVIDER"}
+                  mine={item.sender === (admin ? "ADMIN" : "PROVIDER")}
                   pending={item.pending}
                   failed={item.failed}
                   onRetry={() => item.localId && retry(item.localId)}
+                  hidden={admin ? item.hidden : undefined}
+                  onToggleHide={admin ? () => toggleHide(item) : undefined}
                 />
               )}
               onContentSizeChange={scrollToEnd}
             />
           )}
-          <Composer value={draft} onChangeText={setDraft} onSend={handleSend} sending={sending} />
+          {conversation?.closed ? (
+            <View style={styles.closedComposer}>
+              <Text style={styles.closedComposerText}>
+                المحادثة دي مقفولة — {admin ? "افتحها تاني عشان تبعت رسالة." : "كلّم الإدارة لو محتاج تكمل."}
+              </Text>
+            </View>
+          ) : (
+            <Composer value={draft} onChangeText={setDraft} onSend={handleSend} sending={sending} />
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
     </>
@@ -194,4 +251,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   flex: { flex: 1 },
   messages: { paddingVertical: 12 },
+  closedBar: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: colors.surfaceContainer,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.outlineVariant,
+  },
+  closedBarText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
+  closedBarBtn: { paddingHorizontal: 10, paddingVertical: 4 },
+  closedBarBtnText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
+  closedComposer: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainer,
+  },
+  closedComposerText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },
 });

@@ -26,7 +26,17 @@ function estimateLine(lead: ApiLead): string | null {
   return formatEgp(lead.estimatedMin);
 }
 
-export default function LeadRow({ lead, onPress }: { lead: ApiLead; onPress: () => void }) {
+export default function LeadRow({
+  lead,
+  onPress,
+  showCompany,
+}: {
+  lead: ApiLead;
+  onPress: () => void;
+  /** Admin's all-companies list only (phase 8) — the provider screens never
+   *  pass this, since every lead there is already known to be their own. */
+  showCompany?: boolean;
+}) {
   const estimate = estimateLine(lead);
 
   return (
@@ -40,6 +50,7 @@ export default function LeadRow({ lead, onPress }: { lead: ApiLead; onPress: () 
 
       <Text style={styles.name} numberOfLines={1}>
         {lead.name} · {lead.district}
+        {showCompany ? ` · ${lead.companyName}` : ""}
       </Text>
 
       <View style={styles.bottom}>

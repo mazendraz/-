@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiLead, ApiLeadStatus } from "@alassema/core";
@@ -7,6 +7,8 @@ import { colors, type } from "@alassema/core";
 import { ApiError, textStart, useLiveEvents } from "@alassema/mobile-shared";
 import { fetchLead, updateLeadStatus } from "../../lib/leads";
 import { fetchConversationForLead } from "../../lib/chat";
+import { fetchAdminLead, deleteAdminLead } from "../../lib/adminLeads";
+import { fetchAdminConversationForLead } from "../../lib/adminChat";
 import { isAdmin } from "../../lib/permissions";
 import { useStaffAuth } from "../../lib/staffAuth";
 import StatusPill from "../../components/StatusPill";
@@ -15,6 +17,13 @@ import ItemsTable from "../../components/ItemsTable";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
 import { formatEgp } from "../../lib/money";
 
+/**
+ * Shared between the provider and admin tab groups (both link here as
+ * `/lead/${id}`) — the data module is swapped by role, the screen isn't
+ * duplicated. See lib/leads.ts's and lib/adminLeads.ts's header comments for
+ * why these live in separate files: `providerOnly`/`adminOnly` are both
+ * strict role equality, so the wrong one 403s outright.
+ */
 export default function LeadDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useStaffAuth();
@@ -25,18 +34,19 @@ export default function LeadDetail() {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setError(null);
     try {
-      setLead(await fetchLead(id));
+      setLead(await (admin ? fetchAdminLead(id) : fetchLead(id)));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل الطلب. جرّب تاني.");
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, admin]);
 
   useEffect(() => {
     void load();
@@ -77,15 +87,50 @@ export default function LeadDetail() {
     if (!lead || openingChat) return;
     setOpeningChat(true);
     try {
-      // Every lead already has exactly one conversation, created eagerly at
-      // submission — this can only fail if the lead id itself is wrong.
-      const conversation = await fetchConversationForLead(lead.id);
-      router.push(`/chat/${conversation.id}`);
+      if (admin) {
+        // No admin route resolves a conversation directly from a leadId (see
+        // lib/adminChat.ts's fetchAdminConversationForLead comment) — this
+        // can legitimately come back null if admin/chat's ref-number search
+        // hasn't caught up with a conversation created moments ago.
+        const conversation = await fetchAdminConversationForLead(lead.refNumber);
+        if (!conversation) throw new ApiError(404, "لسه المحادثة مش لاقيها — جرّب تاني بعد شوية.");
+        router.push(`/chat/${conversation.id}`);
+      } else {
+        // Every lead already has exactly one conversation, created eagerly at
+        // submission — this can only fail if the lead id itself is wrong.
+        const conversation = await fetchConversationForLead(lead.id);
+        router.push(`/chat/${conversation.id}`);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر فتح المحادثة. جرّب تاني.");
     } finally {
       setOpeningChat(false);
     }
+  }
+
+  function handleDelete() {
+    if (!lead) return;
+    Alert.alert(
+      "حذف الطلب",
+      `هل تريد حذف الطلب ${lead.refNumber} نهائيًا؟ هيتحذف كمان المحادثة المرتبطة بيه، ولا يمكن التراجع.`,
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "حذف",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await deleteAdminLead(lead.id);
+              router.back();
+            } catch (err) {
+              setError(err instanceof ApiError ? err.message : "تعذّر حذف الطلب.");
+              setDeleting(false);
+            }
+          },
+        },
+      ],
+    );
   }
 
   return (
@@ -161,13 +206,20 @@ export default function LeadDetail() {
 
         {lead ? (
           <View style={styles.actionsBar}>
-            <Pressable
-              style={styles.statusBtn}
-              disabled={statusBusy}
-              onPress={() => setSheetVisible(true)}
-            >
-              <Text style={styles.statusBtnLabel}>{statusBusy ? "بيتحدّث..." : "غيّر الحالة"}</Text>
-            </Pressable>
+            <View style={styles.actionsRow}>
+              <Pressable
+                style={styles.statusBtn}
+                disabled={statusBusy}
+                onPress={() => setSheetVisible(true)}
+              >
+                <Text style={styles.statusBtnLabel}>{statusBusy ? "بيتحدّث..." : "غيّر الحالة"}</Text>
+              </Pressable>
+              {admin ? (
+                <Pressable style={styles.deleteBtn} disabled={deleting} onPress={handleDelete}>
+                  <Text style={styles.deleteBtnLabel}>{deleting ? "..." : "حذف"}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -245,6 +297,9 @@ const styles = StyleSheet.create({
     borderTopColor: colors.outlineVariant,
     backgroundColor: colors.surface,
   },
-  statusBtn: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
+  actionsRow: { flexDirection: "row-reverse", gap: 10 },
+  statusBtn: { flex: 1, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   statusBtnLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
+  deleteBtn: { backgroundColor: colors.errorContainer, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: "center" },
+  deleteBtnLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onErrorContainer },
 });

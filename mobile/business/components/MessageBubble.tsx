@@ -26,6 +26,8 @@ export default function MessageBubble({
   pending,
   failed,
   onRetry,
+  hidden,
+  onToggleHide,
 }: {
   body: string;
   sender: MessageSenderValue;
@@ -34,19 +36,33 @@ export default function MessageBubble({
   pending?: boolean;
   failed?: boolean;
   onRetry?: () => void;
+  /** Only ever set in the admin thread view — see ApiMessage.hidden's own
+   *  comment: the other viewers never receive a hidden row at all. */
+  hidden?: boolean;
+  /** Admin-only moderation control (PATCH .../messages/[id] { hidden }) —
+   *  undefined for both the provider and customer views. */
+  onToggleHide?: () => void;
 }) {
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs]}>
-      <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+      <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs, hidden && styles.bubbleHidden]}>
         {!mine ? <Text style={styles.sender}>{SENDER_LABEL[sender]}</Text> : null}
         <Text style={[styles.body, mine ? styles.bodyMine : styles.bodyTheirs]}>{body}</Text>
         <View style={styles.metaRow}>
           {pending ? <ActivityIndicator size="small" color={mine ? colors.onPrimary : colors.onSurfaceVariant} /> : null}
+          {hidden ? <Text style={[styles.hiddenTag, mine ? styles.timeMine : styles.timeTheirs]}>مخفية</Text> : null}
           <Text style={[styles.time, mine ? styles.timeMine : styles.timeTheirs]}>{timeLabel(createdAt)}</Text>
         </View>
         {failed ? (
           <Pressable onPress={onRetry} style={styles.retry}>
             <Text style={styles.retryText}>فشل الإرسال — اضغط للمحاولة تاني</Text>
+          </Pressable>
+        ) : null}
+        {onToggleHide ? (
+          <Pressable onPress={onToggleHide} style={styles.moderate}>
+            <Text style={[styles.moderateText, mine ? styles.timeMine : styles.timeTheirs]}>
+              {hidden ? "إظهار" : "إخفاء"}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -71,4 +87,8 @@ const styles = StyleSheet.create({
   timeTheirs: { color: colors.outline },
   retry: { marginTop: 4 },
   retryText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.error },
+  bubbleHidden: { opacity: 0.55, borderWidth: 1, borderColor: colors.error, borderStyle: "dashed" },
+  hiddenTag: { fontSize: 10, fontFamily: "Cairo_700Bold" },
+  moderate: { marginTop: 2 },
+  moderateText: { fontSize: 10, fontFamily: "Cairo_600SemiBold", textDecorationLine: "underline" },
 });

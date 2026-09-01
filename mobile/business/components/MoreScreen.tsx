@@ -15,9 +15,9 @@ interface MenuItem {
 
 /**
  * Account + sign-out, plus a role-branched menu. Provider items land in
- * phase 6; admin items (team/settings/maintenance) land in phase 11 — this
- * screen is the shared shell both grow into, not a screen either phase
- * replaces wholesale.
+ * phase 6; admin's global search lands in phase 8, team/settings/maintenance
+ * in phase 11 — this screen is the shared shell every phase grows into, not
+ * a screen any one phase replaces wholesale.
  */
 export default function MoreScreen() {
   const { user } = useStaffAuth();
@@ -32,7 +32,7 @@ export default function MoreScreen() {
         { label: "خصومات الباقات", href: "/bundle-rules" },
         { label: "بيانات الشركة", href: "/profile" },
       ]
-    : [];
+    : [{ label: "بحث شامل", href: "/search" }];
 
   async function handleSignOut() {
     setSigningOut(true);

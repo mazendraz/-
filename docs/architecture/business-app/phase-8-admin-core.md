@@ -76,7 +76,10 @@ action set: full status range, delete, open thread.
 Every thread platform-wide, via `AdminListQuery`. Reuses phase 5's components with
 two additional controls:
 
-- **Hide a message** — `DELETE /admin/chat/[conversationId]/messages/[messageId]`
+- **Hide a message** — `PATCH /admin/chat/[conversationId]/messages/[messageId]`
+  (corrected from an earlier draft of this doc, which had this as a DELETE —
+  the actual route hides in place via `{ hidden: boolean }`, so the message
+  stays in the table and stays visible to admins; nothing is destroyed)
 - **Close a thread** — `PATCH /admin/chat/[conversationId]`
 
 Both must not render for a provider.
@@ -84,6 +87,16 @@ Both must not render for a provider.
 ### `(admin)/companies`
 
 Directory with search and status filter. Read-only here; editing is phase 10.
+
+> **Correction (found live):** `ApiCompany` never actually serializes a
+> `status` field (ACTIVE/INACTIVE/SUSPENDED lives on the Prisma row and on
+> `GET /admin/companies`'s `?status=` query filter, but `serializeCompanyAdmin`
+> doesn't put it on the response). The status filter still works — it narrows
+> which companies come back — but this phase's list rows cannot show a
+> per-company status badge, since the app has nothing to render one from. Not
+> worth a backend change for a read-only directory in this phase; revisit
+> alongside phase 10's status-change control, which will need the field
+> serialized regardless.
 
 ---
 
@@ -99,12 +112,22 @@ Directory with search and status filter. Read-only here; editing is phase 10.
 | GET | `/admin/chat` | `AdminListQuery` → `ApiPage<ApiConversation>` |
 | GET · POST | `/admin/chat/[conversationId]` | Read thread · send as admin |
 | PATCH | `/admin/chat/[conversationId]` | Close / reopen |
-| DELETE | `/admin/chat/[conversationId]/messages/[messageId]` | Hide a message |
+| PATCH | `/admin/chat/[conversationId]/messages/[messageId]` | Hide/unhide a message (`{ hidden }`) — corrected, see above |
 | GET | `/admin/companies` | `ApiPage<ApiCompany>` |
 | GET | `/admin/search` | Cross-entity search — `ApiSearchResponse` |
 
-All `adminOnly` except `PATCH /leads/[id]` (`authed`) and `/admin/search`, which
-is gated but reachable by any admin.
+All `adminOnly` except `PATCH /leads/[id]` (`authed`) and `/admin/search`.
+
+> **Correction (found live):** `/admin/search` is `adminOnly`, but each of its
+> five categories is ALSO independently gated behind a specific
+> `desktopPermissions` grant (`business:read`, `operations:read`,
+> `finance:read` — see the route's own `CATEGORY_PERMISSION` map). An admin
+> with no desktop permissions at all — the default for a freshly created
+> admin account, including this repo's `e2e-admin` seed user — gets a 200
+> with an EMPTY results array for every query, not an error. The screen must
+> treat this as a normal empty state, not surface it as a bug; there is
+> nothing here for a plain admin account to unlock without a permissions
+> grant, which is a phase-11/Control-Center concern, not this phase's.
 
 ## Realtime
 

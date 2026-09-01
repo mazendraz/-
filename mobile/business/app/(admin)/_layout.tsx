@@ -15,16 +15,12 @@ import {
 } from "../../lib/liveBadges";
 
 /**
- * Admin tab group: Overview · Leads · Approvals · Messages · More.
+ * Admin tab group: Overview · Leads · Messages · Companies · More.
  *
- * Every screen under here calls `/admin/*` routes (`withRole("ADMIN")`) —
- * a PROVIDER 403s on all of them, so this layout redirects one to the
- * provider group rather than mounting a screen that can only fail. See
- * lib/permissions.ts's header comment for why there is no "either" case.
- *
- * Shares liveBadges' counters with the provider layout — the two tab
- * groups are never mounted at the same time for one signed-in account (a
- * staff member is exactly one role), so module-level state is enough.
+ * Mirrors (provider)/_layout.tsx exactly — same live-badge wiring, same
+ * strict-role redirect (see its header comment for why there's no fallback
+ * chain: `adminOnly` on the server is strict equality too, so a PROVIDER
+ * 403s on every route this tab group's screens call).
  */
 export default function AdminTabsLayout() {
   const { user } = useStaffAuth();
@@ -59,8 +55,8 @@ export default function AdminTabsLayout() {
     >
       <Tabs.Screen name="overview" options={{ title: "الرئيسية" }} />
       <Tabs.Screen name="leads" options={{ title: "الطلبات", tabBarBadge: badgeLabel(leadsBadge) }} />
-      <Tabs.Screen name="approvals" options={{ title: "الموافقات" }} />
       <Tabs.Screen name="messages" options={{ title: "الرسائل", tabBarBadge: badgeLabel(messagesBadge) }} />
+      <Tabs.Screen name="companies" options={{ title: "الشركات" }} />
       <Tabs.Screen name="more" options={{ title: "المزيد" }} />
     </Tabs>
   );
