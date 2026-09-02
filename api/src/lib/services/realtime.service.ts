@@ -33,7 +33,17 @@
 export type RealtimeEvent =
   | { type: "message"; leadId: string; conversationId: string }
   | { type: "lead"; leadId: string; companyId: string }
-  | { type: "lead-status"; leadId: string };
+  | { type: "lead-status"; leadId: string }
+  // Both of these are customer-scoped and deliberately EMPTY beyond the tag.
+  // Favorites and profile fields are account data the receiving client already
+  // has an authorized endpoint for, and the rule this hub is built on is that
+  // an event says "something in your world changed" and never carries the
+  // thing itself — so a subscription bug can cause a spurious refetch, never a
+  // leak. A `favorite` event that named the company would be the first
+  // exception to that, for no gain: the client refetches the whole shortlist
+  // anyway, because it has to reconcile removals as well as additions.
+  | { type: "favorite" }
+  | { type: "profile" };
 
 type Listener = (event: RealtimeEvent) => void;
 

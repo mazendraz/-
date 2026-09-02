@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import type { ApiMessage } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import { fetchThread, sendMessage } from "../../lib/chat";
 import { useLiveEvents, ApiError, rowStart } from "@alassema/mobile-shared";
 
@@ -85,10 +85,22 @@ export default function Chat() {
           <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{companyName || "المحادثة"}</Text>
-        <View style={{ width: 22 }} />
+        {/* Was an empty 22-wide counterweight balancing the back arrow so
+            the title stayed centred. The menu is the same width, so nothing
+            has moved. */}
+        <MenuButton size={22} />
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      {/* `behavior="padding"` on ANDROID too, not just iOS.
+          Leaving it undefined here relied on the Activity's
+          `windowSoftInputMode="adjustResize"` shrinking the window so a flex
+          column would lift the composer on its own. That stopped being true
+          when this app went edge-to-edge (android/gradle.properties'
+          `edgeToEdgeEnabled=true`): the window then draws behind the system
+          bars and no longer resizes for the IME, so nothing moved and the
+          composer sat underneath the keyboard — reported as "the chat box
+          doesn't rise above the keyboard like WhatsApp". */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <FlatList
           ref={listRef}
           data={messages}
@@ -153,6 +165,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: type.subhead.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, flex: 1, textAlign: "center" },
   list: { padding: 16, gap: 8, flexGrow: 1 },
   empty: { textAlign: "center", color: colors.outline, fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, paddingTop: 60 },
+  // Deliberately a hardcoded "row", not `rowStart`: the two modifiers below
+  // pick a SIDE, and under the RTL engine plain "row" puts flex-end on the
+  // left — which is where an outgoing message belongs in an RTL thread, and
+  // where the website puts it too (ChatThread.tsx's `justify-end` on a
+  // dir="rtl" page resolves the same way).
   bubbleRow: { flexDirection: "row" },
   bubbleRowMine: { justifyContent: "flex-end" },
   bubbleRowTheirs: { justifyContent: "flex-start" },

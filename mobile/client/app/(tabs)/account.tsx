@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Button from "../../components/Button";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import {
   customerLogout,
@@ -14,7 +15,7 @@ import {
   type CustomerSession,
 } from "../../lib/customerAuth";
 import { useRequireAccount } from "../../lib/authGate";
-import { ApiError, rowStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, displayLine } from "@alassema/mobile-shared";
 
 /**
  * The customer's account: profile, signed-in devices, and the way out — the
@@ -109,9 +110,12 @@ export default function Account() {
                 <Logo size={28} />
                 <Text style={styles.title}>حسابك</Text>
               </View>
-              <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
-                <Icon name="search" size={22} color={colors.onSurface} />
-              </Pressable>
+              <View style={styles.topBarActions}>
+                <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
+                  <Icon name="search" size={22} color={colors.onSurface} />
+                </Pressable>
+                <MenuButton size={22} />
+              </View>
             </View>
 
             {error !== "" && (
@@ -196,16 +200,23 @@ export default function Account() {
                 اللي بعتها قبل كده بتفضل عند الشركات اللي بعتها ليها — دي سجلّهم للشغل
                 اللي عملوه.
               </Text>
-              <Button
-                label="حذف الحساب"
-                variant="secondary"
-                onPress={() => {
-                  setTypedEmail("");
-                  setError("");
-                  setConfirmOpen(true);
-                }}
-                style={styles.dangerBtn}
-              />
+              {/* The action sits below a hairline, in its own row: the rule is
+                  what makes it read as the card's conclusion rather than a
+                  third paragraph, and the row is what lets it hug the start
+                  edge (the right, in Arabic) without `alignSelf` collapsing
+                  it out of the card's padding box. */}
+              <View style={styles.dangerRule} />
+              <View style={styles.dangerActions}>
+                <Button
+                  label="حذف الحساب"
+                  variant="danger"
+                  onPress={() => {
+                    setTypedEmail("");
+                    setError("");
+                    setConfirmOpen(true);
+                  }}
+                />
+              </View>
             </View>
           </>
         }
@@ -246,13 +257,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: 20, gap: 10 },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",
   },
   topBar: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
+  // Groups the header's trailing actions so the global menu sits beside the
+  // existing search icon instead of being spread apart by space-between.
+  topBarActions: { flexDirection: rowStart, alignItems: "center", gap: 14 },
   errorBox: { backgroundColor: colors.errorContainer, borderRadius: 12, padding: 12, marginBottom: 12 },
   errorText: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onErrorContainer, textAlign: "right" },
   card: {
@@ -309,10 +323,47 @@ const styles = StyleSheet.create({
   linksRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 14, marginBottom: 20, marginTop: 4 },
   link: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.outline, textDecorationLine: "underline" },
   signOutBtn: { marginBottom: 24 },
-  dangerCard: { borderWidth: 1, borderColor: `${colors.error}33`, borderRadius: 16, padding: 16, gap: 10 },
-  dangerTitle: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.error, textAlign: "right" },
-  dangerBody: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right", lineHeight: 20 },
-  dangerBtn: { alignSelf: "flex-start" },
+  // Same 16-radius / 1px-border card language as every other block on this
+  // screen; the only difference is that the border and the faint wash are
+  // drawn from the error palette instead of the neutral one, so the section
+  // reads as dangerous without becoming a different KIND of card.
+  //
+  // `gap` is gone: the three parts need different spacing (title→prose is
+  // tight, prose→rule is loose), and one gap cannot express that.
+  dangerCard: {
+    borderWidth: 1,
+    borderColor: `${colors.error}33`,
+    backgroundColor: `${colors.error}08`,
+    borderRadius: 16,
+    padding: 18,
+  },
+  dangerTitle: {
+    fontSize: type.body.fontSize,
+    fontFamily: "Cairo_700Bold",
+    color: colors.error,
+    textAlign: "right",
+    // Arabic at this weight needs the room — see displayLine's note on how
+    // tight line boxes clip descenders.
+    lineHeight: 24,
+    marginBottom: 6,
+  },
+  dangerBody: {
+    fontSize: type.label.fontSize,
+    fontFamily: "Cairo_400Regular",
+    color: colors.onSurfaceVariant,
+    textAlign: "right",
+    lineHeight: 22,
+  },
+  dangerRule: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: `${colors.error}26`,
+    marginTop: 16,
+    marginBottom: 14,
+  },
+  // `rowStart` so the button hugs the reading-start edge — the right, in
+  // Arabic — and stays there on any width. A row (rather than alignSelf on
+  // the button itself) keeps it inside the card's padding box.
+  dangerActions: { flexDirection: rowStart },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", padding: 20 },
   modalCard: { backgroundColor: colors.surfaceContainerLowest, borderRadius: 20, padding: 20, gap: 12 },
   confirmInput: {

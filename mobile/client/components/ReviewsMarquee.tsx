@@ -239,18 +239,15 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
         </Pressable>
       </View>
 
-      {/* Tapping the strip itself pauses too — a discoverable shortcut for a
-          customer who wants to finish reading a card that's sliding away.
-          The explicit button above is what WCAG 2.2.2 actually requires
-          (see index.css's HOME-07 note); this is a convenience, not the
-          mechanism. */}
+      {/* The strip itself is NOT a pause target. It used to be — a
+          "convenience" on top of the explicit button above, which is what
+          WCAG 2.2.2 actually requires (see index.css's HOME-07 note). But it
+          sits in the middle of a scrolling home screen, so a tap meant for
+          the card under a thumb froze the banner instead, with no visible
+          cause; a banner that stops when you touch it is indistinguishable
+          from one that broke. The button is the one way to stop it. */}
       <View style={styles.marqueeWrap}>
-        <Pressable
-          onPress={() => setPaused((p) => !p)}
-          accessibilityRole="button"
-          accessibilityLabel={paused ? "تشغيل عرض الآراء" : "إيقاف عرض الآراء"}
-          style={styles.clip}
-        >
+        <View style={styles.clip}>
           <Animated.View
             style={[styles.track, { width: loopWidth * 2 }, { transform: [{ translateX: x }] }]}
           >
@@ -268,7 +265,7 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
               />
             ))}
           </Animated.View>
-        </Pressable>
+        </View>
 
         {/* Edge fades. RN has no mask-image, and the band behind this strip
             is a flat colour, so a gradient of that same colour over each

@@ -26,7 +26,7 @@ import {
 } from "../lib/customerAuth";
 import { isGoogleSignInConfigured, useGoogleSignIn } from "../lib/googleAuth";
 import { isAppleSignInAvailable, signInWithApple as runAppleSheet } from "../lib/appleAuth";
-import { ApiError, rowStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, displayLine } from "@alassema/mobile-shared";
 
 type Mode = "signin" | "register";
 
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   heading: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "center",

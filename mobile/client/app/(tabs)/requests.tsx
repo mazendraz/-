@@ -4,13 +4,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { ApiLead, ApiLeadStatus, ApiWaitlistEntry } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import StatusPill from "../../components/StatusPill";
 import WaitlistStatusPill from "../../components/WaitlistStatusPill";
 import { router } from "expo-router";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchMyWaitlistEntries } from "../../lib/waitlist";
-import { useLiveEvents, ApiError, rowStart } from "@alassema/mobile-shared";
+import { useLiveEvents, ApiError, rowStart, displayLine, bodyLine } from "@alassema/mobile-shared";
 import ReviewModal from "../../components/ReviewModal";
 import { useRequireAccount } from "../../lib/authGate";
 import { formatLeadEstimate } from "../../lib/pricing";
@@ -138,9 +139,12 @@ export default function Requests() {
           <Logo size={28} />
           <Text style={styles.title}>طلباتي</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
-          <Icon name="search" size={22} color={colors.onSurface} />
-        </Pressable>
+        <View style={styles.topBarActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
+            <Icon name="search" size={22} color={colors.onSurface} />
+          </Pressable>
+          <MenuButton size={22} />
+        </View>
       </View>
 
       {loaded && (leads!.length > 0 || waitlist!.length > 0) && (
@@ -357,8 +361,11 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
+  // Groups the header's trailing actions so the global menu sits beside the
+  // existing search icon instead of being spread apart by space-between.
+  topBarActions: { flexDirection: rowStart, alignItems: "center", gap: 14 },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",
@@ -381,11 +388,21 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     color: colors.onSurface,
   },
-  filterRow: { flexGrow: 0, marginTop: 8 },
+  // `flexShrink: 0` is load-bearing, not decoration. This row is a horizontal
+  // ScrollView between the search field and the FlatList in a `flex: 1`
+  // column; when the column ran short, Yoga SHRANK this box — `flexGrow: 0`
+  // only stops it growing — and because the chips stretch to the row's cross
+  // size, the squeeze passed straight through to their <Text>. Measured on the
+  // emulator via onLayout: the chip text box came out 13.3dp tall for a
+  // lineHeight of 20, so the bottom of every ب/ج/ل was sliced off ("الكل"
+  // rendered as "الكا"). With shrink off it measures the full 20.2dp and the
+  // glyphs are whole. See @alassema/mobile-shared's bodyLine() for the
+  // separate Cairo line-height floor that the chip text also needs.
+  filterRow: { flexGrow: 0, flexShrink: 0, marginTop: 8 },
   filterContent: { flexDirection: rowStart, paddingHorizontal: 20, gap: 8 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, backgroundColor: colors.surfaceContainer },
   filterChipActive: { backgroundColor: colors.primary },
-  filterChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant },
+  filterChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, lineHeight: bodyLine(type.caption.fontSize), color: colors.onSurfaceVariant },
   filterChipTextActive: { color: colors.onPrimary },
   listContent: { padding: 20, gap: 12, flexGrow: 1 },
   card: {

@@ -47,8 +47,42 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Did this rejection come from US aborting the request, rather than a real
+ * failure?
+ *
+ * The obvious check — `err instanceof DOMException && err.name ===
+ * "AbortError"` — is a WEB check, and it is wrong on a phone. React Native's
+ * Android networking module rejects an aborted `fetch()` with a plain
+ * `Error` whose message is "Fetch request has been canceled": it is not a
+ * DOMException, and its `name` is the default "Error", so both halves of the
+ * web check miss it. (Confirmed on the emulator: navigating away from a
+ * screen with the live-event stream open logged `Live stream error: [Error:
+ * Fetch request has been canceled]` — a warning for an abort WE performed
+ * during cleanup, which is what put the "Open debugger to view warnings!"
+ * LogBox toast on screen in a build a customer could be looking at.)
+ *
+ * So this recognises all three shapes: the web/DOMException one (react-native-web,
+ * and Hermes builds that do throw a real AbortError), any Error already named
+ * AbortError, and RN's own cancellation message. Matching on the message is
+ * narrow enough to be safe — it is anchored to the two words RN's native
+ * module actually emits, not a loose "cancel" substring test.
+ */
 export function isAbort(err: unknown): boolean {
-  return err instanceof DOMException && err.name === "AbortError";
+  // Deliberately duck-typed, and deliberately WITHOUT naming `DOMException`.
+  // That global does not exist in Hermes, and a bare `err instanceof
+  // DOMException` is not a safe no-op there — it throws `ReferenceError:
+  // Property 'DOMException' doesn't exist` before it can return false, so the
+  // check blew up inside the very catch blocks that exist to handle a failed
+  // request. Reading `.name` covers a real DOMException (its name is
+  // "AbortError") without ever touching the constructor.
+  const name = (err as { name?: unknown } | null | undefined)?.name;
+  if (name === "AbortError") return true;
+  // RN Android: "Fetch request has been canceled". RN iOS has been seen to
+  // spell it "cancelled" — accept both spellings rather than only the one
+  // this platform happens to use today.
+  const message = (err as { message?: unknown } | null | undefined)?.message;
+  return typeof message === "string" && /fetch request has been cancell?ed/i.test(message);
 }
 
 // ── Reachability signal ──────────────────────────────────────────────────────

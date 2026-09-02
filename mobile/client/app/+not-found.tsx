@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Icon from "../components/Icon";
 import Button from "../components/Button";
+import { displayLine } from "@alassema/mobile-shared";
 
 /**
  * expo-router's own 404 convention — any unmatched route renders this file
@@ -56,12 +57,12 @@ const styles = StyleSheet.create({
     fontFamily: "Alexandria_800ExtraBold",
     fontSize: 56,
     color: colors.primary,
-    lineHeight: 60,
+    lineHeight: displayLine(56),
     marginBottom: 4,
   },
   title: {
     fontFamily: "Alexandria_800ExtraBold",
-    fontSize: type.title.fontSize,
+    fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize),
     color: colors.onSurface,
     textAlign: "center",
     marginBottom: 8,

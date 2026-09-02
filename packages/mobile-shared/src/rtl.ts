@@ -37,6 +37,33 @@ import { I18nManager } from "react-native";
 import * as Updates from "expo-updates";
 
 export function ensureRTL(): void {
+  // ── Make `left`/`right` mean the same thing on both platforms ────────────
+  // Android and iOS ship OPPOSITE defaults for this flag, and the difference
+  // is invisible until a build runs RTL:
+  //   - iOS   (RCTI18nUtil.m) reads it from NSUserDefaults with no default
+  //           written, so `boolForKey` answers NO — no swap.
+  //   - Android defaults it to TRUE — so `left: 12` is quietly re-read as
+  //           `start: 12`, which under RTL is the RIGHT edge.
+  //
+  // Everything in this app that positions something physically — the photo
+  // viewer's prev/next arrows, the marquee's `left: i * CARD_STEP` card
+  // track, a gallery tile's zoom badge, the edge fades — was written and
+  // verified against the iOS behaviour. On Android those all landed mirrored:
+  // verified on the emulator, where the photo viewer's "next" arrow sat on
+  // the right-hand edge carrying a left-pointing chevron.
+  //
+  // Turning the swap OFF (rather than rewriting every physical inset as a
+  // logical one) is what makes the two platforms agree, and it is the
+  // direction that matches the code that already exists. Logical properties
+  // — `start`/`end`, `paddingStart`, `insetInlineEnd`, `borderStartRadius` —
+  // are unaffected and keep flipping correctly; only the explicitly physical
+  // ones stop being rewritten behind our backs.
+  //
+  // Set unconditionally, ahead of the isRTL early-return below: a build that
+  // is ALREADY RTL from a previous launch still needs the flag, and it is
+  // idempotent.
+  I18nManager.swapLeftAndRightInRTL(false);
+
   if (I18nManager.isRTL) return;
   // allowRTL must be true for forceRTL to take effect at all.
   I18nManager.allowRTL(true);

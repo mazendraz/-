@@ -6,6 +6,7 @@ import { ForbiddenError, RateLimitError, ValidationError } from "@/lib/utils/err
 import { clientIp, rateLimit } from "@/lib/middleware/rateLimit";
 import { readJsonObject } from "@/lib/middleware/bodyLimit";
 import { verifyCaptcha } from "@/lib/middleware/captcha";
+import { optionalCustomerId } from "@/lib/middleware/optionalCustomer";
 import { createSiteReviewSchema } from "@/lib/validation/siteReviews";
 import * as service from "@/lib/services/siteReviews.service";
 
@@ -43,7 +44,27 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
   }
 
   // CAPTCHA (no-op unless a secret is configured).
-  await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
+  // CAPTCHA — for ANONYMOUS submissions only, and a no-op unless a secret is
+  // configured at all. Same rule, and the same reasoning, as POST /leads (see
+  // that route's own comment): a signed-in customer already answered "is there
+  // a human here?" more strongly than a challenge can, by holding a session
+  // minted from a verified email address that every submission is attributable
+  // to and revocable with.
+  //
+  // This matters because Turnstile is a BROWSER widget. The native apps have no
+  // origin on the site key's domain list, so a WebView answers 110200 and never
+  // issues a token — with a secret configured, this endpoint returned 400
+  // "CAPTCHA verification required" for every signed-in mobile submission.
+  // (Verified against this API with TURNSTILE_SECRET_KEY set: POST returned
+  // {"code":"VALIDATION_ERROR","message":"CAPTCHA verification required"}.)
+  // The leads route was already fixed this way; these routes were missed.
+  //
+  // Anonymous callers are unchanged, and the honeypot + per-IP rate limit above
+  // still apply to signed-in and anonymous alike.
+  const captchaCustomerId = await optionalCustomerId(request);
+  if (!captchaCustomerId) {
+    await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
+  }
 
   const payload = createSiteReviewSchema.parse(raw);
   return ok(await service.create(payload), 201);

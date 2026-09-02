@@ -8,7 +8,7 @@ import Icon from "./Icon";
 import ReviewModal from "./ReviewModal";
 import { verifyLeadAmount } from "../lib/leads";
 import { formatEgp } from "../lib/pricing";
-import { ApiError, useSettings, rowStart } from "@alassema/mobile-shared";
+import { ApiError, useSettings, rowStart, displayLine } from "@alassema/mobile-shared";
 
 type Phase = "amount" | "discrepancy" | "confirmed" | "rating";
 
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   amountLabel: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "center" },
   amountValue: {
     fontFamily: "Alexandria_800ExtraBold",
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     color: colors.onSurface,
     textAlign: "center",
   },
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   error: { fontFamily: "Cairo_500Medium", fontSize: type.label.fontSize, color: colors.error, textAlign: "center" },
   secondBtn: { marginTop: 2 },
   footerNote: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "center", marginTop: 6 },
-  discTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" },
+  discTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.onSurface, textAlign: "right" },
   reportedRow: {
     flexDirection: rowStart,
     justifyContent: "space-between",
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   doneIconAmber: { backgroundColor: colors.primaryContainer },
-  doneTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "center" },
+  doneTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.onSurface, textAlign: "center" },
   doneAmount: { fontFamily: "Cairo_700Bold", color: colors.onSurface },
   doneMeta: {
     alignSelf: "center",

@@ -20,11 +20,6 @@ export interface NewLeadInput {
   district: string;
   description: string;
   items?: { offeringId: string; qty?: number; tierId?: string | null }[];
-  /** From <Captcha> (phase 10) — undefined/null whenever the widget isn't
-   *  configured, matching the website's own fallback: verifyCaptcha() is a
-   *  no-op server-side unless a secret is set, so the honeypot + rate limit
-   *  alone cover that case. */
-  captchaToken?: string | null;
 }
 
 export async function submitLead(input: NewLeadInput): Promise<ApiLead> {

@@ -16,10 +16,11 @@ import { router } from "expo-router";
 import type { ApiCategory, ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies, type CompanySort } from "../../lib/companies";
-import { ApiError, useRefreshOnFocus, assetUri, firstAssetUri, rowStart } from "@alassema/mobile-shared";
+import { ApiError, useRefreshOnFocus, assetUri, firstAssetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 
 const PAGE_SIZE = 20;
 
@@ -189,6 +190,7 @@ export default function Companies() {
           <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
             <Icon name="search" size={22} color={colors.onSurface} />
           </Pressable>
+          <MenuButton size={22} />
         </View>
       </View>
 
@@ -467,7 +469,7 @@ const styles = StyleSheet.create({
   topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
   topBarActions: { flexDirection: rowStart, alignItems: "center", gap: 18 },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "right",

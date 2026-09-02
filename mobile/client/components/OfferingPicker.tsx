@@ -4,7 +4,7 @@ import type { ApiBundleRule, ApiOffering } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
 import { calculateRequest, formatEstimate, formatPrice, formatQtyRange, isQuoteOnly } from "../lib/pricing";
-import { rowStart } from "@alassema/mobile-shared";
+import { rowStart, displayLine } from "@alassema/mobile-shared";
 
 export interface CartItem {
   offeringId: string;
@@ -217,7 +217,14 @@ const styles = StyleSheet.create({
   dotSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
   desc: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right", lineHeight: 18 },
   price: { fontFamily: "Cairo_600SemiBold", fontSize: type.label.fontSize, textAlign: "right", marginTop: 2 },
-  priceFixed: { color: colors.primary, fontFamily: "Alexandria_700Bold" },
+  // Swaps in the display face over `price`'s own size, so it needs the
+  // display line height with it — see displayLine's note on Alexandria's
+  // under-declared descent clipping Arabic tails.
+  priceFixed: {
+    color: colors.primary,
+    fontFamily: "Alexandria_700Bold",
+    lineHeight: displayLine(type.label.fontSize),
+  },
   priceQuote: { color: colors.outline },
 
   optionsRow: { marginTop: 10, paddingTop: 10, gap: 10, alignItems: "flex-end" },

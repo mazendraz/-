@@ -167,7 +167,27 @@ export function toIconName(
   fallback: IconName = "category",
 ): ResolvedIconName {
   if (name == null) return fallback;
-  const symbols = name.trim().toLowerCase();
+
+  // `ApiCategory.icon` is a FREE-TEXT admin field (the website's CategoryEditor
+  // is a plain <input>), so real rows arrive with decoration around the name:
+  // production currently stores "⚡electrical-services" and "🔧 appliance-repair"
+  // with an emoji glued on, and one row leads with a non-breaking space. A
+  // plain trim() only catches the last of those, so an otherwise perfectly
+  // valid icon name was still falling through to the generic square.
+  //
+  // Normalise first: drop everything that cannot appear in an icon name at
+  // all (emoji, NBSP, stray punctuation), then fold whitespace and
+  // underscores to the single hyphen Material Icons uses. Verified against
+  // the live /categories payload — this is what lifts "⚡electrical-services"
+  // back onto the real `electrical-services` glyph.
+  const symbols = name
+    .toLowerCase()
+    .replace(/[^a-z0-9 _-]+/g, " ")
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!symbols) return fallback;
   if (symbols in MATERIAL_ICON_NAME) return symbols as IconName;
 
   // The map above only ever listed the handful of category glyphs the seeded
@@ -184,8 +204,7 @@ export function toIconName(
   // ~90 written out by hand. The check is what keeps the old guarantee: a
   // name with no glyph still degrades to `category` rather than rendering a
   // blank box.
-  const kebab = symbols.replace(/_/g, "-");
-  if (kebab in MaterialIcons.glyphMap) return kebab as ResolvedIconName;
+  if (symbols in MaterialIcons.glyphMap) return symbols as ResolvedIconName;
 
   return fallback;
 }

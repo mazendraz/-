@@ -237,6 +237,7 @@ model Company {
   conversations  Conversation[]
   telegramChats  CompanyTelegramChat[]
   transactions   Transaction[]
+  favoritedBy    CustomerFavorite[]
 
   @@index([slug])
   @@index([status])
@@ -1168,9 +1169,42 @@ model CustomerUser {
   leads         Lead[]
   waitlistEntries WaitlistEntry[]
   notifications Notification[]
+  favorites     CustomerFavorite[]
   // No @@index([email]) — @unique above already creates one, and a second index
   // on the same column only costs write throughput. (`User` above carries that
   // duplication; not worth a migration to undo there, but not worth copying.)
+}
+
+// One row per company a customer has saved ("المفضلة").
+//
+// Favorites used to live in AsyncStorage on mobile and localStorage on the web,
+// which meant the same account had three different shortlists depending on
+// which client you opened. They are account data — the customer thinks of them
+// as "my saved companies", not "this browser's saved companies" — so they
+// belong on the account, keyed by the canonical customerId like every other
+// per-customer table here.
+//
+// Cascade on BOTH sides on purpose: deleting the account takes its shortlist
+// with it (nothing here is a business record the way a Lead is — see
+// customerDeletion.service's note on why leads are only detached), and a
+// company that is removed from the catalogue should not leave dangling saves.
+model CustomerFavorite {
+  id         String   @id @default(uuid())
+  customerId String
+  companyId  String
+  createdAt  DateTime @default(now())
+
+  customer CustomerUser @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // The uniqueness the API relies on: "save" is idempotent, so a double tap
+  // (or the same company arriving from two devices during the sign-in merge)
+  // is a no-op upsert rather than a duplicate row.
+  @@unique([customerId, companyId])
+  // Listing a customer's shortlist is the hot read; the compound unique above
+  // already covers it left-to-right, but the delete-by-company path and the
+  // company-side cascade both scan the other way.
+  @@index([companyId])
 }
 
 // One row per (provider, provider's user id) pair a CustomerUser can sign in with.

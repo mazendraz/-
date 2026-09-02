@@ -7,6 +7,7 @@ import Icon from "../components/Icon";
 import Logo from "../components/Logo";
 import Button from "../components/Button";
 import { verifyEmailToken } from "../lib/customerAuth";
+import { displayLine } from "@alassema/mobile-shared";
 
 /**
  * Landing screen for the emailed confirmation link — the mobile counterpart
@@ -97,7 +98,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   heading: {
-    fontSize: type.title.fontSize,
+    fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "center",

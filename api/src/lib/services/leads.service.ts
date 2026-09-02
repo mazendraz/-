@@ -230,11 +230,30 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
       // synchronous write to an in-memory Set, and a provider watching their
       // dashboard should see the row appear now rather than after the email and
       // Telegram calls have settled.
-      publishAll([channelForCompany(company.id), ADMIN_CHANNEL], {
-        type: "lead",
-        leadId: lead.id,
-        companyId: company.id,
-      });
+      //
+      // The CUSTOMER's own channel is in this list for the same reason it is in
+      // the status-change fan-out below, and it was the one channel missing
+      // here. The device that submitted already knows — but an account is one
+      // account across devices, and the customer's OTHER sessions (their phone
+      // while they ordered from the web, a second browser, the app in another
+      // window) had no way to learn the order existed until they reloaded.
+      // Verified against a live stream: creating an order from the app
+      // delivered `lead` to the company and admin channels and nothing at all
+      // to the customer's, so their other clients sat on a stale list.
+      //
+      // Null for an anonymous submission, which has no account to notify.
+      publishAll(
+        [
+          channelForCompany(company.id),
+          ADMIN_CHANNEL,
+          ...(lead.customerId ? [channelForCustomer(lead.customerId)] : []),
+        ],
+        {
+          type: "lead",
+          leadId: lead.id,
+          companyId: company.id,
+        },
+      );
 
       // Notifications run AFTER the response is sent (see runAfterResponse): they
       // never block or fail lead creation, and on a serverless host the function is

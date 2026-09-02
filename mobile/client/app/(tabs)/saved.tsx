@@ -6,11 +6,12 @@ import { router } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import { fetchCompany } from "../../lib/companyDetail";
 import { toggleSaved, useSavedSlugs } from "../../lib/saved";
 import { useRequireAccount } from "../../lib/authGate";
-import { useRefreshOnFocus, assetUri, rowStart } from "@alassema/mobile-shared";
+import { useRefreshOnFocus, assetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 
 /**
  * Saved companies — reads the device-local list (lib/saved.ts) and resolves
@@ -72,9 +73,12 @@ export default function Saved() {
           <Logo size={28} />
           <Text style={styles.title}>المفضلة</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
-          <Icon name="search" size={22} color={colors.onSurface} />
-        </Pressable>
+        <View style={styles.topBarActions}>
+          <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
+            <Icon name="search" size={22} color={colors.onSurface} />
+          </Pressable>
+          <MenuButton size={22} />
+        </View>
       </View>
 
       {rows.length > 0 && (
@@ -100,9 +104,15 @@ export default function Saved() {
             <View style={styles.empty}>
               <Icon name="favorite" size={40} color={colors.outline} />
               <Text style={styles.emptyTitle}>مفيش حاجة محفوظة لسه</Text>
+              {/* Copy kept in step with lib/saved.ts. Favorites used to be an
+                  AsyncStorage list and this line correctly said so; they are
+                  ACCOUNT data now (api's CustomerFavorite, mirrored into the
+                  cache), and this screen is behind useRequireAccount, so every
+                  reader of this sentence is signed in. Left as it was, it told
+                  the customer the exact opposite of what the app now does. */}
               <Text style={styles.emptyBody}>
-                احفظ شركة من صفحتها عشان تلاقيها هنا بسرعة. المفضلة محفوظة على الجهاز ده بس، ومش
-                هتظهر لو دخلت من جهاز تاني.
+                احفظ شركة من صفحتها عشان تلاقيها هنا بسرعة. المفضلة محفوظة على حسابك،
+                فهتلاقيها زي ما هي على أي جهاز تدخل منه.
               </Text>
             </View>
           ) : rows.length > 0 && visibleRows.length === 0 ? (
@@ -165,7 +175,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   topBar: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 12 },
   topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
-  title: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
+  // Groups the header's trailing actions so the global menu sits beside the
+  // existing search icon instead of being spread apart by space-between.
+  topBarActions: { flexDirection: rowStart, alignItems: "center", gap: 14 },
+  title: { fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize), fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "right" },
   searchRow: {
     flexDirection: rowStart,
     alignItems: "center",

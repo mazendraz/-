@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { colors, type } from "@alassema/core";
@@ -8,7 +8,7 @@ import Button from "../components/Button";
 import TextField from "../components/TextField";
 import Logo from "../components/Logo";
 import { resetPassword } from "../lib/customerAuth";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, displayLine } from "@alassema/mobile-shared";
 
 /**
  * Landing screen for the emailed password-reset link — the mobile counterpart
@@ -87,7 +87,13 @@ export default function ResetPassword() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      {/* `behavior="padding"` on ANDROID too — see app/chat/[leadId].tsx for
+          the full reasoning: this app is edge-to-edge
+          (android/gradle.properties' `edgeToEdgeEnabled=true`), so the window
+          no longer resizes for the IME and the Activity's
+          `windowSoftInputMode="adjustResize"` can no longer lift a field on
+          its own. Without this the keyboard covers the bottom of this form. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <Logo size={56} />
@@ -131,7 +137,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   heading: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "center",

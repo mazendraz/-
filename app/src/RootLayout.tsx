@@ -17,7 +17,7 @@ import { useHashScroll } from "./hooks/useHashScroll";
 import { useSaved } from "./hooks/useSaved";
 import { getCurrentUser } from "./lib/auth";
 import { useMyLeads, useMyLeadsHydrated } from "./lib/requests";
-import { useAccountLeads } from "./hooks/useAccountLeads";
+import { useAccountLeads, useAccountLeadsLiveSync } from "./hooks/useAccountLeads";
 import { hasFullBleedHero } from "./lib/heroRoutes";
 import { t } from "./lib/i18n";
 
@@ -59,6 +59,11 @@ export default function RootLayout() {
   // read that cache and used to see nothing until My Requests happened to be
   // opened. No-op for a signed-out visitor.
   const { settled: accountSettled } = useAccountLeads();
+  // ...and keeps it live afterwards. The pull above happens once per page load;
+  // this is what makes an order placed on the customer's phone, or a status the
+  // provider just changed, reach an already-open tab without a reload. Same
+  // stream, same pull — see the hook's own comment.
+  useAccountLeadsLiveSync();
   const myLeads = useMyLeads();
   // Closes a real refresh-bypass window: without this, the FIRST render after a
   // hard refresh paints from whatever this device cached before the provider

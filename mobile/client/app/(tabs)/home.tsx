@@ -20,6 +20,7 @@ import Icon, { toIconName } from "../../components/Icon";
 import Logo from "../../components/Logo";
 import SiteReviewModal from "../../components/SiteReviewModal";
 import ReviewsMarquee from "../../components/ReviewsMarquee";
+import MenuButton from "../../components/MenuButton";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
 import {
@@ -29,8 +30,7 @@ import {
   refreshSettings,
   useSettings,
   assetUri,
-  firstAssetUri,
-} from "@alassema/mobile-shared";
+  firstAssetUri, displayLine } from "@alassema/mobile-shared";
 import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
 import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
 import { useCountUp } from "../../lib/useCountUp";
@@ -551,6 +551,11 @@ export default function Home() {
         <Pressable accessibilityRole="button" accessibilityLabel="بحث" onPress={() => router.push("/search")} hitSlop={8}>
           <Icon name="search" size={22} color={scrolled ? colors.onSurface : "#fff"} />
         </Pressable>
+        {/* Pushed to the far END of the bar, opposite the search icon, so the
+            absolutely-centred logo between them stays centred. Same corner
+            the company profile puts its menu in. */}
+        <View style={styles.topBarSpacer} />
+        <MenuButton size={22} color={scrolled ? colors.onSurface : "#fff"} />
       </View>
 
       <SiteReviewModal
@@ -649,6 +654,10 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     backgroundColor: "transparent",
   },
+  // Eats the space between the search icon and the menu so the two sit at
+  // opposite ends of the bar. A spacer rather than `space-between`, which
+  // would also try to distribute the absolutely-positioned logo wrapper.
+  topBarSpacer: { flex: 1 },
   topBarSolid: {
     backgroundColor: colors.surfaceContainerLowest,
     borderBottomWidth: 1,
@@ -696,7 +705,7 @@ const styles = StyleSheet.create({
     fontFamily: "Alexandria_800ExtraBold",
     color: "#fff",
     textAlign: "center",
-    lineHeight: 34,
+    lineHeight: displayLine(type.headline.fontSize),
     maxWidth: 320,
     textShadowColor: "rgba(0,0,0,0.35)",
     textShadowOffset: { width: 0, height: 1 },
@@ -761,7 +770,7 @@ const styles = StyleSheet.create({
   },
   statItem: { flex: 1, alignItems: "center", gap: 4 },
   statValueRow: { flexDirection: rowStart, alignItems: "center", gap: 4 },
-  statValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: 22, color: colors.primary },
+  statValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: 22, lineHeight: displayLine(22), color: colors.primary },
   statLabel: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.outline, textAlign: "center" },
   // 2×2 grid, not a 4-across row (website's own mobile breakpoint is
   // grid-cols-1 for this same section) — 4 cards squeezed into one row left

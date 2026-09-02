@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import type { ApiCustomerNotification, ApiCustomerNotificationType } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon, { type IconName } from "../components/Icon";
+import MenuButton from "../components/MenuButton";
 import {
   fetchNotificationPreferences,
   fetchNotifications,
@@ -128,13 +129,17 @@ export default function Notifications() {
           <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>الإشعارات</Text>
-        {unreadCount > 0 ? (
-          <Pressable accessibilityRole="button" onPress={onMarkAllRead} hitSlop={8}>
-            <Icon name="done_all" size={22} color={colors.primary} />
-          </Pressable>
-        ) : (
-          <View style={{ width: 22 }} />
-        )}
+        <View style={styles.headerActions}>
+          {unreadCount > 0 && (
+            <Pressable accessibilityRole="button" onPress={onMarkAllRead} hitSlop={8}>
+              <Icon name="done_all" size={22} color={colors.primary} />
+            </Pressable>
+          )}
+          {/* Replaces the empty 22-wide balance box this row fell back to when
+              there was nothing to mark as read — same width either way, so
+              the title stays centred. */}
+          <MenuButton size={22} />
+        </View>
       </View>
 
       <FlatList
@@ -229,6 +234,7 @@ export default function Notifications() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: { alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 8 },
+  headerActions: { flexDirection: rowStart, alignItems: "center", gap: 14 },
   headerTitle: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface },
   listContent: { paddingBottom: 32 },
 

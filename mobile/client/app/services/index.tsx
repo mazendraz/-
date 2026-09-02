@@ -6,8 +6,9 @@ import { router } from "expo-router";
 import type { ApiCategory } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import { fetchCategories } from "../../lib/categories";
-import { ApiError, useRefreshOnFocus, assetUri, rowStart } from "@alassema/mobile-shared";
+import { ApiError, useRefreshOnFocus, assetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 
 /** All service categories to browse — the mobile counterpart of Services.tsx. */
 export default function Services() {
@@ -44,7 +45,10 @@ export default function Services() {
           <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title}>الخدمات</Text>
-        <View style={{ width: 22 }} />
+        {/* Was an empty 22-wide counterweight balancing the back arrow so
+            the title stayed centred. The menu is the same width, so nothing
+            has moved — the balance box just does something now. */}
+        <MenuButton size={22} />
       </View>
 
       <View style={styles.searchBox}>
@@ -88,7 +92,7 @@ export default function Services() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 10 },
-  title: { fontFamily: "Alexandria_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface },
+  title: { fontFamily: "Alexandria_700Bold", fontSize: type.subhead.fontSize, lineHeight: displayLine(type.subhead.fontSize), color: colors.onSurface },
   searchBox: { flexDirection: rowStart, alignItems: "center", gap: 8, backgroundColor: colors.surfaceContainer, borderRadius: 12, marginHorizontal: 20, paddingHorizontal: 14, marginBottom: 12 },
   searchInput: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.onSurface, paddingVertical: 10 },
   errorText: { fontFamily: "Cairo_500Medium", fontSize: type.label.fontSize, color: colors.error, textAlign: "center", marginBottom: 8 },

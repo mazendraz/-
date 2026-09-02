@@ -22,6 +22,7 @@ import {
   setReportingRole,
 } from "@alassema/mobile-shared";
 import { bootstrapSession, useCustomerAuth } from "../lib/customerAuth";
+import { refreshFromServer } from "../lib/saved";
 import { fetchAccountLeads } from "../lib/customerLeads";
 import PriceVerificationGate from "../components/PriceVerificationGate";
 import MaintenanceScreen from "../components/MaintenanceScreen";
@@ -29,6 +30,8 @@ import OfflineScreen from "../components/OfflineScreen";
 import UpdateRequiredScreen from "../components/UpdateRequiredScreen";
 import SoftUpdateBanner from "../components/SoftUpdateBanner";
 import GuestPromptModal from "../components/GuestPromptModal";
+import AppShell from "../components/AppShell";
+import AppMenu from "../components/AppMenu";
 import CrashScreen from "../components/CrashScreen";
 
 // expo-router's own top-level crash net: exporting `ErrorBoundary` from the
@@ -192,8 +195,18 @@ export default function RootLayout() {
   // Catches a completion that happens WHILE the app is already open, not just
   // at cold start — same "no screen the customer can dodge it on" guarantee
   // the website gets from RootLayout re-rendering on every route.
-  useLiveEvents(() => {
-    if (customer && !maintenance.enabled) void checkPendingVerification();
+  useLiveEvents((event) => {
+    if (!customer || maintenance.enabled) return;
+    void checkPendingVerification();
+    // Favorites are account data now (see lib/saved.ts). This is the one
+    // subscription in the app that is always mounted, so it is where the
+    // shortlist gets told to re-read itself — favouriting on the web, or on
+    // the customer's other phone, lands here and the heart flips without a
+    // refresh. Scoped server-side to this customer's own channel.
+    // `reconnect` is the client-synthesised "you may have missed something"
+    // signal (see liveEvents.ts) — reconcile everything this handler owns,
+    // not just the one thing a real event would have named.
+    if (event.type === "favorite" || event.type === "reconnect") void refreshFromServer();
   });
 
   function onGateResolved() {
@@ -218,29 +231,38 @@ export default function RootLayout() {
   ) : gatedLead ? (
     <PriceVerificationGate lead={gatedLead} onResolved={onGateResolved} />
   ) : (
+    // AppShell is the persistent chrome — see its own header comment. It wraps
+    // the WHOLE navigator rather than living inside it, which is what makes
+    // the bottom bar survive a push into an internal screen. It is
+    // deliberately only on this branch: maintenance / offline / forced-update
+    // / the price-verification gate each replace the entire app above, and
+    // none of them has anything for a tab bar to navigate within.
     <>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.surface },
-          // ── Swipe-back ────────────────────────────────────────────────
-          // Every screen in this app draws its own header, so `headerShown`
-          // is false everywhere — and on iOS that ALSO silently kills the
-          // system back gesture, because UIKit's interactivePopGestureRecognizer
-          // is wired to the navigation bar it is being told to hide. The app
-          // was left with no way back except finding the one small arrow in
-          // the corner, which is exactly the "I get into things easily but
-          // can't get out, and swiping back does nothing" report.
-          //
-          // `gestureEnabled` alone does not bring it back for a hidden
-          // header. `fullScreenGestureEnabled` does: react-native-screens
-          // installs its own pan recogniser across the whole screen instead
-          // of relying on UIKit's edge one, so the swipe works from anywhere
-          // and from the correct (right-hand, under RTL) edge.
-          gestureEnabled: true,
-          fullScreenGestureEnabled: true,
-        }}
-      />
+      <AppShell>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.surface },
+            // ── Swipe-back ──────────────────────────────────────────────
+            // Every screen in this app draws its own header, so `headerShown`
+            // is false everywhere — and on iOS that ALSO silently kills the
+            // system back gesture, because UIKit's
+            // interactivePopGestureRecognizer is wired to the navigation bar
+            // it is being told to hide. The app was left with no way back
+            // except finding the one small arrow in the corner, which is
+            // exactly the "I get into things easily but can't get out, and
+            // swiping back does nothing" report.
+            //
+            // `gestureEnabled` alone does not bring it back for a hidden
+            // header. `fullScreenGestureEnabled` does: react-native-screens
+            // installs its own pan recogniser across the whole screen instead
+            // of relying on UIKit's edge one, so the swipe works from
+            // anywhere and from the correct (right-hand, under RTL) edge.
+            gestureEnabled: true,
+            fullScreenGestureEnabled: true,
+          }}
+        />
+      </AppShell>
       {/* Only reachable here — never during maintenance/offline/forced-update/
           the price-verification gate, each of which already replaces the
           whole app above and has nothing this could float over. */}
@@ -275,6 +297,11 @@ export default function RootLayout() {
         content
       )}
       <GuestPromptModal />
+      {/* The one <MenuModal> in the app. Every hamburger anywhere in the
+          shell just flips lib/appMenu.ts's store; nothing else mounts a menu
+          of its own, so there is exactly one instance and opening it from a
+          screen five pushes deep changes no navigation state at all. */}
+      <AppMenu />
       <StatusBar style="dark" />
     </SafeAreaProvider>
   );

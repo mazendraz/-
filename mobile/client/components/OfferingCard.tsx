@@ -4,7 +4,7 @@ import type { ApiOffering } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "./Icon";
 import { formatPrice, formatQtyRange, isQuoteOnly } from "../lib/pricing";
-import { assetUri, rowStart } from "@alassema/mobile-shared";
+import { assetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 
 /**
  * A single priced service/product card — the mobile counterpart of the
@@ -77,7 +77,11 @@ export default function OfferingCard({ offering, onAdd, onOpenPhoto }: {
         )}
 
         <View style={styles.footer}>
-          <View>
+          {/* Shrinkable, so the widest price this catalogue can produce
+              ("من 100,000 ج / م²") wraps inside its own column instead of
+              pushing the add button past the card's `overflow: "hidden"`
+              edge, which is what clipped it on a 320dp phone. */}
+          <View style={styles.priceCol}>
             <Text style={[styles.price, quote && styles.priceQuote]}>{formatPrice(offering)}</Text>
             {offering.minQty != null && <Text style={styles.minQty}>الحد الأدنى {offering.minQty}</Text>}
           </View>
@@ -115,10 +119,16 @@ const styles = StyleSheet.create({
   tierLabel: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.onSurfaceVariant, textAlign: "right" },
   tierPrice: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onSurface },
   footer: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "flex-end", gap: 8, marginTop: 2 },
-  price: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.subhead.fontSize, color: colors.primary },
+  // `minWidth: 0` alongside flexShrink: RN will not shrink a flex child below
+  // its content's intrinsic width without it, so the shrink alone would not
+  // actually let a long price reflow.
+  priceCol: { flexShrink: 1, minWidth: 0 },
+  price: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.subhead.fontSize, lineHeight: displayLine(type.subhead.fontSize), color: colors.primary },
   priceQuote: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.secondary },
   minQty: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, marginTop: 2 },
-  addBtn: { flexDirection: rowStart, alignItems: "center", gap: 4, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  // flexShrink: 0 — the button keeps its full label; the price column above
+  // is the side that gives way.
+  addBtn: { flexShrink: 0, flexDirection: rowStart, alignItems: "center", gap: 4, backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   addBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimary },
   note: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, fontStyle: "italic", textAlign: "right" },
 });

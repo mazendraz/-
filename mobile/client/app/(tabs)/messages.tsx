@@ -5,10 +5,11 @@ import { router } from "expo-router";
 import type { ApiThreadSummary } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchThreadSummaries } from "../../lib/chat";
-import { useLiveEvents, ApiError, rowStart, textStart, uiIsRTL } from "@alassema/mobile-shared";
+import { useLiveEvents, ApiError, rowStart, textStart, uiIsRTL, displayLine } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
 
 interface Row {
@@ -113,7 +114,12 @@ export default function Messages() {
           </Pressable>
         </View>
         <Logo size={26} />
-        <View style={styles.headerSide} />
+        {/* This box was an empty counterweight balancing the search button so
+            the logo stayed optically centred. It now holds the global menu —
+            same width, so the logo has not moved. */}
+        <View style={styles.headerSide}>
+          <MenuButton size={21} />
+        </View>
       </View>
 
       <Text style={styles.title}>الرسائل</Text>
@@ -317,7 +323,7 @@ const styles = StyleSheet.create({
   headerBtnPressed: { backgroundColor: colors.surfaceContainer },
   title: {
     fontSize: type.title.fontSize,
-    lineHeight: type.title.lineHeight,
+    lineHeight: displayLine(type.title.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: textStart,
@@ -362,7 +368,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarUnread: { backgroundColor: colors.primary },
-  avatarText: { fontFamily: "Alexandria_700Bold", fontSize: type.body.fontSize, color: colors.primary },
+  avatarText: { fontFamily: "Alexandria_700Bold", fontSize: type.body.fontSize, lineHeight: displayLine(type.body.fontSize), color: colors.primary },
   avatarTextUnread: { color: colors.onPrimary },
 
   rowBody: { flex: 1, gap: 3 },

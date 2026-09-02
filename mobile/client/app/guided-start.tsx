@@ -8,7 +8,7 @@ import { colors, type } from "@alassema/core";
 import Icon, { type IconName } from "../components/Icon";
 import { fetchCategories } from "../lib/categories";
 import { fetchCompanies } from "../lib/companies";
-import { assetUri, rowStart } from "@alassema/mobile-shared";
+import { assetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 
 type Priority = "rating" | "projects" | "reviews";
 
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   progressDotActive: { backgroundColor: colors.primary },
   stepBody: { paddingHorizontal: 20, paddingBottom: 24 },
   eyebrow: { fontFamily: "Cairo_800ExtraBold", fontSize: type.caption.fontSize, color: colors.primary, textAlign: "right", marginBottom: 4 },
-  question: { fontFamily: "Alexandria_700Bold", fontSize: type.headline.fontSize, color: colors.onSurface, textAlign: "right", marginBottom: 18, lineHeight: 32 },
+  question: { fontFamily: "Alexandria_700Bold", fontSize: type.headline.fontSize, color: colors.onSurface, textAlign: "right", marginBottom: 18, lineHeight: displayLine(type.headline.fontSize)},
   grid: { gap: 10 },
   gridList: { gap: 10 },
   optionCard: { flex: 1, backgroundColor: colors.surfaceContainerLowest, borderRadius: 14, padding: 14, gap: 6, borderWidth: 1, borderColor: colors.outlineVariant },

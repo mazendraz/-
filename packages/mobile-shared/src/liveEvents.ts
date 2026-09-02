@@ -56,10 +56,27 @@ import { AppState, type AppStateStatus } from "react-native";
 import { fetch as expoFetch } from "expo/fetch";
 import { getConfig } from "./config";
 import { getAccessToken, useAuthSubject } from "./session";
-import { apiKeyHeader, refreshAccessToken, streamUrl } from "./api";
+import { apiKeyHeader, isAbort, refreshAccessToken, streamUrl } from "./api";
 
 export interface LiveEvent {
-  type: "message" | "lead" | "lead-status";
+  /**
+   * Server event types, plus ONE synthesised locally: `reconnect`.
+   *
+   * `reconnect` never comes down the wire. It is emitted here the moment a
+   * stream is (re)established after having been down, and it means exactly
+   * "you were disconnected — anything could have changed while you weren't
+   * listening". SSE has no replay: a reconnect delivers what happens NEXT, not
+   * what was missed, so a client that only reacts to real events sits on stale
+   * data forever after one dropped connection. Verified on a device: with the
+   * phone in airplane mode an order was moved to In Progress, and on
+   * reconnecting the screen still showed the previous status.
+   *
+   * Every consumer already refetches through its authorized endpoint on any
+   * event, so emitting this makes reconnection self-healing without a second
+   * mechanism — and it covers the foreground case too, since returning to the
+   * app reconnects.
+   */
+  type: "message" | "lead" | "lead-status" | "favorite" | "profile" | "reconnect";
   leadId?: string;
   conversationId?: string;
   companyId?: string;
@@ -85,6 +102,11 @@ const connectionListeners = new Set<(connected: boolean) => void>();
 // doesn't hammer the server or the battery.
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30_000;
+
+/** Has a stream ever been established in this session? Distinguishes the first
+ *  connection (nothing to reconcile) from a re-connection (possibly missed
+ *  events) — see the `reconnect` note on LiveEvent. */
+let hasEverConnected = false;
 
 function setConnected(next: boolean): void {
   if (sharedConnected === next) return;
@@ -175,8 +197,14 @@ async function connect(): Promise<void> {
       return;
     }
 
+    // Was this a RE-connect rather than the first one? Decided before
+    // setConnected flips the flag.
+    const reconnected = hasEverConnected && !sharedConnected;
+    hasEverConnected = true;
     setConnected(true);
     backoffAttempt = 0; // a real connection landed — forget any prior backoff
+    // Tell everyone to reconcile — see the `reconnect` note on LiveEvent.
+    if (reconnected) dispatch({ type: "reconnect" });
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -203,9 +231,13 @@ async function connect(): Promise<void> {
       }
     }
   } catch (err) {
-    // AbortError is US disconnecting (backgrounding, sign-out, or a newer
-    // connect() superseding this one) — not a failure to report.
-    if (!(err instanceof Error && err.name === "AbortError")) {
+    // An abort is US disconnecting (backgrounding, sign-out, or a newer
+    // connect() superseding this one) — not a failure to report. Goes through
+    // api.ts's isAbort() rather than testing `err.name` here: on Android RN
+    // rejects an aborted fetch with a plain Error named "Error", so the
+    // name check this used to do never matched and every ordinary
+    // disconnect warned — see isAbort's own comment.
+    if (!isAbort(err)) {
       console.warn("Live stream error:", err);
     }
   } finally {

@@ -97,7 +97,27 @@ export default function MediaLightbox({
     onIndex(i);
   }
 
-  // Which physical edge each arrow hangs off — see the arrows themselves.
+  // ── Carousel arrows: BOTH the glyph and the side mirror ──────────────────
+  //
+  // The pager underneath genuinely runs the other way in Arabic: with an RTL
+  // engine a horizontal list lays photo 1 at the RIGHT and the last one at the
+  // LEFT. So "next" is a move to the LEFT and "previous" a move to the RIGHT,
+  // and each arrow points the way it actually travels.
+  //
+  // The side has to mirror WITH the glyph, not stay pinned. An earlier version
+  // fixed the corners (previous always left, next always right) and turned
+  // only the glyphs, which under RTL put a right-pointing ‹›› on the LEFT edge
+  // and a left-pointing ‹‹› on the RIGHT — every button pointing away from the
+  // edge it sits on, the two arrows aimed at each other. That reads as simply
+  // backwards, and it was reported as exactly that.
+  //
+  // Mirroring both gives each arrow a button on the side it points to — the
+  // plain mirror image of the LTR viewer:
+  //
+  //   RTL:   ‹  left edge  …  right edge  ›        LTR:  ‹  …  ›
+  //            (next)          (previous)              (prev)  (next)
+  const prevGlyph = engineIsRTL ? "navigate_next" : "navigate_before";
+  const nextGlyph = engineIsRTL ? "navigate_before" : "navigate_next";
   const prevSide = engineIsRTL ? styles.arrowRight : styles.arrowLeft;
   const nextSide = engineIsRTL ? styles.arrowLeft : styles.arrowRight;
 
@@ -181,15 +201,9 @@ export default function MediaLightbox({
         </View>
 
         {/* Arrows as well as swipe: the swipe is the native gesture, but a
-            visible arrow is what tells someone there IS another photo.
-
-            Each arrow must sit on the side the photo it leads to actually
-            LIVES on, and point that way — under an RTL engine the pager lays
-            photo 1 at the right and the last one at the left, so "previous"
-            is to the RIGHT and "next" to the LEFT, the mirror of the LTR
-            arrangement. Hardcoding prev-left/next-right (which is what the
-            website can do, since its arrows drive no swipe surface) made
-            every arrow here point away from the direction it moved you. */}
+            visible arrow is what tells someone there IS another photo. See
+            prevGlyph/nextGlyph above for why BOTH the glyph and the side
+            mirror under RTL. */}
         {index > 0 && (
           <Pressable
             style={[styles.arrow, prevSide, { top: height / 2 - 22 }]}
@@ -198,7 +212,7 @@ export default function MediaLightbox({
             onPress={() => onIndex(index - 1)}
             hitSlop={12}
           >
-            <Icon name={engineIsRTL ? "navigate_next" : "navigate_before"} size={26} color="#fff" />
+            <Icon name={prevGlyph} size={26} color="#fff" />
           </Pressable>
         )}
         {index < total - 1 && (
@@ -209,7 +223,7 @@ export default function MediaLightbox({
             onPress={() => onIndex(index + 1)}
             hitSlop={12}
           >
-            <Icon name={engineIsRTL ? "navigate_before" : "navigate_next"} size={26} color="#fff" />
+            <Icon name={nextGlyph} size={26} color="#fff" />
           </Pressable>
         )}
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
@@ -7,6 +7,7 @@ import Button from "../components/Button";
 import TextField from "../components/TextField";
 import Logo from "../components/Logo";
 import { requestPasswordReset } from "../lib/customerAuth";
+import { displayLine } from "@alassema/mobile-shared";
 
 /**
  * "Forgot your password?" — the entry point sign-in.tsx links to. One field,
@@ -54,7 +55,13 @@ export default function ForgotPassword() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      {/* `behavior="padding"` on ANDROID too — see app/chat/[leadId].tsx for
+          the full reasoning: this app is edge-to-edge
+          (android/gradle.properties' `edgeToEdgeEnabled=true`), so the window
+          no longer resizes for the IME and the Activity's
+          `windowSoftInputMode="adjustResize"` can no longer lift a field on
+          its own. Without this the keyboard covers the bottom of this form. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <Logo size={56} />
@@ -93,7 +100,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   heading: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_700Bold",
     color: colors.onSurface,
     textAlign: "center",

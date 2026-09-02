@@ -2,9 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
-import Captcha from "./Captcha";
 import { ApiError, rowStart } from "@alassema/mobile-shared";
-import { captchaConfigured } from "../lib/captcha";
 import { submitFeedback, type FeedbackType } from "../lib/feedback";
 
 const TYPES: { key: FeedbackType; label: string }[] = [
@@ -33,8 +31,6 @@ export default function FeedbackModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaReset, setCaptchaReset] = useState(0);
 
   function reset() {
     setType("problem");
@@ -42,19 +38,14 @@ export default function FeedbackModal({
     setPhone("");
     setError("");
     setDone(false);
-    setCaptchaToken(null);
   }
 
   async function onSubmit() {
     if (!message.trim()) return;
-    if (captchaConfigured() && !captchaToken) {
-      setError("استنى لحد ما التحقق يخلص. لو فضل واقف، اضغط «أعد المحاولة» تحت.");
-      return;
-    }
     setBusy(true);
     setError("");
     try {
-      await submitFeedback({ companySlug, type, message: message.trim(), phone: phone.trim() || undefined, captchaToken });
+      await submitFeedback({ companySlug, type, message: message.trim(), phone: phone.trim() || undefined });
       setDone(true);
       setTimeout(() => {
         reset();
@@ -62,8 +53,6 @@ export default function FeedbackModal({
       }, 1200);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر إرسال البلاغ.");
-      setCaptchaToken(null);
-      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -120,7 +109,6 @@ export default function FeedbackModal({
                 keyboardType="phone-pad"
               />
 
-              <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
 
               {error !== "" && <Text style={styles.error}>{error}</Text>}
 

@@ -78,7 +78,8 @@
           ]
         }
       ],
-      "allowBackup": false
+      "allowBackup": false,
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"

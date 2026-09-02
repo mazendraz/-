@@ -6,9 +6,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import type { ApiCategory, ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import { fetchCategories, recordCategoryView } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
-import { ApiError, useRefreshOnFocus, assetUri, rowStart } from "@alassema/mobile-shared";
+import { ApiError, useRefreshOnFocus, assetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 import { useCustomerAuth } from "../../lib/customerAuth";
 
 const PAGE_SIZE = 20;
@@ -113,7 +114,10 @@ export default function ServiceCategory() {
           <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>{category?.label ?? "الشركات"}</Text>
-        <View style={{ width: 22 }} />
+        {/* Was an empty 22-wide counterweight balancing the back arrow so
+            the title stayed centred. The menu is the same width, so nothing
+            has moved — the balance box just does something now. */}
+        <MenuButton size={22} />
       </View>
       {category?.description ? <Text style={styles.sub}>{category.description}</Text> : null}
 
@@ -201,7 +205,7 @@ export default function ServiceCategory() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
   header: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20, paddingBottom: 4 },
-  title: { fontFamily: "Alexandria_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface, flex: 1, textAlign: "center" },
+  title: { fontFamily: "Alexandria_700Bold", fontSize: type.subhead.fontSize, lineHeight: displayLine(type.subhead.fontSize), color: colors.onSurface, flex: 1, textAlign: "center" },
   sub: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.outline, textAlign: "right", paddingHorizontal: 20, marginBottom: 8 },
   searchRow: {
     flexDirection: rowStart,

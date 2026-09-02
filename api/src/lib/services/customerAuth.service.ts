@@ -8,6 +8,7 @@
  */
 import type { IdentityProvider } from "@/generated/prisma/enums";
 import { prisma } from "@/lib/prisma";
+import { channelForCustomer, publish } from "@/lib/services/realtime.service";
 import { UnauthorizedError } from "@/lib/utils/errors";
 import type { CustomerAuthUser } from "@/lib/auth";
 import * as audit from "@/lib/services/audit.service";
@@ -279,7 +280,7 @@ async function refreshProfile(
   customerId: string,
   identity: VerifiedIdentity,
 ): Promise<CustomerRow> {
-  return prisma.customerUser.update({
+  const updated = await prisma.customerUser.update({
     where: { id: customerId },
     data: {
       // Only the fields the provider actually asserted. A null means "no
@@ -297,6 +298,22 @@ async function refreshProfile(
     },
     select: CUSTOMER_SELECT,
   });
+
+  // Tell the account's OTHER clients their cached profile is stale.
+  //
+  // This is the only place a customer's displayed name or avatar changes
+  // server-side today — the provider asserts new values and we cache them. So
+  // signing in with Google on a new phone, having changed your Google photo,
+  // is the one flow that can leave an already-open web tab and a second device
+  // showing yesterday's name. Published AFTER the write resolves, and carrying
+  // nothing: the receiver refetches GET /customer/me, which is authenticated.
+  //
+  // (There is no profile EDITOR in either client yet. When one is added, it
+  // should publish this same event from its own handler rather than inventing
+  // a second signal.)
+  publish(channelForCustomer(customerId), { type: "profile" });
+
+  return updated;
 }
 
 /**

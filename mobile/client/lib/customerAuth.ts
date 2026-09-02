@@ -322,6 +322,17 @@ export async function deleteAccount(confirmEmail: string): Promise<DeletionSumma
   return summary;
 }
 
+/**
+ * The signed-in customer, read outside React.
+ *
+ * lib/saved.ts needs this: its read/toggle functions are plain async calls made
+ * from event handlers and from the live-event handler, none of which can use a
+ * hook. Same store the hook below reads, so the two can never disagree.
+ */
+export function getCustomer(): Customer | null {
+  return snapshot.customer;
+}
+
 /** Subscribe to the customer session. */
 export function useCustomerAuth(): Snapshot {
   return useSyncExternalStore(

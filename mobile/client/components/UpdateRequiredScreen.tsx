@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
-import { rowStart } from "@alassema/mobile-shared";
+import { rowStart, displayLine } from "@alassema/mobile-shared";
 
 /**
  * Blocking "you must update" screen — same rendered-instead-of-the-whole-app
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",

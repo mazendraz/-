@@ -1,40 +1,53 @@
-import { Tabs, router } from "expo-router";
-import Icon from "../../components/Icon";
-import TabBar, { tabIconLift } from "../../components/TabBar";
-import { useCustomerAuth } from "../../lib/customerAuth";
-import { showGuestPrompt } from "../../lib/authGate";
+import { Tabs } from "expo-router";
 import { usePushNotifications } from "@alassema/mobile-shared";
+import { useCustomerAuth } from "../../lib/customerAuth";
 
 /**
- * The tab shell: Home, Search, Messages, Requests, Account — five tabs, each
- * an equal fifth of the width. Saved is still part of this group (same screen
- * it always was) but no longer holds a slot in the bar: `href: null` hides it
- * there while leaving /saved fully navigable. Its doors are the heart button
- * in the Search header — where you save a company in the first place — and
- * the المفضلة row on the Account tab.
+ * The tab GROUP. Note what this no longer is: the thing that draws the bottom
+ * bar.
  *
- * Messages sits in the bar rather than Saved because a thread is a
- * conversation someone is WAITING on: a provider's reply is the one thing in
- * this app that arrives without the customer asking, and a shortlist is not.
+ * ── What changed, and why ───────────────────────────────────────────────────
+ * This navigator used to render the bar via `tabBar={(props) => <TabBar/>}`,
+ * which meant the bar was the navigator's own furniture and existed only
+ * while one of these five screens was the top of the root stack. Every
+ * internal screen in the app (`/services`, `/company/[slug]`, `/search`,
+ * `/chat/[leadId]`, `/new-request/[slug]`, `/notifications`, `/legal/[kind]`)
+ * is a SIBLING of this group in that stack, so pushing one covered this
+ * navigator entirely and the bar went with it — the "bottom bar disappears
+ * one level deep" bug. The bar now belongs to components/AppShell.tsx, which
+ * wraps the whole navigator instead of living inside it.
  *
+ * `tabBar={() => null}` rather than deleting the navigator, because the two
+ * things it still does are exactly the two things the fix must not lose:
+ *   1. It keeps all five screens MOUNTED, so switching tabs preserves each
+ *      one's scroll position, filters and loaded data — requirement "do not
+ *      unnecessarily reset nested navigation stacks".
+ *   2. It owns the five routes, so `/home`, `/companies`, … keep resolving
+ *      and every existing deep link still lands where it did.
+ * With the bar returning null the navigator reserves no space for one, so the
+ * shell's bar is the only bottom chrome on screen — there is no second bar
+ * and no gap where one used to be.
+ *
+ * The per-screen `tabBarIcon` / `title` / `tabPress` guard options are gone
+ * from here for the same reason: nothing renders them any more. Labels,
+ * icons and the guest guards moved to lib/navShell.ts's TABS, which is the
+ * single source of truth the shell's bar reads. Each gated screen still
+ * guards ITSELF with useRequireAccount (lib/authGate.ts) — that is what
+ * covers deep links and signing out mid-session, and it never depended on
+ * the tab bar.
+ *
+ * ── Unchanged ───────────────────────────────────────────────────────────────
  * "البحث" is the companies catalogue (companies.tsx): a search field, category
  * and rating filters, and sort — named for what a customer goes there to do
  * rather than for the entity it lists.
  *
- * Guest browsing (phase 1): Home and Search are open to everyone. The other
- * three require an account — tapping one as a guest is intercepted here
- * (tabPress, which components/TabBar.tsx re-emits by hand; see its header).
- * Messages/Requests show a contextual prompt explaining what signing in
- * unlocks (dismissible — a guest can back out and keep browsing); Account goes
- * straight to sign-in with no prompt, since needing an account to see "your
- * account" needs no explaining. Each of those screens ALSO guards itself with
- * useRequireAccount (see lib/authGate.ts), for deep links and for a customer
- * signing out while sitting on the tab — cases a tab-bar intercept alone
- * can't cover, and now also the only thing standing between a guest and
- * /saved, which no longer has a tab to intercept.
+ * Saved is still part of this group (same screen it always was) but holds no
+ * slot in the bar: it is simply not in TABS. Its doors are the heart button
+ * in the Search header — where you save a company in the first place — and
+ * the المفضلة row on the Account tab.
  */
 export default function TabsLayout() {
-  const { customer, loading } = useCustomerAuth();
+  const { loading } = useCustomerAuth();
   // Registration + tap-to-open are account-level concerns (see push.ts),
   // mounted once here rather than per-screen. Called unconditionally (hooks
   // can't be conditional) — it internally no-ops until `customer` exists.
@@ -42,91 +55,21 @@ export default function TabsLayout() {
 
   if (loading) return null;
 
-  function guardTab(next: string, prompt?: { title: string; subtitle: string }) {
-    return {
-      tabPress: (e: { preventDefault: () => void }) => {
-        if (!customer) {
-          e.preventDefault();
-          if (prompt) {
-            showGuestPrompt({ ...prompt, next, secondary: { label: "ليس الآن", kind: "dismiss" } });
-          } else {
-            router.push({ pathname: "/sign-in", params: { next } });
-          }
-        }
-      },
-    };
-  }
-
   return (
     <Tabs
-      // Every visual decision the bar used to take from screenOptions (height,
-      // padding, tints, label font) now lives in TabBar itself — passing them
-      // here as well would leave two sources of truth, one of them dead.
+      // The bar is drawn by the shell, above this navigator — see the header
+      // comment. Returning null (rather than `tabBarStyle: { display: "none" }`)
+      // is what keeps the navigator from reserving height for a bar it no
+      // longer owns.
       screenOptions={{ headerShown: false }}
-      tabBar={(props) => <TabBar {...props} />}
+      tabBar={() => null}
     >
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: "الرئيسية",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon name="home" color={color} size={size} style={tabIconLift(focused)} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="companies"
-        options={{
-          title: "البحث",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon name="search" color={color} size={size} style={tabIconLift(focused)} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: "الرسائل",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon name="forum" color={color} size={size} style={tabIconLift(focused)} />
-          ),
-        }}
-        listeners={guardTab("/messages", {
-          title: "سجل الدخول لعرض رسائلك",
-          subtitle: "سجل الدخول عشان تقدر تتواصل مع الشركات وتشوف ردودهم.",
-        })}
-      />
-      <Tabs.Screen
-        name="requests"
-        options={{
-          title: "طلباتي",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon name="receipt_long" color={color} size={size} style={tabIconLift(focused)} />
-          ),
-        }}
-        listeners={guardTab("/requests", {
-          title: "سجل الدخول لمتابعة طلباتك",
-          subtitle: "سجل الدخول عشان تقدر تشوف كل طلباتك وتتابع حالتها أول بأول.",
-        })}
-      />
-      <Tabs.Screen
-        name="saved"
-        options={{
-          title: "المفضلة",
-          // Off the bar, still routable — see this file's header comment.
-          href: null,
-        }}
-      />
-      <Tabs.Screen
-        name="account"
-        options={{
-          title: "حسابي",
-          tabBarIcon: ({ color, size, focused }) => (
-            <Icon name="person" color={color} size={size} style={tabIconLift(focused)} />
-          ),
-        }}
-        listeners={guardTab("/account")}
-      />
+      <Tabs.Screen name="home" />
+      <Tabs.Screen name="companies" />
+      <Tabs.Screen name="messages" />
+      <Tabs.Screen name="requests" />
+      <Tabs.Screen name="saved" />
+      <Tabs.Screen name="account" />
     </Tabs>
   );
 }

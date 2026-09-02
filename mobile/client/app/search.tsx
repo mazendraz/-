@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
 import Icon from "../components/Icon";
+import MenuButton from "../components/MenuButton";
 import { assetUri, rowStart } from "@alassema/mobile-shared";
 import {
   addRecentSearch,
@@ -105,6 +106,10 @@ export default function Search() {
         <Pressable onPress={() => router.back()} hitSlop={8}>
           <Text style={styles.cancel}>إلغاء</Text>
         </Pressable>
+        {/* The search field is flex:1, so this rides at the end of the row
+            without squeezing it — the menu stays reachable here like it is on
+            every other non-full-screen route. */}
+        <MenuButton size={20} />
       </View>
 
       {query.trim() !== "" ? (

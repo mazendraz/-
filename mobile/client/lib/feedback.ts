@@ -9,9 +9,6 @@ export function submitFeedback(input: {
   name?: string;
   phone?: string;
   message: string;
-  /** From <Captcha> (phase 10) — see lib/leads.ts's submitLead for the
-   *  no-op-when-unconfigured contract this matches. */
-  captchaToken?: string | null;
 }): Promise<unknown> {
   return apiPost("/feedback", { ...input, hp_field: "" });
 }

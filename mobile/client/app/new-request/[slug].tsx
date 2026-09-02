@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { ApiCompany, ApiLead, ApiWaitlistEntry } from "@alassema/core";
 import {
@@ -25,16 +24,15 @@ import {
 } from "@alassema/core";
 import Button from "../../components/Button";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import TextField from "../../components/TextField";
 import OfferingPicker, { type CartItem } from "../../components/OfferingPicker";
-import Captcha from "../../components/Captcha";
 import { submitLead } from "../../lib/leads";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchCompany, joinWaitlist } from "../../lib/companyDetail";
 import { formatLeadEstimate } from "../../lib/pricing";
-import { captchaConfigured } from "../../lib/captcha";
-import { ApiError, parseLines, useSettings, rowStart, rowLtr } from "@alassema/mobile-shared";
+import { ApiError, parseLines, useSettings, rowStart, rowLtr, displayLine, textStart } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
 
 /**
@@ -63,9 +61,8 @@ import { useRequireAccount } from "../../lib/authGate";
  * state, validation, or submit logic above changed; only how it's presented.
  */
 export default function NewRequest() {
-  const { slug, name: companyName, offeringId } = useLocalSearchParams<{ slug: string; name: string; offeringId?: string }>();
+  const { slug, name: companyNameParam, offeringId } = useLocalSearchParams<{ slug: string; name: string; offeringId?: string }>();
   const customer = useRequireAccount(`/new-request/${slug}`);
-  const insets = useSafeAreaInsets();
 
   // Admin-configurable district list (Settings → districts), falling back to
   // the built-in DISTRICTS — same override rule as the website's
@@ -144,12 +141,31 @@ export default function NewRequest() {
     | { kind: "queued"; entry: ApiWaitlistEntry }
     | null
   >(null);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const [captchaReset, setCaptchaReset] = useState(0);
 
   useEffect(() => {
     fetchCompany(slug).then(setCompany).catch(() => setCompany(null));
   }, [slug]);
+
+  /**
+   * The company's display name, from the PROFILE first and the `?name=` route
+   * param only as a first-paint fallback.
+   *
+   * The param used to be the only source, and that made the whole screen
+   * depend on whoever linked here having remembered to attach it. Every
+   * in-app path does — but a deep link does not: `alassema://new-request/<slug>`,
+   * an `https://al-assema.tech/...` app link, and a push notification all land
+   * here with `name` undefined. The form then rendered fine, accepted input,
+   * and POSTed `companyName: ""` — which api's createLeadSchema rejects
+   * (`companyName: z.string().trim().min(1)`), so the request came back 400
+   * "Validation failed" and the customer saw a button that simply did nothing.
+   * Reproduced on the emulator via `adb shell am start -d
+   * alassema://new-request/aura-interiors`.
+   *
+   * `fetchCompany(slug)` already runs above for the catalogue, so the correct
+   * value is on its way in every case; reading it from there removes the
+   * dependency on the caller entirely.
+   */
+  const companyName = company?.name ?? companyNameParam;
 
   // "أضف للطلب" on the company profile links here with ?offeringId=... — land
   // with that offering already checked in the picker below, instead of an
@@ -200,9 +216,6 @@ export default function NewRequest() {
         // screen sits off-screen and put the offering we just cleared back
         // into the cart. The line above releases it again on the way in.
         setPreselected(true);
-        // Turnstile tokens are single-use — the next order needs a fresh one.
-        setCaptchaToken(null);
-        setCaptchaReset((n) => n + 1);
       };
     }, []),
   );
@@ -210,7 +223,12 @@ export default function NewRequest() {
   const phoneE164 = toE164(phoneNational, DEFAULT_COUNTRY);
   // `service` is deliberately absent from this check — see the module comment.
   // The website requires exactly these three and nothing else.
-  const canSubmit = name.trim().length >= 2 && phoneE164 !== null && district !== "";
+  // `companyName` joins the three form fields for the reason its own comment
+  // above gives: the payload carries it and the server requires it non-empty,
+  // so without it the press can only ever produce a 400. Disabled-until-loaded
+  // is an honest wait; a button that looks ready and silently fails is not.
+  const canSubmit =
+    name.trim().length >= 2 && phoneE164 !== null && district !== "" && Boolean(companyName?.trim());
 
   // Is this company booked out right now? The ONE thing it changes about this
   // screen: the finished request is queued on their waiting list instead of
@@ -224,10 +242,6 @@ export default function NewRequest() {
 
   async function onSubmit() {
     if (!canSubmit || !phoneE164) return;
-    if (captchaConfigured() && !captchaToken) {
-      setError("استنى لحد ما التحقق يخلص. لو فضل واقف، اضغط «أعد المحاولة» تحت.");
-      return;
-    }
     setBusy(true);
     setError("");
     // One payload for both destinations: a request to a busy company is the
@@ -249,7 +263,6 @@ export default function NewRequest() {
           note: description.trim(),
           district,
           items,
-          captchaToken,
         });
         setSubmitted({ kind: "queued", entry });
       } else {
@@ -262,7 +275,6 @@ export default function NewRequest() {
           district,
           description: description.trim(),
           items,
-          captchaToken,
         });
         setSubmitted({ kind: "lead", lead });
       }
@@ -270,8 +282,6 @@ export default function NewRequest() {
       setError(
         err instanceof ApiError ? err.message : "تعذّر إرسال الطلب. جرّب تاني.",
       );
-      setCaptchaToken(null);
-      setCaptchaReset((n) => n + 1);
     } finally {
       setBusy(false);
     }
@@ -355,11 +365,21 @@ export default function NewRequest() {
           <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Logo size={26} />
-        {/* Balances the back button so the logo is optically centered. */}
-        <View style={styles.headerBtn} />
+        {/* This box balanced the back button so the logo stayed optically
+            centred. It now holds the global menu — same 22-wide box, so the
+            logo has not moved. */}
+        <View style={styles.headerBtn}>
+          <MenuButton size={22} />
+        </View>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+      {/* `behavior="padding"` on ANDROID too — see app/chat/[leadId].tsx for
+          the full reasoning: this app is edge-to-edge
+          (android/gradle.properties' `edgeToEdgeEnabled=true`), so the window
+          no longer resizes for the IME and the Activity's
+          `windowSoftInputMode="adjustResize"` can no longer lift a field on
+          its own. Without this the keyboard covers the bottom of this form. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
@@ -385,12 +405,6 @@ export default function NewRequest() {
                 {companyName} محجوزة بالكامل دلوقتي. اطلب عادي — طلبك بيتسجّل كامل
                 وبياخد دوره، وهيبدأوا معاك أول ما يفضوا.
               </Text>
-            </View>
-          )}
-
-          {error !== "" && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
 
@@ -437,7 +451,7 @@ export default function NewRequest() {
             <View style={styles.field}>
               <Text style={styles.label}>رقم الموبايل</Text>
               <View style={styles.phoneRow}>
-                <Text style={styles.dialCode}>{DEFAULT_DIAL_CODE}</Text>
+                <Text style={styles.dialCode}>{`‎${DEFAULT_DIAL_CODE}`}</Text>
                 <TextInput
                   value={phoneNational}
                   onChangeText={(t) => {
@@ -478,14 +492,28 @@ export default function NewRequest() {
             />
           </View>
 
-          <Captcha onToken={setCaptchaToken} resetSignal={captchaReset} />
         </ScrollView>
 
         {/* Sticky CTA — a normal flex sibling of the ScrollView (not an
             absolute overlay), so it always occupies its own space and can
             never cover a field or a service card; KeyboardAvoidingView
             carries it up above the keyboard along with the scroll content. */}
-        <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {/* Flat 12, not `Math.max(insets.bottom, 12)`: the shell's persistent
+            tab bar sits below this screen and already clears the home
+            indicator, so repeating the inset here would only open a gap
+            between the two. */}
+        <View style={styles.footer}>
+          {/* Submit errors belong HERE, beside the button that caused them.
+              This block used to sit near the top of the ScrollView, hundreds
+              of points above the sticky CTA — so a failed submit set the text
+              off-screen and the customer, still looking at the button, saw
+              nothing happen at all. Same box, same styles; only the position
+              changed, so it is now impossible to miss the reason. */}
+          {error !== "" && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
           {/* The button says what the next press actually does: at a booked-out
               company the request joins a queue, and knowing that before
               pressing is the whole point of saying it here. */}
@@ -573,7 +601,7 @@ const styles = StyleSheet.create({
   scroll: { padding: 16, paddingBottom: 8, gap: 22 },
 
   contextBlock: { gap: 4 },
-  contextCompany: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" },
+  contextCompany: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.onSurface, textAlign: "right" },
   contextSubtitle: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onSurfaceVariant, textAlign: "right" },
 
   busyBox: { flexDirection: rowStart, alignItems: "flex-start", gap: 10, backgroundColor: colors.warningContainer, borderRadius: 14, padding: 12 },
@@ -630,6 +658,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceContainerLowest,
   },
   dialCode: {
+    // The value is rendered behind a U+200E LEFT-TO-RIGHT MARK (see the JSX).
+    // "+20" is a lone LTR token inside an RTL paragraph, and the bidi
+    // algorithm treats the leading "+" as neutral — it took the paragraph's
+    // direction and flipped to the far side, rendering as "20+". The mark
+    // anchors the run's direction; `writingDirection` alone did not, since it
+    // sets the paragraph base, not the neutral character's resolution.
     paddingHorizontal: 12,
     fontFamily: "Cairo_600SemiBold",
     fontSize: type.body.fontSize,
@@ -677,6 +711,7 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: 16,
     paddingTop: 12,
+    paddingBottom: 12,
     backgroundColor: colors.surfaceContainerLowest,
     borderTopWidth: 1,
     borderTopColor: colors.surfaceContainerHigh,
@@ -697,7 +732,7 @@ const styles = StyleSheet.create({
   sheetRowMuted: { color: colors.outline },
 
   successCard: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 10 },
-  successTitle: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface },
+  successTitle: { fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize), fontFamily: "Alexandria_700Bold", color: colors.onSurface },
   successBody: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "center", lineHeight: 22 },
   ref: { fontFamily: "Cairo_700Bold", color: colors.primary, writingDirection: "ltr" },
   estimateCard: {
@@ -709,9 +744,21 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
-  estimateRow: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
-  estimateLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.outline },
-  estimateValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.primary },
+  // `flexWrap` + shrinkable children: the estimate is not always a short
+  // number. An ON_INSPECTION order renders the sentence "السعر يتحدد بعد
+  // المعاينة" here at title size, which on a phone is wider than the row —
+  // with neither child allowed to give way it overflowed the card at BOTH
+  // edges and the label behind it was painted over. Now the value wraps onto
+  // its own line instead of running off the card.
+  estimateRow: {
+    flexDirection: rowStart,
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  estimateLabel: { flexShrink: 1, minWidth: 0, fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.outline },
+  estimateValue: { flexShrink: 1, minWidth: 0, fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.primary, textAlign: textStart },
   estimateNote: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary, textAlign: "right" },
   estimateFooter: { fontFamily: "Cairo_400Regular", fontSize: type.caption.fontSize, color: colors.outline, textAlign: "right" },
   successBtn: { marginTop: 20, alignSelf: "stretch" },

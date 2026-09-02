@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
-import { probeReady, rowStart } from "@alassema/mobile-shared";
+import { probeReady, rowStart, displayLine } from "@alassema/mobile-shared";
 
 /**
  * Full-screen "can't reach the server" notice — the mobile counterpart of
@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",

@@ -58,8 +58,41 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
     throw new ValidationError("Submission rejected");
   }
 
-  // CAPTCHA (no-op unless a secret is configured).
-  await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
+  // Who is submitting, IF anyone is signed in. Resolved BEFORE the CAPTCHA
+  // because it decides whether one is needed at all — see below.
+  //
+  // (Optional on purpose: the website gates the send behind sign-in, so real
+  // traffic arrives with a session. Making it REQUIRED here is a separate,
+  // one-line decision — and a dangerous one to take at the same time as
+  // shipping the gate. If anything about the gate is wrong on the day it
+  // deploys, an optional attach loses the account link on some requests; a
+  // required one loses the REQUESTS, which for a lead-generation business is
+  // the whole product going dark. Flip it once the gate has been seen working
+  // in production.)
+  const customerId = await optionalCustomerId(request);
+
+  // CAPTCHA — for ANONYMOUS submissions only, and a no-op unless a secret is
+  // configured at all.
+  //
+  // A captcha answers one question: "is there a human behind this request?".
+  // A signed-in customer has already answered it far more strongly — they
+  // hold a session minted from a verified email address, and every submission
+  // is attributable to that account and revocable with it. Demanding a
+  // Cloudflare challenge on top buys nothing and costs the whole native app:
+  // Turnstile is a BROWSER widget, and the only way to render it on a device
+  // is a WebView whose origin is not on the site key's domain list, so it
+  // answers with error 110200 and never issues a token. With a secret
+  // configured, that made ordering from the mobile app impossible — the
+  // submit button could never enable. (Verified against the live API: with no
+  // secret set in production the gate was already inert; this makes the
+  // behaviour intentional rather than accidental.)
+  //
+  // Anonymous callers are unchanged, and every other defence on this route —
+  // the honeypot above, the per-IP limit, and the site-wide and per-company
+  // circuit breakers below — applies to signed-in and anonymous alike.
+  if (!customerId) {
+    await verifyCaptcha((raw as { captchaToken?: string }).captchaToken, clientIp(request));
+  }
 
   const payload = createLeadSchema.parse(raw);
 
@@ -71,18 +104,6 @@ export const POST = withErrors(withMaintenance(async (request: NextRequest) => {
     COMPANY_LIMIT,
   );
   if (!company.ok) throw tooMany(company.retryAfterMs);
-
-  // Who is submitting, IF anyone is signed in. Optional on purpose:
-  //
-  // The website now gates the send behind sign-in, so real traffic arrives with
-  // a session. Making it REQUIRED here is a separate, one-line decision — and a
-  // dangerous one to take at the same time as shipping the gate. If anything
-  // about the gate is wrong on the day it deploys, an optional attach loses the
-  // account link on some requests; a required one loses the REQUESTS, which for
-  // a lead-generation business is the whole product going dark.
-  //
-  // Flip it once the gate has been seen working in production.
-  const customerId = await optionalCustomerId(request);
 
   const lead = await leadsService.create(payload, customerId);
   return ok(lead, 201);

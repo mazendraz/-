@@ -19,12 +19,12 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import Logo from "../../components/Logo";
 import FeedbackModal from "../../components/FeedbackModal";
-import MenuModal from "../../components/MenuModal";
+import MenuButton from "../../components/MenuButton";
 import AvailabilityBadge from "../../components/AvailabilityBadge";
 import CompanyGallery from "../../components/CompanyGallery";
 import OfferingGroup from "../../components/OfferingGroup";
 import { fetchCompany } from "../../lib/companyDetail";
-import { useRefreshOnFocus, ApiError, assetUri, firstAssetUri, rowStart } from "@alassema/mobile-shared";
+import { useRefreshOnFocus, ApiError, assetUri, firstAssetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 import { useIsSaved } from "../../lib/saved";
 import { formatPrice } from "../../lib/pricing";
 import { splitByKind } from "../../lib/offerings";
@@ -71,7 +71,6 @@ export default function CompanyProfile() {
   const [company, setCompany] = useState<ApiCompany | null>(null);
   const [error, setError] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [openProject, setOpenProject] = useState<number | null>(0);
   const [scrolled, setScrolled] = useState(false);
   const [activeTab, setActiveTab] = useState("about");
@@ -230,7 +229,9 @@ export default function CompanyProfile() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         stickyHeaderIndices={[1]}
-        contentContainerStyle={{ paddingBottom: 96 + insets.bottom }}
+        // 96 clears the docked action bar below; the safe area is the tab
+        // bar's job now, not this scroll view's.
+        contentContainerStyle={styles.scrollPad}
       >
         {/* index 0 — cover + back pill + identity block */}
         <View>
@@ -244,11 +245,11 @@ export default function CompanyProfile() {
               accessibilityLabel="رجوع"
             >
               <Text style={styles.backPillText}>رجوع</Text>
-              {/* Mirrored: MaterialIcons' arrow-back glyph is a fixed shape
-                  pointing left — RTL layout direction doesn't flip icon
-                  fonts on its own, so "back" (toward where you came from, in
-                  RTL reading direction) has to be flipped explicitly to
-                  actually point right, matching the reference screenshots. */}
+              {/* Points RIGHT, which is "back" in an RTL reading direction.
+                  RN does not mirror icon fonts for you, so this is a
+                  different GLYPH, not the back arrow under a scaleX flip —
+                  see Icon.tsx's note on why every directional icon in this
+                  app is now chosen by name. */}
               <Icon name="arrow_forward" size={16} color="#fff" />
             </Pressable>
           </View>
@@ -536,9 +537,13 @@ export default function CompanyProfile() {
           <Logo size={30} />
         </View>
         <View style={styles.topBarGroup}>
-          <Pressable accessibilityRole="button" accessibilityLabel="القائمة" onPress={() => setMenuOpen(true)} hitSlop={8}>
-            <Icon name="menu" size={24} color={scrolled ? colors.onSurface : "#fff"} />
-          </Pressable>
+          {/* The shared trigger for the app-wide menu — same glyph, same
+              size, same place. What changed is that it no longer owns a
+              <MenuModal> and a `menuOpen` state of its own: there is one
+              modal for the whole app, mounted in app/_layout.tsx. This
+              screen having been the ONLY one with a menu is why it seemed to
+              vanish everywhere else. */}
+          <MenuButton color={scrolled ? colors.onSurface : "#fff"} />
         </View>
       </View>
 
@@ -546,7 +551,13 @@ export default function CompanyProfile() {
           screen sits outside the (tabs) navigator (a stack push, like the
           website's own separate route), so there's no bottom tab bar under
           it to additionally clear here — only the device's own safe area. */}
-      <View style={[styles.stickyBar, { paddingBottom: insets.bottom + 12 }]}>
+      {/* Docked action bar. Its bottom padding is a flat 12 now, not
+          `insets.bottom + 12`: this screen no longer reaches the bottom of
+          the display — the shell's persistent tab bar sits below it and is
+          what clears the home indicator (see components/AppShell.tsx). Adding
+          the inset here too would open a dead gap the height of the safe area
+          between this bar and the tab bar. */}
+      <View style={[styles.stickyBar, styles.stickyBarPad]}>
         <Pressable
           style={({ pressed }) => [styles.stickyFavorite, pressed && styles.pressed]}
           onPress={onFavoritePress}
@@ -567,7 +578,6 @@ export default function CompanyProfile() {
         companyName={company.name}
         onClose={() => setFeedbackOpen(false)}
       />
-      <MenuModal visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );
 }
@@ -620,7 +630,7 @@ const styles = StyleSheet.create({
   logo: { width: 60, height: 60, borderRadius: 16, backgroundColor: colors.surfaceContainer, borderWidth: 3, borderColor: colors.surfaceContainerLowest },
   identityText: { flex: 1, gap: 6 },
   nameRow: { flexDirection: rowStart, alignItems: "center", gap: 8, flexWrap: "wrap" },
-  name: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" },
+  name: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.onSurface, textAlign: "right" },
   verifiedBadge: { flexDirection: rowStart, alignItems: "center", gap: 4, backgroundColor: `${colors.primary}1a`, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   verifiedText: { fontFamily: "Cairo_700Bold", fontSize: 11, color: colors.primary },
   category: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.outline, textAlign: "right" },
@@ -643,6 +653,9 @@ const styles = StyleSheet.create({
   primaryActionText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
   saveAction: { flexDirection: rowStart, alignItems: "center", gap: 6, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 13 },
   saveActionText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface },
+
+  stickyBarPad: { paddingBottom: 12 },
+  scrollPad: { paddingBottom: 96 },
 
   // ── Sticky tabs ──
   tabsBar: { flexDirection: rowStart, backgroundColor: colors.surfaceContainerLowest, borderBottomWidth: 1, borderBottomColor: colors.outlineVariant, paddingHorizontal: 12 },
@@ -705,7 +718,7 @@ const styles = StyleSheet.create({
   reportBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.error },
 
   finalCta: { marginTop: 16, backgroundColor: colors.primary, borderRadius: 18, padding: 22, alignItems: "flex-end", gap: 8 },
-  finalCtaTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, color: colors.onPrimary, textAlign: "right" },
+  finalCtaTitle: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.onPrimary, textAlign: "right" },
   finalCtaSub: { fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.onPrimary, opacity: 0.9, textAlign: "right", lineHeight: 20, alignSelf: "stretch" },
   finalCtaBtn: { alignSelf: "stretch", backgroundColor: "#fff", borderRadius: 12, paddingVertical: 13, alignItems: "center", marginTop: 6 },
   finalCtaBtnText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.primary },

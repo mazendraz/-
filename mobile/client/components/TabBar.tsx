@@ -1,8 +1,13 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import type { TextStyle } from "react-native";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { router, usePathname } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
-import { rowStart } from "@alassema/mobile-shared";
+import { rowStart, bodyLine } from "@alassema/mobile-shared";
+import Icon from "./Icon";
+import { activeTab, TABS, type TabDef } from "../lib/navShell";
+import { useCustomerAuth } from "../lib/customerAuth";
+import { showGuestPrompt } from "../lib/authGate";
 
 /**
  * The bottom tab bar, drawn by hand instead of by react-navigation's default
@@ -16,19 +21,26 @@ import { rowStart } from "@alassema/mobile-shared";
  * to switch on, because the default bar renders icon and label as one
  * inseparable stack inside a square container welded to the screen edges.
  *
- * ── What it still owes react-navigation ─────────────────────────────────────
- * A custom `tabBar` opts out of the default bar's behavior wholesale, not
- * just its looks, so three things it used to do for free are re-implemented
- * below and must stay:
- *   1. `navigation.emit("tabPress", { canPreventDefault: true })` BEFORE
- *      navigating — that event is what (tabs)/_layout.tsx's guest guards
- *      listen for. Skip it and every account-only tab silently opens for a
- *      signed-out visitor.
- *   2. `tabLongPress`, emitted for parity even though nothing listens yet.
- *   3. Honouring `href: null`. expo-router compiles that to
- *      `tabBarItemStyle: { display: "none" }` (see its useScreens.js) and
- *      trusts the BAR to skip the route — a custom bar that maps over
- *      `state.routes` blindly puts hidden screens back in the tab bar.
+ * ── Why it no longer takes BottomTabBarProps ────────────────────────────────
+ * It used to be handed to <Tabs> as `tabBar={...}`, which meant it was drawn
+ * BY the tab navigator and therefore existed only while a tab screen was the
+ * top of the stack. Every internal screen — a category, a company profile, a
+ * chat — is a sibling of the `(tabs)` group in the ROOT stack, so pushing one
+ * covered the tab navigator and took the bar with it. That is the whole
+ * "bottom bar disappears once you go one level deep" bug.
+ *
+ * So the bar is now mounted by components/AppShell.tsx, OUTSIDE the
+ * navigator, and drives navigation itself:
+ *   - the five tabs come from lib/navShell.ts's TABS, not from the
+ *     navigator's `state.routes` (which also retires the `href: null`
+ *     dance — a tab with no bar slot is simply not in that list);
+ *   - which one is lit comes from `activeTab(pathname)`, so it stays lit
+ *     through nested screens instead of only on the tab's own route;
+ *   - the guest guards that used to hang off `tabPress` listeners in
+ *     (tabs)/_layout.tsx run here, since that event can no longer fire.
+ *
+ * Everything below the constants is unchanged: this is the same bar,
+ * pixel for pixel, with a different owner.
  */
 
 // One size for all five glyphs, active or not: the active tab earns its
@@ -68,9 +80,10 @@ const ACTIVE_PILL_BG = "rgba(0, 85, 120, 0.12)";
  *
  * Idle glyphs get a nearly invisible grey lift; the active one gets a
  * brand-blue glow of the same shape, so the selected tab reads as raised
- * rather than merely recolored. Exported because a tab's icon is built in
- * (tabs)/_layout.tsx, where `tabBarIcon` is declared — the bar receives the
- * finished element and has nowhere left to style it.
+ * rather than merely recolored. Local again now that the bar builds its own
+ * icons from lib/navShell.ts's TABS — it used to be exported because the
+ * icons were declared as `tabBarIcon` over in (tabs)/_layout.tsx and arrived
+ * here already rendered.
  */
 const lift = StyleSheet.create({
   idle: {
@@ -85,11 +98,52 @@ const lift = StyleSheet.create({
   },
 });
 
-export function tabIconLift(focused: boolean): TextStyle {
+function tabIconLift(focused: boolean): TextStyle {
   return focused ? lift.active : lift.idle;
 }
 
-export default function TabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+export default function TabBar() {
+  const pathname = usePathname();
+  const insets = useSafeAreaInsets();
+  const { customer } = useCustomerAuth();
+  const current = activeTab(pathname);
+
+  function onPress(tab: TabDef) {
+    // The guest guards, carried over verbatim from the `tabPress` listeners
+    // in (tabs)/_layout.tsx. That event belonged to the tab navigator and can
+    // no longer fire now that this bar sits outside it, so the interception
+    // happens here instead. Each of the gated screens still guards ITSELF
+    // with useRequireAccount (see lib/authGate.ts) — that is what covers deep
+    // links and signing out mid-session; this only keeps the friendlier
+    // "here is what you get" prompt in front of a normal tab tap.
+    if (tab.guard && !customer) {
+      if (tab.guard === "sign-in") {
+        router.push({ pathname: "/sign-in", params: { next: tab.href } });
+      } else {
+        showGuestPrompt({
+          ...tab.guard,
+          next: tab.href,
+          secondary: { label: "ليس الآن", kind: "dismiss" },
+        });
+      }
+      return;
+    }
+
+    // Already sitting on this tab's own screen — a second tap has nothing to
+    // do, and navigating anyway would push a duplicate of the screen the
+    // customer is already looking at.
+    if (pathname === tab.href) return;
+
+    // `navigate`, not `push`: the five tabs live inside the `(tabs)` group at
+    // the BOTTOM of the root stack, so this resolves to the group already in
+    // the history — react-navigation unwinds whatever internal screens are
+    // stacked on top and selects the tab, rather than stacking a sixth copy
+    // of the shell. Tapping the tab you are already inside (but three screens
+    // deep) therefore returns you to its root, which is the standard
+    // behaviour on both platforms.
+    router.navigate(tab.href);
+  }
+
   return (
     // Two layers, and both are load-bearing. The card is inset on all four
     // sides and rounded the whole way round, so a strip of whatever sits
@@ -109,35 +163,17 @@ export default function TabBar({ state, descriptors, navigation, insets }: Botto
             bleeding past the rounded corners. */}
         <View style={styles.clip}>
           <View style={styles.row}>
-            {state.routes.map((route, index) => {
-              const { options } = descriptors[route.key];
-              // See (3) in the header comment — expo-router's `href: null`.
-              if (StyleSheet.flatten(options.tabBarItemStyle)?.display === "none") return null;
-
-              const focused = state.index === index;
+            {TABS.map((tab) => {
+              const focused = current?.href === tab.href;
               const tint = focused ? colors.primary : colors.outline;
-              const label = options.title ?? route.name;
-
-              function onPress() {
-                const event = navigation.emit({
-                  type: "tabPress",
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-                if (!focused && !event.defaultPrevented) {
-                  navigation.navigate(route.name, route.params);
-                }
-              }
 
               return (
                 <Pressable
-                  key={route.key}
+                  key={tab.href}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: focused }}
-                  accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
-                  testID={options.tabBarButtonTestID}
-                  onPress={onPress}
-                  onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
+                  accessibilityLabel={tab.label}
+                  onPress={() => onPress(tab)}
                   // borderless, so no hard rectangle appears on a bar that has
                   // no dividers — the clip above is what keeps it inside the
                   // card's corners.
@@ -147,10 +183,10 @@ export default function TabBar({ state, descriptors, navigation, insets }: Botto
                   {({ pressed }) => (
                     <View style={[styles.itemInner, pressed && styles.itemPressed]}>
                       <View style={[styles.pill, focused && styles.pillActive]}>
-                        {options.tabBarIcon?.({ focused, color: tint, size: ICON_SIZE })}
+                        <Icon name={tab.icon} color={tint} size={ICON_SIZE} style={tabIconLift(focused)} />
                       </View>
                       <Text numberOfLines={1} style={[styles.label, { color: tint }, focused && styles.labelActive]}>
-                        {label}
+                        {tab.label}
                       </Text>
                     </View>
                   )}
@@ -217,7 +253,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: "Cairo_500Medium",
     fontSize: type.caption.fontSize,
-    lineHeight: type.caption.lineHeight,
+    lineHeight: bodyLine(type.caption.fontSize),
     textAlign: "center",
   },
   labelActive: { fontFamily: "Cairo_700Bold" },

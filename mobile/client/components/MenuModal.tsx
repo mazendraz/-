@@ -6,7 +6,10 @@ import { customerLogout, useCustomerAuth } from "../lib/customerAuth";
 import { rowStart } from "@alassema/mobile-shared";
 
 const PUBLIC_LINKS: { label: string; href: Href; icon: IconName }[] = [
-  { label: "الرئيسية", href: "/", icon: "home" },
+  // "/home", not "/": the latter is app/index.tsx, a <Redirect> — pushing it
+  // put a throwaway screen on the stack on its way to the same place. The tab
+  // route is the real destination, and it is what the bottom bar targets too.
+  { label: "الرئيسية", href: "/home", icon: "home" },
   { label: "الخدمات", href: "/services", icon: "category" },
   { label: "الشركات", href: "/companies", icon: "apps" },
 ];
@@ -22,9 +25,15 @@ const PUBLIC_LINKS: { label: string; href: Href; icon: IconName }[] = [
 export default function MenuModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { customer } = useCustomerAuth();
 
+  // `navigate`, not `push`. The menu is reachable from every screen in the
+  // app now (it used to exist only on the company profile), so a plain push
+  // would happily stack a second copy of the screen the customer is already
+  // looking at — or a third Home under two others. `navigate` resolves
+  // against the existing history instead, unwinding to a route already on the
+  // stack rather than duplicating it.
   function go(href: Href) {
     onClose();
-    router.push(href);
+    router.navigate(href);
   }
 
   return (

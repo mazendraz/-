@@ -5,8 +5,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import Markdown from "react-native-markdown-display";
 import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
+import MenuButton from "../../components/MenuButton";
 import { fetchLegalPages } from "../../lib/pages";
-import { rowStart } from "@alassema/mobile-shared";
+import { rowStart, displayLine } from "@alassema/mobile-shared";
 
 /** Terms / Privacy — the mobile counterpart of the website's LegalPage.tsx.
  *  Content is admin-managed Markdown; rendered with react-native-markdown-display
@@ -55,7 +56,10 @@ export default function LegalPage() {
           <Icon name="arrow_forward" size={22} color={colors.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
-        <View style={{ width: 22 }} />
+        {/* Was an empty 22-wide counterweight balancing the back arrow so
+            the title stayed centred. The menu is the same width, so nothing
+            has moved. */}
+        <MenuButton size={22} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -87,8 +91,8 @@ const styles = StyleSheet.create({
 // objects (not RN's optimized IDs) are what it expects.
 const markdownStyles = {
   body: { fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.onSurfaceVariant, textAlign: "right" as const, lineHeight: 26 },
-  heading1: { fontFamily: "Alexandria_700Bold", fontSize: type.headline.fontSize, color: colors.onSurface, textAlign: "right" as const, marginTop: 16, marginBottom: 8 },
-  heading2: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, color: colors.onSurface, textAlign: "right" as const, marginTop: 14, marginBottom: 6 },
+  heading1: { fontFamily: "Alexandria_700Bold", fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize), color: colors.onSurface, textAlign: "right" as const, marginTop: 16, marginBottom: 8 },
+  heading2: { fontFamily: "Alexandria_700Bold", fontSize: type.title.fontSize, lineHeight: displayLine(type.title.fontSize), color: colors.onSurface, textAlign: "right" as const, marginTop: 14, marginBottom: 6 },
   heading3: { fontFamily: "Cairo_700Bold", fontSize: type.subhead.fontSize, color: colors.onSurface, textAlign: "right" as const, marginTop: 12, marginBottom: 6 },
   paragraph: { marginTop: 0, marginBottom: 12, textAlign: "right" as const },
   strong: { fontFamily: "Cairo_700Bold" },

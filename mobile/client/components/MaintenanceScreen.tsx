@@ -5,7 +5,7 @@ import type { ApiMaintenanceStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Logo from "./Logo";
 import Icon from "./Icon";
-import { useSettings, rowStart } from "@alassema/mobile-shared";
+import { useSettings, rowStart, displayLine } from "@alassema/mobile-shared";
 
 /**
  * Full-screen maintenance notice — the mobile counterpart of the website's
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   title: {
-    fontSize: type.headline.fontSize,
+    fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize),
     fontFamily: "Alexandria_800ExtraBold",
     color: colors.onSurface,
     textAlign: "center",
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   countdownLabel: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline },
   countdownRow: { flexDirection: rowStart, alignItems: "flex-end", gap: 10 },
   countdownPart: { alignItems: "center" },
-  countdownValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.headline.fontSize, color: colors.onSurface },
+  countdownValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: type.headline.fontSize, lineHeight: displayLine(type.headline.fontSize), color: colors.onSurface },
   countdownUnit: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.outline },
   actions: { flexDirection: rowStart, flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 16 },
   retryBtn: {
