@@ -637,6 +637,35 @@
 }
 .field-input::placeholder { color: #9aa0a6; }
 
+/* ── A field the server refused ────────────────────────────────────────────
+   A rejected save names the FIELD that was wrong, and the admin editor puts a
+   ring on that field instead of only a sentence at the bottom of a 40-field
+   form. It is a WRAPPER class, not a modifier on the control, because half the
+   fields it has to mark are composites that render their own chrome — the tag
+   editor, the image pickers, the gallery grid — and those have no single input
+   to put `.field-input.error` on. */
+.field-flag > .field-input,
+.field-flag .field-input {
+  border-color: #ba1a1a;
+  box-shadow: 0 0 0 3px rgba(186, 26, 26, 0.1);
+}
+/* The composites: ring the whole block. `outline` rather than `border`, so
+   nothing inside shifts by a pixel when the flag appears or clears. */
+.field-flag {
+  border-radius: 14px;
+  outline: 1.5px solid rgba(186, 26, 26, 0.55);
+  outline-offset: 8px;
+}
+/* A plain input already takes the red border above, so the block ring around it
+   would just be a second ring saying the same thing. Where :has() is missing the
+   field simply gets both — louder than intended, never wrong. */
+.field-flag:has(> .field-input) { outline: none; }
+.field-flag-msg {
+  margin-top: 6px;
+  color: #ba1a1a;
+  font-weight: 600;
+}
+
 /* ── Select arrow ─────────────────────────────────────────────────────── */
 select.field-input {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2370787f' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");

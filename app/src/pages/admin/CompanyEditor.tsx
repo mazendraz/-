@@ -60,19 +60,79 @@ const ERROR_FIELD_LABEL_KEYS: Record<string, StringKey> = {
 };
 
 /**
- * One line per rejected field: the form's own label for it, then what the server
- * said. Nested paths ("projects.0.img") keep their path in parentheses, since
- * the row index is the only way to find WHICH project is at fault.
+ * A Zod sentence ("Too big: expected array to have <=100 items") turned into
+ * something that reads as advice under an Arabic form field. Anything this
+ * doesn't recognise is passed through untouched — a message the admin can quote
+ * to a developer beats a friendly one that hides which rule was broken.
  */
-function describeFieldErrors(details: ApiErrorDetails, locale: Locale): string {
-  return Object.entries(details)
-    .map(([path, messages]) => {
-      const key = ERROR_FIELD_LABEL_KEYS[path.split(".")[0]];
-      const label = key ? t(locale, key) : path;
-      const where = path.includes(".") ? ` (${path})` : "";
-      return `${label}${where}: ${messages.join(" — ")}`;
-    })
+function humanizeIssue(message: string, locale: Locale): string {
+  const withN = (key: StringKey, n: string) => t(locale, key).replace("{n}", n);
+  const bound = (kind: "array" | "string", dir: "<=" | ">=") =>
+    new RegExp(`${kind} to have ${dir}(\\d+)`).exec(message);
+  let m: RegExpExecArray | null;
+  if ((m = bound("array", "<="))) return withN("admin_ce_err_max_items", m[1]);
+  if ((m = bound("array", ">="))) return withN("admin_ce_err_min_items", m[1]);
+  if ((m = bound("string", "<="))) return withN("admin_ce_err_max_chars", m[1]);
+  // ">=1 characters" is Zod's way of saying the box is empty; "at least 1
+  // character" is a sentence nobody has ever needed to read.
+  if ((m = bound("string", ">=")))
+    return m[1] === "1" ? t(locale, "admin_ce_err_required") : withN("admin_ce_err_min_chars", m[1]);
+  if (/URL, data URL, or site-relative path/i.test(message)) return t(locale, "admin_ce_err_image");
+  if (/email/i.test(message)) return t(locale, "admin_ce_err_email");
+  if (/expected number|expected int/i.test(message)) return t(locale, "admin_ce_err_number");
+  if (/required|expected string, received/i.test(message)) return t(locale, "admin_ce_err_required");
+  return message;
+}
+
+type FieldFlags = Record<string, string>;
+
+/**
+ * Server field paths → { formField: message }, so each message can be printed
+ * on the control it belongs to.
+ *
+ * Paths arrive dotted: "gallery", but also "projects.2.img". Only the head
+ * segment names a control the admin can see, so that is the key; a numeric
+ * second segment becomes a row number in the text, because with 40 projects
+ * "one of them has no image" is not an actionable sentence.
+ */
+function toFieldFlags(details: ApiErrorDetails, locale: Locale): FieldFlags {
+  const flags: FieldFlags = {};
+  for (const [path, messages] of Object.entries(details)) {
+    const [head, second] = path.split(".");
+    const human = messages.map((msg) => humanizeIssue(msg, locale)).join(" — ");
+    const row = /^\d+$/.test(second ?? "")
+      ? `${t(locale, "admin_ce_err_row").replace("{n}", String(Number(second) + 1))}: `
+      : "";
+    flags[head] = flags[head] ? `${flags[head]} • ${row}${human}` : `${row}${human}`;
+  }
+  return flags;
+}
+
+/**
+ * Fields the form has no control for (a schema key this editor doesn't render,
+ * or one added later) still have to be reported SOMEWHERE — a red ring on a
+ * control that doesn't exist is silence. Those go to the banner instead.
+ */
+function unflaggableSummary(flags: FieldFlags, locale: Locale): string {
+  return Object.entries(flags)
+    .filter(([field]) => !(field in ERROR_FIELD_LABEL_KEYS))
+    .map(([field, message]) => `${field}: ${message}`)
     .join("\n");
+}
+
+/**
+ * Marks a COMPOSITE field a rejected save named — the tag editors, the image
+ * pickers, the gallery, the projects tab. `LField` does this for plain inputs;
+ * these render their own label and chrome and have no single input to ring.
+ */
+function Flagged({ error, children }: { error?: string; children: React.ReactNode }) {
+  if (!error) return <>{children}</>;
+  return (
+    <div>
+      <div className="field-flag">{children}</div>
+      <p className="field-flag-msg text-caption">{error}</p>
+    </div>
+  );
 }
 
 // Sub-tab id → label key. The ids are internal state, the labels are not.
@@ -100,14 +160,28 @@ export function CompanyEditor({ company, categories, onClose }: {
     company ? { ...company } : emptyCompany()
   );
   const [saveError, setSaveError] = useState("");
+  // Which controls the last rejected save named, keyed by form field. Cleared
+  // per-field the moment the admin edits that field, so the red goes away where
+  // they fixed it and stays where they haven't.
+  const [fieldFlags, setFieldFlags] = useState<FieldFlags>({});
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
   const navBlocker = useUnsavedChangesGuard(dirty);
 
+  function clearFlags(...fields: string[]) {
+    setFieldFlags((flags) => {
+      if (!fields.some((f) => f in flags)) return flags; // no re-render for nothing
+      const next = { ...flags };
+      for (const f of fields) delete next[f];
+      return next;
+    });
+  }
+
   function set<K extends keyof CompanyDraft>(key: K, val: CompanyDraft[K]) {
     setDraft((d) => ({ ...d, [key]: val }));
     setDirty(true);
+    clearFlags(String(key));
   }
 
   // `categories` (the full membership) is the source of truth; `category`/
@@ -123,6 +197,9 @@ export function CompanyEditor({ company, categories, onClose }: {
       categoryLabel: primary?.label ?? "",
     }));
     setDirty(true);
+    // The server names these `categoryIds`/`primaryCategoryId`; the form calls
+    // the control "categories". Both spellings clear together.
+    clearFlags("categoryIds", "primaryCategoryId");
   }
 
   // UX-09: the × button and backdrop-click both route through `onClose` — a
@@ -137,22 +214,49 @@ export function CompanyEditor({ company, categories, onClose }: {
   // Validate the fields the live API requires before saving — otherwise the
   // create/update is rejected server-side and the row vanishes on the next sync.
   // In demo mode (no API) only the name is enforced.
-  function validate(): string | null {
-    if (draft.name.trim().length < 2) return t(locale, "admin_ce_name_min");
+  // Keyed by the same field names the SERVER uses, so a locally-caught problem
+  // and a server-rejected one light up the same control the same way. Every
+  // problem is collected, not just the first: returning early meant an admin
+  // with three empty fields fixed them one save at a time.
+  function validate(): FieldFlags {
+    const flags: FieldFlags = {};
+    if (draft.name.trim().length < 2) flags.name = t(locale, "admin_ce_name_min");
     if (isApiConfigured()) {
-      if (draft.categories.length === 0) return t(locale, "admin_ce_pick_category");
-      if (!draft.logo) return t(locale, "admin_ce_need_logo");
-      if (!draft.cover) return t(locale, "admin_ce_need_cover");
-      if (!isValidE164(draft.phone)) return t(locale, "admin_ce_need_phone");
+      if (draft.categories.length === 0) flags.categoryIds = t(locale, "admin_ce_pick_category");
+      if (!draft.logo) flags.logo = t(locale, "admin_ce_need_logo");
+      if (!draft.cover) flags.cover = t(locale, "admin_ce_need_cover");
+      if (!isValidE164(draft.phone)) flags.phone = t(locale, "admin_ce_need_phone");
     }
-    return null;
+    return flags;
+  }
+
+  /** Does this tab hold a flagged field? Everything except `projects` is edited
+   *  on Details, so a flag that isn't a project belongs to that tab. */
+  function tabHasFlag(id: EditorTab): boolean {
+    const fields = Object.keys(fieldFlags);
+    if (id === "projects") return fields.includes("projects");
+    if (id === "details") return fields.some((f) => f !== "projects");
+    return false;
+  }
+
+  /** Put the admin on the tab holding a flagged field — Details unless the only
+   *  thing wrong is a project, which lives behind another tab entirely. */
+  function focusFlags(flags: FieldFlags) {
+    if (Object.keys(flags).length === 0) return;
+    setTab(Object.keys(flags).every((f) => f === "projects") ? "projects" : "details");
   }
 
   async function save() {
-    const problem = validate();
-    if (problem) { setSaveError(problem); setTab("details"); return; }
+    const problems = validate();
+    if (Object.keys(problems).length > 0) {
+      setFieldFlags(problems);
+      setSaveError(t(locale, "admin_ce_err_banner"));
+      focusFlags(problems);
+      return;
+    }
     setSaving(true);
     setSaveError("");
+    setFieldFlags({});
     try {
       if (company) await updateCompany(company.id, draft);
       else await addCompany(draft);
@@ -160,13 +264,18 @@ export function CompanyEditor({ company, categories, onClose }: {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       // A validation refusal carries the useful half in `details`; `message` is
-      // the constant "Validation failed" and is not worth showing next to it.
-      const fields =
-        err instanceof ApiError && err.details ? describeFieldErrors(err.details, locale) : "";
+      // the constant "Validation failed" and says nothing worth printing.
+      const flags = err instanceof ApiError && err.details ? toFieldFlags(err.details, locale) : {};
+      const flagged = Object.keys(flags).length > 0;
+      setFieldFlags(flags);
+      focusFlags(flags);
+      const leftover = flagged ? unflaggableSummary(flags, locale) : "";
       setSaveError(
         /quota/i.test(msg) || (err as { name?: string })?.name === "QuotaExceededError"
           ? t(locale, "admin_ce_quota")
-          : fields || msg || t(locale, "admin_ce_save_failed")
+          : flagged
+            ? [t(locale, "admin_ce_err_banner"), leftover].filter(Boolean).join("\n")
+            : msg || t(locale, "admin_ce_save_failed")
       );
       console.error(err);
     } finally {
@@ -205,6 +314,11 @@ export function CompanyEditor({ company, categories, onClose }: {
             <>
               {t(locale, EDITOR_TAB_KEYS[id])}
               {id === "projects" && draft.projects.length > 0 && <span className="ms-1 text-outline">({draft.projects.length})</span>}
+              {/* A flagged field can sit on a tab that isn't open — without this
+                  the admin reads "fix the fields in red" and sees none. */}
+              {tabHasFlag(id) && (
+                <span className="ms-1.5 inline-block w-1.5 h-1.5 rounded-full bg-error align-middle" aria-hidden="true" />
+              )}
             </>
           ),
         }))}
@@ -213,11 +327,11 @@ export function CompanyEditor({ company, categories, onClose }: {
       {tab === "details" && (
         <TabPanel idPrefix="ce" id="details" className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <LField label={t(locale, "admin_ce_name")} required><input className="field-input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder={t(locale, "admin_ce_name_ph")} /></LField>
-            <LField label={t(locale, "admin_ce_name_ar")}><input className="field-input" dir="rtl" value={draft.nameAr ?? ""} onChange={(e) => set("nameAr", e.target.value)} placeholder={t(locale, "admin_ce_name_ar_ph")} /></LField>
-            <LField label={t(locale, "admin_ce_tagline")}><input className="field-input" value={draft.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder={t(locale, "admin_ce_tagline_ph")} /></LField>
+            <LField label={t(locale, "admin_ce_name")} required error={fieldFlags.name}><input className="field-input" value={draft.name} onChange={(e) => set("name", e.target.value)} placeholder={t(locale, "admin_ce_name_ph")} /></LField>
+            <LField label={t(locale, "admin_ce_name_ar")} error={fieldFlags.nameAr}><input className="field-input" dir="rtl" value={draft.nameAr ?? ""} onChange={(e) => set("nameAr", e.target.value)} placeholder={t(locale, "admin_ce_name_ar_ph")} /></LField>
+            <LField label={t(locale, "admin_ce_tagline")} error={fieldFlags.tagline}><input className="field-input" value={draft.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder={t(locale, "admin_ce_tagline_ph")} /></LField>
           </div>
-          <LField label={t(locale, "admin_ce_categories")} required>
+          <LField label={t(locale, "admin_ce_categories")} required error={fieldFlags.categoryIds ?? fieldFlags.primaryCategoryId}>
             <CategoryMultiSelect
               categories={categories}
               selected={draft.categories}
@@ -225,15 +339,21 @@ export function CompanyEditor({ company, categories, onClose }: {
               max={MAX_CATEGORIES_PER_COMPANY}
             />
           </LField>
-          <LField label={t(locale, "admin_ce_about")}><textarea className="field-input resize-none" rows={3} value={draft.about} onChange={(e) => set("about", e.target.value)} /></LField>
+          <LField label={t(locale, "admin_ce_about")} error={fieldFlags.about}><textarea className="field-input resize-none" rows={3} value={draft.about} onChange={(e) => set("about", e.target.value)} /></LField>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <ImageUpload label={t(locale, "admin_ce_logo")} value={draft.logo} onChange={(v) => set("logo", v)} shape="logo" maxDim={256} bucket="logos" />
-            <ImageUpload label={t(locale, "admin_ce_cover")} value={draft.cover} onChange={(v) => set("cover", v)} shape="wide" maxDim={1200} bucket="covers" />
+            <Flagged error={fieldFlags.logo}>
+              <ImageUpload label={t(locale, "admin_ce_logo")} value={draft.logo} onChange={(v) => set("logo", v)} shape="logo" maxDim={256} bucket="logos" />
+            </Flagged>
+            <Flagged error={fieldFlags.cover}>
+              <ImageUpload label={t(locale, "admin_ce_cover")} value={draft.cover} onChange={(v) => set("cover", v)} shape="wide" maxDim={1200} bucket="covers" />
+            </Flagged>
           </div>
-          <GalleryUpload images={draft.gallery} onChange={(g) => set("gallery", g)} />
+          <Flagged error={fieldFlags.gallery}>
+            <GalleryUpload images={draft.gallery} onChange={(g) => set("gallery", g)} />
+          </Flagged>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <LField label={t(locale, "admin_ce_phone")}><PhoneInput value={draft.phone} onChange={(v) => set("phone", v)} /></LField>
-            <LField label={t(locale, "admin_ce_location")}><input className="field-input" value={draft.location} onChange={(e) => set("location", e.target.value)} /></LField>
+            <LField label={t(locale, "admin_ce_phone")} error={fieldFlags.phone}><PhoneInput value={draft.phone} onChange={(v) => set("phone", v)} /></LField>
+            <LField label={t(locale, "admin_ce_location")} error={fieldFlags.location}><input className="field-input" value={draft.location} onChange={(e) => set("location", e.target.value)} /></LField>
           </div>
 
           {/* Internal lead-notification contact — NOT shown publicly. New-lead
@@ -245,20 +365,22 @@ export function CompanyEditor({ company, categories, onClose }: {
               {t(locale, "admin_ce_notif_title")}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <LField label={t(locale, "admin_ce_notif_email")}>
+              <LField label={t(locale, "admin_ce_notif_email")} error={fieldFlags.email}>
                 <input className="field-input" type="email" value={draft.email ?? ""} onChange={(e) => set("email", e.target.value)} placeholder={t(locale, "admin_ce_notif_email_ph")} />
               </LField>
-              <LField label={t(locale, "admin_ce_whatsapp")}>
+              <LField label={t(locale, "admin_ce_whatsapp")} error={fieldFlags.whatsapp}>
                 <PhoneInput value={draft.whatsapp ?? ""} onChange={(v) => set("whatsapp", v)} />
               </LField>
             </div>
           </div>
 
-          <TagField label={t(locale, "admin_ce_services")} tags={draft.services} onChange={(v) => set("services", v)} placeholder={t(locale, "admin_ce_services_ph")} />
+          <Flagged error={fieldFlags.services}>
+            <TagField label={t(locale, "admin_ce_services")} tags={draft.services} onChange={(v) => set("services", v)} placeholder={t(locale, "admin_ce_services_ph")} />
+          </Flagged>
           {/* Trust numbers. Rating + Reviews are auto-calculated from the Review
               table unless an admin ticks "set manually" below to override them. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <LField label={t(locale, "admin_ce_rating")}>
+            <LField label={t(locale, "admin_ce_rating")} error={fieldFlags.rating}>
               {draft.ratingOverridden ? (
                 <input type="number" min="0" max="5" step="0.1" className="field-input" value={draft.rating ?? 0}
                   onChange={(e) => set("rating", Math.min(5, Math.max(0, Number(e.target.value) || 0)))} />
@@ -268,7 +390,7 @@ export function CompanyEditor({ company, categories, onClose }: {
                 </div>
               )}
             </LField>
-            <LField label={t(locale, "admin_ce_reviews")}>
+            <LField label={t(locale, "admin_ce_reviews")} error={fieldFlags.reviewCount}>
               {draft.ratingOverridden ? (
                 <input type="number" min="0" className="field-input" value={draft.reviewCount ?? 0}
                   onChange={(e) => set("reviewCount", Math.max(0, Math.trunc(Number(e.target.value) || 0)))} />
@@ -278,8 +400,8 @@ export function CompanyEditor({ company, categories, onClose }: {
                 </div>
               )}
             </LField>
-            <LField label={t(locale, "admin_ce_projects")}><input type="number" min="0" className="field-input" value={draft.completedProjects} onChange={(e) => set("completedProjects", Number(e.target.value))} /></LField>
-            <LField label={t(locale, "admin_ce_years")}><input type="number" min="0" className="field-input" value={draft.yearsExperience} onChange={(e) => set("yearsExperience", Number(e.target.value))} /></LField>
+            <LField label={t(locale, "admin_ce_projects")} error={fieldFlags.completedProjects}><input type="number" min="0" className="field-input" value={draft.completedProjects} onChange={(e) => set("completedProjects", Number(e.target.value))} /></LField>
+            <LField label={t(locale, "admin_ce_years")} error={fieldFlags.yearsExperience}><input type="number" min="0" className="field-input" value={draft.yearsExperience} onChange={(e) => set("yearsExperience", Number(e.target.value))} /></LField>
           </div>
           <label className="flex items-start gap-2.5 -mt-1 cursor-pointer">
             <input type="checkbox" className="w-4 h-4 accent-primary mt-0.5 flex-shrink-0" checked={draft.ratingOverridden === true}
@@ -289,10 +411,12 @@ export function CompanyEditor({ company, categories, onClose }: {
             </span>
           </label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <LField label={t(locale, "admin_ce_response")}><input className="field-input" value={draft.responseTime} onChange={(e) => set("responseTime", e.target.value)} placeholder={t(locale, "admin_ce_response_ph")} /></LField>
-            <LField label={t(locale, "admin_ce_verified_since")}><input className="field-input" value={draft.verifiedSince} onChange={(e) => set("verifiedSince", e.target.value)} placeholder="2021" /></LField>
+            <LField label={t(locale, "admin_ce_response")} error={fieldFlags.responseTime}><input className="field-input" value={draft.responseTime} onChange={(e) => set("responseTime", e.target.value)} placeholder={t(locale, "admin_ce_response_ph")} /></LField>
+            <LField label={t(locale, "admin_ce_verified_since")} error={fieldFlags.verifiedSince}><input className="field-input" value={draft.verifiedSince} onChange={(e) => set("verifiedSince", e.target.value)} placeholder="2021" /></LField>
           </div>
-          <TagField label={t(locale, "admin_ce_badges")} tags={draft.badges} onChange={(v) => set("badges", v)} placeholder={t(locale, "admin_ce_badges_ph")} />
+          <Flagged error={fieldFlags.badges}>
+            <TagField label={t(locale, "admin_ce_badges")} tags={draft.badges} onChange={(v) => set("badges", v)} placeholder={t(locale, "admin_ce_badges_ph")} />
+          </Flagged>
           {/* Verified toggle */}
           <label className="flex items-center gap-3 bg-primary/6 border border-primary/18 rounded-xl p-3.5 cursor-pointer">
             <input type="checkbox" className="w-5 h-5 accent-primary" checked={draft.verified === true} onChange={(e) => set("verified", e.target.checked)} />
@@ -320,10 +444,10 @@ export function CompanyEditor({ company, categories, onClose }: {
               <Icon name="travel_explore" className="text-body" />
               {t(locale, "admin_ce_seo_title")}
             </p>
-            <LField label={t(locale, "admin_ce_meta_title")}>
+            <LField label={t(locale, "admin_ce_meta_title")} error={fieldFlags.metaTitle}>
               <input className="field-input" value={draft.metaTitle ?? ""} onChange={(e) => set("metaTitle", e.target.value)} placeholder={t(locale, "admin_ce_meta_title_ph")} />
             </LField>
-            <LField label={t(locale, "admin_ce_meta_desc")}>
+            <LField label={t(locale, "admin_ce_meta_desc")} error={fieldFlags.metaDescription}>
               <textarea className="field-input resize-none" rows={2} value={draft.metaDescription ?? ""} onChange={(e) => set("metaDescription", e.target.value)} placeholder={t(locale, "admin_cat_meta_desc_ph")} />
             </LField>
           </div>
@@ -332,7 +456,9 @@ export function CompanyEditor({ company, categories, onClose }: {
 
       {tab === "projects" && (
         <TabPanel idPrefix="ce" id="projects">
-          <ProjectsEditor projects={draft.projects} onChange={(p) => set("projects", p)} />
+          <Flagged error={fieldFlags.projects}>
+            <ProjectsEditor projects={draft.projects} onChange={(p) => set("projects", p)} />
+          </Flagged>
         </TabPanel>
       )}
 
