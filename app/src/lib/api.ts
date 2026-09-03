@@ -9,16 +9,54 @@
 const BASE_URL = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const API_KEY  = import.meta.env.VITE_API_KEY ?? "";
 
+/**
+ * Per-field messages from a rejected write — ApiErrorBody.details, keyed by the
+ * field path the server used ("gallery", "projects.0.img", …).
+ */
+export type ApiErrorDetails = Record<string, string[]>;
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
     /** Machine-readable ApiErrorBody.code, when the server sent one. */
     public readonly code?: string,
+    /**
+     * The field-level half of the error. The API has ALWAYS sent this on a
+     * VALIDATION_ERROR (utils/withErrors.ts → zodDetails), and this client threw
+     * it away and kept only `message` — which for a Zod rejection is the bare
+     * string "Validation failed". So an admin whose save was refused because one
+     * field was over its limit got a modal that named neither the field nor the
+     * limit, on a form with forty of them.
+     *
+     * Measured (Sept 2026): eight production companies could not be saved at all
+     * — one over the gallery cap, seven over the per-service length cap — and
+     * nothing on screen said which field, or that a length was the problem.
+     */
+    public readonly details?: ApiErrorDetails,
   ) {
     super(message);
     this.name = "ApiError";
   }
+}
+
+/**
+ * Read ApiErrorBody.details defensively: it is untrusted JSON, and a 4xx body
+ * from a proxy (or a future server) may carry anything at all under that key.
+ * Anything that is not `{ field: string[] }` is dropped rather than rendered.
+ */
+function parseErrorDetails(raw: unknown): ApiErrorDetails | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: ApiErrorDetails = {};
+  for (const [field, messages] of Object.entries(raw as Record<string, unknown>)) {
+    if (Array.isArray(messages)) {
+      const strings = messages.filter((m): m is string => typeof m === "string");
+      if (strings.length > 0) out[field] = strings;
+    } else if (typeof messages === "string") {
+      out[field] = [messages];
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 // ── Backend reachability signal ──────────────────────────────────────────────
@@ -283,10 +321,12 @@ async function readBody<T>(
   if (!res.ok) {
     let message = res.statusText;
     let code: string | undefined;
+    let details: ApiErrorDetails | undefined;
     try {
       const body = await res.json();
       message = body.message ?? message;
       code = typeof body.code === "string" ? body.code : undefined;
+      details = parseErrorDetails(body.details);
     } catch { /* ignore */ }
     if (isReachabilityFailure(res.status, code)) signal(API_DOWN_EVENT);
     // The session behind this request is gone. lib/auth.ts and lib/customerAuth.ts
@@ -296,7 +336,7 @@ async function readBody<T>(
     // NOT be read as "your session ended".
     const audience = res.status === 401 ? audienceFor401(path) : null;
     if (audience) signal(AUTH_EXPIRED_EVENT, { audience });
-    throw new ApiError(res.status, message, code);
+    throw new ApiError(res.status, message, code, details);
   }
 
   signal(API_UP_EVENT);
@@ -396,13 +436,15 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
     if (!res.ok) {
       let message = res.statusText;
       let code: string | undefined;
+      let details: ApiErrorDetails | undefined;
       try {
         const body = await res.json();
         message = body.message ?? message;
         code = typeof body.code === "string" ? body.code : undefined;
+        details = parseErrorDetails(body.details);
       } catch { /* ignore */ }
       if (isReachabilityFailure(res.status, code)) signal(API_DOWN_EVENT);
-      throw new ApiError(res.status, message, code);
+      throw new ApiError(res.status, message, code, details);
     }
 
     signal(API_UP_EVENT);

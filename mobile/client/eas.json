@@ -7,13 +7,15 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": false },
+      "ios": {
+        "simulator": false
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
-        "EXPO_PUBLIC_ASSET_URL": "",
         "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "592484560089-tgrpblqd2e34rs0o956072m31f371tag.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "592484560089-sjqeh9fht1kr38vl9ek3deb4p3rtqgho.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "preview": {
@@ -21,10 +23,10 @@
       "channel": "preview",
       "env": {
         "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
-        "EXPO_PUBLIC_ASSET_URL": "",
         "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "592484560089-tgrpblqd2e34rs0o956072m31f371tag.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "592484560089-sjqeh9fht1kr38vl9ek3deb4p3rtqgho.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
@@ -32,10 +34,10 @@
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
-        "EXPO_PUBLIC_ASSET_URL": "",
         "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "592484560089-tgrpblqd2e34rs0o956072m31f371tag.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "592484560089-sjqeh9fht1kr38vl9ek3deb4p3rtqgho.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "592484560089-sruoa9mb53b7th69qhrh1oeq6ho6srlg.apps.googleusercontent.com",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     }
   },

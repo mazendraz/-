@@ -3,7 +3,7 @@ import {
   addCompany, updateCompany, deleteCompany, emptyCompany, MAX_CATEGORIES_PER_COMPANY,
   type Company, type CompanyDraft, type ServiceCategory, type Project,
 } from "../../lib/catalog";
-import { isApiConfigured } from "../../lib/api";
+import { isApiConfigured, ApiError, type ApiErrorDetails } from "../../lib/api";
 import { setCompanyAvailability, isBusy } from "../../lib/availability";
 import AvailabilityControl from "../../components/AvailabilityControl";
 import BusyWindowsEditor from "../../components/BusyWindowsEditor";
@@ -18,10 +18,62 @@ import { ConfirmDelete } from "./components/confirm";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { useLocale } from "../../context/LocaleContext";
-import { t, type StringKey } from "../../lib/i18n";
+import { t, type StringKey, type Locale } from "../../lib/i18n";
 import { isValidE164 } from "../../lib/phone";
 import Icon from "../../components/Icon";
 import PhoneInput from "../../components/PhoneInput";
+
+// Server field path → the label THIS form already shows for that field.
+//
+// The API has always answered a rejected write with per-field messages
+// (ApiErrorBody.details); the client just dropped them, so every refusal
+// rendered as the bare "Validation failed" — on a form with forty fields, on a
+// payload the admin never assembled by hand (the editor PUTs the COMPLETE
+// record on every save, so the field at fault is very often one the admin never
+// touched). Naming the field is the whole point: that is the difference between
+// "something is wrong" and "the gallery has too many images".
+const ERROR_FIELD_LABEL_KEYS: Record<string, StringKey> = {
+  categoryIds: "admin_ce_categories",
+  primaryCategoryId: "admin_ce_categories",
+  name: "admin_ce_name",
+  nameAr: "admin_ce_name_ar",
+  tagline: "admin_ce_tagline",
+  about: "admin_ce_about",
+  logo: "admin_ce_logo",
+  cover: "admin_ce_cover",
+  gallery: "prov_field_gallery",
+  services: "admin_ce_services",
+  badges: "admin_ce_badges",
+  phone: "admin_ce_phone",
+  location: "admin_ce_location",
+  yearsExperience: "admin_ce_years",
+  responseTime: "admin_ce_response",
+  verifiedSince: "admin_ce_verified_since",
+  completedProjects: "admin_ce_projects",
+  rating: "admin_ce_rating",
+  reviewCount: "admin_ce_reviews",
+  metaTitle: "admin_ce_meta_title",
+  metaDescription: "admin_ce_meta_desc",
+  email: "admin_ce_notif_email",
+  whatsapp: "admin_ce_whatsapp",
+  projects: "admin_ce_tab_projects",
+};
+
+/**
+ * One line per rejected field: the form's own label for it, then what the server
+ * said. Nested paths ("projects.0.img") keep their path in parentheses, since
+ * the row index is the only way to find WHICH project is at fault.
+ */
+function describeFieldErrors(details: ApiErrorDetails, locale: Locale): string {
+  return Object.entries(details)
+    .map(([path, messages]) => {
+      const key = ERROR_FIELD_LABEL_KEYS[path.split(".")[0]];
+      const label = key ? t(locale, key) : path;
+      const where = path.includes(".") ? ` (${path})` : "";
+      return `${label}${where}: ${messages.join(" — ")}`;
+    })
+    .join("\n");
+}
 
 // Sub-tab id → label key. The ids are internal state, the labels are not.
 const EDITOR_TAB_KEYS: Record<EditorTab, StringKey> = {
@@ -107,10 +159,14 @@ export function CompanyEditor({ company, categories, onClose }: {
       onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
+      // A validation refusal carries the useful half in `details`; `message` is
+      // the constant "Validation failed" and is not worth showing next to it.
+      const fields =
+        err instanceof ApiError && err.details ? describeFieldErrors(err.details, locale) : "";
       setSaveError(
         /quota/i.test(msg) || (err as { name?: string })?.name === "QuotaExceededError"
           ? t(locale, "admin_ce_quota")
-          : msg || t(locale, "admin_ce_save_failed")
+          : fields || msg || t(locale, "admin_ce_save_failed")
       );
       console.error(err);
     } finally {
@@ -309,7 +365,8 @@ export function CompanyEditor({ company, categories, onClose }: {
       {/* Footer actions — sticky so Save is always reachable */}
       <div className="sticky bottom-0 -mx-5 px-5 py-3.5 mt-6 bg-surface-container-lowest/97 backdrop-blur-lg border-t border-outline-variant/20 flex flex-col gap-2">
         {saveError && (
-          <p className="text-label text-error font-medium bg-error/8 rounded-lg px-3 py-2">{saveError}</p>
+          // whitespace-pre-line: describeFieldErrors returns one line per field.
+          <p className="text-label text-error font-medium bg-error/8 rounded-lg px-3 py-2 whitespace-pre-line">{saveError}</p>
         )}
         <div className="flex items-center justify-between gap-3">
           {!isNew ? (

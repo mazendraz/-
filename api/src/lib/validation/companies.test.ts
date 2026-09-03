@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { upsertCompanySchema, updateCompanySchema } from "@/lib/validation/companies";
+import {
+  upsertCompanySchema,
+  updateCompanySchema,
+  MAX_GALLERY_IMAGES,
+  MAX_SERVICE_ITEMS,
+  MAX_SERVICE_LENGTH,
+  MAX_BADGE_ITEMS,
+} from "@/lib/validation/companies";
 
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -30,11 +37,31 @@ describe("upsertCompanySchema — happy path", () => {
   it("accepts the largest values a real record plausibly holds", () => {
     const parsed = upsertCompanySchema.safeParse({
       ...base,
-      services: Array.from({ length: 100 }, (_, i) => `Service ${i}`),
-      gallery: Array.from({ length: 60 }, (_, i) => `/img/${i}.jpg`),
-      badges: Array.from({ length: 20 }, (_, i) => `Badge ${i}`),
+      services: Array.from({ length: MAX_SERVICE_ITEMS }, (_, i) => `Service ${i}`),
+      gallery: Array.from({ length: MAX_GALLERY_IMAGES }, (_, i) => `/img/${i}.jpg`),
+      badges: Array.from({ length: MAX_BADGE_ITEMS }, (_, i) => `Badge ${i}`),
     });
     expect(parsed.success).toBe(true);
+  });
+
+  // Regression (Sept 2026). The caps were sized off the SEED data — ~6 services,
+  // ~6 gallery items — and production had long since outgrown them: one company
+  // carried 62 gallery images against a cap of 60, and seven carried a whole
+  // service list pasted into ONE tag, 139-208 characters against a cap of 120.
+  //
+  // The admin editor PUTs the COMPLETE record on every save, so those companies
+  // could not be edited at all: whatever field the admin actually changed, the
+  // over-long one went with it and the write was rejected. These two shapes are
+  // the real ones, and they must stay valid.
+  it("accepts the shapes production actually holds", () => {
+    const longService = "أ".repeat(208); // the longest real `services` entry
+    expect(
+      upsertCompanySchema.safeParse({
+        ...base,
+        services: [longService],
+        gallery: Array.from({ length: 62 }, (_, i) => `/img/${i}.jpg`),
+      }).success,
+    ).toBe(true);
   });
 });
 
@@ -65,6 +92,10 @@ describe("upsertCompanySchema — unbounded-field regressions", () => {
 
   it("rejects a single service that is itself enormous", () => {
     expect(upsertCompanySchema.safeParse({ ...base, services: [huge] }).success).toBe(false);
+    // …and the boundary itself, so raising MAX_SERVICE_LENGTH stays deliberate.
+    expect(
+      upsertCompanySchema.safeParse({ ...base, services: ["x".repeat(MAX_SERVICE_LENGTH + 1)] }).success,
+    ).toBe(false);
   });
 
   it("rejects an absurd number of badges and gallery entries", () => {

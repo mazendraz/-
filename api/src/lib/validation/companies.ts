@@ -17,6 +17,32 @@ const companyProjectSchema = z.object({
 // "no max number of categories unless explicitly configured").
 export const MAX_CATEGORIES_PER_COMPANY = 5;
 
+// ── Array/entry limits, in ONE place ────────────────────────────────────────
+// Both schemas below (create + partial update) read these, so the two can never
+// drift apart again — they were duplicated literals, and a company that was
+// created under one set could then fail to save under the other.
+//
+// The numbers are sized from REAL data, not from what a seeded fixture happens
+// to carry. Measured on production (Sept 2026): one company had 62 gallery
+// images (the old cap was 60) and seven had a single `services` entry of
+// 139-208 characters (the old cap was 120) — a whole comma-separated service
+// list pasted into one tag, which is how the admin UI is actually used. Every
+// one of those companies was IMPOSSIBLE to save from the editor: the admin
+// sends the complete record on every PUT, so the over-long field was rejected
+// no matter which field the admin had actually edited, and the modal showed a
+// bare "Validation failed".
+export const MAX_GALLERY_IMAGES = 100;
+export const MAX_SERVICE_ITEMS = 100;
+export const MAX_SERVICE_LENGTH = 400;
+export const MAX_BADGE_ITEMS = 20;
+export const MAX_BADGE_LENGTH = 120;
+
+const servicesArray = () =>
+  z.array(z.string().trim().min(1).max(MAX_SERVICE_LENGTH)).max(MAX_SERVICE_ITEMS);
+const galleryArray = () => z.array(imageRef).max(MAX_GALLERY_IMAGES);
+const badgesArray = () =>
+  z.array(z.string().trim().min(1).max(MAX_BADGE_LENGTH)).max(MAX_BADGE_ITEMS);
+
 const baseCompanySchema = z.object({
   categoryIds: z
     .array(z.string().uuid())
@@ -44,12 +70,14 @@ const baseCompanySchema = z.object({
   // path that creates it reads the body with a bare request.json() — no size
   // limit at all (unlike the public endpoints, which go through readJsonObject).
   //
-  // The caps are deliberately far above real data (seeded companies carry ~6
-  // services, ~3 badges, ~6 gallery items), so no existing record can fail to
-  // round-trip through the admin editor — they only stop the absurd.
-  services: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
-  gallery: z.array(imageRef).max(60).default([]),
-  badges: z.array(z.string().trim().min(1).max(60)).max(20).default([]),
+  // The caps are meant to stop the absurd, never a real record: the whole point
+  // is that everything already in the database still round-trips through the
+  // admin editor. Sizing them off the SEED data broke exactly that (see the
+  // limit constants above) — so they now live there, above real production
+  // maxima, and any future change to them belongs there too.
+  services: servicesArray().default([]),
+  gallery: galleryArray().default([]),
+  badges: badgesArray().default([]),
   phone: z.string().trim().min(8).max(32),
   location: z.string().trim().min(1).max(200),
   yearsExperience: z.number().int().min(0).max(200),
@@ -109,9 +137,9 @@ export type UpsertCompanyInput = z.infer<typeof upsertCompanySchema>;
 export const updateCompanySchema = baseCompanySchema
   .partial()
   .extend({
-    services: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
-    gallery: z.array(imageRef).max(60).optional(),
-    badges: z.array(z.string().trim().min(1).max(60)).max(20).optional(),
+    services: servicesArray().optional(),
+    gallery: galleryArray().optional(),
+    badges: badgesArray().optional(),
     featured: z.boolean().optional(),
     verified: z.boolean().optional(),
     completedProjects: z.number().int().min(0).optional(),
