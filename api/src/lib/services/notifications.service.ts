@@ -158,9 +158,44 @@ const FALLBACK_BRANDING: EmailBranding = {
 };
 
 /**
+ * Mail clients that can render an <img>, and the formats they can render, are a
+ * much smaller set than a browser's. This guard exists because the admin logo
+ * upload (upload.service.ts) re-encodes EVERY image to WebP, and Gmail cannot
+ * render WebP at all: it fetches the image through its own proxy, re-encodes
+ * it, and the alpha channel flattens to BLACK. With a brand mark that is black
+ * line art on transparency the result is a solid black square where the logo
+ * should be — which is exactly what shipped once an admin uploaded a logo from
+ * the dashboard, because `s.logo_url || DEFAULT_LOGO_URL` silently preferred
+ * that WebP over the email-safe asset prepared for this very purpose.
+ *
+ * So: an admin-supplied logo is used in mail only if it is a format every
+ * client can draw. Anything else (WebP, AVIF, SVG — Gmail strips SVG outright —
+ * or a URL with no extension we can vouch for) falls back to
+ * DEFAULT_LOGO_URL. The website and the mobile apps keep using s.logo_url as
+ * before; this narrowing is scoped to email, where the cost of a wrong guess
+ * is a black box in a customer's inbox.
+ */
+const EMAIL_SAFE_LOGO_EXT = /\.(png|jpe?g|gif)$/i;
+
+export function emailSafeLogoUrl(logoUrl: string | undefined | null): string {
+  if (!logoUrl) return DEFAULT_LOGO_URL;
+  // Compare against the PATH only: a query string (?width=200, a CDN cache
+  // buster, a signed-URL token) must not decide the format, and ".png" sitting
+  // in a query value must not vouch for a .webp path.
+  let path = logoUrl;
+  try {
+    path = new URL(logoUrl, SITE_URL).pathname;
+  } catch {
+    path = logoUrl.split(/[?#]/)[0];
+  }
+  return EMAIL_SAFE_LOGO_EXT.test(path) ? logoUrl : DEFAULT_LOGO_URL;
+}
+
+/**
  * Logo + footer identity for the shell, admin-uploaded logo and admin-entered
- * contact details preferred. Falls back to the built-in asset and a bare
- * name/URL footer on any DB error — the same fail-soft contract as
+ * contact details preferred — the logo only when it is a format mail clients
+ * can actually draw (see emailSafeLogoUrl). Falls back to the built-in asset
+ * and a bare name/URL footer on any DB error — the same fail-soft contract as
  * getEmailTemplates, so a settings-table hiccup degrades to default branding,
  * never to no email.
  */
@@ -168,7 +203,7 @@ async function resolveBranding(): Promise<EmailBranding> {
   try {
     const s = await getPlatformSettings();
     return {
-      logoUrl: s.logo_url || DEFAULT_LOGO_URL,
+      logoUrl: emailSafeLogoUrl(s.logo_url),
       footer: {
         siteName: s.site_name || "Al Assema",
         siteUrl: SITE_URL,

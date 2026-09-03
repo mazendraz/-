@@ -19,6 +19,7 @@ import {
   sendCustomerVerificationEmail,
   sendCustomerPasswordResetEmail,
   sendCustomerWelcomeEmail,
+  emailSafeLogoUrl,
 } from "@/lib/services/notifications.service";
 import type { ApiLead } from "@/lib/apiTypes";
 
@@ -411,5 +412,58 @@ describe("RTL audit — every customer-facing send wraps its HTML dir=\"rtl\"", 
     // what the test environment has — an email is never sent logo-less.
     expect(html).toContain("/email-logo.png");
     expect(html).toContain("الرابط صالح 24 ساعة");
+  });
+  // The regression this guards: the admin logo upload re-encodes every image to
+  // WebP (upload.service.ts), Gmail cannot render WebP and flattens its alpha
+  // to black through its image proxy, and the brand mark is black line art —
+  // so an admin uploading a logo from the dashboard turned the email header
+  // into a solid black square. The website still uses that WebP; email does not.
+  describe("emailSafeLogoUrl", () => {
+    const FALLBACK = "/email-logo.png";
+    const SUPA = "https://vdwurkqarfnrquwihweo.supabase.co/storage/v1/object/public/logos/49eeb3d6.";
+
+    it("rejects the WebP the admin upload produces", () => {
+      expect(emailSafeLogoUrl(SUPA + "webp")).toContain(FALLBACK);
+    });
+
+    it("rejects SVG (Gmail strips it) and AVIF (barely supported anywhere)", () => {
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.svg")).toContain(FALLBACK);
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.avif")).toContain(FALLBACK);
+    });
+
+    it("rejects a URL whose format it cannot vouch for", () => {
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand")).toContain(FALLBACK);
+      expect(emailSafeLogoUrl("https://cdn.example.com/img?id=42")).toContain(FALLBACK);
+    });
+
+    it("keeps a PNG, JPG or GIF the admin uploaded", () => {
+      expect(emailSafeLogoUrl(SUPA + "png")).toBe(SUPA + "png");
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.JPG")).toBe(
+        "https://cdn.example.com/brand.JPG",
+      );
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.jpeg")).toBe(
+        "https://cdn.example.com/brand.jpeg",
+      );
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.gif")).toBe(
+        "https://cdn.example.com/brand.gif",
+      );
+    });
+
+    it("judges the path, not the query string", () => {
+      // A cache buster on a good file must not disqualify it...
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.png?v=7")).toBe(
+        "https://cdn.example.com/brand.png?v=7",
+      );
+      // ...and ".png" hiding in a query value must not vouch for a WebP path.
+      expect(emailSafeLogoUrl("https://cdn.example.com/brand.webp?fallback=x.png")).toContain(
+        FALLBACK,
+      );
+    });
+
+    it("falls back on blank/absent settings rather than sending a logo-less email", () => {
+      expect(emailSafeLogoUrl("")).toContain(FALLBACK);
+      expect(emailSafeLogoUrl(undefined)).toContain(FALLBACK);
+      expect(emailSafeLogoUrl(null)).toContain(FALLBACK);
+    });
   });
 });
