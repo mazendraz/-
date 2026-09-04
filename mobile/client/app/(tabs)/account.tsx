@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
@@ -125,9 +126,23 @@ export default function Account() {
             )}
 
             <View style={styles.card}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{customer.name.trim().charAt(0) || "?"}</Text>
-              </View>
+              {customer.avatarUrl ? (
+                // Mirrors the website's Account.tsx / AccountButton.tsx — same
+                // field, same fallback. Unlike a browser, expo-image issues a
+                // plain native request with no auto-attached Referer header, so
+                // there is no referrerPolicy equivalent needed here for
+                // lh3.googleusercontent.com to serve it.
+                <Image
+                  source={{ uri: customer.avatarUrl }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                  accessibilityLabel=""
+                />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{customer.name.trim().charAt(0) || "?"}</Text>
+                </View>
+              )}
               <View style={styles.profileText}>
                 <Text style={styles.name}>{customer.name}</Text>
                 <Text style={styles.email}>{customer.email}</Text>
@@ -281,7 +296,7 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
   },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  avatarText: { color: colors.onPrimary, fontFamily: "Cairo_700Bold", fontSize: type.title.fontSize },
+  avatarText: { color: colors.onPrimary, fontFamily: "Cairo_700Bold", fontSize: type.title.fontSize, textAlign: "center" },
   profileText: { flex: 1 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   email: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline, textAlign: "right", writingDirection: "ltr" },

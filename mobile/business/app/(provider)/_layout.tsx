@@ -4,6 +4,7 @@ import { colors, type } from "@alassema/core";
 import { useLiveEvents } from "@alassema/mobile-shared";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { isAdmin, isProvider } from "../../lib/permissions";
+import Icon, { type IconName } from "../../components/Icon";
 import {
   bumpLeadsBadge,
   clearLeadsBadge,
@@ -13,6 +14,24 @@ import {
   useMessagesBadge,
   badgeLabel,
 } from "../../lib/liveBadges";
+
+/**
+ * `tabBarIcon` factory. Hoisted to module scope rather than written inline per
+ * screen so the six call sites below stay one line each, and so the component
+ * identity is stable across renders.
+ *
+ * ── Why this had to exist at all ───────────────────────────────────────────
+ * These tabs previously passed only `title`. @react-navigation/bottom-tabs
+ * does NOT then render a label-only tab — it falls back to its built-in
+ * placeholder glyph, which shipped as a row of empty boxes (tofu) under every
+ * label on a real device. A missing `tabBarIcon` is not a no-op; it is a
+ * visible defect.
+ */
+function tabIcon(name: IconName) {
+  return ({ color, size }: { color: string; size: number }) => (
+    <Icon name={name} color={color} size={size} />
+  );
+}
 
 /**
  * Provider tab group: Overview · Leads · Messages · More.
@@ -68,10 +87,10 @@ export default function ProviderTabsLayout() {
         tabBarLabelStyle: { fontFamily: "Cairo_600SemiBold", fontSize: type.caption.fontSize },
       }}
     >
-      <Tabs.Screen name="overview" options={{ title: "الرئيسية" }} />
-      <Tabs.Screen name="leads" options={{ title: "الطلبات", tabBarBadge: badgeLabel(leadsBadge) }} />
-      <Tabs.Screen name="messages" options={{ title: "الرسائل", tabBarBadge: badgeLabel(messagesBadge) }} />
-      <Tabs.Screen name="more" options={{ title: "المزيد" }} />
+      <Tabs.Screen name="overview" options={{ title: "الرئيسية", tabBarIcon: tabIcon("dashboard") }} />
+      <Tabs.Screen name="leads" options={{ title: "الطلبات", tabBarIcon: tabIcon("inbox"), tabBarBadge: badgeLabel(leadsBadge) }} />
+      <Tabs.Screen name="messages" options={{ title: "الرسائل", tabBarIcon: tabIcon("forum"), tabBarBadge: badgeLabel(messagesBadge) }} />
+      <Tabs.Screen name="more" options={{ title: "المزيد", tabBarIcon: tabIcon("more_horiz") }} />
     </Tabs>
   );
 }

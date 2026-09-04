@@ -33,6 +33,7 @@ import GuestPromptModal from "../components/GuestPromptModal";
 import AppShell from "../components/AppShell";
 import AppMenu from "../components/AppMenu";
 import CrashScreen from "../components/CrashScreen";
+import IntroVideo from "../components/IntroVideo";
 
 // expo-router's own top-level crash net: exporting `ErrorBoundary` from the
 // root layout catches anything thrown by the route tree below it
@@ -69,6 +70,11 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 export default function RootLayout() {
   const fontsLoaded = useAppFonts();
+  // The logo reveal that covers the app while it boots — see
+  // components/IntroVideo.tsx. Starts already DONE on web: that build is the
+  // render-verification surface (see lib/session.ts), and holding a 3.5s
+  // animation in front of it would slow every check down for no one's benefit.
+  const [introDone, setIntroDone] = useState(Platform.OS === "web");
   const [sessionReady, setSessionReady] = useState(false);
   const { customer } = useCustomerAuth();
 
@@ -219,10 +225,20 @@ export default function RootLayout() {
   // Deliberately NOT gated on maintenance/offline/update: each of those
   // replaces the whole app anyway, and none of them should wait on an account
   // request that may be exactly what's failing.
-  if (!fontsLoaded || !sessionReady || maintenanceLoading) return null;
-  if (!maintenance.enabled && !backendOffline && !updateRequired && !verificationChecked) return null;
+  //
+  // A FLAG rather than the two `return null`s this used to be. The intro
+  // overlay has to keep its place in the tree across the moment boot finishes:
+  // returning early would unmount it and restart the video from frame zero
+  // exactly when the session resolved (see IntroVideo.tsx's header). Rendering
+  // nothing is still precisely what happens while this is true — it just
+  // happens one level further in, BESIDE the overlay rather than instead of it.
+  const booting =
+    !fontsLoaded ||
+    !sessionReady ||
+    maintenanceLoading ||
+    (!maintenance.enabled && !backendOffline && !updateRequired && !verificationChecked);
 
-  const content = updateRequired ? (
+  const content = booting ? null : updateRequired ? (
     <UpdateRequiredScreen status={updateRequired} />
   ) : maintenance.enabled ? (
     <MaintenanceScreen status={maintenance} onRetry={recheckMaintenance} />
@@ -281,29 +297,41 @@ export default function RootLayout() {
   );
 
   return (
-    <SafeAreaProvider>
-      {/* On web this is a phone app rendered in an arbitrary-width desktop
-          browser tab, not a real phone — with no cap, every screen (the hero
-          image included) stretches to the full window width, which is what
-          was actually making the hero crop look wrong/off-center and every
-          list/card feel stretched and "un-mobile" compared to the real
-          website. Pin it to a phone-sized column on web only; native builds
-          (iOS/Android) are untouched since Platform.OS !== "web" there. */}
-      {Platform.OS === "web" ? (
-        <View style={styles.webBackdrop}>
-          <View style={styles.webFrame}>{content}</View>
-        </View>
-      ) : (
-        content
+    <>
+      {/* Mounted only once boot is done — the same "nothing on screen until
+          every hold clears" contract the two early returns above used to
+          provide, now expressed as a condition so the intro overlay below can
+          outlive the transition. */}
+      {!booting && (
+        <SafeAreaProvider>
+          {/* On web this is a phone app rendered in an arbitrary-width desktop
+              browser tab, not a real phone — with no cap, every screen (the hero
+              image included) stretches to the full window width, which is what
+              was actually making the hero crop look wrong/off-center and every
+              list/card feel stretched and "un-mobile" compared to the real
+              website. Pin it to a phone-sized column on web only; native builds
+              (iOS/Android) are untouched since Platform.OS !== "web" there. */}
+          {Platform.OS === "web" ? (
+            <View style={styles.webBackdrop}>
+              <View style={styles.webFrame}>{content}</View>
+            </View>
+          ) : (
+            content
+          )}
+          <GuestPromptModal />
+          {/* The one <MenuModal> in the app. Every hamburger anywhere in the
+              shell just flips lib/appMenu.ts's store; nothing else mounts a menu
+              of its own, so there is exactly one instance and opening it from a
+              screen five pushes deep changes no navigation state at all. */}
+          <AppMenu />
+          <StatusBar style="dark" />
+        </SafeAreaProvider>
       )}
-      <GuestPromptModal />
-      {/* The one <MenuModal> in the app. Every hamburger anywhere in the
-          shell just flips lib/appMenu.ts's store; nothing else mounts a menu
-          of its own, so there is exactly one instance and opening it from a
-          screen five pushes deep changes no navigation state at all. */}
-      <AppMenu />
-      <StatusBar style="dark" />
-    </SafeAreaProvider>
+      {/* LAST child, so it paints over everything above it — including the
+          maintenance / offline / forced-update screens, which are allowed to
+          resolve underneath the animation rather than racing it. */}
+      {!introDone && <IntroVideo onDone={() => setIntroDone(true)} />}
+    </>
   );
 }
 

@@ -255,6 +255,14 @@ export function fetchOfferingReference(offeringId: string): Promise<{ reference:
 // ── Projects — add on the company's behalf; delete is the shared
 // /admin/projects/[id] route already in lib/approvals.ts ──────────────────
 
+/** GET /admin/companies/[id]/projects — projects WITH `id` and `status`.
+ *  NOT the same as the `projects` array on the company detail payload, which is
+ *  serialized publicly and has no `id`: rendering that list gave every row
+ *  `key={undefined}` and a delete button that posted an undefined id. */
+export function fetchCompanyProjects(companyId: string): Promise<ApiProject[]> {
+  return apiGet<ApiProject[]>(`/admin/companies/${companyId}/projects`);
+}
+
 export function addCompanyProject(companyId: string, input: { title: string; img: string; description: string; year: string; sortOrder?: number }): Promise<ApiProject> {
   return apiPost<ApiProject>(`/admin/companies/${companyId}/projects`, input);
 }

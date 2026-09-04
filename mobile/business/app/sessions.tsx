@@ -106,6 +106,10 @@ export default function Sessions() {
             <FlatList
               data={sessions}
               keyExtractor={(item) => item.id}
+              // `flex: 1` so the list is bounded by the footer instead of
+              // growing under it — without it the last row rendered half-hidden
+              // behind the "end all sessions" button.
+              style={styles.listFlex}
               contentContainerStyle={styles.list}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
               renderItem={({ item }) => (
@@ -137,7 +141,10 @@ export default function Sessions() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { padding: 16 },
+  listFlex: { flex: 1 },
+  // paddingBottom so the final row clears the footer with breathing room
+  // rather than sitting flush against a destructive button.
+  list: { padding: 16, paddingBottom: 8 },
   separator: { height: 10 },
   row: {
     flexDirection: "row-reverse",

@@ -16,6 +16,12 @@
 
 > للنشر على VPS بدومين واحد، شوف كمان [`../deploy/README.md`](../deploy/README.md) والسكربتات في [`../deploy/`](../deploy/).
 
+## 📱 التطبيقات الموبايل — التوثيق المرجعي
+- [`mobile/business/README.md`](../mobile/business/README.md) — **تطبيق الموظفين (مقدّم الخدمة + الأدمن)**: المعمارية، خريطة الشاشات، الصلاحيات، الجلسات، SSE/الإشعارات، البناء والنشر.
+- [`mobile/client/README.md`](../mobile/client/README.md) — تطبيق العملاء.
+
+> خطة بناء تطبيق الموظفين بالمراحل في [`architecture/business-app/`](architecture/business-app/README.md).
+
 ## 🤖 prompts — برومبتات الـ AI
 - [`ai-context-prompt-al-assema.md`](prompts/ai-context-prompt-al-assema.md) — برومبت سياقي تلصقه لأي AI agent جديد عشان يفهم المشروع كامل.
 - [`dev-prompt-critical-fixes-and-notifications.md`](prompts/dev-prompt-critical-fixes-and-notifications.md) — برومبت جاهز لمطوّر fullstack (إصلاحات كريتيكال + إشعارات).

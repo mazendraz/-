@@ -54,6 +54,61 @@ function projectId(): string | undefined {
 }
 
 /**
+ * The Android channel every push from this backend is delivered on.
+ *
+ * Must match the `channelId` api's expoPush.service.ts puts on each message —
+ * a push naming a channel that does not exist on the device is dropped by
+ * Android without a trace, and one naming NO channel lands on expo-
+ * notifications' own fallback ("Miscellaneous"), which the user can neither
+ * find by a meaningful name nor tune separately from anything else.
+ */
+export const ANDROID_CHANNEL_ID = "default";
+
+/**
+ * Create (or update) that channel. Android-only no-op elsewhere.
+ *
+ * ── Why this is not optional on Android ─────────────────────────────────────
+ * Since Android 8 every notification belongs to a channel, and the channel —
+ * not the message — owns importance. Without one declared here, a delivered
+ * push sits silently in the shade with no banner and no sound: exactly the
+ * "the company replied and nothing happened on my phone" report this fixes,
+ * which is why it looked like the push was never sent at all.
+ *
+ * `IMPORTANCE_HIGH` is what buys the heads-up banner. `showBadge` is what lets
+ * the launcher dot appear for the app icon badge expoPush already sets.
+ *
+ * Android only lets a channel's NAME and DESCRIPTION change after creation
+ * (see setNotificationChannelAsync's own doc comment) — importance and sound
+ * are frozen at first create, and a person who has muted the channel keeps it
+ * muted. That is the intended behaviour, and it is also why the id is a
+ * constant rather than something versioned: re-running this on every launch
+ * is free and idempotent.
+ */
+async function ensureAndroidChannel(): Promise<void> {
+  if (Platform.OS !== "android") return;
+  try {
+    await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+      name: "تنبيهات العاصمة",
+      description: "ردود الشركات على رسائلك وتحديثات حالة طلباتك.",
+      importance: Notifications.AndroidImportance.HIGH,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      sound: "default",
+      vibrationPattern: [0, 250, 250, 250],
+      enableVibrate: true,
+      enableLights: true,
+      // The brand blue the expo-notifications config plugin already sets as
+      // the small-icon tint in each app's app.json.
+      lightColor: "#005578",
+      showBadge: true,
+    });
+  } catch (err) {
+    // Same fail-open contract as the rest of this module: no channel means no
+    // banner, not a broken app.
+    console.warn("Push channel setup failed:", err);
+  }
+}
+
+/**
  * Ask for permission (if not already asked) and register this device's Expo
  * push token with the account. Never throws — matches every other
  * notification path in this codebase (web-push, Telegram) failing open: a
@@ -70,6 +125,13 @@ async function registerForPush(): Promise<void> {
   // degrade, so the other calls in this function get the same preemptive
   // guard instead of being trusted one by one.
   if (Platform.OS === "web") return;
+
+  // Before the permission prompt, not after: on Android the channel is what
+  // decides whether a delivered notification is allowed to interrupt, and
+  // creating it first means the very first push after the customer says yes
+  // already arrives as a banner. It is also independent of the answer — the
+  // channel is device state, not account state.
+  await ensureAndroidChannel();
 
   // Physical devices only — a push token requires real APNs/FCM registration
   // that simulators and emulators cannot provide.

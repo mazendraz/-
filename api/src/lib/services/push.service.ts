@@ -13,10 +13,20 @@ import {
   notifyCompanyProviderDevices,
   notifyUserDevices,
 } from "@/lib/services/expoPush.service";
+import { StaffNotificationType } from "@/generated/prisma/enums";
+import { record as recordStaffNotification } from "@/lib/services/notifications.staff.service";
 
 export interface PushPayload {
   title: string;
   body: string;
+  /**
+   * Notification-center category for the persisted row (see
+   * notifications.staff.service.ts). Optional so no existing call site had to
+   * change to keep working; omitting it records the notification as SYSTEM,
+   * which is accurate for anything that hasn't declared a better category
+   * rather than a silent miscategorisation.
+   */
+  type?: StaffNotificationType;
   /** Relative path the SW opens on click (e.g. "/provider" or "/admin"). */
   url?: string;
   tag?: string;
@@ -99,6 +109,48 @@ async function sendToSubs(subs: StoredSub[], payload: PushPayload): Promise<numb
   return sent;
 }
 
+// ── Notification-center persistence ────────────────────────────────────────
+// Rows are written HERE, in the same three fan-outs that already own transport,
+// for the reason this module's own comment gives above: five services notify,
+// and adding a second thing to remember in five places is how the in-app list
+// and the push that was actually sent drift apart. See
+// notifications.staff.service.ts's header for the rest of the rationale.
+//
+// Deliberately awaited rather than fired alongside the pushes: `record()` never
+// throws (it swallows and logs, like every notify* path here), and awaiting it
+// means a caller that immediately reads the list back — a test, or a client
+// refetching on the SSE event this push accompanies — sees the row.
+
+function toRecordInput(payload: PushPayload) {
+  return {
+    type: payload.type ?? StaffNotificationType.SYSTEM,
+    title: payload.title,
+    body: payload.body,
+    url: payload.url,
+  };
+}
+
+/**
+ * Resolve a recipient set to user ids and record one row each.
+ *
+ * The `where` mirrors the push query in the caller directly below it, so the
+ * people who get a row are exactly the people who get a push — including the
+ * `isActive` filter, which matters: a deactivated account must not accumulate a
+ * notification history it could see if it were ever reactivated.
+ */
+async function recordForRecipients(
+  where: { companyId?: string; role?: "ADMIN"; isActive: boolean },
+  payload: PushPayload,
+): Promise<void> {
+  try {
+    const users = await prisma.user.findMany({ where, select: { id: true } });
+    await recordStaffNotification(users.map((u) => u.id), toRecordInput(payload));
+  } catch (err) {
+    // Same fail-open contract as everything else in this module.
+    console.error("[notify] failed to resolve staff notification recipients:", err);
+  }
+}
+
 /**
  * Push to all of a user's devices — BROWSERS and PHONES. Never throws.
  *
@@ -112,6 +164,7 @@ async function sendToSubs(subs: StoredSub[], payload: PushPayload): Promise<numb
  * independently, and one being absent must not silence the other.
  */
 export async function notifyUser(userId: string, payload: PushPayload): Promise<number> {
+  await recordStaffNotification([userId], toRecordInput(payload));
   const [web, native] = await Promise.all([
     (async () => {
       try {
@@ -136,6 +189,7 @@ export async function notifyCompanyProviders(
   companyId: string,
   payload: PushPayload,
 ): Promise<number> {
+  await recordForRecipients({ companyId, isActive: true }, payload);
   const [web, native] = await Promise.all([
     (async () => {
       try {
@@ -157,6 +211,7 @@ export async function notifyCompanyProviders(
 
 /** Push to every active admin. Never throws. */
 export async function notifyAdmins(payload: PushPayload): Promise<number> {
+  await recordForRecipients({ role: "ADMIN", isActive: true }, payload);
   const [web, native] = await Promise.all([
     (async () => {
       try {

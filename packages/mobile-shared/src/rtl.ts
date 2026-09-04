@@ -33,7 +33,7 @@
  * happens while the OS's own native splash is still covering the screen —
  * the customer never sees the wrong-direction frame it replaces.
  */
-import { I18nManager } from "react-native";
+import { I18nManager, Platform } from "react-native";
 import * as Updates from "expo-updates";
 
 export function ensureRTL(): void {
@@ -113,10 +113,44 @@ export const uiIsRTL = true;
  *  correct under either engine, unlike a hardcoded "row-reverse". */
 export const rowStart: "row" | "row-reverse" = I18nManager.isRTL === uiIsRTL ? "row" : "row-reverse";
 
-/** `textAlign` hugging the start edge. left/right are PHYSICAL in both engines
- *  (unlike flexDirection), so this needs no isRTL term — only the UI's own
- *  direction. */
-export const textStart: "left" | "right" = uiIsRTL ? "right" : "left";
+/**
+ * Does `textAlign` mean the OPPOSITE of what it says on this platform?
+ *
+ * On iOS it does, under an RTL layout direction, and this is not a bug in this
+ * app: React Native's own iOS text layer swaps the two values deliberately —
+ *
+ *     if (layoutDirection == RightToLeft) {
+ *       if (alignment == Right)     alignment = Left;
+ *       else if (alignment == Left) alignment = Right;
+ *     }
+ *
+ * — in ReactCommon/.../RCTAttributedTextUtils.mm (New Architecture) and
+ * Libraries/Text/RCTTextAttributes.mm (old), so `textAlign: "right"` renders
+ * text against the LEFT edge of its box on an iPhone running this RTL app.
+ * Read out of the installed react-native rather than recalled (AGENTS.md), and
+ * visible in a device screenshot of the Messages tab: the "الرسائل" title and
+ * every company name sat on the left.
+ *
+ * Android has no equivalent. The one flag there that could do something like
+ * it — `doLeftAndRightSwapInRTL`, TRUE by default — rewrites `left`/`right`
+ * MARGINS and INSETS, never text alignment, and ensureRTL() turns it off for
+ * those anyway.
+ *
+ * Tested against `I18nManager.isRTL` — the ENGINE, not `uiIsRTL` — for the
+ * same reason `rowStart` is: the swap is a property of the layout direction
+ * actually running, which is LTR under Expo web even for an Arabic product.
+ */
+const textAlignFlips: boolean = Platform.OS === "ios" && I18nManager.isRTL;
+
+/**
+ * `textAlign` hugging the start edge — the value that PUTS the text there,
+ * which is not always the value that names that side (see above).
+ *
+ * The hardcoded `textAlign: "right"` still written across both apps' style
+ * sheets is exactly what this replaces: correct on Android, silently
+ * left-aligned on iOS.
+ */
+export const textStart: "left" | "right" = uiIsRTL === textAlignFlips ? "left" : "right";
 
 /**
  * `flexDirection` laying children END → START — the mirror of `rowStart`, for

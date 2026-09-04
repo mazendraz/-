@@ -15,6 +15,11 @@ import {
 } from "../lib/notifications";
 import { useLiveEvents, rowStart, textStart } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../lib/authGate";
+import {
+  decrementUnreadNotifications,
+  setUnreadNotifications,
+  useUnreadNotifications,
+} from "../lib/unreadStore";
 
 const DAY_MS = 86_400_000;
 
@@ -63,7 +68,12 @@ const TYPE_STYLE: Record<ApiCustomerNotificationType, { icon: IconName; tint: st
 export default function Notifications() {
   const customer = useRequireAccount("/notifications");
   const [rows, setRows] = useState<ApiCustomerNotification[] | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  // Held in lib/unreadStore rather than in local state, because the tab bar's
+  // حسابي badge draws the same number and this screen is the only thing that
+  // ever CLEARS it. Two copies would mean the badge kept a count the customer
+  // had just read away until the next 45s poll — the store makes the header's
+  // pill and the badge the same value by construction.
+  const unreadCount = useUnreadNotifications();
   const [prefs, setPrefs] = useState<{ marketingPushEnabled: boolean; marketingEmailEnabled: boolean } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -75,7 +85,7 @@ export default function Notifications() {
     try {
       const [res, p] = await Promise.all([fetchNotifications(), fetchNotificationPreferences()]);
       setRows(res.notifications);
-      setUnreadCount(res.unreadCount);
+      setUnreadNotifications(res.unreadCount);
       setPrefs(p);
     } catch {
       setError("تعذّر تحميل الإشعارات.");
@@ -98,7 +108,7 @@ export default function Notifications() {
   async function onOpen(n: ApiCustomerNotification) {
     if (!n.read) {
       setRows((prev) => prev?.map((r) => (r.id === n.id ? { ...r, read: true } : r)) ?? prev);
-      setUnreadCount((c) => Math.max(0, c - 1));
+      decrementUnreadNotifications();
       markNotificationRead(n.id).catch(() => {});
     }
     if (n.url) router.push(n.url as never);
@@ -106,7 +116,7 @@ export default function Notifications() {
 
   async function onMarkAllRead() {
     setRows((prev) => prev?.map((r) => ({ ...r, read: true })) ?? prev);
-    setUnreadCount(0);
+    setUnreadNotifications(0);
     markAllNotificationsRead().catch(() => {});
   }
 

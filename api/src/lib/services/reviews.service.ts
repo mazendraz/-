@@ -4,7 +4,7 @@
 import { prisma } from "@/lib/prisma";
 import { clampPage, clampPageSize } from "@/lib/utils/paging";
 import type { Prisma } from "@/generated/prisma/client";
-import { CompanyStatus, LeadStatus } from "@/generated/prisma/enums";
+import { CompanyStatus, LeadStatus, StaffNotificationType } from "@/generated/prisma/enums";
 import { serializeReview, serializeReviewAdmin } from "@/lib/utils/serialize";
 import { leadSecretMatches } from "@/lib/services/leads.service";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
@@ -31,6 +31,7 @@ async function notifyAdminsNewReview(companyId: string, rating: number, author: 
     // serverless function alive until both channels actually send.
     await Promise.allSettled([
       pushAdmins({
+        type: StaffNotificationType.REVIEW_SUBMITTED,
         title: "New review to approve",
         body: `${companyName} — ${"★".repeat(rating)} from ${author}`,
         url: "/admin",

@@ -14,6 +14,7 @@ import { SidebarBody } from "./components/SidebarBody";
 import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import NotificationBell from "../../components/NotificationBell";
 
 /**
  * NAV-06: the admin dashboard's 10 tabs used to be `useState` read once from
@@ -53,6 +54,7 @@ export default function AdminLayout() {
       title={topbarTitle}
       topbarActions={isAuthenticated() && (
         <>
+          <NotificationBell />
           <DashboardRefreshButton onRefresh={() => setRefreshKey((k) => k + 1)} />
           {/* DM-17: the label is `hidden sm:inline`, so below sm this is a bare
               glyph. `title` does not surface on touch — aria-label is what names

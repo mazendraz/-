@@ -9,6 +9,7 @@ import MenuButton from "../../components/MenuButton";
 import Logo from "../../components/Logo";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchThreadSummaries } from "../../lib/chat";
+import { setUnreadFromSummaries } from "../../lib/unreadStore";
 import { useLiveEvents, ApiError, rowStart, textStart, uiIsRTL, displayLine } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
 
@@ -54,6 +55,9 @@ export default function Messages() {
       const [leads, s] = await Promise.all([fetchAccountLeads(), fetchThreadSummaries()]);
       setRefByLeadId(new Map(leads.map((l) => [l.refNumber, l.id])));
       setSummaries(s);
+      // The tab bar's red badge reads the same numbers this list draws — hand
+      // them over rather than making it fetch the identical payload again.
+      setUnreadFromSummaries(s);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل المحادثات.");
     } finally {
@@ -125,13 +129,15 @@ export default function Messages() {
       <Text style={styles.title}>الرسائل</Text>
 
       {loading ? (
-        <View style={[styles.listContent, styles.card]}>
-          {[0, 1, 2, 3].map((i) => (
-            <View key={i}>
-              {i > 0 && <View style={styles.divider} />}
-              <SkeletonRow />
-            </View>
-          ))}
+        <View style={styles.listWrap}>
+          <View style={[styles.listContent, styles.card]}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i}>
+                {i > 0 && <View style={styles.divider} />}
+                <SkeletonRow />
+              </View>
+            ))}
+          </View>
         </View>
       ) : errorTakesOver ? (
         <View style={styles.stateWrap}>
@@ -158,41 +164,43 @@ export default function Messages() {
             </View>
           )}
 
-          <FlatList
-            data={rows}
-            keyExtractor={(row) => row.leadId}
-            contentContainerStyle={[
-              styles.listContent,
-              // The white sheet only exists where there are rows to sit on it;
-              // an empty list must not paint a full-height blank card.
-              rows.length > 0 ? styles.card : styles.listGrow,
-            ]}
-            ItemSeparatorComponent={() => <View style={styles.divider} />}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />
-            }
-            ListEmptyComponent={
-              <View style={styles.stateWrap}>
-                <View style={styles.stateIcon}>
-                  <Icon name="forum" size={26} color={colors.primary} />
+          <View style={styles.listWrap}>
+            <FlatList
+              data={rows}
+              keyExtractor={(row) => row.leadId}
+              contentContainerStyle={[
+                styles.listContent,
+                // The white sheet only exists where there are rows to sit on it;
+                // an empty list must not paint a full-height blank card.
+                rows.length > 0 ? styles.card : styles.listGrow,
+              ]}
+              ItemSeparatorComponent={() => <View style={styles.divider} />}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.primary} />
+              }
+              ListEmptyComponent={
+                <View style={styles.stateWrap}>
+                  <View style={styles.stateIcon}>
+                    <Icon name="forum" size={26} color={colors.primary} />
+                  </View>
+                  <Text style={styles.stateTitle}>لا توجد رسائل بعد</Text>
+                  <Text style={styles.stateBody}>لما تبعت طلب، تقدر تتواصل مع الشركة من هنا.</Text>
                 </View>
-                <Text style={styles.stateTitle}>لا توجد رسائل بعد</Text>
-                <Text style={styles.stateBody}>لما تبعت طلب، تقدر تتواصل مع الشركة من هنا.</Text>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <ConversationRow
-                summary={item.summary}
-                onPress={() =>
-                  router.push({
-                    pathname: "/chat/[leadId]",
-                    params: { leadId: item.leadId, companyName: item.summary.companyName },
-                  })
-                }
-              />
-            )}
-          />
+              }
+              renderItem={({ item }) => (
+                <ConversationRow
+                  summary={item.summary}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/chat/[leadId]",
+                      params: { leadId: item.leadId, companyName: item.summary.companyName },
+                    })
+                  }
+                />
+              )}
+            />
+          </View>
         </>
       )}
     </SafeAreaView>
@@ -304,6 +312,9 @@ const PRIMARY_TINT_PRESSED = "rgba(0, 85, 120, 0.09)";
 // One step lighter than colors.outlineVariant (#bfc7cf), which reads as a hard
 // outline when it repeats down a list of dividers.
 const HAIRLINE = colors.surfaceContainerHigh;
+// The unread count's circle. Named because its text needs the SAME number as
+// its lineHeight — see unreadText below for why that is what centres the digit.
+const UNREAD_BADGE_SIZE = 20;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
@@ -333,10 +344,30 @@ const styles = StyleSheet.create({
   },
 
   // ── List sheet ────────────────────────────────────────────────────────────
+  /**
+   * The side inset for the whole list, as PADDING on a plain View wrapping the
+   * FlatList — not as `marginHorizontal` on the list's own
+   * `contentContainerStyle`, which is where it used to live.
+   *
+   * That margin is what made the sheet sit off-centre on an iPhone: hard left
+   * gap, double-width gap on the right (measured on a device screenshot at
+   * roughly 0dp / 32dp instead of 16dp / 16dp). React Native's scroll view does
+   * not lay its content container out like an ordinary flex child — it drives
+   * that view's frame itself against the scrollable content size — so a
+   * horizontal margin there is not the symmetric inset it looks like, and under
+   * an RTL layout direction it collapses onto one side. Every other list in
+   * this app already insets with padding (requests.tsx, saved.tsx and
+   * notifications.tsx all use `padding` on the content container) and none of
+   * them drift; this screen was the only one using a margin, and the only one
+   * that looked wrong.
+   *
+   * The card keeps `marginBottom` — a VERTICAL margin on the content container
+   * is along the scroll axis, where it is just content size, and is unaffected.
+   */
+  listWrap: { flex: 1, paddingHorizontal: 16 },
   listContent: { paddingBottom: 24 },
   listGrow: { flexGrow: 1 },
   card: {
-    marginHorizontal: 16,
     marginBottom: 24,
     paddingBottom: 0,
     backgroundColor: colors.surfaceContainerLowest,
@@ -368,7 +399,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarUnread: { backgroundColor: colors.primary },
-  avatarText: { fontFamily: "Alexandria_700Bold", fontSize: type.body.fontSize, lineHeight: displayLine(type.body.fontSize), color: colors.primary },
+  avatarText: { fontFamily: "Alexandria_700Bold", fontSize: type.body.fontSize, lineHeight: displayLine(type.body.fontSize), color: colors.primary, textAlign: "center" },
   avatarTextUnread: { color: colors.onPrimary },
 
   rowBody: { flex: 1, gap: 3 },
@@ -381,19 +412,37 @@ const styles = StyleSheet.create({
   preview: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.label.fontSize, color: colors.outline, textAlign: textStart },
   previewUnread: { fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant },
   unreadBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
+    minWidth: UNREAD_BADGE_SIZE,
+    height: UNREAD_BADGE_SIZE,
+    borderRadius: UNREAD_BADGE_SIZE / 2,
     paddingHorizontal: 6,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
-  unreadText: { color: colors.onPrimary, fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize },
+  // The explicit lineHeight is what CENTRES the digit, and it is load-bearing
+  // rather than cosmetic leading. With none set, Android measures the <Text>
+  // with `includeFontPadding` on — it pads the box by the font's hhea line
+  // gap, which Cairo declares asymmetrically (a tall ascent for Arabic marks
+  // over a much shallower descent). `justifyContent: "center"` then centres
+  // that LOPSIDED box in the circle, and the digit inside it lands low. Naming
+  // any lineHeight replaces that padding with a symmetric line box, so the ink
+  // centres with the circle; the badge's own height is the natural value to
+  // name, and digits have no descender to clip. Same rule as TabBar.tsx's
+  // badgeText — see components/TabBar.tsx.
+  unreadText: {
+    color: colors.onPrimary,
+    fontFamily: "Cairo_700Bold",
+    fontSize: type.caption.fontSize,
+    lineHeight: UNREAD_BADGE_SIZE,
+    textAlign: "center",
+  },
 
   // ── Empty / error ─────────────────────────────────────────────────────────
-  stateWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 40, paddingBottom: 48 },
+  // 24, not 40: this sits inside listWrap's 16 now, so the text block keeps the
+  // same measure it had when the list carried no inset of its own.
+  stateWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 24, paddingBottom: 48 },
   stateIcon: {
     width: 56,
     height: 56,

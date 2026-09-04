@@ -1370,6 +1370,49 @@ export interface ApiNotificationsResponse {
   notifications: ApiNotification[];
 }
 
+// ── Staff (provider + admin): Notification Center ────────────────────────────
+// Backed by the real `StaffNotification` table — the staff counterpart of the
+// customer block below, and the persisted replacement for the DERIVED feed
+// above. The difference that matters: `ApiNotification` is recomputed from
+// recentActivity() on every request and therefore has no read state and no
+// history past its lookback window, while these rows are written at the moment
+// the push is sent (push.service.ts's three fan-outs) and carry real
+// server-side `read`.
+//
+// Shapes deliberately mirror ApiCustomerNotification rather than
+// ApiNotification: `url` (a relative in-app path, mapped to a native route by
+// the Business App's lib/deepLinks.ts) not `path` (a desktop-app route), and
+// `createdAt` not `occurredAt`, because these are delivery records with the
+// same lifecycle as the customer ones.
+
+export type ApiStaffNotificationType =
+  | "LEAD_NEW"
+  | "LEAD_STATUS"
+  | "LEAD_COMPLETED"
+  | "CHAT_MESSAGE"
+  | "CHANGE_REQUEST"
+  | "PROJECT_SUBMITTED"
+  | "REVIEW_SUBMITTED"
+  | "SYSTEM";
+
+export interface ApiStaffNotification {
+  id: string;
+  type: ApiStaffNotificationType;
+  title: string;
+  body: string;
+  /** Relative path to open on tap, or null. Server payloads name WEB dashboard
+   *  paths ("/provider?tab=messages"); the Business App maps them to native
+   *  routes in its own lib/deepLinks.ts. */
+  url: string | null;
+  read: boolean;
+  createdAt: number; // epoch ms
+}
+
+export interface ApiStaffNotificationsResponse {
+  notifications: ApiStaffNotification[];
+  unreadCount: number;
+}
+
 // ── Customer app: Notification Center ───────────────────────────────────────
 // Backed by the real `Notification` table (Prisma) — every push a customer
 // receives is also written here (see notifications.customer.service.ts's

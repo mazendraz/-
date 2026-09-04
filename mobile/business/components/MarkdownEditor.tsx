@@ -13,7 +13,21 @@ import { textStart } from "@alassema/mobile-shared";
  * hand-rolled renderer (no markdown package — this is the only place in the
  * app that would ever need one).
  */
-export default function MarkdownEditor({ value, onChange, minHeight = 200 }: { value: string; onChange: (next: string) => void; minHeight?: number }) {
+export default function MarkdownEditor({
+  value,
+  onChange,
+  minHeight = 200,
+  placeholder,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  minHeight?: number;
+  /** Shown while empty. Worth passing: `placeholderTextColor` was already set
+   *  here but no `placeholder` ever was, so an unfilled page rendered as a bare
+   *  grey box with nothing to say whether it was empty by choice or failed to
+   *  load. */
+  placeholder?: string;
+}) {
   const [preview, setPreview] = useState(false);
 
   function append(snippet: string) {
@@ -48,7 +62,8 @@ export default function MarkdownEditor({ value, onChange, minHeight = 200 }: { v
           onChangeText={onChange}
           multiline
           textAlignVertical="top"
-          placeholderTextColor={colors.onSurfaceVariant}
+          placeholder={placeholder}
+          placeholderTextColor={colors.outline}
         />
       )}
     </View>

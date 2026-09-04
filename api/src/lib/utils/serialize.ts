@@ -18,6 +18,7 @@ import type {
   OfferingTier,
   Project,
   Review,
+  StaffNotification,
   Transaction,
   TransactionCategory,
   WaitlistEntry,
@@ -29,6 +30,7 @@ import type {
   ApiClient,
   ApiCompany,
   ApiCustomerNotification,
+  ApiStaffNotification,
   ApiFinancialAccount,
   ApiLead,
   ApiLeadCompletion,
@@ -391,6 +393,20 @@ export type WaitlistEntryWithCompany = WaitlistEntry & {
 };
 
 export function serializeCustomerNotification(n: Notification): ApiCustomerNotification {
+  return {
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    body: n.body,
+    url: n.url ?? null,
+    read: n.read,
+    createdAt: toEpochMs(n.createdAt),
+  };
+}
+
+/** Staff counterpart of serializeCustomerNotification — same shape, different
+ *  table and enum (see StaffNotification in prisma/schema.prisma). */
+export function serializeStaffNotification(n: StaffNotification): ApiStaffNotification {
   return {
     id: n.id,
     type: n.type,

@@ -591,9 +591,64 @@ model User {
   pushSubscriptions PushSubscription[]
   pushDevices       PushDevice[]
   staffSessions     StaffSession[]
+  notifications     StaffNotification[]
 
   @@index([email])
   @@index([companyId])
+}
+
+enum StaffNotificationType {
+  LEAD_NEW
+  LEAD_STATUS
+  LEAD_COMPLETED
+  CHAT_MESSAGE
+  CHANGE_REQUEST
+  PROJECT_SUBMITTED
+  REVIEW_SUBMITTED
+  SYSTEM
+}
+
+// Staff counterpart of `Notification` (which is customerId-only). The gap this
+// closes was documented in api/src/app/api/admin/notifications/route.ts: that
+// route derives a feed from `recentActivity()` because "building a REAL
+// notification feed with server-side read receipts would need a new
+// Notification table — a real `prisma migrate dev` migration", which the
+// environment that wrote it could not run. So staff had a bell with no read
+// state, no history beyond the lookback window, and nothing at all on the
+// Business App. This is that table.
+//
+// ── Why a separate model instead of making Notification polymorphic ─────────
+// `Notification.customerId` is a non-null FK with a cascade to CustomerUser and
+// an index built around it. Making it nullable to fit a second audience would
+// weaken that constraint for the audience it already serves correctly, and every
+// existing customer query would grow an `AND userId IS NULL` it does not need.
+// Two tables, each with a real FK, is the cheaper correctness.
+//
+// ── Why rows are written in push.service, not at the five call sites ────────
+// push.service.ts's own comment already argues this for transport: "there are
+// five services that notify, and 'someone added push to the mobile app' must
+// not become 'someone has to remember to add a second call in five places'."
+// Persistence has exactly the same shape, so it lives in the same fan-out —
+// which is what keeps the in-app list from ever drifting from what was pushed.
+model StaffNotification {
+  id        String                @id @default(uuid())
+  userId    String
+  type      StaffNotificationType
+  title     String
+  body      String
+  // Relative path to open on tap. Server payloads name WEB dashboard paths
+  // ("/provider?tab=messages"); the Business App maps them to native routes in
+  // its own lib/deepLinks.ts, so this stays the single stored form.
+  url       String?
+  read      Boolean               @default(false)
+  createdAt DateTime              @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Serves the list (WHERE userId=? ORDER BY createdAt DESC) and the unread
+  // badge (WHERE userId=? AND read=false) from one index — same shape as
+  // Notification's own (customerId, read, createdAt).
+  @@index([userId, read, createdAt])
 }
 
 // Long-lived device sessions for the staff (Business App) mobile client —

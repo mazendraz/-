@@ -3,15 +3,21 @@ import type { Company } from "./catalog";
 import type { ApiLeadStats } from "./apiTypes";
 import { t, type Locale } from "./i18n";
 import { intlLocale } from "./format";
+// Business definitions live in the shared package so the website and the
+// Business App can never disagree on what a number means — see that module's
+// header. Imported (not just re-exported) because this file still uses them.
+import {
+  STATUS_HEX,
+  deltaPercent,
+  statsConversion as coreConversion,
+  statsFunnel as coreFunnel,
+} from "@alassema/core";
 
 // ── Status colors (hex — for charts) ────────────────────────────────────────
-export const STATUS_HEX: Record<LeadStatus, string> = {
-  New: "#2563eb",
-  Contacted: "#ca8a04",
-  "In Progress": "#ea580c",
-  Completed: "#16a34a",
-  Cancelled: "#9aa0a6",
-};
+// Re-exported from @alassema/core rather than declared here: the Business App
+// renders the same status breakdown, and two copies of a colour map is how the
+// two surfaces drift. Same values as before.
+export { STATUS_HEX };
 
 export type Point = { label: string; value: number; key?: string };
 export type Segment = { label: string; value: number; color: string; key?: string };
@@ -142,10 +148,7 @@ export function periodDelta(leads: Lead[], days = 7): number {
   return deltaPercent(current, previous);
 }
 
-function deltaPercent(current: number, previous: number): number {
-  if (previous === 0) return current > 0 ? 100 : 0;
-  return Math.round(((current - previous) / previous) * 100);
-}
+
 
 // ── Server-aggregate adapters ────────────────────────────────────────────────
 //
@@ -204,16 +207,25 @@ export function statsByStatus(stats: ApiLeadStats, locale: Locale): Segment[] {
  * stage exceeded its earlier one would read as nonsense.
  */
 export function statsFunnel(stats: ApiLeadStats, locale: Locale): Segment[] {
-  const s = stats.byStatus;
-  const completed = s.Completed ?? 0;
-  const inProgress = (s["In Progress"] ?? 0) + completed;
-  const contacted = (s.Contacted ?? 0) + inProgress;
-  return [
-    { label: t(locale, "chart_funnel_received"), value: stats.total, color: "#005578" },
-    { label: t(locale, "lead_status_contacted"), value: contacted, color: "#0b6e99" },
-    { label: t(locale, "lead_status_in_progress"), value: inProgress, color: "#ea580c" },
-    { label: t(locale, "lead_status_completed"), value: completed, color: "#16a34a" },
-  ];
+  // Counts from core (the shared definition of the funnel's cumulative math);
+  // labels and colours stay here, where this app's i18n lives.
+  const LABEL = {
+    received: "chart_funnel_received",
+    contacted: "lead_status_contacted",
+    inProgress: "lead_status_in_progress",
+    completed: "lead_status_completed",
+  } as const;
+  const COLOR = {
+    received: "#005578",
+    contacted: "#0b6e99",
+    inProgress: "#ea580c",
+    completed: "#16a34a",
+  } as const;
+  return coreFunnel(stats).map((stage) => ({
+    label: t(locale, LABEL[stage.key]),
+    value: stage.value,
+    color: COLOR[stage.key],
+  }));
 }
 
 /** Top companies by volume (admin only — empty on the provider endpoint). */
@@ -228,5 +240,5 @@ export function statsDelta(stats: ApiLeadStats): number {
 /** Completion rate over the WHOLE table — the number the capped client-side
  *  version got wrong, because its denominator was one page. */
 export function statsConversion(stats: ApiLeadStats): number {
-  return stats.total ? Math.round(((stats.byStatus.Completed ?? 0) / stats.total) * 100) : 0;
+  return coreConversion(stats);
 }

@@ -9,32 +9,50 @@ export default function MoneyField({
   value,
   onChangeValue,
   error,
+  hint,
+  editable = true,
 }: {
   label: string;
   value: string;
   onChangeValue: (v: string) => void;
   error?: string;
+  /** Explains where the number came from, or what to enter. */
+  hint?: string;
+  /** False renders the amount as a settled figure rather than an input — used
+   *  where the catalogue already fixed the price and the provider is
+   *  confirming it, not composing it. */
+  editable?: boolean;
 }) {
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
-      <View style={[styles.row, error ? styles.rowError : null]}>
+      <View style={[styles.row, !editable && styles.rowReadOnly, error ? styles.rowError : null]}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, !editable && styles.inputReadOnly]}
           value={value}
           onChangeText={(v) => onChangeValue(v.replace(/[^0-9]/g, ""))}
           keyboardType="number-pad"
           placeholder="0"
           placeholderTextColor={colors.onSurfaceVariant}
+          editable={editable}
         />
         <Text style={styles.suffix}>ج.م</Text>
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : hint ? <Text style={styles.hint}>{hint}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  rowReadOnly: { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant },
+  inputReadOnly: { color: colors.onSurfaceVariant },
+  hint: {
+    fontSize: type.caption.fontSize,
+    fontFamily: "Cairo_400Regular",
+    color: colors.outline,
+    marginTop: 6,
+    textAlign: textStart,
+  },
   label: {
     fontSize: type.label.fontSize,
     fontFamily: "Cairo_600SemiBold",

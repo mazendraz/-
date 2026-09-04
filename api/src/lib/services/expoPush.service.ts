@@ -59,6 +59,13 @@ async function sendToTokens(tokens: string[], payload: PushPayload): Promise<num
       // counterpart of the service worker's notificationclick URL.
       data: payload.url ? { url: payload.url } : undefined,
       sound: "default",
+      // Android 8+ gives the CHANNEL, not the message, the final say over
+      // whether a notification may show a banner or make a sound. A message
+      // with no channelId lands on expo-notifications' unnamed fallback
+      // channel; this names the high-importance one both apps create at
+      // startup (ANDROID_CHANNEL_ID in packages/mobile-shared/src/push.ts —
+      // the two strings must stay equal). Ignored by iOS.
+      channelId: "default",
       // No per-account unread count to reconcile against (no Notification/
       // read-state table yet), so this is deliberately a fixed "something's
       // waiting" flag rather than an accumulating count — the client resets

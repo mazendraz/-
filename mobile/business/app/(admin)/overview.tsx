@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiLead, ApiLeadStats } from "@alassema/core";
@@ -71,24 +71,63 @@ export default function AdminOverview() {
       >
         {maintenanceOn ? <MaintenanceBanner /> : null}
 
+        {/* Each tile opens the list that explains its own number — the status
+            strings are ApiLeadStatus values, so the query is one the server
+            actually supports. */}
         <View style={styles.kpiRow}>
           <KpiTile
             label="إجمالي الطلبات"
             value={stats?.total ?? 0}
             deltaPercent={stats?.recent ? deltaPercent(stats.recent.current, stats.recent.previous) : undefined}
+            onPress={() => router.push("/(admin)/leads")}
+            accessibilityHint="يفتح كل الطلبات"
           />
-          <KpiTile label="جديد" value={stats?.byStatus.New ?? 0} />
+          <KpiTile
+            label="جديد"
+            value={stats?.byStatus.New ?? 0}
+            onPress={() => router.push("/(admin)/leads?status=New")}
+            accessibilityHint="يفتح الطلبات الجديدة"
+          />
         </View>
         <View style={styles.kpiRow}>
-          <KpiTile label="قيد التنفيذ" value={stats?.byStatus["In Progress"] ?? 0} />
-          <KpiTile label="مكتمل" value={stats?.byStatus.Completed ?? 0} />
+          <KpiTile
+            label="قيد التنفيذ"
+            value={stats?.byStatus["In Progress"] ?? 0}
+            onPress={() => router.push("/(admin)/leads?status=In%20Progress")}
+            accessibilityHint="يفتح الطلبات قيد التنفيذ"
+          />
+          <KpiTile
+            label="مكتمل"
+            value={stats?.byStatus.Completed ?? 0}
+            onPress={() => router.push("/(admin)/leads?status=Completed")}
+            accessibilityHint="يفتح الطلبات المكتملة"
+          />
         </View>
         {stats?.catalog ? (
           <View style={styles.kpiRow}>
-            <KpiTile label="شركات نشطة" value={`${stats.catalog.activeCompanies} / ${stats.catalog.companies}`} />
-            <KpiTile label="تصنيفات" value={stats.catalog.categories} />
+            <KpiTile
+              label="شركات نشطة"
+              value={`${stats.catalog.activeCompanies} / ${stats.catalog.companies}`}
+              onPress={() => router.push("/(admin)/companies")}
+              accessibilityHint="يفتح الشركات"
+            />
+            <KpiTile
+              label="تصنيفات"
+              value={stats.catalog.categories}
+              onPress={() => router.push("/categories")}
+              accessibilityHint="يفتح التصنيفات"
+            />
           </View>
         ) : null}
+
+        <Pressable
+          style={({ pressed }) => [styles.analyticsCta, pressed && styles.analyticsCtaPressed]}
+          onPress={() => router.push("/analytics")}
+          accessibilityRole="button"
+        >
+          <Text style={styles.analyticsCtaText}>عرض التحليلات</Text>
+          <Text style={styles.analyticsCtaChevron}>‹</Text>
+        </Pressable>
 
         {stats?.perDay ? <LeadsChart perDay={stats.perDay} /> : null}
 
@@ -135,6 +174,18 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12 },
   kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  analyticsCta: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  analyticsCtaPressed: { opacity: 0.85 },
+  analyticsCtaText: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onPrimary },
+  analyticsCtaChevron: { fontSize: type.title.fontSize, color: colors.onPrimary },
   sectionTitle: {
     fontSize: type.title.fontSize,
     fontFamily: "Alexandria_700Bold",

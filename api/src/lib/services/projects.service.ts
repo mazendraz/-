@@ -2,7 +2,7 @@
 // Moderation: provider-submitted projects are PENDING until an admin APPROVES
 // them; only APPROVED projects appear publicly.
 import { prisma } from "@/lib/prisma";
-import { CompanyStatus, ProjectStatus } from "@/generated/prisma/enums";
+import { CompanyStatus, ProjectStatus, StaffNotificationType } from "@/generated/prisma/enums";
 import { serializeProjectAdmin } from "@/lib/utils/serialize";
 import { NotFoundError } from "@/lib/utils/errors";
 import { notifyAdmins as pushAdmins } from "@/lib/services/push.service";
@@ -31,6 +31,7 @@ async function notifyAdminsPendingProject(project: ApiProject, companyId: string
     // serverless function alive until both channels actually send.
     await Promise.allSettled([
       pushAdmins({
+        type: StaffNotificationType.PROJECT_SUBMITTED,
         title: "New project for review",
         body: `${companyName}: “${project.title}” needs approval`,
         url: "/admin",

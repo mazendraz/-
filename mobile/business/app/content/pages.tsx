@@ -49,11 +49,19 @@ export default function LegalPages() {
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View>
               <Text style={styles.label}>الشروط والأحكام</Text>
-              <MarkdownEditor value={pages.terms} onChange={(v) => setPages({ ...pages, terms: v })} />
+              <MarkdownEditor
+                value={pages.terms}
+                onChange={(v) => setPages({ ...pages, terms: v })}
+                placeholder="اكتب نص الشروط والأحكام هنا… يدعم Markdown (عناوين، نص عريض، روابط)."
+              />
             </View>
             <View>
               <Text style={styles.label}>سياسة الخصوصية</Text>
-              <MarkdownEditor value={pages.privacy} onChange={(v) => setPages({ ...pages, privacy: v })} />
+              <MarkdownEditor
+                value={pages.privacy}
+                onChange={(v) => setPages({ ...pages, privacy: v })}
+                placeholder="اكتب نص سياسة الخصوصية هنا… يدعم Markdown (عناوين، نص عريض، روابط)."
+              />
             </View>
             <Button label={saving ? "بيتحفظ..." : "حفظ"} onPress={handleSave} busy={saving} />
           </ScrollView>

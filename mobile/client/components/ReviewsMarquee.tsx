@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  avatarText: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onPrimary },
+  avatarText: { fontFamily: "Cairo_700Bold", fontSize: type.body.fontSize, color: colors.onPrimary, textAlign: "center" },
   identity: { flexShrink: 1 },
   name: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onSurface, textAlign: textStart },
   district: { fontFamily: "Cairo_400Regular", fontSize: 11, color: colors.outline, textAlign: textStart, marginTop: 1 },

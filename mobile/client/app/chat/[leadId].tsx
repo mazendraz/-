@@ -15,6 +15,7 @@ import { colors, type } from "@alassema/core";
 import Icon from "../../components/Icon";
 import MenuButton from "../../components/MenuButton";
 import { fetchThread, sendMessage } from "../../lib/chat";
+import { refreshUnreadMessages } from "../../lib/unreadStore";
 import { useLiveEvents, ApiError, rowStart } from "@alassema/mobile-shared";
 
 /**
@@ -43,6 +44,11 @@ export default function Chat() {
     try {
       const thread = await fetchThread(leadId);
       setMessages(thread.messages);
+      // A full read (no `after` cursor) zeroes this conversation's
+      // customerUnread server-side — see api's customer/leads/[id]/messages
+      // route calling chat.markRead. Re-ask for the totals so the tab badge
+      // drops the moment the thread opens instead of a poll later.
+      void refreshUnreadMessages();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل المحادثة.");
     } finally {

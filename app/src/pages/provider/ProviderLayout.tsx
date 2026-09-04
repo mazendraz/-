@@ -11,6 +11,7 @@ import DashboardRefreshButton from "../../components/DashboardRefreshButton";
 import SidebarNav from "../../components/SidebarNav";
 import Logo from "../../components/Logo";
 import Icon from "../../components/Icon";
+import NotificationBell from "../../components/NotificationBell";
 import Select from "../../components/Select";
 import { useLocale } from "../../context/LocaleContext";
 import { t } from "../../lib/i18n";
@@ -140,6 +141,7 @@ export default function ProviderLayout() {
       title={topbarTitle}
       topbarActions={isAuthenticated() && (
         <>
+          <NotificationBell />
           <DashboardRefreshButton onRefresh={() => setRefreshKey((k) => k + 1)} />
           {/* DM-17: label is `hidden sm:inline` below sm — see AdminLayout. */}
           <button onClick={() => logout()} title={t(locale, "prov_sign_out")} aria-label={t(locale, "prov_sign_out")} className="flex items-center gap-1.5 bg-surface-container text-on-surface px-3 py-2 min-h-[44px] rounded-xl font-bold text-label hover:bg-surface-container-high transition-colors touch-press btn-press flex-shrink-0">

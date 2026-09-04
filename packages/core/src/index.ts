@@ -12,3 +12,7 @@ export * from "./plural";
 export * from "./theme";
 export * from "./phone";
 export * from "./districts";
+// Analytics business definitions (conversion, funnel, deltas) + the chart
+// palette — shared so the website and the Business App can never disagree on
+// what a number means. See the module's own header.
+export * from "./analytics";

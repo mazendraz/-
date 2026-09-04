@@ -9,6 +9,7 @@ import { fetchReport, REPORT_TYPES } from "../../lib/controlReports";
 import PermissionGate from "../../components/PermissionGate";
 import ReportTable from "../../components/ReportTable";
 import TruncatedNotice from "../../components/TruncatedNotice";
+import { ChipBar, Chip } from "../../components/ChipBar";
 import { ListSkeleton, ErrorCard, EmptyCard } from "../../components/ListStates";
 
 export default function Reports() {
@@ -35,13 +36,16 @@ export default function Reports() {
       <Stack.Screen options={{ headerShown: true, title: "التقارير" }} />
       <PermissionGate permission="reports:read">
         <SafeAreaView style={styles.container} edges={["bottom"]}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
+          <ChipBar>
             {REPORT_TYPES.map((t) => (
-              <Pressable key={t.value} onPress={() => selectType(t.value)} style={[styles.typeChip, type === t.value && styles.typeChipActive]}>
-                <Text style={[styles.typeChipLabel, type === t.value && styles.typeChipLabelActive]}>{t.label}</Text>
-              </Pressable>
+              <Chip
+                key={t.value}
+                label={t.label}
+                active={type === t.value}
+                onPress={() => selectType(t.value)}
+              />
             ))}
-          </ScrollView>
+          </ChipBar>
 
           {!type ? (
             <EmptyCard title="اختر نوع التقرير" message="اضغط على أحد الأنواع فوق عشان يتولّد التقرير." />
@@ -68,11 +72,6 @@ export default function Reports() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  typeRow: { flexDirection: "row-reverse", gap: 8, padding: 16, paddingBottom: 8 },
-  typeChip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, backgroundColor: colors.surfaceContainer },
-  typeChipActive: { backgroundColor: colors.primary },
-  typeChipLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
-  typeChipLabelActive: { color: colors.onPrimary },
   content: { padding: 16, paddingTop: 4, gap: 10 },
   reportTitle: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface },
   reportDescription: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant },

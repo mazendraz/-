@@ -3,10 +3,11 @@ import type { TextStyle } from "react-native";
 import { router, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, type } from "@alassema/core";
-import { rowStart, bodyLine } from "@alassema/mobile-shared";
+import { rowStart, bodyLine, uiIsRTL } from "@alassema/mobile-shared";
 import Icon from "./Icon";
 import { activeTab, TABS, type TabDef } from "../lib/navShell";
 import { useCustomerAuth } from "../lib/customerAuth";
+import { useUnreadMessages, useUnreadNotifications } from "../lib/unreadStore";
 import { showGuestPrompt } from "../lib/authGate";
 
 /**
@@ -67,6 +68,22 @@ const CARD_RADIUS = 24;
 // blue. Written out rather than composed because RN takes no color-mix.
 const ACTIVE_PILL_BG = "rgba(0, 85, 120, 0.12)";
 
+// ── Unread badge ────────────────────────────────────────────────────────────
+// The red count that rides on a tab's icon — the same affordance the Business
+// App gets for free from react-navigation's `tabBarBadge` (see mobile/business
+// app/(admin)/_layout.tsx's الموافقات tab). This bar is hand-drawn, so it has
+// to draw its own.
+//
+// 18 tall, not 20: it sits INSIDE the 32-tall pill's top corner, and anything
+// larger reads as a second element beside the icon rather than a marker on it.
+const BADGE_SIZE = 18;
+// Past 99 the number stops being information and starts being a wide pill that
+// unbalances the row — every messaging app caps it for the same reason.
+const BADGE_MAX = 99;
+// The icon is 24 wide inside a 54-wide pill, so its edge is at (54-24)/2 = 15.
+// 9 puts the badge's own edge just outside the glyph, overlapping its corner.
+const BADGE_INSET = 9;
+
 /**
  * The soft lift under each glyph — a shadow on the ICON only, which is what
  * gives the row its slight relief without putting a single extra shape on
@@ -102,11 +119,23 @@ function tabIconLift(focused: boolean): TextStyle {
   return focused ? lift.active : lift.idle;
 }
 
+/** Which count, if any, rides on a given tab's icon. 0 draws nothing. */
+function badgeFor(href: TabDef["href"], messages: number, notifications: number): number {
+  if (href === "/messages") return messages;
+  if (href === "/account") return notifications;
+  return 0;
+}
+
 export default function TabBar() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { customer } = useCustomerAuth();
   const current = activeTab(pathname);
+  // Kept current by (tabs)/_layout.tsx's useBadgeCountsSync — this bar only
+  // reads. Both are zero while signed out, so the guarded tabs never show a
+  // stranger's count.
+  const unreadMessages = useUnreadMessages();
+  const unreadNotifications = useUnreadNotifications();
 
   function onPress(tab: TabDef) {
     // The guest guards, carried over verbatim from the `tabPress` listeners
@@ -166,13 +195,26 @@ export default function TabBar() {
             {TABS.map((tab) => {
               const focused = current?.href === tab.href;
               const tint = focused ? colors.primary : colors.outline;
+              // The lookup the comment above used to promise: a badged tab
+              // is one entry here, not a second copy of the markup.
+              //
+              // حسابي carries the NOTIFICATION count because that is the tab
+              // the notification centre lives one tap inside — (tabs)/
+              // account.tsx's الإشعارات row is its only entry point, so the
+              // count is cleared by the same tap that reveals it. The lead
+              // notifications are deliberately NOT split onto طلباتي for the
+              // opposite reason: opening that tab reads nothing, so a badge
+              // there would light up and never go out.
+              const badge = badgeFor(tab.href, unreadMessages, unreadNotifications);
 
               return (
                 <Pressable
                   key={tab.href}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: focused }}
-                  accessibilityLabel={tab.label}
+                  accessibilityLabel={
+                    badge > 0 ? `${tab.label} — ${badge} غير مقروءة` : tab.label
+                  }
                   onPress={() => onPress(tab)}
                   // borderless, so no hard rectangle appears on a bar that has
                   // no dividers — the clip above is what keeps it inside the
@@ -184,6 +226,13 @@ export default function TabBar() {
                     <View style={[styles.itemInner, pressed && styles.itemPressed]}>
                       <View style={[styles.pill, focused && styles.pillActive]}>
                         <Icon name={tab.icon} color={tint} size={ICON_SIZE} style={tabIconLift(focused)} />
+                        {badge > 0 && (
+                          <View style={styles.badge} pointerEvents="none">
+                            <Text style={styles.badgeText} numberOfLines={1}>
+                              {badge > BADGE_MAX ? `${BADGE_MAX}+` : String(badge)}
+                            </Text>
+                          </View>
+                        )}
                       </View>
                       <Text numberOfLines={1} style={[styles.label, { color: tint }, focused && styles.labelActive]}>
                         {tab.label}
@@ -250,6 +299,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pillActive: { backgroundColor: ACTIVE_PILL_BG },
+  badge: {
+    position: "absolute",
+    // -1, not 0: the badge's own border laps over the pill's top edge, which
+    // is what makes it read as sitting ON the icon rather than beside it.
+    top: -1,
+    // PHYSICAL left/right, chosen by the UI's direction — not `start`/`end`.
+    // ensureRTL() calls I18nManager.swapLeftAndRightInRTL(false) (see
+    // packages/mobile-shared/src/rtl.ts), so `left` means left on both
+    // platforms and in both engines, while a logical inset would resolve
+    // against the ENGINE — which is LTR in Expo web and RTL on a device, i.e.
+    // the badge would jump sides between the two. RTL puts it on the icon's
+    // LEFT corner, matching where react-navigation's own tabBarBadge lands in
+    // an RTL app (the Business App screenshot this mirrors).
+    ...(uiIsRTL ? { left: BADGE_INSET } : { right: BADGE_INSET }),
+    minWidth: BADGE_SIZE,
+    height: BADGE_SIZE,
+    borderRadius: BADGE_SIZE / 2,
+    paddingHorizontal: 5,
+    backgroundColor: colors.error,
+    alignItems: "center",
+    justifyContent: "center",
+    // A ring in the card's own color, so the badge stays legible where it
+    // overlaps the dark glyph underneath it.
+    borderWidth: 2,
+    borderColor: colors.surfaceContainerLowest,
+  },
+  badgeText: {
+    color: colors.onError,
+    fontFamily: "Cairo_700Bold",
+    // Two points under the caption size: this is a marker, not a label, and at
+    // caption size "12" alone is as wide as the pill it sits on.
+    fontSize: type.caption.fontSize - 2,
+    lineHeight: BADGE_SIZE - 4,
+    textAlign: "center",
+  },
   label: {
     fontFamily: "Cairo_500Medium",
     fontSize: type.caption.fontSize,

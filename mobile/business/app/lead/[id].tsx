@@ -14,6 +14,7 @@ import { useStaffAuth } from "../../lib/staffAuth";
 import StatusPill from "../../components/StatusPill";
 import StatusSheet from "../../components/StatusSheet";
 import ItemsTable from "../../components/ItemsTable";
+import Icon from "../../components/Icon";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
 import { formatEgp } from "../../lib/money";
 
@@ -77,10 +78,6 @@ export default function LeadDetail() {
 
   function call() {
     if (lead) Linking.openURL(`tel:${lead.phone}`).catch(() => {});
-  }
-
-  function whatsapp() {
-    if (lead) Linking.openURL(`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`).catch(() => {});
   }
 
   async function openChat() {
@@ -153,15 +150,33 @@ export default function LeadDetail() {
               <InfoRow label="الاسم" value={lead.name} />
               <InfoRow label="الحي" value={lead.district} />
               <InfoRow label="الهاتف" value={lead.phone} />
+              {/* Two channels only, both first-party: the in-app thread and the
+                  device dialer. WhatsApp used to sit between them, which sent
+                  the conversation somewhere the platform cannot see — no
+                  thread, no moderation, no record on the lead. `رسالة` is the
+                  filled/primary action because the in-app thread is the one
+                  the product can actually support. */}
               <View style={styles.contactRow}>
-                <Pressable style={styles.contactBtn} onPress={call}>
+                <Pressable
+                  style={({ pressed }) => [styles.contactBtn, styles.contactBtnPrimary, pressed && styles.contactBtnPressed]}
+                  onPress={openChat}
+                  disabled={openingChat}
+                  accessibilityRole="button"
+                  accessibilityLabel="فتح محادثة العميل"
+                >
+                  <Icon name="chat" size={18} color={colors.onPrimary} />
+                  <Text style={[styles.contactBtnLabel, styles.contactBtnLabelPrimary]}>
+                    {openingChat ? "..." : "رسالة"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.contactBtn, pressed && styles.contactBtnPressed]}
+                  onPress={call}
+                  accessibilityRole="button"
+                  accessibilityLabel={`اتصال بالعميل ${lead.phone}`}
+                >
+                  <Icon name="call" size={18} color={colors.onPrimaryContainer} />
                   <Text style={styles.contactBtnLabel}>اتصال</Text>
-                </Pressable>
-                <Pressable style={styles.contactBtn} onPress={whatsapp}>
-                  <Text style={styles.contactBtnLabel}>واتساب</Text>
-                </Pressable>
-                <Pressable style={styles.contactBtn} onPress={openChat} disabled={openingChat}>
-                  <Text style={styles.contactBtnLabel}>{openingChat ? "..." : "رسالة"}</Text>
                 </Pressable>
               </View>
             </Section>
@@ -285,9 +300,24 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 8 },
   infoLabel: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant },
   infoValue: { fontSize: type.body.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurface },
-  contactRow: { flexDirection: "row-reverse", gap: 10, marginTop: 6 },
-  contactBtn: { flex: 1, backgroundColor: colors.primaryContainer, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  contactRow: { flexDirection: "row-reverse", gap: 10, marginTop: 10 },
+  contactBtn: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.primaryContainer,
+    borderRadius: 12,
+    // 48px — a comfortable target, and equal for both so neither reads as
+    // secondary by accident.
+    minHeight: 48,
+    paddingHorizontal: 12,
+  },
+  contactBtnPrimary: { backgroundColor: colors.primary },
+  contactBtnPressed: { opacity: 0.75 },
   contactBtnLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimaryContainer },
+  contactBtnLabelPrimary: { color: colors.onPrimary },
   description: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, lineHeight: 22, textAlign: textStart },
   estimateTotal: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary, marginTop: 8, textAlign: textStart },
   inspectionNote: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },

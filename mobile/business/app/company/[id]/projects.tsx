@@ -7,7 +7,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import type { ApiProject } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
-import { fetchCompanyDetail, addCompanyProject } from "../../../lib/adminCompanies";
+import { fetchCompanyProjects, fetchCompanyDetail, addCompanyProject } from "../../../lib/adminCompanies";
 import { deleteProject } from "../../../lib/approvals";
 import { uploadAdminImage } from "../../../lib/adminUpload";
 import Button from "../../../components/Button";
@@ -32,10 +32,18 @@ export default function CompanyProjects() {
     if (!id) return;
     if (!silent) setError(null);
     try {
-      const company = await fetchCompanyDetail(id);
+      // Two calls on purpose. The detail payload carries the NAME (for the
+      // header) but serializes its `projects` publicly — no `id` — so the list
+      // has to come from the admin projects route instead, which returns
+      // `id`/`status`. Reading `company.projects` here is what gave every row
+      // key={undefined} and a delete button with an undefined id.
+      const [company, rows] = await Promise.all([
+        fetchCompanyDetail(id),
+        fetchCompanyProjects(id),
+      ]);
       if (!company) throw new ApiError(404, "الشركة مش لاقيها.");
       setCompanyName(company.name);
-      setProjects(company.projects);
+      setProjects(rows);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل المعرض. جرّب تاني.");
     } finally {

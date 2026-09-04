@@ -10,7 +10,10 @@ const TYPE_LABEL: Record<ApiTransaction["type"], string> = {
   ADJUSTMENT: "تسوية",
 };
 
-const STATUS_LABEL: Record<ApiTransaction["status"], { label: string; tone: "pending" | "collected" | "disputed" | "void" }> = {
+/** Shared with the transaction DETAIL screen, which was rendering the raw enum
+ *  ("PENDING") while every list row beside it said "معلّقة". Exported rather
+ *  than duplicated so the two can't drift apart again. */
+export const STATUS_LABEL: Record<ApiTransaction["status"], { label: string; tone: "pending" | "collected" | "disputed" | "void" }> = {
   PENDING: { label: "معلّقة", tone: "pending" },
   COLLECTED: { label: "محصّلة", tone: "collected" },
   DISPUTED: { label: "متنازع عليها", tone: "disputed" },

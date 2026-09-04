@@ -5,6 +5,7 @@ import {
   CompanyStatus,
   LeadStatus,
   LeadVerificationStatus,
+  StaffNotificationType,
   TransactionStatus,
   TransactionType,
 } from "@/generated/prisma/enums";
@@ -311,12 +312,14 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
           // closed. Bodies stay lean (no PII on a lockscreen); the click opens
           // the dashboard for the full record.
           pushCompanyProviders(company.id, {
+            type: StaffNotificationType.LEAD_NEW,
             title: "New lead — Al Assema",
             body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
             url: "/provider",
             tag: `lead-${serialized.id}`,
           }),
           pushAdmins({
+            type: StaffNotificationType.LEAD_NEW,
             title: `New lead — ${company.name}`,
             body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
             url: "/admin",

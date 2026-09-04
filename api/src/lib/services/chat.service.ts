@@ -8,7 +8,7 @@ import * as audit from "@/lib/services/audit.service";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import { notifyCompanyProviders, notifyAdmins as pushAdmins } from "@/lib/services/push.service";
 import { notifyCustomer } from "@/lib/services/notifications.customer.service";
-import { NotificationType } from "@/generated/prisma/enums";
+import { NotificationType, StaffNotificationType } from "@/generated/prisma/enums";
 import {
   ADMIN_CHANNEL,
   channelForCompany,
@@ -394,8 +394,11 @@ export async function postMessage(params: {
  * Push + Telegram for a just-posted message, run after the response is sent
  * (see runAfterResponse) so a slow or failing channel never delays the send
  * itself. CUSTOMER → provider + admin (the admin heads-up mirrors the lead
- * notification pattern); ADMIN stepping in → provider only; PROVIDER →
- * the customer's own devices, IF the lead has an account attached.
+ * notification pattern); PROVIDER → the customer; ADMIN stepping in →
+ * the customer AND the provider, since the customer sees an admin reply as
+ * the company answering and the provider needs to know their thread was
+ * answered for them. Either way the customer branch needs the lead to have an
+ * account attached.
  *
  * That PROVIDER branch used to return immediately with a comment claiming
  * "the customer side has no account to hold a subscription or a link" — true
@@ -418,12 +421,22 @@ function notifyNewMessage(
 
   const bodyPreview = preview(body);
 
-  if (sender === "PROVIDER") {
-    const customerId = conversation.lead.customerId;
-    // A guest-submitted lead (optionalCustomerId) has no account and
-    // therefore no device to push to — same "nothing to tell" case the
-    // original comment described, just narrowed to when it's actually true.
-    if (!customerId) return;
+  // Anything that is not the customer's own message is, from the customer's
+  // side of the thread, "the company replied" — the chat screen renders an
+  // ADMIN message exactly like a PROVIDER one (mobile client's
+  // chat/[leadId].tsx keys the bubble side on `sender === "CUSTOMER"` alone,
+  // and the website's ChatThread.tsx does the same). Until this covered ADMIN
+  // too, a reply sent by the platform's own staff — which is how a thread
+  // gets answered whenever the provider has not picked it up — notified the
+  // customer NOTHING: no push, and no row in their notification centre
+  // either, since notifyCustomer writes both. Reported as "the company
+  // replied and no notification came".
+  //
+  // A guest-submitted lead (optionalCustomerId) has no account and therefore
+  // no device to push to — the one case where there is genuinely nothing to
+  // tell.
+  const customerId = sender === "CUSTOMER" ? null : conversation.lead.customerId;
+  if (customerId) {
     runAfterResponse(() =>
       notifyCustomer(customerId, {
         type: NotificationType.CHAT_MESSAGE,
@@ -433,8 +446,12 @@ function notifyNewMessage(
         tag: `chat-${conversation.id}`,
       }),
     );
-    return;
   }
+
+  // A provider's reply is finished here: the company already knows what it
+  // just sent, and the admin heads-up is deliberately limited to messages
+  // FROM customers (see the notifyAdmin gate below).
+  if (sender === "PROVIDER") return;
 
   const senderLabel = sender === "CUSTOMER" ? "العميل" : "الإدارة";
   const text = buildChatTelegramMessage({
@@ -451,6 +468,7 @@ function notifyNewMessage(
     const notifyAdmin = sender === "CUSTOMER" && (await isAdminChatNotifyEnabled());
     await Promise.allSettled([
       notifyCompanyProviders(conversation.company.id, {
+        type: StaffNotificationType.CHAT_MESSAGE,
         title: `رسالة جديدة — ${conversation.lead!.refNumber}`,
         body: bodyPreview,
         url: "/provider?tab=messages",
@@ -460,6 +478,7 @@ function notifyNewMessage(
       ...(notifyAdmin
         ? [
             pushAdmins({
+              type: StaffNotificationType.CHAT_MESSAGE,
               title: `رسالة جديدة — ${conversation.company.name}`,
               body: bodyPreview,
               url: "/admin?tab=chat",

@@ -11,6 +11,7 @@ import PermissionGate from "../../../../components/PermissionGate";
 import Button from "../../../../components/Button";
 import StatusTransitionSheet from "../../../../components/StatusTransitionSheet";
 import { ListSkeleton, ErrorCard } from "../../../../components/ListStates";
+import { STATUS_LABEL } from "../../../../components/TransactionRow";
 import { hasDesktopPermission } from "../../../../lib/permissions";
 import { useStaffAuth } from "../../../../lib/staffAuth";
 
@@ -92,7 +93,7 @@ export default function TransactionDetail() {
                 </Text>
                 <Text style={styles.type}>{TYPE_LABEL[transaction.type]}</Text>
 
-                <InfoRow label="الحالة" value={transaction.status} />
+                <InfoRow label="الحالة" value={STATUS_LABEL[transaction.status].label} />
                 {transaction.companyName ? <InfoRow label="الشركة" value={transaction.companyName} /> : null}
                 {transaction.leadRefNumber ? <InfoRow label="رقم الطلب" value={transaction.leadRefNumber} /> : null}
                 {transaction.categoryName ? <InfoRow label="التصنيف" value={transaction.categoryName} /> : null}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import type { ApiCompany, ApiLead, ApiLeadStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, textStart, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
@@ -93,11 +93,26 @@ function CompanyFilter({
   );
 }
 
+/**
+ * A status passed in the URL — how the overview's KPI tiles hand off ("28
+ * جديد" → this list, already filtered to New). Validated against the real
+ * enum rather than cast: the value arrives as a string from a route param, and
+ * a typo'd or stale link must fall back to "all", never filter on a status the
+ * API would reject.
+ */
+function useInitialStatus(): ApiLeadStatus | undefined {
+  const { status } = useLocalSearchParams<{ status?: string }>();
+  return STATUSES.includes(status as ApiLeadStatus) ? (status as ApiLeadStatus) : undefined;
+}
+
+const STATUSES: readonly ApiLeadStatus[] = ["New", "Contacted", "In Progress", "Completed", "Cancelled"];
+
 export default function AdminLeads() {
   const [leads, setLeads] = useState<ApiLead[] | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [status, setStatus] = useState<ApiLeadStatus | undefined>(undefined);
+  const initialStatus = useInitialStatus();
+  const [status, setStatus] = useState<ApiLeadStatus | undefined>(initialStatus);
   const [search, setSearch] = useState("");
   const [companyId, setCompanyId] = useState<string | undefined>(undefined);
   const [companyName, setCompanyName] = useState<string | undefined>(undefined);
@@ -105,6 +120,14 @@ export default function AdminLeads() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tab screens stay mounted once visited, so `useState(initialStatus)` alone
+  // would seed the filter on the FIRST arrival and silently ignore every later
+  // hand-off from a KPI tile. Syncing on the param keeps the list honest about
+  // the link the user just followed.
+  useEffect(() => {
+    if (initialStatus !== undefined) setStatus(initialStatus);
+  }, [initialStatus]);
 
   const load = useCallback(
     async (opts: { page: number; append: boolean; silent?: boolean }) => {

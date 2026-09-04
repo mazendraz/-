@@ -8,7 +8,7 @@
 // the one status reviews.service.submitFromLead already gates the review flow
 // on. "Confirmed vs discrepancy" lives entirely in LeadCompletion.verificationStatus.
 import { prisma } from "@/lib/prisma";
-import { LeadStatus, LeadVerificationStatus, NotificationType } from "@/generated/prisma/enums";
+import { LeadStatus, LeadVerificationStatus, NotificationType, StaffNotificationType } from "@/generated/prisma/enums";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/utils/errors";
 import { serializeLead, type LeadWithCompany } from "@/lib/utils/serialize";
 // COMPLETABLE_FROM is derived from the LEAD_TRANSITIONS graph rather than
@@ -312,6 +312,7 @@ async function applyVerification(
         ? notifyProviderAmountConfirmed(serialized, target)
         : notifyProviderAmountDiscrepancy(serialized, target),
       pushCompanyProviders(lead.companyId, {
+        type: StaffNotificationType.LEAD_COMPLETED,
         title: verificationPushTitle(decision),
         body: `${serialized.service} · ${serialized.refNumber}`,
         url: "/provider",
@@ -340,6 +341,7 @@ async function applyVerification(
       tasks.push(
         notifyAdminsAmountDiscrepancy(serialized, lead.company.name, admins.map((a) => a.email)),
         pushAdmins({
+          type: StaffNotificationType.LEAD_COMPLETED,
           title: `اختلاف في المبلغ — ${lead.company.name}`,
           body: `${serialized.service} · ${serialized.refNumber}`,
           url: "/admin",
