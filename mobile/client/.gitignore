@@ -46,3 +46,6 @@ yarn-error.*
 
 # Local env — see .env.example
 .env
+
+# Verified production export produced by scripts/publish-production-update.js
+dist-production/

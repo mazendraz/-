@@ -58,6 +58,7 @@
     "preweb": "npm run sync-lan-ip",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "update:production": "node scripts/publish-production-update.js",
     "bundle:check": "expo export --platform web --output-dir .expo-export-check"
   },
   "private": true

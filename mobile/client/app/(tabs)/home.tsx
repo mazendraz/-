@@ -24,7 +24,6 @@ import MenuButton from "../../components/MenuButton";
 import { fetchCategories } from "../../lib/categories";
 import { fetchCompanies } from "../../lib/companies";
 import {
-  isApiConfigured,
   rowStart,
   useRefreshOnFocus,
   refreshSettings,
@@ -77,6 +76,16 @@ const REASONS = [
 ];
 
 // ── Local preview fallback (NOT real product data) ─────────────────────────
+// ⚠️ __DEV__ ONLY. The gate used to be `__DEV__ || !isApiConfigured()`, so a
+// RELEASE build whose EXPO_PUBLIC_API_URL failed to inline would quietly
+// render invented company names and ratings to a real customer. That stopped
+// being hypothetical on 2026-09-04, when a production OTA shipped with the
+// wrong API URL baked in (see scripts/publish-production-update.js): the only
+// reason this branch did not fire is that the URL it carried was a reachable
+// LAN address rather than an empty string. A production build with no usable
+// API must show an empty state and let useBackendHealth's offline screen
+// explain itself — never fabricated companies in a product whose entire
+// premise is that every listed company is manually vetted.
 // Shown when fetchCategories()/fetchCompanies() fail AND (__DEV__ OR the API
 // isn't configured) — so there's something on screen to judge the
 // layout/polish against instead of a blank section, without a REAL
@@ -196,9 +205,8 @@ export default function Home() {
         // including a real customer's transient network blip in production,
         // rendering invented company names and ratings as if they were real
         // in a product whose entire premise is that every listed company is
-        // manually vetted. Gated on the same signal isApiConfigured() and
-        // this app's other demo/offline branches already use.
-        if (__DEV__ || !isApiConfigured()) {
+        // manually vetted. Now __DEV__ only — see the DEMO_CATEGORIES note.
+        if (__DEV__) {
           setCategories(DEMO_CATEGORIES);
           setUsingDemoData(true);
         } else {
@@ -220,7 +228,7 @@ export default function Home() {
         });
       })
       .catch(() => {
-        if (__DEV__ || !isApiConfigured()) {
+        if (__DEV__) {
           setFeatured(DEMO_COMPANIES);
           setUsingDemoData(true);
         } else {
