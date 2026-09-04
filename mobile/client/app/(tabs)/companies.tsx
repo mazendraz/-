@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -149,6 +149,21 @@ export default function Companies() {
     load(1, false);
   });
 
+  // ── Why the row is its own memoised component ────────────────────────────
+  // `renderItem` used to be an inline arrow, so it was a new function on every
+  // render of this screen — and this screen re-renders on every keystroke in
+  // the search box, every filter tap, and every focus refresh. A changed
+  // `renderItem` invalidates every mounted cell, so typing one character into
+  // the search field re-rendered every card currently on screen (each with two
+  // <Image> elements) before the debounce had even fired the request.
+  //
+  // A stable `useCallback` plus a `React.memo`'d row means a cell only
+  // re-renders when its own company object actually changes.
+  const renderCompany = useCallback(
+    ({ item }: { item: ApiCompany }) => <CompanyCard company={item} />,
+    [],
+  );
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const canLoadMore = page < pageCount && !loading && !loadingMore;
   function loadMore() {
@@ -284,55 +299,19 @@ export default function Companies() {
             <ActivityIndicator style={styles.footerSpinner} color={colors.primary} />
           ) : null
         }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() =>
-              router.push({ pathname: "/company/[slug]", params: { slug: item.slug } })
-            }
-            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-          >
-            {/* Cover + badges — the website's own card leads with a cover
-                photo and verified/busy badges; this list used to skip
-                straight to a small logo + two lines of text. */}
-            <View style={styles.coverWrap}>
-              <Image source={{ uri: firstAssetUri(item.cover, item.logo) }} style={styles.cover} />
-              <View style={styles.coverLogoWrap}>
-                <Image source={{ uri: assetUri(item.logo) }} style={styles.coverLogo} />
-              </View>
-              {item.verified ? (
-                <View style={styles.verifiedBadge}>
-                  <Icon name="verified" size={11} color={colors.primary} />
-                  <Text style={styles.verifiedBadgeText}>موثّقة</Text>
-                </View>
-              ) : null}
-              {item.busy ? (
-                <View style={styles.busyBadge}>
-                  <Icon name="event_busy" size={11} color="#fff" />
-                  <Text style={styles.busyBadgeText}>مشغولة</Text>
-                </View>
-              ) : null}
-            </View>
-            <View style={styles.cardBody}>
-              <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.category} numberOfLines={1}>{item.categoryLabel}</Text>
-              <View style={styles.ratingRow}>
-                <Text style={styles.ratingStar}>★</Text>
-                <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
-                <Text style={styles.reviewCount}>({item.reviewCount})</Text>
-              </View>
-              {item.tagline ? (
-                <Text style={styles.tagline} numberOfLines={2}>{item.tagline}</Text>
-              ) : null}
-              <View style={styles.cardFooter}>
-                <Text style={styles.projectsText}>{item.completedProjects} مشروع</Text>
-                <View style={styles.viewRow}>
-                  <Text style={styles.viewText}>عرض</Text>
-                  <Icon name="arrow_back" size={12} color={colors.primary} />
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        )}
+        renderItem={renderCompany}
+        // ── Why these are set explicitly ─────────────────────────────────────
+        // This list grows without bound (20 per page, `onEndReached` appends),
+        // and each card carries two remote images. VirtualizedList's default
+        // `windowSize` of 21 keeps ten screens of cards either side of the
+        // viewport mounted, so a customer who has paged four times is holding
+        // most of the catalog — and its images — in memory at once. Five
+        // screens' worth is still far more than a scroll can outrun on a
+        // phone, and it is what stops the list getting heavier the longer
+        // someone browses.
+        windowSize={5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={8}
       />
 
       {/* Every filter in one sheet — category (wrapped, so a growing catalog
@@ -456,6 +435,64 @@ function ActiveChip({ label, onRemove }: { label: string; onRemove: () => void }
     </Pressable>
   );
 }
+
+/**
+ * One catalogue row. Memoised (see renderCompany) so the search box, the
+ * filter sheet and the focus refresh above can all re-render the SCREEN
+ * without re-rendering every card and re-mounting its two images.
+ *
+ * Nothing about the markup changed when it moved here — it is the same card,
+ * lifted verbatim out of the old inline `renderItem`.
+ */
+const CompanyCard = memo(function CompanyCard({ company: item }: { company: ApiCompany }) {
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: "/company/[slug]", params: { slug: item.slug } })}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      {/* Cover + badges — the website's own card leads with a cover
+          photo and verified/busy badges; this list used to skip
+          straight to a small logo + two lines of text. */}
+      <View style={styles.coverWrap}>
+        <Image source={{ uri: firstAssetUri(item.cover, item.logo) }} style={styles.cover} />
+        <View style={styles.coverLogoWrap}>
+          <Image source={{ uri: assetUri(item.logo) }} style={styles.coverLogo} />
+        </View>
+        {item.verified ? (
+          <View style={styles.verifiedBadge}>
+            <Icon name="verified" size={11} color={colors.primary} />
+            <Text style={styles.verifiedBadgeText}>موثّقة</Text>
+          </View>
+        ) : null}
+        {item.busy ? (
+          <View style={styles.busyBadge}>
+            <Icon name="event_busy" size={11} color="#fff" />
+            <Text style={styles.busyBadgeText}>مشغولة</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.category} numberOfLines={1}>{item.categoryLabel}</Text>
+        <View style={styles.ratingRow}>
+          <Text style={styles.ratingStar}>★</Text>
+          <Text style={styles.ratingText}>{item.rating.toFixed(1)}</Text>
+          <Text style={styles.reviewCount}>({item.reviewCount})</Text>
+        </View>
+        {item.tagline ? (
+          <Text style={styles.tagline} numberOfLines={2}>{item.tagline}</Text>
+        ) : null}
+        <View style={styles.cardFooter}>
+          <Text style={styles.projectsText}>{item.completedProjects} مشروع</Text>
+          <View style={styles.viewRow}>
+            <Text style={styles.viewText}>عرض</Text>
+            <Icon name="arrow_back" size={12} color={colors.primary} />
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },

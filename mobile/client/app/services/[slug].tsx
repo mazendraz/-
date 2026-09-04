@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -101,6 +101,13 @@ export default function ServiceCategory() {
     load(1, false);
   });
 
+  // Stable identity, so a keystroke in the search box does not invalidate
+  // every mounted cell — see CompanyRow's own comment.
+  const renderCompany = useCallback(
+    ({ item }: { item: ApiCompany }) => <CompanyRow company={item} />,
+    [],
+  );
+
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const canLoadMore = page < pageCount && !loading && !loadingMore;
   function loadMore() {
@@ -152,55 +159,74 @@ export default function ServiceCategory() {
         ListFooterComponent={
           loadingMore ? <ActivityIndicator style={styles.footerSpinner} color={colors.primary} /> : null
         }
-        renderItem={({ item }) => (
-          <Pressable
-            style={styles.card}
-            onPress={() => router.push({ pathname: "/company/[slug]", params: { slug: item.slug } })}
-          >
-            <View>
-              <Image source={{ uri: assetUri(item.logo) }} style={styles.logo} />
-              {/* Missing before — the website's ServiceCategory.tsx marks
-                  verified companies with a badge on the cover photo. */}
-              {item.verified && (
-                <View style={styles.verifiedBadge}>
-                  <Icon name="verified" size={11} color={colors.primary} />
-                </View>
-              )}
-            </View>
-            <View style={styles.cardBody}>
-              <View style={styles.nameRow}>
-                <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-                {item.verified && <Text style={styles.verifiedLabel}>موثّقة</Text>}
-              </View>
-              <Text style={styles.tagline} numberOfLines={2}>{item.tagline}</Text>
-              <View style={styles.metaRow}>
-                <Text style={styles.rating}>★ {item.rating.toFixed(1)}</Text>
-                <Text style={styles.metaDot}>·</Text>
-                <Text style={styles.reviewCount}>{item.reviewCount} تقييم</Text>
-              </View>
-              {/* Missing before — the website shows up to 4 individual
-                  service chips per card, plus a "+N" overflow chip. */}
-              {item.services.length > 0 && (
-                <View style={styles.chipsRow}>
-                  {item.services.slice(0, 3).map((s) => (
-                    <View key={s} style={styles.chip}>
-                      <Text style={styles.chipText} numberOfLines={1}>{s}</Text>
-                    </View>
-                  ))}
-                  {item.services.length > 3 && (
-                    <View style={styles.chip}>
-                      <Text style={styles.chipText}>+{item.services.length - 3}</Text>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          </Pressable>
-        )}
+        renderItem={renderCompany}
+        // Same reasoning as companies.tsx: an append-as-you-scroll list of
+        // cards with remote images, whose screen re-renders on every keystroke
+        // in the search box. VirtualizedList's default window keeps ten
+        // screens either side mounted; five screens' worth still outruns any
+        // scroll a phone can produce.
+        windowSize={5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={8}
       />
     </SafeAreaView>
   );
 }
+
+/**
+ * One company row in a category. Memoised, and reached through a stable
+ * `renderItem` (see renderCompany) — an inline arrow is a new function every
+ * render, which invalidates every mounted cell, so typing a character into
+ * the search box above re-rendered every visible card and its <Image>.
+ * Markup unchanged from the inline version it replaces.
+ */
+const CompanyRow = memo(function CompanyRow({ company: item }: { company: ApiCompany }) {
+  return (
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push({ pathname: "/company/[slug]", params: { slug: item.slug } })}
+    >
+      <View>
+        <Image source={{ uri: assetUri(item.logo) }} style={styles.logo} />
+        {/* Missing before — the website's ServiceCategory.tsx marks
+            verified companies with a badge on the cover photo. */}
+        {item.verified && (
+          <View style={styles.verifiedBadge}>
+            <Icon name="verified" size={11} color={colors.primary} />
+          </View>
+        )}
+      </View>
+      <View style={styles.cardBody}>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+          {item.verified && <Text style={styles.verifiedLabel}>موثّقة</Text>}
+        </View>
+        <Text style={styles.tagline} numberOfLines={2}>{item.tagline}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.rating}>★ {item.rating.toFixed(1)}</Text>
+          <Text style={styles.metaDot}>·</Text>
+          <Text style={styles.reviewCount}>{item.reviewCount} تقييم</Text>
+        </View>
+        {/* Missing before — the website shows up to 4 individual
+            service chips per card, plus a "+N" overflow chip. */}
+        {item.services.length > 0 && (
+          <View style={styles.chipsRow}>
+            {item.services.slice(0, 3).map((s) => (
+              <View key={s} style={styles.chip}>
+                <Text style={styles.chipText} numberOfLines={1}>{s}</Text>
+              </View>
+            ))}
+            {item.services.length > 3 && (
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>+{item.services.length - 3}</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },
