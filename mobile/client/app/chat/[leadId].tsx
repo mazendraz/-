@@ -16,7 +16,7 @@ import Icon from "../../components/Icon";
 import MenuButton from "../../components/MenuButton";
 import { fetchThread, sendMessage } from "../../lib/chat";
 import { refreshUnreadMessages } from "../../lib/unreadStore";
-import { useLiveEvents, ApiError, rowStart } from "@alassema/mobile-shared";
+import { useLiveEvents, useCoalescedReload, useSingleSubmit, ApiError, rowStart } from "@alassema/mobile-shared";
 
 /**
  * A conversation about one request — reached from a chat icon on its card in
@@ -40,16 +40,43 @@ export default function Chat() {
   const [error, setError] = useState("");
   const listRef = useRef<FlatList<ApiMessage>>(null);
 
+  /**
+   * Which thread read is allowed to win.
+   *
+   * A reload can be in flight when the customer hits send — the SSE stream
+   * fires a `message` event for the company's own reply while a thread read
+   * is already running, and the two settle in whatever order the network
+   * decides. Without a guard, a read that STARTED before the send and landed
+   * after it called `setMessages(thread.messages)` with a list that predates
+   * the sent message, and the message the customer had just watched appear
+   * silently vanished from the thread — recoverable only by leaving and
+   * coming back.
+   *
+   * Bumping this on send is what makes the sent message authoritative: every
+   * read older than it is discarded, and the next read (a live event, or the
+   * coalesced follow-up below) fetches a thread that contains it.
+   */
+  const readId = useRef(0);
+
   const load = useCallback(async () => {
+    const id = ++readId.current;
     try {
       const thread = await fetchThread(leadId);
+      if (id !== readId.current) return;
       setMessages(thread.messages);
+      // A successful read means the thread is on screen again — the banner
+      // from an earlier failure has nothing left to describe. It used to be
+      // set once and never cleared, so one transient failure left a red
+      // error bar sitting above a perfectly healthy conversation for the
+      // rest of the visit.
+      setError("");
       // A full read (no `after` cursor) zeroes this conversation's
       // customerUnread server-side — see api's customer/leads/[id]/messages
       // route calling chat.markRead. Re-ask for the totals so the tab badge
       // drops the moment the thread opens instead of a poll later.
       void refreshUnreadMessages();
     } catch (err) {
+      if (id !== readId.current) return;
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل المحادثة.");
     } finally {
       setLoaded(true);
@@ -60,22 +87,40 @@ export default function Chat() {
     load();
   }, [load]);
 
-  // Live delivery: any "message" event triggers a reload, same coarse-refetch
+  // Live delivery: a "message" event triggers a reload, same coarse-refetch
   // pattern the Requests tab uses — the SSE payload carries only IDs (see
   // api's realtime.service.ts), never message content, so there is nothing
   // finer-grained to apply.
+  //
+  // Two narrowings over the old `if (event.type === "message") load()`:
+  //  - the event names the lead it belongs to, so a reply on a DIFFERENT
+  //    request no longer refetches this thread (it did, and this screen was
+  //    only one of five consumers doing something on that same event);
+  //  - it is coalesced, so a company sending several messages in a row costs
+  //    one refetch and a single follow-up rather than one read per message,
+  //    all racing each other into setMessages.
+  const reload = useCoalescedReload(load);
   useLiveEvents((event) => {
-    if (event.type === "message") load();
+    if (event.type === "reconnect") reload();
+    // `!event.leadId` is defensive: every `message` the server publishes
+    // carries one today (realtime.service.ts), and if that ever stopped being
+    // true, refetching too often is the right way to be wrong here.
+    if (event.type === "message" && (!event.leadId || event.leadId === leadId)) reload();
   });
 
-  async function onSend() {
+  async function send() {
     const body = draft.trim();
     if (!body || sending) return;
     setSending(true);
     setDraft("");
     try {
       const message = await sendMessage(leadId, body);
+      // See readId: this discards any thread read that started before the
+      // send, so none of them can land afterwards with a list that predates
+      // this message.
+      readId.current += 1;
       setMessages((prev) => [...prev, message]);
+      setError("");
     } catch (err) {
       setDraft(body); // give the text back so nothing typed is lost
       setError(err instanceof ApiError ? err.message : "تعذّر إرسال الرسالة.");
@@ -83,6 +128,11 @@ export default function Chat() {
       setSending(false);
     }
   }
+
+  // `sending` is state and lands a render late, so two taps in one frame both
+  // read the old `false` AND the same un-cleared `draft` — the identical
+  // message went out twice. See useSingleSubmit.
+  const onSend = useSingleSubmit(send);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
