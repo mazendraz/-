@@ -24,6 +24,7 @@ export * from "./backendHealth";
 export * from "./maintenance";
 export * from "./useRefreshOnFocus";
 export * from "./useCoalescedReload";
+export * from "./useSingleSubmit";
 export * from "./errorReporting";
 export * from "./settings";
 export * from "./assetUrl";

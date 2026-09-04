@@ -8,7 +8,7 @@ import Icon from "./Icon";
 import ReviewModal from "./ReviewModal";
 import { verifyLeadAmount } from "../lib/leads";
 import { formatEgp } from "../lib/pricing";
-import { ApiError, useSettings, rowStart, displayLine } from "@alassema/mobile-shared";
+import { ApiError, useSettings, useSingleSubmit, rowStart, displayLine } from "@alassema/mobile-shared";
 
 type Phase = "amount" | "discrepancy" | "confirmed" | "rating";
 
@@ -43,7 +43,7 @@ export default function PriceVerificationGate({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleConfirm() {
+  async function confirmAmount() {
     setBusy(true);
     setError("");
     try {
@@ -56,7 +56,7 @@ export default function PriceVerificationGate({
     }
   }
 
-  async function handleDiscrepancy(clientAmount: number, note: string) {
+  async function reportDiscrepancy(clientAmount: number, note: string) {
     setBusy(true);
     setError("");
     try {
@@ -73,6 +73,13 @@ export default function PriceVerificationGate({
       setBusy(false);
     }
   }
+
+  // This screen replaces the WHOLE app until it is answered, and its two
+  // buttons each record a decision the server treats as final. `busy` only
+  // disables them a render later, so a double-tap could file the decision
+  // twice — see useSingleSubmit.
+  const handleConfirm = useSingleSubmit(confirmAmount);
+  const handleDiscrepancy = useSingleSubmit(reportDiscrepancy);
 
   if (phase === "rating") {
     return (

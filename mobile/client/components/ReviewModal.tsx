@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, useSingleSubmit } from "@alassema/mobile-shared";
 import { submitReview } from "../lib/reviews";
 
 /**
@@ -29,7 +29,7 @@ export default function ReviewModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function onSubmit() {
+  async function submit() {
     if (rating === 0) return;
     setBusy(true);
     setError("");
@@ -44,6 +44,9 @@ export default function ReviewModal({
       setBusy(false);
     }
   }
+
+  // `busy` disables the button a render late — see useSingleSubmit.
+  const onSubmit = useSingleSubmit(submit);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

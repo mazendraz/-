@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
-import { ApiError } from "@alassema/mobile-shared";
+import { ApiError, useSingleSubmit } from "@alassema/mobile-shared";
 import { submitSiteReview } from "../lib/siteReviews";
 
 /** Share a general (not-tied-to-one-company) site review — the mobile
@@ -25,7 +25,7 @@ export default function SiteReviewModal({
 
   const canSubmit = name.trim().length >= 2 && district.trim().length >= 2 && rating > 0 && text.trim().length >= 5;
 
-  async function onSubmit() {
+  async function submit() {
     if (!canSubmit) return;
     setBusy(true);
     setError("");
@@ -42,6 +42,9 @@ export default function SiteReviewModal({
       setBusy(false);
     }
   }
+
+  // `busy` disables the button a render late — see useSingleSubmit.
+  const onSubmit = useSingleSubmit(submit);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

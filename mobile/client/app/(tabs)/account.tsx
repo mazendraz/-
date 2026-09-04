@@ -16,7 +16,7 @@ import {
   type CustomerSession,
 } from "../../lib/customerAuth";
 import { useRequireAccount } from "../../lib/authGate";
-import { ApiError, rowStart, displayLine } from "@alassema/mobile-shared";
+import { ApiError, rowStart, displayLine, useSingleSubmit } from "@alassema/mobile-shared";
 
 /**
  * The customer's account: profile, signed-in devices, and the way out — the
@@ -47,7 +47,7 @@ export default function Account() {
       .catch(() => setSessions([]));
   }, [customer]);
 
-  async function onRevoke(sessionId?: string) {
+  async function revoke(sessionId?: string) {
     setBusy(true);
     setError("");
     try {
@@ -73,7 +73,7 @@ export default function Account() {
     router.replace("/sign-in");
   }
 
-  async function onDelete() {
+  async function deleteThisAccount() {
     setBusy(true);
     setError("");
     try {
@@ -93,6 +93,13 @@ export default function Account() {
       setBusy(false);
     }
   }
+
+  // Both of these change the account irreversibly enough that doing them
+  // twice matters — revoking sessions signs this device out mid-flight, and
+  // deleting cannot be undone at all — and `busy` only disables their buttons
+  // a render later. See useSingleSubmit.
+  const onRevoke = useSingleSubmit(revoke);
+  const onDelete = useSingleSubmit(deleteThisAccount);
 
   if (!customer) return null;
 

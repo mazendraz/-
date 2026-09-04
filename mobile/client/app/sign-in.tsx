@@ -26,7 +26,7 @@ import {
 } from "../lib/customerAuth";
 import { isGoogleSignInConfigured, useGoogleSignIn } from "../lib/googleAuth";
 import { isAppleSignInAvailable, signInWithApple as runAppleSheet } from "../lib/appleAuth";
-import { ApiError, rowStart, displayLine } from "@alassema/mobile-shared";
+import { ApiError, rowStart, displayLine, useSingleSubmit } from "@alassema/mobile-shared";
 
 type Mode = "signin" | "register";
 
@@ -128,7 +128,7 @@ export default function SignIn() {
     }
   }
 
-  async function onSubmit() {
+  async function submit() {
     setError("");
     setNeedsVerify(false);
     setBusy(true);
@@ -163,6 +163,14 @@ export default function SignIn() {
       setBusy(false);
     }
   }
+
+  // `busy` disables <Button> only on the NEXT render, so a double-tap on
+  // "سجل الدخول" started two sign-ins — two sessions, two refresh tokens, one
+  // of them orphaned on the account's device list. Same for a double-tapped
+  // registration, which turned an ordinary sign-up into a 409. See
+  // useSingleSubmit; onApplePress keeps its own `if (busy)` check as well,
+  // since Apple draws its own button with no disabled state at all.
+  const onSubmit = useSingleSubmit(submit);
 
   async function onResend() {
     setBusy(true);

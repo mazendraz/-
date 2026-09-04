@@ -32,7 +32,7 @@ import { submitLead } from "../../lib/leads";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchCompany, joinWaitlist } from "../../lib/companyDetail";
 import { formatLeadEstimate } from "../../lib/pricing";
-import { ApiError, parseLines, useSettings, rowStart, rowLtr, displayLine, textStart } from "@alassema/mobile-shared";
+import { ApiError, parseLines, useSettings, useSingleSubmit, rowStart, rowLtr, displayLine, textStart } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
 
 /**
@@ -240,7 +240,7 @@ export default function NewRequest() {
   // went busy is the same harmless race the website has always accepted.
   const companyBusy = company?.busy === true;
 
-  async function onSubmit() {
+  async function submit() {
     if (!canSubmit || !phoneE164) return;
     setBusy(true);
     setError("");
@@ -286,6 +286,14 @@ export default function NewRequest() {
       setBusy(false);
     }
   }
+
+  // ── The one place in the app where a double-tap costs real money ──────────
+  // <Button> disables itself on `busy`, but `busy` is state and state lands a
+  // render later — two taps inside one frame both got through, and this screen
+  // is the one where that means the company receives the SAME ORDER TWICE,
+  // under two reference numbers, with only the second confirmation card ever
+  // shown to the customer. See useSingleSubmit for the general form.
+  const onSubmit = useSingleSubmit(submit);
 
   if (!customer) return null;
 

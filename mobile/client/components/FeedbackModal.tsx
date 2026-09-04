@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
 import Button from "./Button";
-import { ApiError, rowStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, useSingleSubmit } from "@alassema/mobile-shared";
 import { submitFeedback, type FeedbackType } from "../lib/feedback";
 
 const TYPES: { key: FeedbackType; label: string }[] = [
@@ -40,14 +40,27 @@ export default function FeedbackModal({
     setDone(false);
   }
 
-  async function onSubmit() {
+  // The "sent!" card holds for a beat before the sheet closes itself. Kept in
+  // a ref and cleared on unmount: the timer used to be started and forgotten,
+  // so closing the profile inside that beat left a callback due to fire
+  // reset()/onClose() against a component that no longer existed.
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
+  async function submit() {
     if (!message.trim()) return;
     setBusy(true);
     setError("");
     try {
       await submitFeedback({ companySlug, type, message: message.trim(), phone: phone.trim() || undefined });
       setDone(true);
-      setTimeout(() => {
+      closeTimer.current = setTimeout(() => {
+        closeTimer.current = null;
         reset();
         onClose();
       }, 1200);
@@ -57,6 +70,9 @@ export default function FeedbackModal({
       setBusy(false);
     }
   }
+
+  // Two taps in one frame filed the same report twice — see useSingleSubmit.
+  const onSubmit = useSingleSubmit(submit);
 
   return (
     <Modal
