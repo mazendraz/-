@@ -138,6 +138,26 @@ export default function MediaLightbox({
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
           keyExtractor={(item, i) => `${item.src}-${i}`}
           onMomentumScrollEnd={onScrollEnd}
+          // ── Windowing, because these are FULL-SCREEN decoded bitmaps ───────
+          // Every other list in this app renders thumbnails, where
+          // VirtualizedList's defaults (windowSize 21, i.e. ten screens either
+          // side) are harmless. Here each mounted page is one photo decoded at
+          // device resolution, so the defaults kept up to twenty-one of them
+          // alive at once — a gallery of thirty photos on a modern phone is
+          // easily 8 MP a page, and this is the one screen in the app that can
+          // be opened, swiped through and reopened dozens of times in a
+          // session. `windowSize: 3` keeps exactly the neighbours a swipe can
+          // reach before the next batch renders, which is all a pager needs;
+          // the rest are unmounted and their bitmaps released.
+          windowSize={3}
+          initialNumToRender={1}
+          maxToRenderPerBatch={2}
+          // Deliberately NOT `removeClippedSubviews`: unmounting beyond the
+          // window is what frees the bitmaps, and that is already done above.
+          // The extra flag only detaches native views, and its long history of
+          // rendering blank cells on Android is not worth risking on the one
+          // screen whose failure mode this component's own header describes as
+          // "opens to a black screen you can't get out of".
           // Without this the pages are memoised against `data` alone, so the
           // `active={i === index}` a video page reads would never update and
           // a swiped-away video would keep playing (with sound) behind the

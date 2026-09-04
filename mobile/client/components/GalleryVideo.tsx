@@ -1,5 +1,6 @@
-import { useEffect } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { AppState, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 
 /**
@@ -41,10 +42,62 @@ export default function GalleryVideo({
     p.play();
   });
 
+  // ── Only while the screen is actually in front of the customer ────────────
+  // A preview tile is a LOOPING autoplaying video, and a company profile can
+  // hold several of them. The screen under a push is not unmounted — expo-
+  // router keeps it mounted beneath /new-request, /chat, the media viewer and
+  // every tab switch (see useRefreshOnFocus's comment) — so every one of those
+  // loops kept a hardware decoder running, on repeat, for the rest of the
+  // session, out of sight. Opening a few company profiles in a browsing
+  // session accumulated them, which is exactly the "the app gets hotter and
+  // slower the longer I use it" shape.
+  //
+  // Backgrounding is the other half: Android in particular keeps a playing
+  // decoder alive behind the home screen. Neither of these is something a
+  // decorative thumbnail should ever be doing.
+  //
+  // The full-screen variant already has `active` for its own pager and is
+  // only ever mounted inside an open viewer, so it needs neither.
+  // Two independent facts, deliberately not one flag: a blurred screen whose
+  // app returns to the foreground is still blurred, and folding both into one
+  // boolean had the AppState handler resume a thumbnail on a screen buried
+  // three pushes down.
+  const [focused, setFocused] = useState(true);
+  const [foreground, setForeground] = useState(true);
+
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true);
+      return () => setFocused(false);
+    }, []),
+  );
+
   useEffect(() => {
-    if (active) player.play();
-    else player.pause();
-  }, [active, player]);
+    const sub = AppState.addEventListener("change", (state) => {
+      // "background", not `!== "active"` — on iOS "inactive" is transient (a
+      // Control Centre pull, an app-switcher peek, an incoming-call banner)
+      // and the app returns straight to active, so treating it as backgrounded
+      // would stutter every thumbnail for a gesture nobody connects to it.
+      // Same distinction, for the same reason, as liveEvents.ts's own
+      // AppState handler.
+      setForeground(state !== "background");
+    });
+    return () => sub.remove();
+  }, []);
+
+  const shouldPlay = active && (!preview || (focused && foreground));
+
+  useEffect(() => {
+    // expo-video throws if the native player has already been released (a
+    // race between this effect and unmount teardown); a thumbnail that failed
+    // to pause is not worth taking a screen down for.
+    try {
+      if (shouldPlay) player.play();
+      else player.pause();
+    } catch {
+      /* player already released */
+    }
+  }, [shouldPlay, player]);
 
   return (
     <View style={[styles.frame, style]}>

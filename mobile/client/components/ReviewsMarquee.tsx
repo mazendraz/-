@@ -28,6 +28,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Animated,
+  AppState,
+  type AppStateStatus,
   Easing,
   Pressable,
   ScrollView,
@@ -79,6 +81,11 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
   const { width: screenWidth } = useWindowDimensions();
   const [paused, setPaused] = useState(false);
   const [focused, setFocused] = useState(true);
+  // Starts true rather than reading AppState.currentState: that value is not
+  // reliably populated on the very first render on Android, and getting it
+  // wrong there means a banner that never starts moving at all — a worse
+  // failure than one frame of animation the customer cannot see.
+  const [foreground, setForeground] = useState(true);
   // null until the OS answers — nothing animates on that first frame, which
   // is also what keeps a reduce-motion user from ever seeing one moving one.
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
@@ -109,6 +116,23 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
     }, []),
   );
 
+  // Backgrounding is not a focus change: the home tab is still the focused
+  // screen when the customer switches to another APP, so the loop above kept
+  // this animation running — and a native-driver animation is driven by the
+  // UI thread, which Android in particular keeps servicing behind the home
+  // screen. An endlessly looping banner nobody can see is pure battery.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      // "background", not `!== "active"`: on iOS "inactive" is a transient
+      // state (Control Centre, the app switcher, a call banner) that returns
+      // straight to active — pausing on it would visibly stutter the strip for
+      // a gesture nobody would connect to it. Same distinction liveEvents.ts
+      // draws, for the same reason.
+      setForeground(state !== "background");
+    });
+    return () => sub.remove();
+  }, []);
+
   // One loop has to outrun the screen, otherwise the second copy hasn't
   // reached the trailing edge by the time the first one leaves it.
   const reps = reviews.length
@@ -124,7 +148,7 @@ export default function ReviewsMarquee({ reviews: allReviews }: { reviews: ApiSi
   // handful of real reviews the site has early on, the mobile strip sat
   // still while the website kept scrolling — exactly the mismatch reported.
   const animate = reduceMotion === false;
-  const running = animate && !paused && focused;
+  const running = animate && !paused && focused && foreground;
 
   const x = useRef(new Animated.Value(0)).current;
   // The running loop, so it can be stopped on pause/blur. Animated.loop's
