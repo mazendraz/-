@@ -41,6 +41,30 @@ const listeners = new Set<() => void>();
 /** Last list we believe in — server's when signed in, this device's otherwise. */
 let cache: string[] | null = null;
 
+// ── How long a resolved list counts as current ──────────────────────────────
+// `read()` is called by every mounted subscriber's `sync`, and `sync` runs
+// again on every notify — so a single favourite toggle used to fan out into
+// one `GET /customer/favorites` per subscriber, all of them asking the same
+// question about a list the notify had just handed them. A notify already
+// carries the new value; anything asking again within a few seconds of a
+// confirmed read is asking for what it was just told.
+//
+// Short on purpose: this is a shortlist a person edits by hand, and the
+// server-pushed `favorite` event (app/_layout.tsx → refreshFromServer) is
+// what keeps it live across devices — this window only collapses the burst
+// that a single change produces locally.
+const FRESH_MS = 10_000;
+/** When `cache` was last resolved (from the server, or from disk when signed out). */
+let freshAt = 0;
+/** The one read in flight, so concurrent subscribers share it instead of racing. */
+let inFlight: Promise<string[]> | null = null;
+/** Whose list that in-flight read is about — a read started as one account
+ *  must never be handed to the next one. */
+let inFlightOwner: string | null | undefined;
+/** Identity of the in-flight read, so it only ever clears its OWN slot: a read
+ *  for a newer owner may have replaced it while this one was still running. */
+let inFlightToken: object | null = null;
+
 /**
  * The cache records WHOSE list it is.
  *
@@ -84,8 +108,32 @@ async function readLocal(): Promise<string[]> {
   return cached.owner === owner ? cached.slugs : [];
 }
 
+function sameSlugs(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((slug, i) => slug === b[i]);
+}
+
+/**
+ * ⚠️ Notifying UNCONDITIONALLY here was an unbounded request loop.
+ *
+ * `read()` below ends in `writeLocal(server)`, and every mounted useIsSaved /
+ * useSavedSlugs registers its own `sync` — which calls `read()` — in
+ * `listeners`. So one signed-in company profile was enough to close the
+ * circle: read → writeLocal → notify → read → writeLocal → notify, one
+ * `GET /customer/favorites` per lap, for as long as the screen stayed
+ * mounted. With two subscribers each lap notified both, so the laps
+ * MULTIPLIED rather than merely repeating. Reproduced with the network and
+ * AsyncStorage stubbed out: a single subscriber passed 5000 requests without
+ * ever yielding to the timer queue.
+ *
+ * The list itself is stable across those laps, so comparing before notifying
+ * cuts the cycle at the first lap without changing what any subscriber ever
+ * sees: a listener only exists to be told the list CHANGED, and re-running it
+ * for an identical list was never information.
+ */
 async function writeLocal(slugs: string[]): Promise<void> {
+  const changed = cache === null || !sameSlugs(cache, slugs);
   cache = slugs;
+  freshAt = Date.now();
   try {
     await AsyncStorage.setItem(
       KEY,
@@ -95,7 +143,7 @@ async function writeLocal(slugs: string[]): Promise<void> {
     // A cache that cannot be written is still a working session — the server
     // has the list, and the next read re-fetches it.
   }
-  listeners.forEach((l) => l());
+  if (changed) listeners.forEach((l) => l());
 }
 
 /** Has this account's local list already been folded into the server's? */
@@ -136,12 +184,18 @@ export async function refreshFromServer(): Promise<void> {
 /**
  * Forget this session's merge marker and cached list.
  *
- * Called on sign-out so the next account does not inherit the previous one's
- * shortlist, and so signing back in re-runs the merge.
+ * ⚠️ Currently has NO caller, and its comment used to claim otherwise ("called
+ * on sign-out"). Sign-out cannot call it: customerAuth.ts would have to import
+ * this module, which already imports customerAuth — the exact cycle the owner
+ * stamp above exists to avoid. What actually protects the next account is
+ * `read()`'s own owner check, which drops the cache (and its freshness stamp)
+ * the moment `getCustomer()` returns someone else. Kept as the explicit escape
+ * hatch for a caller that can reach it without the cycle.
  */
 export function resetSavedCache(): void {
   mergedFor = null;
   cache = null;
+  freshAt = 0;
   listeners.forEach((l) => l());
 }
 
@@ -155,15 +209,49 @@ async function read(): Promise<string[]> {
     // about this viewer. Drop it rather than showing it for one frame.
     cache = null;
     cacheOwner = owner;
+    freshAt = 0;
   }
-  const server = await pullFromServer();
-  if (server) {
-    await writeLocal(server);
-    return server;
-  }
-  const local = await readLocal();
-  cache = local;
-  return local;
+
+  // Already answered, recently — see FRESH_MS. This is what turns "every
+  // subscriber re-reads on every notify" from N requests into none.
+  if (cache && Date.now() - freshAt < FRESH_MS) return cache;
+  // Someone else is already asking; join them rather than opening a second
+  // request for the same answer — but only if they are asking about the SAME
+  // viewer. A read started before a sign-out must not be handed to whoever
+  // comes next.
+  if (inFlight && inFlightOwner === owner) return inFlight;
+
+  const token = {};
+  inFlightOwner = owner;
+  inFlightToken = token;
+  inFlight = (async () => {
+    try {
+      const server = await pullFromServer();
+      // Signing out (or switching accounts) mid-request. Writing here would
+      // stamp THIS viewer's owner onto the previous one's slugs — a shortlist
+      // silently inherited across accounts, which is the exact thing the owner
+      // stamp exists to prevent. This window is narrow but it is the same one
+      // an expired session produces, so it is not merely theoretical.
+      if ((getCustomer()?.id ?? null) !== owner) return cache ?? [];
+      if (server) {
+        await writeLocal(server); // stamps freshAt
+        return server;
+      }
+      const local = await readLocal();
+      cache = local;
+      freshAt = Date.now();
+      return local;
+    } finally {
+      // Only clear the slot if it is still OURS — a read for a newer owner may
+      // have replaced it while this one was in flight.
+      if (inFlightToken === token) {
+        inFlight = null;
+        inFlightOwner = undefined;
+        inFlightToken = null;
+      }
+    }
+  })();
+  return inFlight;
 }
 
 export async function isSaved(slug: string): Promise<boolean> {
