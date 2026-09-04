@@ -162,7 +162,23 @@ async function connect(): Promise<void> {
   const myController = controller;
 
   let token = await getAccessToken();
-  if (!token || myGeneration !== generation) return;
+  if (myGeneration !== generation) return;
+  if (!token) {
+    // A subject with no access token on disk — the small window while
+    // invalidateSession() has cleared the tokens but has not yet told the
+    // app's auth-state module (which is what clears currentSubjectId), or a
+    // SecureStore read that failed. Returning bare, as this used to, ended the
+    // whole stream for the rest of the session: no reconnect was scheduled and
+    // no AppState/subject transition was coming to start one, so the app went
+    // permanently silent with only the screens' 45s polls covering for it —
+    // the exact failure mode the 401 branch below was added to fix, reached
+    // through a different door. Backoff is capped at 30s and the retry is a
+    // SecureStore read, so a genuinely token-less state costs nothing while it
+    // waits for the sign-out that is on its way.
+    setConnected(false);
+    scheduleReconnect(myGeneration);
+    return;
+  }
 
   try {
     let res = await openStream(url, token, myController.signal);

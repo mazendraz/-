@@ -130,13 +130,35 @@ function withTimeout(externalSignal?: AbortSignal | null): {
     timedOut = true;
     controller.abort();
   }, REQUEST_TIMEOUT_MS);
+
+  // ── The caller's signal, and giving it back ────────────────────────────────
+  // `{ once: true }` only removes the listener if the signal ACTUALLY aborts.
+  // A request that completes normally left its listener attached forever —
+  // and this function is called once per attempt, so the 401→refresh→retry
+  // path below attaches a second one for the same request. That is harmless
+  // for the throwaway controller a single screen creates and drops, and a
+  // real leak for the shape this signature invites: one long-lived
+  // AbortController held in a ref and passed to every fetch a screen makes,
+  // which would accumulate one dead listener per request for the life of the
+  // screen. Removing it in `finish` (which every path already runs in a
+  // `finally`) costs nothing and closes that off.
+  let detach: (() => void) | null = null;
   if (externalSignal) {
-    if (externalSignal.aborted) controller.abort();
-    else externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      const onAbort = () => controller.abort();
+      externalSignal.addEventListener("abort", onAbort, { once: true });
+      detach = () => externalSignal.removeEventListener("abort", onAbort);
+    }
   }
+
   return {
     signal: controller.signal,
-    finish: () => clearTimeout(timer),
+    finish: () => {
+      clearTimeout(timer);
+      detach?.();
+    },
     isOurTimeout: () => timedOut,
   };
 }
