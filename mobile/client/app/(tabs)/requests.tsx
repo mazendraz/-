@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { ApiLead, ApiLeadStatus, ApiWaitlistEntry } from "@alassema/core";
@@ -11,7 +11,7 @@ import WaitlistStatusPill from "../../components/WaitlistStatusPill";
 import { router } from "expo-router";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchMyWaitlistEntries } from "../../lib/waitlist";
-import { useLiveEvents, ApiError, rowStart, displayLine, bodyLine } from "@alassema/mobile-shared";
+import { useLiveEvents, useCoalescedReload, ApiError, rowStart, displayLine, bodyLine } from "@alassema/mobile-shared";
 import ReviewModal from "../../components/ReviewModal";
 import { useRequireAccount } from "../../lib/authGate";
 import { formatLeadEstimate } from "../../lib/pricing";
@@ -58,17 +58,27 @@ export default function Requests() {
   const [query, setQuery] = useState("");
   const [reviewing, setReviewing] = useState<{ id: string; companyName: string } | null>(null);
 
+  // Bumped on every load — a pull-to-refresh, the 45s interval and a live
+  // event can all be running at once, and without this the last RESPONSE won
+  // rather than the last REQUEST: a slow earlier read landing late put a
+  // request back on the previous status after the customer had watched it
+  // move. Same guard, same reason, as companies.tsx's filter loads.
+  const requestId = useRef(0);
+
   const load = useCallback(async (isRefresh = false) => {
     // Guest mid-redirect (see useRequireAccount) — these are account-scoped
     // endpoints, nothing to fetch without a session.
     if (!customer) return;
+    const id = ++requestId.current;
     if (isRefresh) setRefreshing(true);
     setError("");
     try {
       const [l, w] = await Promise.all([fetchAccountLeads(), fetchMyWaitlistEntries()]);
+      if (id !== requestId.current) return;
       setLeads(l);
       setWaitlist(w);
     } catch (err) {
+      if (id !== requestId.current) return;
       setError(
         err instanceof ApiError ? err.message : "تعذّر تحميل طلباتك. اسحب لتحديث الصفحة.",
       );
@@ -89,7 +99,26 @@ export default function Requests() {
     load();
   }, [load]);
 
-  useLiveEvents(() => load());
+  // Two changes over the bare `useLiveEvents(() => load())` this was:
+  //
+  //  - It no longer refetches for events that cannot change this list. A
+  //    `favorite` (a heart tapped on another device) and a `profile` (a name
+  //    changed in Account) both used to re-download every lead AND every
+  //    waitlist entry here, and a chat `message` did too — while the Messages
+  //    list, the tab badges and the root layout were each fetching for the
+  //    same message. A message does not move a request's status; the
+  //    `lead-status` event that does is still handled.
+  //  - It is coalesced, so a burst still costs one refetch rather than one
+  //    per event (see useCoalescedReload).
+  //
+  // `reconnect` is kept for the reason liveEvents.ts documents: after a drop,
+  // anything could have changed while nobody was listening.
+  const reload = useCoalescedReload(load);
+  useLiveEvents((event) => {
+    if (event.type === "lead" || event.type === "lead-status" || event.type === "reconnect") {
+      reload();
+    }
+  });
 
   // Fallback for the live stream reconnecting (liveEvents.ts retries on its
   // own, but that can take up to its 30s backoff ceiling) or having silently
@@ -98,9 +127,9 @@ export default function Requests() {
   // polling here is only ever REDUNDANT with a healthy connection, never the
   // primary path.
   useEffect(() => {
-    const id = setInterval(() => load(), 45_000);
+    const id = setInterval(() => reload(), 45_000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [reload]);
 
   const items: RequestItem[] = useMemo(() => {
     const all: RequestItem[] = [
@@ -129,6 +158,23 @@ export default function Requests() {
   // Controls the search box and filter chips: only meaningful once there is
   // actually something to search and filter.
   const loaded = hasData;
+
+  // Stable identity, and memoised cards below. `renderItem` was an inline
+  // arrow, so it was a new function on every render of this screen — and this
+  // screen re-renders on every keystroke in the search box, every filter chip,
+  // every live event and every 45s poll. A changed `renderItem` invalidates
+  // every mounted cell, so typing one character re-rendered every visible
+  // request card. `setReviewing` is a setState function, so it is already
+  // stable and safe to close over with an empty dependency list.
+  const renderRequest = useCallback(
+    ({ item }: { item: RequestItem }) =>
+      item.kind === "lead" ? (
+        <LeadCard lead={item.data} onReview={setReviewing} />
+      ) : (
+        <WaitlistCard entry={item.data} />
+      ),
+    [],
+  );
 
   if (!customer) return null;
 
@@ -217,13 +263,7 @@ export default function Requests() {
             </View>
           )
         }
-        renderItem={({ item }) =>
-          item.kind === "lead" ? (
-            <LeadCard lead={item.data} onReview={setReviewing} />
-          ) : (
-            <WaitlistCard entry={item.data} />
-          )
-        }
+        renderItem={renderRequest}
       />
 
       {/* Only for a failed refresh OVER existing rows. A total failure gets the
@@ -251,7 +291,7 @@ export default function Requests() {
   );
 }
 
-function LeadCard({ lead: item, onReview }: { lead: ApiLead; onReview: (v: { id: string; companyName: string }) => void }) {
+const LeadCard = memo(function LeadCard({ lead: item, onReview }: { lead: ApiLead; onReview: (v: { id: string; companyName: string }) => void }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -294,7 +334,7 @@ function LeadCard({ lead: item, onReview }: { lead: ApiLead; onReview: (v: { id:
       </View>
     </View>
   );
-}
+});
 
 /**
  * A queued request — one sent to a company that was booked out.
@@ -305,7 +345,7 @@ function LeadCard({ lead: item, onReview }: { lead: ApiLead; onReview: (v: { id:
  * accepts it. So the actions LeadCard offers are replaced by a line saying where
  * this stands in the queue.
  */
-function WaitlistCard({ entry }: { entry: ApiWaitlistEntry }) {
+const WaitlistCard = memo(function WaitlistCard({ entry }: { entry: ApiWaitlistEntry }) {
   const converted = entry.status === "CONVERTED";
   return (
     <View style={styles.card}>
@@ -348,7 +388,7 @@ function WaitlistCard({ entry }: { entry: ApiWaitlistEntry }) {
       </Pressable>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface },

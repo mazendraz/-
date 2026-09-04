@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Tabs } from "expo-router";
-import { usePushNotifications, useLiveEvents } from "@alassema/mobile-shared";
+import { usePushNotifications, useLiveEvents, useCoalescedReload } from "@alassema/mobile-shared";
 import { useCustomerAuth } from "../../lib/customerAuth";
 import {
   refreshUnreadMessages,
@@ -119,22 +119,31 @@ function useBadgeCountsSync(): void {
   // signed in.
   const customerId = useCustomerAuth().customer?.id ?? null;
 
+  // Both counts go through their own coalescer. A company replying several
+  // times in a row used to start one `/customer/chat/summaries` AND one
+  // `/customer/notifications` per reply from here — on top of what the
+  // Messages list, the Requests list and the open thread were each doing with
+  // the same events. Coalesced, a burst costs at most two requests per count,
+  // and the last event is still always reflected.
+  const syncMessages = useCoalescedReload(refreshUnreadMessages);
+  const syncNotifications = useCoalescedReload(refreshUnreadNotifications);
+
   useEffect(() => {
     if (!customerId) {
       resetUnread();
       return;
     }
     const refreshAll = () => {
-      void refreshUnreadMessages();
-      void refreshUnreadNotifications();
+      syncMessages();
+      syncNotifications();
     };
     refreshAll();
     const id = setInterval(refreshAll, 45_000);
     return () => clearInterval(id);
-  }, [customerId]);
+  }, [customerId, syncMessages, syncNotifications]);
 
   useLiveEvents((event) => {
-    if (event.type === "message") void refreshUnreadMessages();
-    if (NOTIFYING_EVENTS.has(event.type)) void refreshUnreadNotifications();
+    if (event.type === "message") syncMessages();
+    if (NOTIFYING_EVENTS.has(event.type)) syncNotifications();
   });
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -13,7 +13,7 @@ import {
   markNotificationRead,
   updateNotificationPreferences,
 } from "../lib/notifications";
-import { useLiveEvents, rowStart, textStart } from "@alassema/mobile-shared";
+import { useLiveEvents, useCoalescedReload, rowStart, textStart } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../lib/authGate";
 import {
   decrementUnreadNotifications,
@@ -78,16 +78,25 @@ export default function Notifications() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
+  // A live event, a pull-to-refresh and the optimistic mark-read writes below
+  // can overlap. Without this the last RESPONSE won rather than the last
+  // REQUEST — a slow earlier read landing late re-marked rows the customer
+  // had just read as unread, and put the badge count back with them.
+  const requestId = useRef(0);
+
   const load = useCallback(async (isRefresh = false) => {
     if (!customer) return;
+    const id = ++requestId.current;
     if (isRefresh) setRefreshing(true);
     setError("");
     try {
       const [res, p] = await Promise.all([fetchNotifications(), fetchNotificationPreferences()]);
+      if (id !== requestId.current) return;
       setRows(res.notifications);
       setUnreadNotifications(res.unreadCount);
       setPrefs(p);
     } catch {
+      if (id !== requestId.current) return;
       setError("تعذّر تحميل الإشعارات.");
     } finally {
       if (isRefresh) setRefreshing(false);
@@ -100,9 +109,13 @@ export default function Notifications() {
 
   // A push arriving while this screen is open should show up without a
   // manual pull-to-refresh — same live-event trigger messages.tsx already
-  // uses for its own list.
+  // uses for its own list, and coalesced for the same reason: a burst of
+  // replies used to start one pair of requests per event from here.
+  const reload = useCoalescedReload(load);
   useLiveEvents((event) => {
-    if (event.type === "message" || event.type === "lead-status" || event.type === "lead") load();
+    if (event.type === "message" || event.type === "lead-status" || event.type === "lead" || event.type === "reconnect") {
+      reload();
+    }
   });
 
   async function onOpen(n: ApiCustomerNotification) {

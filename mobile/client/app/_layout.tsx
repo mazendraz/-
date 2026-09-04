@@ -17,6 +17,7 @@ import {
   isVersionBelow,
   useMaintenance,
   useBackendHealth,
+  useCoalescedReload,
   initErrorReporting,
   reportError,
   setReportingRole,
@@ -201,9 +202,23 @@ export default function RootLayout() {
   // Catches a completion that happens WHILE the app is already open, not just
   // at cold start — same "no screen the customer can dodge it on" guarantee
   // the website gets from RootLayout re-rendering on every route.
+  // Coalesced, because this is the one live-event consumer that is ALWAYS
+  // mounted: without it, five replies arriving in a row started five
+  // overlapping `GET /customer/leads` calls from this component alone, on top
+  // of everything the mounted tab screens were doing with the same events.
+  const recheckVerification = useCoalescedReload(checkPendingVerification);
+
   useLiveEvents((event) => {
     if (!customer || maintenance.enabled) return;
-    void checkPendingVerification();
+    // Only the events that can actually produce a PENDING completion. This
+    // used to run for every type — a chat `message`, a `favorite`, a
+    // `profile` — none of which can create the thing this gate looks for, so
+    // an active conversation re-downloaded the whole account's lead list per
+    // reply. `reconnect` stays because it means "you may have missed
+    // something", which is exactly when a completion could have slipped past.
+    if (event.type === "lead" || event.type === "lead-status" || event.type === "reconnect") {
+      recheckVerification();
+    }
     // Favorites are account data now (see lib/saved.ts). This is the one
     // subscription in the app that is always mounted, so it is where the
     // shortlist gets told to re-read itself — favouriting on the web, or on

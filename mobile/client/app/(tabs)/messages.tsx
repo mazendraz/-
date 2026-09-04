@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -10,7 +10,7 @@ import Logo from "../../components/Logo";
 import { fetchAccountLeads } from "../../lib/customerLeads";
 import { fetchThreadSummaries } from "../../lib/chat";
 import { setUnreadFromSummaries } from "../../lib/unreadStore";
-import { useLiveEvents, ApiError, rowStart, textStart, uiIsRTL, displayLine } from "@alassema/mobile-shared";
+import { useLiveEvents, useCoalescedReload, ApiError, rowStart, textStart, uiIsRTL, displayLine } from "@alassema/mobile-shared";
 import { useRequireAccount } from "../../lib/authGate";
 
 interface Row {
@@ -45,20 +45,30 @@ export default function Messages() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
 
+  // Bumped on every load. A pull-to-refresh, the 45s interval and a live
+  // event can all be in flight at once; without this the last RESPONSE won
+  // rather than the last REQUEST, so a slow earlier read landing late put
+  // older threads back on screen — the same guard companies.tsx uses on its
+  // filters, for the same reason.
+  const requestId = useRef(0);
+
   const load = useCallback(async (isRefresh = false) => {
     // Guest mid-redirect (see useRequireAccount) — these are account-scoped
     // endpoints, nothing to fetch without a session.
     if (!customer) return;
+    const id = ++requestId.current;
     if (isRefresh) setRefreshing(true);
     setError("");
     try {
       const [leads, s] = await Promise.all([fetchAccountLeads(), fetchThreadSummaries()]);
+      if (id !== requestId.current) return;
       setRefByLeadId(new Map(leads.map((l) => [l.refNumber, l.id])));
       setSummaries(s);
       // The tab bar's red badge reads the same numbers this list draws — hand
       // them over rather than making it fetch the identical payload again.
       setUnreadFromSummaries(s);
     } catch (err) {
+      if (id !== requestId.current) return;
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل المحادثات.");
     } finally {
       if (isRefresh) setRefreshing(false);
@@ -69,17 +79,23 @@ export default function Messages() {
     load();
   }, [load]);
 
+  // Coalesced: a company replying five times in a row used to start five
+  // overlapping pairs of requests from this screen alone (see
+  // useCoalescedReload's own comment on the fan-out). `reconnect` joins it
+  // because the stream having been down is exactly when this list is most
+  // likely to be behind — see liveEvents.ts's note on that synthesised event.
+  const reload = useCoalescedReload(load);
   useLiveEvents((event) => {
-    if (event.type === "message") load();
+    if (event.type === "message" || event.type === "reconnect") reload();
   });
 
   // Fallback for the live stream reconnecting or having silently never
   // delivered an event this session — see requests.tsx's identical interval
   // for the full reasoning.
   useEffect(() => {
-    const id = setInterval(() => load(), 45_000);
+    const id = setInterval(() => reload(), 45_000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [reload]);
 
   const rows: Row[] = useMemo(() => {
     return (summaries ?? [])
