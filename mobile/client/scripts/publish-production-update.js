@@ -58,31 +58,19 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+// The approved backend, the private-address rule and the bundle URL pattern
+// live in ONE place, shared with scripts/build-production.js — two copies of a
+// security constant is how the OTA path and the native-build path drift apart.
+const {
+  CLIENT_DIR,
+  APPROVED_API_URL,
+  PRIVATE_ADDRESS,
+  API_URL_IN_BUNDLE,
+  resolveProductionEnv,
+} = require("./production-env");
 
-const CLIENT_DIR = path.join(__dirname, "..");
-const EAS_JSON = path.join(CLIENT_DIR, "eas.json");
 const OUT_DIR = path.join(CLIENT_DIR, "dist-production");
-const PROFILE = "production";
 const BRANCH = "production";
-
-/** The one backend a production artifact is allowed to talk to. Anything else
- *  — including a staging host or a typo'd domain — stops the publish. */
-const APPROVED_API_URL = "https://al-assema.tech/api/v1";
-
-/**
- * Addresses that can only ever mean "a machine on someone's desk".
- *
- * `localhost` and `.local` are deliberately NOT here: both appear inside
- * React Native's and Expo's own bundled internals even in a known-good
- * production export (measured: 3 and 1 occurrences), so banning them outright
- * would fail every honest publish — and a check that cries wolf is a check
- * that gets bypassed. They are still caught where it matters, by the API-URL
- * check below, which inspects every `/api/v1`-bearing string in the bundle.
- */
-const PRIVATE_ADDRESS = /\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|127\.0\.0\.1|0\.0\.0\.0)\b/g;
-
-/** Any string in the bundle that looks like an API base URL. */
-const API_URL_IN_BUNDLE = /https?:\/\/[a-zA-Z0-9.:_-]*\/api\/v1/g;
 
 function fail(message, detail) {
   console.error(`\n✗ ${message}`);
@@ -131,17 +119,9 @@ function run(command, args, label, env) {
 // ── 1. Where the production values come from ────────────────────────────────
 step(1, "Resolving the production environment from eas.json");
 
-let profileEnv;
-try {
-  const easJson = JSON.parse(fs.readFileSync(EAS_JSON, "utf8"));
-  profileEnv = easJson?.build?.[PROFILE]?.env;
-} catch (err) {
-  fail(`Could not read ${EAS_JSON}`, err.message);
-}
-if (!profileEnv || typeof profileEnv !== "object") {
-  fail(`eas.json has no build.${PROFILE}.env block to read the production environment from.`);
-}
-
+// Exits with an explanation if the environment is not fit to ship — same rule,
+// same shared definition, as the native-build path.
+const profileEnv = resolveProductionEnv();
 const resolvedApiUrl = profileEnv.EXPO_PUBLIC_API_URL;
 
 console.log("");
@@ -154,21 +134,7 @@ console.log("    Platforms        ios, android");
 // ── 2. Refuse anything that is not the approved backend ─────────────────────
 step(2, "Validating the resolved production environment");
 
-if (!resolvedApiUrl) {
-  fail("EXPO_PUBLIC_API_URL is missing or empty in eas.json's production profile.");
-}
-if (resolvedApiUrl !== APPROVED_API_URL) {
-  fail(
-    "EXPO_PUBLIC_API_URL is not the approved production backend.",
-    `    expected: ${APPROVED_API_URL}\n    found:    ${resolvedApiUrl}`,
-  );
-}
-for (const [key, value] of Object.entries(profileEnv)) {
-  if (typeof value !== "string") continue;
-  const hit = value.match(PRIVATE_ADDRESS);
-  if (hit) fail(`${key} points at a private/LAN address: ${hit[0]}`);
-}
-console.log("    ✓ API URL is the approved production backend");
+console.log(`    ✓ API URL is the approved production backend (${APPROVED_API_URL})`);
 console.log("    ✓ no private/LAN address in any production variable");
 
 // ── 3. Export, with every local channel closed off ──────────────────────────

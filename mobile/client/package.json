@@ -59,6 +59,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "update:production": "node scripts/publish-production-update.js",
+    "build:production": "node scripts/build-production.js",
+    "test:env": "node scripts/production-env.test.js",
     "bundle:check": "expo export --platform web --output-dir .expo-export-check"
   },
   "private": true
