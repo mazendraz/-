@@ -17,7 +17,6 @@ import { router } from "expo-router";
 import type { ApiCategory, ApiCompany, ApiSiteReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon, { toIconName } from "../../components/Icon";
-import SafetyBox from "../../components/SafetyBox";
 import Logo from "../../components/Logo";
 import SiteReviewModal from "../../components/SiteReviewModal";
 import ReviewsMarquee from "../../components/ReviewsMarquee";
@@ -337,12 +336,6 @@ export default function Home() {
             </View>
           ))}
         </View>
-
-        {/* Above the "why" reasons, same order as the website: that section
-            says what kind of platform this is, this one answers the question
-            a visitor is actually holding — "what happens to me if this goes
-            wrong". */}
-        <SafetyBox style={styles.safetyBox} />
 
         <View style={styles.reasonsRow}>
           {REASONS.map((r) => (
@@ -712,16 +705,21 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,
   },
+  // 18/30 over a photo, not 15 with default leading. This line sits on the
+  // brightest part of the skyline and is the first thing a first-time visitor
+  // actually reads; the website's hero sub took the same step up. Opacity is
+  // gone with it — dimming white text over a busy photo costs contrast for no
+  // gain now that the shadow is doing the separating.
   heroSub: {
-    fontSize: type.body.fontSize,
+    fontSize: type.subhead.fontSize,
+    lineHeight: 30,
     fontFamily: "Cairo_400Regular",
     color: "#fff",
-    opacity: 0.92,
     textAlign: "center",
-    maxWidth: 300,
-    textShadowColor: "rgba(0,0,0,0.35)",
+    maxWidth: 330,
+    textShadowColor: "rgba(0,0,0,0.5)",
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
+    textShadowRadius: 8,
   },
   // Stacked vertically, each button ~85% width — matches the website's
   // `flex-col items-center sm:flex-row` + `w-[85%] sm:w-auto` at phone
@@ -757,7 +755,6 @@ const styles = StyleSheet.create({
   heroCtaText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: "#fff" },
   heroScrollHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, alignSelf: "center", marginTop: 16 },
   heroScrollHintText: { fontFamily: "Cairo_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.85)" },
-  safetyBox: { marginHorizontal: 20, marginTop: 20 },
   promisesCard: {
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 20,

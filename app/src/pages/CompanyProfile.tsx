@@ -25,7 +25,6 @@ import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import PhoneInput from "../components/PhoneInput";
 import Icon from "../components/Icon";
-import SafetyBox from "../components/SafetyBox";
 
 export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
@@ -397,12 +396,6 @@ export default function CompanyProfile() {
               <Icon name="arrow_forward" className="text-body rtl-flip" />
             </Link>
           )}
-
-          {/* Directly under the prices, because this is where "that's
-              expensive" gets decided. A number next to a photo is just a
-              number; the same number under four specific commitments is a
-              price for something. */}
-          <SafetyBox className="mt-6" />
         </section>
 
         {/* Gallery — auto-visible, no tab click required. */}

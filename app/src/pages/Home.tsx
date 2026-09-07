@@ -19,7 +19,6 @@ import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import { useSettings } from "../lib/settings";
 import Icon from "../components/Icon";
-import SafetyBox from "../components/SafetyBox";
 
 // ── Generic reveal wrapper ────────────────────────────────────────────────
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -447,16 +446,6 @@ export default function Home() {
               </Reveal>
             ))}
           </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════════════
-            HOW WE PROTECT YOU
-        ═══════════════════════════════════════════════════ */}
-        {/* Above "Why Al Assema" on purpose: that section says what kind of
-            platform this is, this one answers the question a visitor is
-            actually holding — "what happens to me if this goes wrong". */}
-        <section className="py-10 md:py-14 border-t border-surface-dim/20">
-          <SafetyBox />
         </section>
 
         {/* ═══════════════════════════════════════════════════
