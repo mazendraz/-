@@ -114,11 +114,20 @@ export default function Home() {
 
         {/* Content */}
         <div className="relative z-10 text-center px-5 md:px-8 max-w-4xl mx-auto w-full mt-16 md:mt-20">
+          {/* Two direction-specific corrections, both for the same reason: this
+              headline is set in Cairo in Arabic and a Latin display face in
+              English, and they do not want the same metrics.
+              - ltr:tracking-tight, not tracking-tight: negative letter-spacing
+                on Arabic pulls connected letterforms into each other.
+              - rtl:leading-*: at 1.14 the dots above the ش in "الشركة" ran into
+                the descenders of the line above it. Arabic needs the extra
+                leading for its marks; Latin display type does not and looks
+                loose with it. */}
           <h1
-            className="text-white font-black mb-6 tracking-tight
-                       text-[2.4rem] leading-[1.12]
-                       md:text-[3.75rem] md:leading-[1.08]
-                       max-w-3xl mx-auto"
+            className="text-white font-black mb-5 md:mb-6 ltr:tracking-tight
+                       text-[2.4rem] leading-[1.2] rtl:leading-[1.45]
+                       md:text-[3.75rem] md:leading-[1.14] md:rtl:leading-[1.4]
+                       max-w-3xl mx-auto text-balance"
             style={{ textShadow: "0 2px 20px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.4)" }}
           >
             {heroTitleOverride ? (
@@ -130,10 +139,14 @@ export default function Home() {
               </>
             )}
           </h1>
+          {/* Was text-body (15px) inside max-w-lg — a 15px line over a busy
+              photo is the hardest thing on the page to read, and 32rem broke
+              the Arabic sentence into more lines than it needs. One step up in
+              size, one step wider in measure. */}
           <p
-            className="text-white/95 mb-10 max-w-lg mx-auto
-                       text-body md:text-subhead leading-[1.75] font-medium"
-            style={{ textShadow: "0 1px 8px rgba(0,0,0,0.45)" }}
+            className="text-white mb-9 md:mb-10 max-w-[34rem] md:max-w-[38rem] mx-auto
+                       text-subhead md:text-[1.3125rem] leading-[1.8] font-medium text-balance"
+            style={{ textShadow: "0 1px 10px rgba(0,0,0,0.55), 0 1px 3px rgba(0,0,0,0.4)" }}
           >
             {heroSubOverride || t(locale, "home_hero_sub")}
           </p>

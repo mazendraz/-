@@ -501,9 +501,12 @@ export function availabilityLabel(
 
   return {
     state: "free",
-    text: c.responseTime
-      ? ar ? `متاح · بيرد ${c.responseTime}` : `Available · replies ${c.responseTime}`
-      : ar ? "متاح" : "Available",
+    // The provider's raw responseTime string ("within 24 hours") is admin-typed
+    // free text in English, so it read as untranslated noise inside an Arabic
+    // badge — and "24 hours" is a slower promise than the platform wants to
+    // make. The badge now says the thing that matters without quoting a figure
+    // nobody measures.
+    text: ar ? "متاح · بيرد بسرعة" : "Available · replies fast",
   };
 }
 

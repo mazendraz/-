@@ -28,21 +28,30 @@ export default function SafetyBox({ className = "" }: { className?: string }) {
 
   return (
     <section
-      className={`bg-surface-container-lowest border border-outline-variant/25 rounded-2xl p-5 md:p-6 ${className}`}
+      className={`bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-6 md:p-8 shadow-soft ${className}`}
       aria-labelledby="safety-title"
     >
-      <h2 id="safety-title" className="flex items-center gap-2 text-body font-black text-on-surface mb-4">
-        <Icon name="shield" className="text-primary text-subhead" fill />
+      {/* Header. The old one was text-body (15px) with a 18px icon in a box
+          that can run 1280px wide — it read as a caption, not a heading. */}
+      <h2
+        id="safety-title"
+        className="flex items-center gap-2.5 text-subhead md:text-title font-black text-on-surface mb-5 md:mb-6"
+      >
+        <Icon name="shield" className="text-primary text-title md:text-headline" fill />
         {t(locale, "safety_title")}
       </h2>
 
-      <ol className="space-y-3">
+      {/* Two columns from md up. Four 13px lines stacked down the left edge of
+          a full-width card left most of it empty and gave each line a very
+          long measure; two columns halve the measure and let the type come up
+          to body size without the card growing. */}
+      <ol className="grid grid-cols-1 md:grid-cols-2 gap-x-8 lg:gap-x-12 gap-y-4">
         {POINTS.map((key, i) => (
-          <li key={key} className="flex items-start gap-3">
-            <span className="shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-black text-caption grid place-items-center tabular-nums">
+          <li key={key} className="flex items-start gap-3.5">
+            <span className="shrink-0 w-7 h-7 mt-px rounded-full bg-primary/10 text-primary font-black text-label grid place-items-center tabular-nums">
               {i + 1}
             </span>
-            <span className="text-label text-on-surface leading-relaxed">{t(locale, key)}</span>
+            <span className="text-body text-on-surface leading-[1.75]">{t(locale, key)}</span>
           </li>
         ))}
       </ol>
@@ -52,7 +61,7 @@ export default function SafetyBox({ className = "" }: { className?: string }) {
           href={`https://wa.me/${wa}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary text-on-primary px-4 py-2.5 font-bold text-label transition-colors hover:bg-primary-container touch-press"
+          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary text-on-primary px-5 py-3 font-bold text-body transition-colors hover:bg-primary-container touch-press"
         >
           <Icon name="chat" className="text-subhead" />
           {t(locale, "safety_contact")}

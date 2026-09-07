@@ -288,7 +288,7 @@ export default function CompanyProfile() {
                 <div className="flex items-center gap-2 flex-wrap mt-3">
                   <span className="flex items-center gap-1.5 bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-caption font-bold">
                     <Icon name="bolt" className="text-label" />
-                    {t(locale, "profile_responds")} {company.responseTime}
+                    {t(locale, "profile_responds_fast")}
                   </span>
                   <span className="flex items-center gap-1.5 bg-surface-container text-on-surface-variant px-2.5 py-1 rounded-full text-caption font-bold">
                     <Icon name="workspace_premium" className="text-label" />
@@ -486,7 +486,7 @@ export default function CompanyProfile() {
                 <Icon name="bolt" className="text-primary text-title" fill />
                 <div>
                   <p className="text-caption text-outline">{t(locale, "profile_stat_response")}</p>
-                  <p className="text-label font-bold text-on-surface">{company.responseTime}</p>
+                  <p className="text-label font-bold text-on-surface">{t(locale, "profile_response_fast")}</p>
                 </div>
               </div>
               <div className="pt-1">
