@@ -11,7 +11,7 @@
 // an unknown token that substitutes to nothing, and a half-filled pair the API
 // ignores entirely.
 import { describe, expect, it } from "vitest";
-import { checkEmailTemplate, checkEmailTemplatePair } from "@alassema/core";
+import { checkEmailTemplate, checkEmailTemplatePair } from "./emailTemplateRules";
 import { updateEmailTemplatesSchema } from "./settings";
 
 const GOOD_PROVIDER_BODY =

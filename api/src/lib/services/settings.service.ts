@@ -4,7 +4,7 @@
 // contact details, social links. Reads merge stored values over defaults, so a
 // fresh deployment is fully functional before an admin touches anything.
 import { prisma } from "@/lib/prisma";
-import { checkEmailTemplatePair } from "@alassema/core";
+import { checkEmailTemplatePair } from "@/lib/validation/emailTemplateRules";
 import { ValidationError } from "@/lib/utils/errors";
 import type {
   ApiAdminNotificationSettings,

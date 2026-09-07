@@ -45,7 +45,7 @@ import {
   notifyProviderTelegram,
 } from "@/lib/services/telegram.service";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/utils/errors";
-import { checkLossReason } from "@alassema/core";
+import { checkLossReason } from "@/lib/validation/lossReasons";
 import { resolveItems } from "@/lib/services/leadItems.service";
 import type { CreateLeadInput } from "@/lib/validation/leads";
 import { runAfterResponse } from "@/lib/utils/afterResponse";

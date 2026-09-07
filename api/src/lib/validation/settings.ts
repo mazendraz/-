@@ -1,7 +1,7 @@
 // Zod schema for PUT /admin/settings. All keys optional (partial update). Emails
 // and social URLs accept "" (to clear) or a valid value. Values are HTML-stripped.
 import { z } from "zod";
-import { checkEmailTemplate, type EmailTemplateField } from "@alassema/core";
+import { checkEmailTemplate, type EmailTemplateField } from "@/lib/validation/emailTemplateRules";
 import { stripHtml } from "@/lib/utils/sanitize";
 
 const text = (max: number) => z.string().transform(stripHtml).pipe(z.string().max(max));

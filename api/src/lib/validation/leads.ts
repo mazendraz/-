@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { sanitizedText, sanitizedOptionalText } from "@/lib/utils/sanitize";
 import { isValidE164Phone } from "@/lib/utils/phone";
-import { LEAD_LOSS_REASONS } from "@alassema/core";
+import { LEAD_LOSS_REASONS } from "@/lib/validation/lossReasons";
 
 /**
  * One selected line. NO PRICES: the server looks them up from the catalogue.
