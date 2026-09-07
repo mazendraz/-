@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import Logo from "./Logo";
 
 /**
@@ -29,14 +29,14 @@ export default function ScreenHeader({ title, action }: { title: string; action?
 
 const styles = StyleSheet.create({
   topBar: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
   },
-  topBarStart: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  topBarStart: { flexDirection: rowStart, alignItems: "center", gap: 8 },
   title: {
     fontSize: type.headline.fontSize,
     fontFamily: "Alexandria_700Bold",

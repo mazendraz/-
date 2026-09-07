@@ -12,7 +12,7 @@ import {
   statsDelta,
   statsFunnel,
 } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchProviderStats } from "../lib/leads";
 import { fetchAdminStats } from "../lib/adminLeads";
 import { useStaffAuth } from "../lib/staffAuth";
@@ -22,6 +22,8 @@ import TrendChart, { type TrendPoint } from "../components/TrendChart";
 import DonutChart, { type DonutSlice } from "../components/DonutChart";
 import FunnelBar, { type FunnelStep } from "../components/FunnelBar";
 import RangeChips, { RANGES, type Range } from "../components/RangeChips";
+import ExpandedChart from "../components/ExpandedChart";
+import Icon from "../components/Icon";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../components/ListStates";
 
 /**
@@ -77,6 +79,9 @@ export default function Analytics() {
   const { user } = useStaffAuth();
   const admin = isAdmin(user);
   const [range, setRange] = useState<Range>(RANGES[1]); // 30 days
+  // Which chart, if any, is open full-screen. One piece of state for all of
+  // them — only one can be open at a time.
+  const [expanded, setExpanded] = useState<null | "trend" | "status" | "funnel">(null);
   const [stats, setStats] = useState<ApiLeadStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -123,6 +128,7 @@ export default function Analytics() {
             title="حسابك لسه مش مربوط بشركة"
             message="كلّم الأدمن عشان يربط حسابك بشركتك — بعدها هتلاقي تحليلات أدائك هنا."
           />
+
         </SafeAreaView>
       </>
     );
@@ -215,7 +221,11 @@ export default function Analytics() {
             </View>
 
             <Text style={styles.scopeLabel}>في الفترة المختارة</Text>
-            <Section title="الطلبات على مدار الوقت" subtitle="اضغط على أي نقطة لتفاصيل اليوم">
+            <Section
+              title="الطلبات على مدار الوقت"
+              subtitle="اضغط للتكبير والتفاعل"
+              onExpand={() => setExpanded("trend")}
+            >
               <TrendChart
                 points={trend}
                 color={CHART_COLORS.primary}
@@ -224,7 +234,11 @@ export default function Analytics() {
               />
             </Section>
 
-            <Section title="حالات الطلبات" subtitle="اضغط على أي حالة للتفاصيل">
+            <Section
+              title="حالات الطلبات"
+              subtitle="اضغط للتكبير والتفاعل"
+              onExpand={() => setExpanded("status")}
+            >
               <DonutChart
                 slices={slices}
                 centerLabel="إجمالي"
@@ -233,8 +247,17 @@ export default function Analytics() {
               />
             </Section>
 
-            <Section title="مسار التحويل" subtitle="كل مرحلة بتشمل اللي بعدها">
-              <FunnelBar steps={funnel} onSelect={(s) => openLeads(FUNNEL_STATUS[s.key ?? ""])} />
+            <Section
+              title="مسار التحويل"
+              subtitle="اضغط للتكبير · كل مرحلة بتشمل اللي بعدها"
+              onExpand={() => setExpanded("funnel")}
+            >
+              {/* No `onSelect` on the compact card: the body is
+                  `pointerEvents="none"` (see Section), so a pressable row here
+                  would render its chevron and its pressed state over a tap
+                  that can only ever open the full-screen view. The drill-down
+                  lives in the expanded funnel below, where it works. */}
+              <FunnelBar steps={funnel} />
             </Section>
 
             {/* Admin-only: byCompany is empty on the provider endpoint, so this
@@ -286,6 +309,65 @@ export default function Analytics() {
             </Pressable>
           </ScrollView>
         )}
+
+        {/* ── The same charts, full-screen ────────────────────────────────
+            Each one is the SAME component with more room and a taller/larger
+            size, reading the SAME `stats` the screen already fetched — never a
+            second copy of the maths. Selection state lives inside each chart,
+            so an expanded chart starts fresh and the small one behind it keeps
+            whatever the user had selected. */}
+        <ExpandedChart
+          visible={expanded === "trend"}
+          title="الطلبات على مدار الوقت"
+          subtitle="اسحب إصبعك على الخط لاستعراض كل يوم"
+          onClose={() => setExpanded(null)}
+        >
+          <TrendChart
+            points={trend}
+            color={CHART_COLORS.primary}
+            height={340}
+            gridSteps={5}
+            onSelect={() => {
+              setExpanded(null);
+              openLeads();
+            }}
+            actionLabel="عرض الطلبات"
+          />
+        </ExpandedChart>
+
+        <ExpandedChart
+          visible={expanded === "status"}
+          title="حالات الطلبات"
+          subtitle="اضغط على أي جزء من الحلقة، أو على القائمة"
+          onClose={() => setExpanded(null)}
+        >
+          <DonutChart
+            slices={slices}
+            centerLabel="إجمالي"
+            size={260}
+            stacked
+            onSelect={(sl) => {
+              setExpanded(null);
+              openLeads(sl.key as ApiLeadStatus);
+            }}
+            actionLabel={(sl) => `عرض طلبات: ${sl.label}`}
+          />
+        </ExpandedChart>
+
+        <ExpandedChart
+          visible={expanded === "funnel"}
+          title="مسار التحويل"
+          subtitle="اضغط أي مرحلة لعرض طلباتها · كل مرحلة بتشمل اللي بعدها"
+          onClose={() => setExpanded(null)}
+        >
+          <FunnelBar
+            steps={funnel}
+            onSelect={(step) => {
+              setExpanded(null);
+              openLeads(FUNNEL_STATUS[step.key ?? ""]);
+            }}
+          />
+        </ExpandedChart>
       </SafeAreaView>
     </>
   );
@@ -294,25 +376,64 @@ export default function Analytics() {
 function Section({
   title,
   subtitle,
+  onExpand,
   children,
 }: {
   title: string;
   subtitle?: string;
+  /** Opens this chart full-screen. Omit for a section that has nothing more
+   *  to show at a larger size. */
+  onExpand?: () => void;
   children: React.ReactNode;
 }) {
-  return (
-    <View style={styles.section}>
+  const head = (
+    <>
       <Text style={styles.sectionTitle}>{title}</Text>
       {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
-      <View style={styles.sectionBody}>{children}</View>
-    </View>
+    </>
+  );
+
+  if (!onExpand) {
+    return (
+      <View style={styles.section}>
+        {head}
+        <View style={styles.sectionBody}>{children}</View>
+      </View>
+    );
+  }
+
+  return (
+    // ── The card IS the button ──────────────────────────────────────────────
+    // This used to carry a small expand icon in its corner. A chart that
+    // responds to a tap only on one 20px glyph reads as a picture with a
+    // control bolted on; the obvious thing to press is the chart. So the whole
+    // card opens the full-screen view.
+    //
+    // `pointerEvents="none"` on the body is what makes that unambiguous. The
+    // charts are themselves interactive — a donut slice selects, a trend point
+    // selects — and leaving those live inside a pressable card would mean the
+    // same tap could do two different things depending on the pixel it landed
+    // on. Here the compact card is a summary you open; ALL of the interaction
+    // lives in the expanded view, where there is room for it.
+    <Pressable
+      onPress={onExpand}
+      style={({ pressed }) => [styles.section, pressed && styles.sectionPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint="يفتح الرسم البياني بالحجم الكامل"
+    >
+      {head}
+      <View style={styles.sectionBody} pointerEvents="none">
+        {children}
+      </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12, paddingBottom: 32 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   scopeLabel: {
     fontSize: type.caption.fontSize,
     fontFamily: "Cairo_700Bold",
@@ -321,8 +442,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 4,
   },
+  sectionPressed: { backgroundColor: colors.surfaceContainer },
   section: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
@@ -358,7 +480,7 @@ const styles = StyleSheet.create({
   },
   companyList: { gap: 2 },
   companyRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 11,
@@ -375,7 +497,7 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     textAlign: textStart,
   },
-  companyMeta: { flexDirection: "row-reverse", alignItems: "center", gap: 10 },
+  companyMeta: { flexDirection: rowStart, alignItems: "center", gap: 10 },
   companyConv: {
     fontSize: type.caption.fontSize,
     fontFamily: "Cairo_600SemiBold",

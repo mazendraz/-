@@ -1,4 +1,5 @@
 import { useState, useId, useEffect, useRef } from "react";
+import { track } from "../lib/tracking";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { isApiConfigured } from "../lib/api";
 import { useCustomerAuth } from "../lib/customerAuth";
@@ -109,6 +110,9 @@ export default function RequestForm() {
   // built-in list when not overridden.
   const settings = useSettings();
   const districts = parseLines(settings.districts, DISTRICTS);
+  // Suggestion list for the district input below — an id, not a widget: the
+  // field is free text and these are only autocomplete hints.
+  const districtListId = useId();
 
   // Smart pre-fill: reuse contact details from this device's last request
   const lastLead = getMyLeads()[0];
@@ -190,6 +194,19 @@ export default function RequestForm() {
     if (errors[field]) setErrors((e) => ({ ...e, [field]: "" }));
   }
 
+  // ── Funnel instrumentation (lib/analytics.ts) ────────────────────────────
+  // The two stages that matter most on this page. "open" is everyone who got
+  // as far as the form; "start" is everyone who then typed something. The gap
+  // between them is people who looked at the form and walked away, and the gap
+  // between "start" and request_success below is people who tried to send and
+  // didn't make it — two different problems with two different fixes.
+  useEffect(() => {
+    track("request_form_open", { target: companySlug || undefined });
+  }, [companySlug]);
+  useEffect(() => {
+    if (touched) track("request_form_start", { target: companySlug || undefined });
+  }, [touched, companySlug]);
+
   // Above the early returns below: hooks can't be conditional. Nothing left to
   // lose once the request actually sent, so the guard turns off at "success".
   const navBlocker = useUnsavedChangesGuard(touched && step === "form");
@@ -216,7 +233,7 @@ export default function RequestForm() {
     if (!form.name.trim()) e.name = t(locale, "form_err_name");
     if (!form.phone.trim()) e.phone = t(locale, "form_err_phone");
     else if (!isValidE164(form.phone)) e.phone = t(locale, "form_err_phone_invalid");
-    if (!form.district) e.district = t(locale, "form_err_district");
+    if (!form.district.trim()) e.district = t(locale, "form_err_district");
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -249,6 +266,11 @@ export default function RequestForm() {
       // a navigation WE initiated to preserve exactly those changes.
       setTouched(false);
       const next = encodeURIComponent(`${window.location.pathname}${window.location.search}`);
+      // A completed form that now has to go and make an account. The request is
+      // stashed and the trip is short, but this is the single biggest place a
+      // ready-to-send customer can be lost, so it is counted as its own stage
+      // rather than disappearing into "opened the form but never sent".
+      track("request_signin_wall", { target: companySlug || undefined });
       navigate(`/signin?next=${next}`);
       return;
     }
@@ -258,6 +280,7 @@ export default function RequestForm() {
       setSubmitError(t(locale, "form_err_captcha"));
       return;
     }
+    track("request_submit", { target: companySlug || undefined });
     setIsSubmitting(true);
     setSubmitError(null);
     // One payload for both destinations: a request to a busy company is the same
@@ -269,7 +292,7 @@ export default function RequestForm() {
       service: form.service || "General Inquiry",
       name: form.name.trim(),
       phone: form.phone,
-      district: form.district,
+      district: form.district.trim(),
       // Budget is no longer collected on this form; the field stays required
       // on the Lead/API shape (existing leads have real values), so send "".
       budget: "",
@@ -291,10 +314,14 @@ export default function RequestForm() {
       // items next visit as if nothing had been sent. True of a queued request
       // too: it is sent, it is just waiting.
       if (companySlug) clearCart(companySlug);
+      track("request_success", { target: companySlug || undefined });
       setSubmitted(result);
       setStep("success");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
+      // Counted, because a send that fails looks exactly like a customer who
+      // changed their mind in every metric that only tracks successes.
+      track("request_error", { target: companySlug || undefined });
       setSubmitError(t(locale, "form_err_submit"));
       setCaptchaToken(null);
       setCaptchaReset((n) => n + 1); // token is single-use — refresh for retry
@@ -472,21 +499,39 @@ export default function RequestForm() {
             </Field>
           ) : null}
 
+          {/* Typed, not picked.
+              This was a Select over a fixed list, and 12 of the first 16
+              requests came in as "Other" — the list was there, but it was
+              written in English ("R7 District", "Central Business District")
+              on an Arabic form, so the answer people recognised as theirs
+              wasn't on it and the catch-all was. "Other" is not an answer: it
+              loses the one piece of information the provider needs before
+              quoting, and it can't be got back afterwards.
+              The API always accepted free text here (createLeadSchema:
+              sanitizedText(1, 100)) — the constraint only ever existed in this
+              component. The known names stay as a datalist: suggestions while
+              typing, never a wall. */}
           <Field label={t(locale, "form_district")} required error={errors.district}>
             {(p) => (
-              <Select
-                id={p.id}
-                ariaInvalid={p.invalid}
-                describedById={p.describedById}
-                value={form.district}
-                onChange={(v) => set("district", v)}
-                placeholder={t(locale, "form_district_ph")}
-                dataHasError={!!errors.district}
-                options={[
-                  { value: "", label: t(locale, "form_district_ph") },
-                  ...districts.map((d) => ({ value: d, label: d })),
-                ]}
-              />
+              <>
+                <input
+                  id={p.id}
+                  type="text"
+                  className="field-input"
+                  value={form.district}
+                  onChange={(e) => set("district", e.target.value)}
+                  placeholder={t(locale, "form_district_ph")}
+                  list={districtListId}
+                  maxLength={100}
+                  autoComplete="address-level3"
+                  aria-invalid={p.invalid}
+                  aria-describedby={p.describedById}
+                  data-has-error={!!errors.district}
+                />
+                <datalist id={districtListId}>
+                  {districts.map((d) => <option key={d} value={d} />)}
+                </datalist>
+              </>
             )}
           </Field>
 
@@ -725,8 +770,21 @@ function SuccessScreen({ lead, companyName, locale }: { lead: Lead; companyName:
         </div>
 
         <h1 className="font-black text-headline text-on-surface mb-2 tracking-tight">{t(locale, "form_success_title")}</h1>
-        <p className="text-body text-outline mb-7 leading-relaxed max-w-sm mx-auto">
-          {t(locale, "form_success_sub")}
+        {/* Named, not generic.
+            This said "your request was received successfully, our team will
+            contact you soon" — true, and indistinguishable from a form that
+            did nothing. The reference number and the company were on the page
+            already, but as rows in a table underneath; the sentence a person
+            actually reads said neither. Putting the customer's name, their
+            reference, the company it went to and WHEN we call into one line is
+            the difference between a black box and a process with a receipt —
+            the same reason a courier gives you a tracking number instead of
+            "thanks for your parcel". */}
+        <p className="text-body text-on-surface mb-7 leading-relaxed max-w-sm mx-auto">
+          {t(locale, "form_success_named")
+            .replace("{name}", lead.name)
+            .replace("{ref}", lead.refNumber)
+            .replace("{company}", companyName)}
         </p>
 
         {/* Reference card */}

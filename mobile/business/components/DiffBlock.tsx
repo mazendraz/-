@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import type { ChangeEntity } from "../lib/profile";
 
 /** api's changeRequests.service.ts EDITABLE_FIELDS labels, mirrored per
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: type.body.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: "center", padding: 16 },
   field: { backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, gap: 4 },
   fieldConflict: { borderWidth: 1, borderColor: colors.error },
-  fieldHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  fieldHeader: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   fieldLabel: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   conflictTag: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.error },
   before: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.error, textAlign: textStart, textDecorationLine: "line-through" },

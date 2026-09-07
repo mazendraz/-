@@ -68,6 +68,12 @@ describe("serializeLead", () => {
       budget: "EGP 150,000 – 500,000",
       description: "Need a full fit-out",
       status: "New",
+      // Null on a lead that was never cancelled — which is every lead except
+      // the ones a provider or admin closed with a recorded reason, and the
+      // ones cancelled before the column existed. See leads.service
+      // updateStatus: a NEW cancellation cannot be recorded without one.
+      lossReason: null,
+      lossNote: null,
       reviewed: false,
       createdAt: createdAt.getTime(),
       // Feature C. A classic single-service lead carries no items and no

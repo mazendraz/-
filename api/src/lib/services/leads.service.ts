@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import {
   CompanyStatus,
+  LeadLossReason,
   LeadStatus,
   LeadVerificationStatus,
   StaffNotificationType,
@@ -43,12 +44,14 @@ import {
   notifyAdminTelegram,
   notifyProviderTelegram,
 } from "@/lib/services/telegram.service";
-import { ConflictError, NotFoundError } from "@/lib/utils/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/utils/errors";
+import { checkLossReason } from "@alassema/core";
 import { resolveItems } from "@/lib/services/leadItems.service";
 import type { CreateLeadInput } from "@/lib/validation/leads";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import type {
   ApiLead,
+  ApiLeadLossReason,
   ApiLeadStatus,
   ApiOperationsSummary,
   ApiPage,
@@ -723,8 +726,40 @@ export const COMPLETABLE_FROM: readonly LeadStatus[] = (
 export async function updateStatus(
   id: string,
   status: ApiLeadStatus,
-  { requireCompletion = false }: { requireCompletion?: boolean } = {},
+  {
+    requireCompletion = false,
+    lossReason,
+    lossNote,
+  }: {
+    requireCompletion?: boolean;
+    lossReason?: ApiLeadLossReason;
+    lossNote?: string;
+  } = {},
 ): Promise<ApiLead> {
+  // A cancellation without a reason is the thing this exists to stop.
+  //
+  // CANCELLED used to be the only way a request could end badly, and nothing
+  // recorded what "badly" meant — so a month of cancellations was a count, and
+  // every explanation for it was a guess. Enforced HERE rather than in the
+  // schema because the rule is cross-field ("required, but only when the target
+  // is Cancelled"), and because this is the one path all three clients go
+  // through: making it optional at the boundary is how the column would fill up
+  // with nulls and become the empty spreadsheet column it replaces.
+  //
+  // Only the TRANSITION into Cancelled is checked. Re-writing "Cancelled" onto
+  // a lead that is already cancelled stays the no-op success sourcesFor() makes
+  // it (dashboards re-send the selected value routinely), and the reason
+  // already on the row is left alone rather than blanked by a repeat write.
+  const target = leadStatusFromLabel(status);
+  const isNewCancellation =
+    target === LeadStatus.CANCELLED &&
+    (await prisma.lead.findUnique({ where: { id }, select: { status: true } }))?.status !==
+      LeadStatus.CANCELLED;
+  if (isNewCancellation) {
+    const problem = checkLossReason(lossReason, lossNote);
+    if (problem) throw new ValidationError(problem, { lossReason: [problem] });
+  }
+
   if (requireCompletion && status === "Completed") {
     const existing = await prisma.lead.findUnique({
       where: { id },
@@ -743,10 +778,18 @@ export async function updateStatus(
   // a conditional updateMany means a simultaneous writer cannot slip between a
   // read and a write. The pair matters — a plain `update` guarded by a preceding
   // SELECT would still let a concurrent cancel overwrite a completion.
-  const target = leadStatusFromLabel(status);
   const claimed = await prisma.lead.updateMany({
     where: { id, status: { in: sourcesFor(target) } },
-    data: { status: target },
+    data: {
+      status: target,
+      // Written in the SAME conditional update as the status, not after it: a
+      // second write could land while a concurrent one had already moved the
+      // lead, leaving a reason attached to a status that never happened.
+      // Absent on every other transition, so nothing else can blank it.
+      ...(isNewCancellation
+        ? { lossReason: lossReason as LeadLossReason, lossNote: lossNote?.trim() || null }
+        : {}),
+    },
   });
   if (claimed.count === 0) {
     // Distinguish "no such lead" from "not a legal move" — they are different

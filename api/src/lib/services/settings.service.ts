@@ -4,6 +4,8 @@
 // contact details, social links. Reads merge stored values over defaults, so a
 // fresh deployment is fully functional before an admin touches anything.
 import { prisma } from "@/lib/prisma";
+import { checkEmailTemplatePair } from "@alassema/core";
+import { ValidationError } from "@/lib/utils/errors";
 import type {
   ApiAdminNotificationSettings,
   ApiEmailTemplates,
@@ -37,6 +39,10 @@ export const PLATFORM_SETTING_KEYS = [
   "logo_scale",
   // Homepage hero background image URL; blank = the built-in skyline render.
   "hero_image_url",
+  // Meta (Facebook) Pixel id. BLANK = the pixel is not loaded at all — no
+  // script, no cookies, no CSP surface. Only worth setting while ads are
+  // actually running; see app/src/lib/metaPixel.ts.
+  "meta_pixel_id",
 ] as const;
 export type PlatformSettingKey = (typeof PLATFORM_SETTING_KEYS)[number];
 
@@ -59,6 +65,7 @@ const DEFAULTS: ApiPlatformSettings = {
   favicon_url: "",
   logo_scale: "",
   hero_image_url: "",
+  meta_pixel_id: "",
 };
 
 function isKey(k: string): k is PlatformSettingKey {
@@ -117,10 +124,34 @@ export async function getEmailTemplates(): Promise<ApiEmailTemplates> {
   }
 }
 
-/** Admin: upsert email-template keys; returns the full set. */
+/**
+ * Admin: upsert email-template keys; returns the full set.
+ *
+ * The per-field token rules live in validation/settings.ts and run before this.
+ * The one rule that CANNOT live there is the pair: notifications.service only
+ * uses an override when subject AND body are both non-blank (`tpl.providerSubject
+ * && tpl.providerBody`), so filling in one of the two changes nothing at all —
+ * the admin saves, sees the field persisted, and keeps receiving the built-in
+ * email with no explanation. Checking it needs the STORED value of the other
+ * half, which a request-body schema does not have, so it is checked here against
+ * the merged result.
+ */
 export async function updateEmailTemplates(
   patch: Partial<ApiEmailTemplates>,
 ): Promise<ApiEmailTemplates> {
+  const merged: ApiEmailTemplates = { ...(await getEmailTemplates()), ...patch };
+  const details: Record<string, string[]> = {};
+  for (const [subjectKey, bodyKey] of [
+    ["providerSubject", "providerBody"],
+    ["adminSubject", "adminBody"],
+  ] as const) {
+    const problem = checkEmailTemplatePair(merged[subjectKey], merged[bodyKey]);
+    if (problem) details[problem.field === "subject" ? subjectKey : bodyKey] = [problem.message];
+  }
+  if (Object.keys(details).length > 0) {
+    throw new ValidationError("Incomplete email template", details);
+  }
+
   const entries = (Object.keys(patch) as (keyof ApiEmailTemplates)[])
     .filter((f) => f in EMAIL_TEMPLATE_KEYS && typeof patch[f] === "string")
     .map((f) => [EMAIL_TEMPLATE_KEYS[f], patch[f] as string] as const);

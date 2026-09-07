@@ -1,4 +1,5 @@
 import { Link, useParams } from "react-router-dom";
+import { track } from "../lib/tracking";
 import { useEffect, useState } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
@@ -36,6 +37,14 @@ export default function ServiceCategoryPage() {
   // Signed-in only (see recordCategoryView) — a guest's browsing has no
   // account to attach the signal to. Mirrors the mobile app's identical
   // effect in app/services/[slug].tsx.
+  // Funnel stage — every visitor, signed in or not. Deliberately separate from
+  // recordCategoryView below: that one personalises a re-engagement email for a
+  // known customer, this one counts the anonymous majority we are trying to
+  // convert.
+  useEffect(() => {
+    if (category) track("category_view", { target: category });
+  }, [category]);
+
   useEffect(() => {
     if (customer && category) recordCategoryView(category);
   }, [customer, category]);

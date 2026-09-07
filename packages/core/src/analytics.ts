@@ -41,11 +41,36 @@ export const CHART_COLORS = {
   secondary: "#785a02",
 } as const;
 
-/** Per-status chart colour. Matches the website's STATUS_HEX exactly. */
+/**
+ * Per-status chart colour — the ONE definition both surfaces read (the website
+ * re-exports this from app/src/lib/analytics.ts), so a provider comparing the
+ * web dashboard and the app can never see the same status in two colours.
+ *
+ * ── Why these values and not the obvious ones ──────────────────────────────
+ * The first four statuses used to run blue → amber (#ca8a04) → orange
+ * (#ea580c) → green, which is the palette anyone would reach for and is wrong
+ * for the one place it is used most: adjacent arcs of the status donut.
+ * Deuteranopia and protanopia both collapse amber and orange onto the same
+ * yellow axis, and these two sat at the same lightness, so "تم التواصل" and
+ * "قيد التنفيذ" were ΔE 2.9 apart for a red-green colourblind reader — and
+ * only 11.7 apart for everyone else, which is below the ~15 threshold where
+ * two neighbouring fills stop being separable at a glance even with full
+ * colour vision. Measured, not eyeballed.
+ *
+ * The fix keeps the semantics (cool = fresh, warm = working, green = done) and
+ * separates the two warm stages by LIGHTNESS instead of hue, which is the one
+ * channel no form of colour blindness removes: a light amber against a deep
+ * burnt orange. Every adjacent pair now clears both the CVD and the
+ * normal-vision floors, as does every non-adjacent pair.
+ *
+ * `Cancelled` is deliberately the one achromatic entry. A cancelled lead
+ * should read as inactive rather than as a fifth category competing for
+ * attention, and grey is the only thing that says that.
+ */
 export const STATUS_HEX: Record<ApiLeadStatus, string> = {
-  New: "#2563eb",
-  Contacted: "#ca8a04",
-  "In Progress": "#ea580c",
+  New: "#1d4ed8",
+  Contacted: "#f59e0b",
+  "In Progress": "#9a3412",
   Completed: "#16a34a",
   Cancelled: "#9aa0a6",
 };

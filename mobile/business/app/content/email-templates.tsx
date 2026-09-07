@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiEmailTemplates } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { colors, type } from "@alassema/core";
 import { fetchEmailTemplates, updateEmailTemplates } from "../../lib/adminContent";
 import Button from "../../components/Button";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
+import FormScroll from "../../components/FormScroll";
 
 // api's settings.service.ts EMAIL_TEMPLATE_KEYS comment — the exact tokens
 // notifications.service.ts substitutes. Blank template = built-in default.
@@ -81,7 +82,7 @@ export default function EmailTemplates() {
         ) : error ? (
           <ErrorCard message={error} />
         ) : templates ? (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.tokenBar}>
               <Text style={styles.tokenHint}>اضغط لإضافة متغيّر في آخر حقل ركّزت عليه:</Text>
               <View style={styles.tokenRow}>
@@ -110,7 +111,7 @@ export default function EmailTemplates() {
             </View>
 
             <Button label={saving ? "بيتحفظ..." : "حفظ"} onPress={handleSave} busy={saving} />
-          </ScrollView>
+          </FormScroll>
         ) : null}
       </SafeAreaView>
     </>
@@ -122,7 +123,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 14, paddingBottom: 40 },
   tokenBar: { backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, gap: 8 },
   tokenHint: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },
-  tokenRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 6 },
+  tokenRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 6 },
   tokenChip: { backgroundColor: colors.primaryContainer, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   tokenChipText: { fontSize: 11, fontFamily: "Cairo_700Bold", color: colors.onPrimaryContainer },
   sectionTitle: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, marginTop: 4 },
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 100, textAlignVertical: "top" },

@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
+import { rowStart } from "@alassema/mobile-shared";
 
 export default function RatingStars({ rating }: { rating: number }) {
   const full = Math.round(rating);
@@ -14,7 +15,7 @@ export default function RatingStars({ rating }: { rating: number }) {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row-reverse", alignItems: "center", gap: 2 },
+  row: { flexDirection: rowStart, alignItems: "center", gap: 2 },
   star: { fontSize: 16, color: colors.outlineVariant },
   starFilled: { color: "#f5a623" },
   value: { marginStart: 6, fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import type { ApiConversation, ApiMessage } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useLiveEvents } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useLiveEvents } from "@alassema/mobile-shared";
 import { fetchThread, sendMessage } from "../../lib/chat";
 import { fetchAdminThread, sendAdminMessage, setThreadClosed, setMessageHidden } from "../../lib/adminChat";
 import { isAdmin } from "../../lib/permissions";
 import { useStaffAuth } from "../../lib/staffAuth";
+import KeyboardLift from "../../components/KeyboardLift";
 import MessageBubble from "../../components/MessageBubble";
 import Composer from "../../components/Composer";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
@@ -190,11 +191,13 @@ export default function ChatThread() {
     <>
       <Stack.Screen options={{ headerShown: true, title: conversation?.customerName ?? "المحادثة" }} />
       <SafeAreaView style={styles.container} edges={["bottom"]}>
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-        >
+        {/* Measured lift, not KeyboardAvoidingView — see KeyboardLift for the
+            three configurations that were tried here first and how each one
+            failed. The short version: on this build the window partly resizes
+            for the IME, so anything that INFERS the overlap double-counts it,
+            and `padding` lifted the composer about half as far as it needed
+            to. */}
+        <KeyboardLift style={styles.flex}>
           {admin && conversation ? (
             <View style={styles.closedBar}>
               <Text style={styles.closedBarText}>{conversation.closed ? "المحادثة مقفولة" : "المحادثة مفتوحة"}</Text>
@@ -241,7 +244,7 @@ export default function ChatThread() {
           ) : (
             <Composer value={draft} onChangeText={setDraft} onSend={handleSend} sending={sending} />
           )}
-        </KeyboardAvoidingView>
+        </KeyboardLift>
       </SafeAreaView>
     </>
   );
@@ -252,7 +255,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   messages: { paddingVertical: 12 },
   closedBar: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,

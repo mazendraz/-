@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ApiError, apiFetch, apiGet, apiPost, apiPatch, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 import type { StringKey } from "./i18n";
-import { DISTRICTS as CORE_DISTRICTS } from "@alassema/core";
+import { DISTRICTS as CORE_DISTRICTS, type ApiLeadLossReason } from "@alassema/core";
 
 export type LeadStatus = "New" | "Contacted" | "In Progress" | "Completed" | "Cancelled";
 
@@ -43,6 +43,10 @@ export interface Lead {
   budget: string;
   description: string;
   status: LeadStatus;
+  /** Why this request was cancelled. Null unless it was, or if it was cancelled
+   *  before the field existed — the API refuses a new cancellation without one. */
+  lossReason?: ApiLeadLossReason | null;
+  lossNote?: string | null;
   reviewed?: boolean; // true once the customer has left a review for this lead
   // High-entropy secret returned on creation; stored on this device and sent to
   // gate status tracking + the review (replaces sending the phone as the secret).
@@ -382,10 +386,17 @@ export async function addLead(
 // on failure — both callers wrap this in useMutation, which rolls back the optimistic
 // change and shows an error toast; swallowing the error here used to leave that toast
 // unreachable, so a failed save just silently reverted with no explanation.
-export function updateLeadStatus(id: string, status: LeadStatus): Promise<void> {
-  write(read().map((l) => (l.id === id ? { ...l, status } : l))); // optimistic
+export function updateLeadStatus(
+  id: string,
+  status: LeadStatus,
+  // Required by the API when status is "Cancelled" — a cancellation with no
+  // recorded reason is exactly what the field exists to stop, so the server
+  // rejects it rather than storing a null. Callers collect it before calling.
+  loss?: { lossReason: ApiLeadLossReason; lossNote?: string },
+): Promise<void> {
+  write(read().map((l) => (l.id === id ? { ...l, status, ...(loss ?? {}) } : l))); // optimistic
   if (isApiConfigured() && isAuthenticated()) {
-    return apiPatch(`/leads/${id}`, { status })
+    return apiPatch(`/leads/${id}`, { status, ...(loss ?? {}) })
       .then(() => undefined)
       .catch((err) => {
         console.error("Lead status update failed:", err);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiOffering, ApiPriceUnit, ApiPricingModel } from "@alassema/core";
@@ -15,8 +15,11 @@ import {
 import type { OfferingInput } from "../../../../lib/offerings";
 import Button from "../../../../components/Button";
 import PriceFields from "../../../../components/PriceFields";
+import MediaPicker from "../../../../components/MediaPicker";
+import { uploadAdminImage } from "../../../../lib/adminUpload";
 import TierRow from "../../../../components/TierRow";
 import { ListSkeleton, ErrorCard } from "../../../../components/ListStates";
+import FormScroll from "../../../../components/FormScroll";
 
 export default function AdminOfferingEditor() {
   const { id, offeringId } = useLocalSearchParams<{ id: string; offeringId: string }>();
@@ -33,6 +36,7 @@ export default function AdminOfferingEditor() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [unit, setUnit] = useState<ApiPriceUnit | null>(null);
+  const [image, setImage] = useState("");
 
   const [reference, setReference] = useState<{ available: boolean; median?: number; unit?: string; sampleSize?: number } | null>(null);
 
@@ -49,6 +53,7 @@ export default function AdminOfferingEditor() {
       setPricingModel(found.pricingModel);
       setPriceMin(found.priceMin != null ? String(found.priceMin) : "");
       setPriceMax(found.priceMax != null ? String(found.priceMax) : "");
+      setImage(found.image ?? "");
       setUnit(found.unit);
       if (found.pricingModel === "PER_UNIT") {
         fetchOfferingReference(found.id)
@@ -74,6 +79,7 @@ export default function AdminOfferingEditor() {
       priceMin: pricingModel === "ON_INSPECTION" ? null : priceMin ? Number(priceMin) : null,
       priceMax: pricingModel === "FIXED" || pricingModel === "ON_INSPECTION" ? null : priceMax ? Number(priceMax) : null,
       unit: pricingModel === "PER_UNIT" ? unit : null,
+      image: image.trim() || null,
     };
   }
 
@@ -130,7 +136,7 @@ export default function AdminOfferingEditor() {
         ) : error ? (
           <ErrorCard message={error} onRetry={load} />
         ) : (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.notice}>
               <Text style={styles.noticeText}>الحفظ هنا مباشر — من غير مراجعة أدمن.</Text>
             </View>
@@ -150,6 +156,16 @@ export default function AdminOfferingEditor() {
                 placeholderTextColor={colors.onSurfaceVariant}
               />
             </View>
+
+            {/* Same field, same bucket and shape as the provider's own
+                offering editor and the website's — see that editor's note. */}
+            <MediaPicker
+              label="صورة الخدمة أو المنتج (اختياري)"
+              shape="cover"
+              value={image}
+              onChange={setImage}
+              upload={(file) => uploadAdminImage("projects", file)}
+            />
 
             <PriceFields
               pricingModel={pricingModel}
@@ -188,7 +204,7 @@ export default function AdminOfferingEditor() {
                 <Button label="حذف الخدمة" variant="danger" onPress={handleDelete} style={styles.deleteBtn} />
               </>
             ) : null}
-          </ScrollView>
+          </FormScroll>
         )}
       </SafeAreaView>
     </>
@@ -210,7 +226,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },

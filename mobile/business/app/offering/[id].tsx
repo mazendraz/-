@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiOffering, ApiPriceUnit, ApiPricingModel } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import {
   fetchOfferings,
   createOffering,
@@ -15,11 +15,14 @@ import {
   removeTier,
   type OfferingInput,
 } from "../../lib/offerings";
+import { uploadProjectImage } from "../../lib/projects";
 import Button from "../../components/Button";
 import PriceFields from "../../components/PriceFields";
+import MediaPicker from "../../components/MediaPicker";
 import TierRow from "../../components/TierRow";
 import PublishStateChip from "../../components/PublishStateChip";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
+import FormScroll from "../../components/FormScroll";
 
 export default function OfferingEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -36,6 +39,7 @@ export default function OfferingEditor() {
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [unit, setUnit] = useState<ApiPriceUnit | null>(null);
+  const [image, setImage] = useState("");
 
   const [tierLabel, setTierLabel] = useState("");
   const [tierPrice, setTierPrice] = useState("");
@@ -59,6 +63,7 @@ export default function OfferingEditor() {
       setPricingModel(found.pricingModel);
       setPriceMin(found.priceMin != null ? String(found.priceMin) : "");
       setPriceMax(found.priceMax != null ? String(found.priceMax) : "");
+      setImage(found.image ?? "");
       setUnit(found.unit);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل الخدمة. جرّب تاني.");
@@ -79,6 +84,7 @@ export default function OfferingEditor() {
       priceMin: pricingModel === "ON_INSPECTION" ? null : priceMin ? Number(priceMin) : null,
       priceMax: pricingModel === "FIXED" || pricingModel === "ON_INSPECTION" ? null : priceMax ? Number(priceMax) : null,
       unit: pricingModel === "PER_UNIT" ? unit : null,
+      image: image.trim() || null,
     };
   }
 
@@ -200,7 +206,7 @@ export default function OfferingEditor() {
         ) : error ? (
           <ErrorCard message={error} onRetry={load} />
         ) : (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {offering ? <PublishStateChip offering={offering} /> : null}
 
             <View>
@@ -218,6 +224,21 @@ export default function OfferingEditor() {
                 placeholderTextColor={colors.onSurfaceVariant}
               />
             </View>
+
+            {/* A photo of the service or product. `Offering.image` has existed
+                in the schema, in `ApiOffering` and in the upsert validation all
+                along, and the website's offering editor has always exposed it
+                (AdminOfferingsPanel's `prov_off_image`) — this editor was the
+                only place a price could be published without one. Same
+                "projects" bucket and wide shape the website uses, so an image
+                added here and one added there are indistinguishable. */}
+            <MediaPicker
+              label="صورة الخدمة أو المنتج (اختياري)"
+              shape="cover"
+              value={image}
+              onChange={setImage}
+              upload={uploadProjectImage}
+            />
 
             <PriceFields
               pricingModel={pricingModel}
@@ -260,7 +281,7 @@ export default function OfferingEditor() {
                 <Button label="حذف الخدمة" variant="danger" onPress={handleDelete} style={styles.deleteBtn} />
               </>
             ) : null}
-          </ScrollView>
+          </FormScroll>
         )}
       </SafeAreaView>
     </>
@@ -280,14 +301,14 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
   sectionTitle: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, marginTop: 8 },
   tiersList: { gap: 8 },
   tierForm: { backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, gap: 8 },
-  tierRow: { flexDirection: "row-reverse", gap: 8 },
+  tierRow: { flexDirection: rowStart, gap: 8 },
   tierField: { flex: 1 },
   deleteBtn: { marginTop: 16 },
 });

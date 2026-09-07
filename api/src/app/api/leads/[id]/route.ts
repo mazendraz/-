@@ -12,7 +12,7 @@ type Ctx = { params: Promise<{ id: string }> };
 // PATCH /api/leads/[id] → update status. Provider: own company only; Admin: any.
 export const PATCH = authed(async (request: NextRequest, ctx: Ctx, user) => {
   const { id } = await ctx.params;
-  const { status } = leadStatusSchema.parse(await request.json());
+  const { status, lossReason, lossNote } = leadStatusSchema.parse(await request.json());
 
   const isAdmin = user.role === "ADMIN";
   if (!isAdmin) {
@@ -24,5 +24,13 @@ export const PATCH = authed(async (request: NextRequest, ctx: Ctx, user) => {
   // Providers must go through POST /provider/leads/[id]/complete to reach
   // COMPLETED, so the final amount is captured and the client's verification
   // gate can fire. Admins keep the direct set — see updateStatus's comment.
-  return ok(await leadsService.updateStatus(id, status, { requireCompletion: !isAdmin }));
+  // lossReason/lossNote are only meaningful on the move to Cancelled, which
+  // updateStatus refuses without one — see its comment.
+  return ok(
+    await leadsService.updateStatus(id, status, {
+      requireCompletion: !isAdmin,
+      lossReason,
+      lossNote,
+    }),
+  );
 });

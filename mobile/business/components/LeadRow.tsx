@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ApiLead } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import StatusPill from "./StatusPill";
 import { formatEgp } from "../lib/money";
 
@@ -64,7 +64,7 @@ export default function LeadRow({
 
 const styles = StyleSheet.create({
   row: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pressed: { opacity: 0.7 },
-  top: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  top: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", gap: 8 },
   service: {
     flex: 1,
     fontSize: type.body.fontSize,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     textAlign: textStart,
   },
-  bottom: { flexDirection: "row-reverse", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  bottom: { flexDirection: rowStart, alignItems: "center", gap: 10, flexWrap: "wrap" },
   ref: {
     fontSize: type.caption.fontSize,
     fontFamily: "Cairo_500Medium",

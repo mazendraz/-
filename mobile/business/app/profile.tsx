@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Stack } from "expo-router";
+import { router, Stack } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
@@ -9,7 +9,9 @@ import { fetchProfile, submitProfileChange, type ApiChangeRequest, type CompanyE
 import Button from "../components/Button";
 import TextField from "../components/TextField";
 import PendingChangeBanner from "../components/PendingChangeBanner";
+import CompanySectionNav from "../components/CompanySectionNav";
 import { ListSkeleton, ErrorCard } from "../components/ListStates";
+import FormScroll from "../components/FormScroll";
 
 export default function Profile() {
   const [company, setCompany] = useState<ApiCompany | null>(null);
@@ -97,10 +99,28 @@ export default function Profile() {
         ) : error ? (
           <ErrorCard message={error} onRetry={() => load()} />
         ) : company ? (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             {pending ? <PendingChangeBanner request={pending} /> : null}
 
             <Text style={styles.readonlyName}>{company.name}</Text>
+
+            {/* ── Everything else about this company, from inside it ────────
+                These five screens existed already, but the only way to reach
+                them was to leave the company page entirely and go out to the
+                More menu. That is backwards: a provider looking at their own
+                business is exactly where "my prices" and "my portfolio"
+                belong. The admin's company screen has had this same nav all
+                along (company/[id]/index.tsx) — this is the provider side
+                catching up, with the routes that are theirs. */}
+            <CompanySectionNav
+              sections={[
+                { label: "قائمة الأسعار", onPress: () => router.push("/offerings") },
+                { label: "خصومات الباقات", onPress: () => router.push("/bundle-rules") },
+                { label: "معرض الأعمال", onPress: () => router.push("/projects") },
+                { label: "التوفر وفترات الانشغال", onPress: () => router.push("/availability") },
+                { label: "قائمة الانتظار", onPress: () => router.push("/waitlist") },
+              ]}
+            />
 
             <TextField label="الشعار" value={fields.tagline ?? ""} onChangeText={(v) => setFields((f) => ({ ...f, tagline: v }))} />
             <TextField
@@ -125,7 +145,7 @@ export default function Profile() {
               style={styles.submit}
             />
             {!hasChanges ? <Text style={styles.noChangesHint}>غيّر أي حقل عشان تقدر ترسل تعديل.</Text> : null}
-          </ScrollView>
+          </FormScroll>
         ) : null}
       </SafeAreaView>
     </>

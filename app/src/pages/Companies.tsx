@@ -488,7 +488,14 @@ function CompanyCard({ company: c, delay }: { company: Company; delay: number })
           </div>
           <p className="text-label text-on-surface-variant line-clamp-2 flex-grow leading-relaxed">{c.tagline}</p>
           <div className="mt-4 pt-4 border-t border-outline-variant/20 flex items-center justify-between">
-            <span className="text-caption text-outline">{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>
+            {/* Hidden at 0 rather than printed. "0 projects" is not a neutral
+                fact on a card whose job is to make someone feel safe hiring
+                this company — it announces the emptiest thing about them,
+                and it is what 26 of the companies here currently say. Saying
+                nothing is honest; announcing the zero is self-harm. */}
+            {c.completedProjects > 0 && (
+              <span className="text-caption text-outline">{c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>
+            )}
             <span className="text-label font-bold text-primary flex items-center gap-1 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform">
               {t(locale, "common_view_profile")} <Icon name="arrow_forward" className="text-body rtl-flip" />
             </span>

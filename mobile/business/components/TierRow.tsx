@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ApiOfferingTier } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import { formatEgp } from "../lib/money";
 
 function qtyRange(tier: ApiOfferingTier): string {
@@ -45,10 +45,10 @@ export default function TierRow({ tier, onDelete }: { tier: ApiOfferingTier; onD
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     borderRadius: 10,

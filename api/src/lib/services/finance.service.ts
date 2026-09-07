@@ -47,22 +47,62 @@ export const DEFAULT_COMMISSION_SETTING_KEY = "default_commission_percent";
 // step of onboarding gets missed.
 const FALLBACK_COMMISSION_PERCENT = 10;
 
-/** Company override if set, else the platform default from AppSetting, else
- *  the hardcoded fallback above. See the architecture doc §6 "Commission rate
- *  scope — DECIDED: one platform-wide default for now". */
-export async function resolveCommissionPercent(db: Db, companyId: string): Promise<number> {
+/**
+ * What Al Asima charges this company: a fixed amount per job, or a percentage.
+ *
+ * Resolution order, most specific first:
+ *   1. Company.commissionFlat  — a fixed EGP amount per closed job
+ *   2. Company.commissionPercent — this company's own rate
+ *   3. AppSetting default_commission_percent — the platform default
+ *   4. FALLBACK_COMMISSION_PERCENT — only if nobody ever set the default
+ *
+ * Every test here is `!= null`, never a truthiness check, because **0 is a
+ * real rate**: the providers Al Asima deliberately takes nothing from are
+ * recorded as 0, and `if (company.commissionPercent)` would skip straight past
+ * them to the platform default and bill them anyway. Same for a flat 0.
+ *
+ * Flat and percent are mutually exclusive per company — the endpoint that
+ * writes them clears the other — so the order above only ever has one
+ * company-level answer to choose between.
+ */
+export type ResolvedCommission =
+  | { kind: "FLAT"; amount: number }
+  | { kind: "PERCENT"; percent: number };
+
+export async function resolveCommission(db: Db, companyId: string): Promise<ResolvedCommission> {
   const company = await db.company.findUnique({
     where: { id: companyId },
-    select: { commissionPercent: true },
+    select: { commissionFlat: true, commissionPercent: true },
   });
-  if (company?.commissionPercent != null) return Number(company.commissionPercent);
+  if (company?.commissionFlat != null) return { kind: "FLAT", amount: Number(company.commissionFlat) };
+  if (company?.commissionPercent != null) {
+    return { kind: "PERCENT", percent: Number(company.commissionPercent) };
+  }
 
   const setting = await db.appSetting.findUnique({
     where: { key: DEFAULT_COMMISSION_SETTING_KEY },
     select: { value: true },
   });
   const parsed = setting ? Number(setting.value) : NaN;
-  return Number.isFinite(parsed) ? parsed : FALLBACK_COMMISSION_PERCENT;
+  return { kind: "PERCENT", percent: Number.isFinite(parsed) ? parsed : FALLBACK_COMMISSION_PERCENT };
+}
+
+/**
+ * The effective percentage, for callers that only deal in rates (reports,
+ * projections). A company on a flat fee has no meaningful percentage until you
+ * know the job amount, so this reports 0 for them rather than inventing one —
+ * use resolveCommission when the actual charge matters.
+ */
+export async function resolveCommissionPercent(db: Db, companyId: string): Promise<number> {
+  const resolved = await resolveCommission(db, companyId);
+  return resolved.kind === "PERCENT" ? resolved.percent : 0;
+}
+
+/** What this company is charged on a job of `clientAmount`. */
+export function commissionAmount(resolved: ResolvedCommission, clientAmount: number): number {
+  return resolved.kind === "FLAT"
+    ? resolved.amount
+    : Math.round((clientAmount * resolved.percent) / 100);
 }
 
 /** Admin: read the current platform default, for the Settings screen. */
@@ -122,8 +162,8 @@ export async function recognizeCommission(
   });
   if (existing) return;
 
-  const percent = await resolveCommissionPercent(tx, input.companyId);
-  const amount = Math.round((input.clientAmount * percent) / 100);
+  const resolved = await resolveCommission(tx, input.companyId);
+  const amount = commissionAmount(resolved, input.clientAmount);
 
   await tx.transaction.create({
     data: {
@@ -132,7 +172,13 @@ export async function recognizeCommission(
       amount,
       leadId: input.leadId,
       companyId: input.companyId,
-      note: `Commission @ ${percent}% of EGP ${input.clientAmount.toLocaleString("en-US")}`,
+      // Says which rule produced the number, so a row in the ledger can be
+      // explained without going back to the company record as it is TODAY —
+      // which may have changed since.
+      note:
+        resolved.kind === "FLAT"
+          ? `Commission — flat EGP ${resolved.amount.toLocaleString("en-US")} on a job of EGP ${input.clientAmount.toLocaleString("en-US")}`
+          : `Commission @ ${resolved.percent}% of EGP ${input.clientAmount.toLocaleString("en-US")}`,
       // No human actor — system-generated. See Transaction.createdById comment.
       createdById: null,
     },

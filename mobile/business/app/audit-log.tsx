@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiAuditLog } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAuditLogs } from "../lib/adminAudit";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../components/ListStates";
 
@@ -122,7 +122,7 @@ export default function AuditLog() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  filterRow: { flexDirection: "row-reverse", gap: 8, padding: 16, paddingBottom: 8 },
+  filterRow: { flexDirection: rowStart, gap: 8, padding: 16, paddingBottom: 8 },
   filterInput: {
     borderWidth: 1,
     borderColor: colors.outlineVariant,
@@ -132,13 +132,13 @@ const styles = StyleSheet.create({
     fontSize: type.label.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   filterInputHalf: { flex: 1 },
   list: { padding: 16, paddingTop: 4 },
   separator: { height: 10 },
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, padding: 12, gap: 3 },
-  top: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, padding: 12, gap: 3 },
+  top: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   action: { flex: 1, fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   time: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.outline },
   meta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },

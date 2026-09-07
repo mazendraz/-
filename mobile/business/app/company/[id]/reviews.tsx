@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useLocalSearchParams } from "expo-router";
 import type { ApiReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchCompanyDetail, addCompanyReview, deleteCompanyReview } from "../../../lib/adminCompanies";
 import { setReviewApproved } from "../../../lib/approvals";
 import Button from "../../../components/Button";
 import RatingStars from "../../../components/RatingStars";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../../components/ListStates";
+import FormScroll from "../../../components/FormScroll";
 
 /**
  * `ApiReview` never exposes an `approved` flag (see phase-9's own note —
@@ -109,7 +110,7 @@ export default function CompanyReviews() {
         ) : error ? (
           <ErrorCard message={error} onRetry={() => load()} />
         ) : (
-          <ScrollView contentContainerStyle={styles.content}>
+          <FormScroll contentContainerStyle={styles.content}>
             <View style={styles.form}>
               <Text style={styles.formTitle}>إضافة تقييم (منسّق يدويًا)</Text>
               <TextInput style={styles.input} value={author} onChangeText={setAuthor} placeholder="اسم العميل" placeholderTextColor={colors.onSurfaceVariant} />
@@ -146,7 +147,7 @@ export default function CompanyReviews() {
             ) : (
               <EmptyCard title="لسه مفيش تقييمات" />
             )}
-          </ScrollView>
+          </FormScroll>
         )}
       </SafeAreaView>
     </>
@@ -167,17 +168,17 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
   list: { gap: 10 },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 6 },
-  cardTop: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  card: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 6 },
+  cardTop: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   author: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   meta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },
   text: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, textAlign: textStart, lineHeight: 20 },
-  actions: { flexDirection: "row-reverse", gap: 8, marginTop: 4 },
+  actions: { flexDirection: rowStart, gap: 8, marginTop: 4 },
   approveBtn: { backgroundColor: colors.primaryContainer, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   approveText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimaryContainer },
   deleteBtn: { backgroundColor: colors.errorContainer, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },

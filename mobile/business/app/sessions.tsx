@@ -3,7 +3,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from "react-native
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchSessions, revokeAllSessions, revokeSessions, type StaffSession } from "../lib/staffAuth";
 import Button from "../components/Button";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../components/ListStates";
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   list: { padding: 16, paddingBottom: 8 },
   separator: { height: 10 },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 12,
     padding: 14,

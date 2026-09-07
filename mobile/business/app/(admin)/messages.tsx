@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   list: { padding: 16, paddingTop: 12 },
   separator: { height: 10 },

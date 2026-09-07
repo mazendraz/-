@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ApiPriceUnit, ApiPricingModel } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import MoneyField from "./MoneyField";
 import { unitLabel } from "../lib/money";
 
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     textAlign: textStart,
   },
-  modelRow: { flexDirection: "row-reverse", flexWrap: "wrap", gap: 8 },
+  modelRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
   modelChip: { borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surfaceContainer },
   modelChipActive: { backgroundColor: colors.primary },
   modelLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },

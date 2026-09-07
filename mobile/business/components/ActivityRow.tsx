@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import { formatEgp } from "../lib/money";
 
 type ActivityType = "new_request" | "service_completed" | "dispute_raised" | "commission_collected" | "new_client";
@@ -42,7 +42,7 @@ export default function ActivityRow({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, padding: 12, gap: 8 },
+  row: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, padding: 12, gap: 8 },
   info: { flex: 1, gap: 2 },
   typeTag: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   label: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurface, textAlign: textStart },

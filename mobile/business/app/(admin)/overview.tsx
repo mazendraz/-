@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiLead, ApiLeadStats } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAdminLeads, fetchAdminStats } from "../../lib/adminLeads";
 import { fetchMaintenanceStatus } from "../../lib/adminSettings";
 import KpiTile from "../../components/KpiTile";
@@ -12,6 +12,7 @@ import LeadRow from "../../components/LeadRow";
 import LeadsChart from "../../components/LeadsChart";
 import MaintenanceBanner from "../../components/MaintenanceBanner";
 import ScreenHeader from "../../components/ScreenHeader";
+import SectionHeader from "../../components/SectionHeader";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 export default function AdminOverview() {
@@ -120,6 +121,8 @@ export default function AdminOverview() {
           </View>
         ) : null}
 
+        {stats?.perDay ? <LeadsChart perDay={stats.perDay} onPress={() => router.push("/analytics")} /> : null}
+
         <Pressable
           style={({ pressed }) => [styles.analyticsCta, pressed && styles.analyticsCtaPressed]}
           onPress={() => router.push("/analytics")}
@@ -129,27 +132,45 @@ export default function AdminOverview() {
           <Text style={styles.analyticsCtaChevron}>‹</Text>
         </Pressable>
 
-        {stats?.perDay ? <LeadsChart perDay={stats.perDay} /> : null}
-
         {stats?.byCompany && stats.byCompany.length > 0 ? (
           <View>
-            <Text style={styles.sectionTitle}>أكتر الشركات نشاطًا</Text>
+            <SectionHeader
+              title="أكتر الشركات نشاطًا"
+              actionLabel="عرض الكل"
+              onAction={() => router.push("/(admin)/companies")}
+            />
             <View style={styles.companyList}>
+              {/* Pressable, because these are companies and every other list of
+                  companies in this app opens one. They used to be inert Views
+                  wearing full card styling — the strongest possible "tap me"
+                  affordance attached to nothing. */}
               {stats.byCompany.map((c) => (
-                <View key={c.companyId} style={styles.companyRow}>
+                <Pressable
+                  key={c.companyId}
+                  style={({ pressed }) => [styles.companyRow, pressed && styles.companyRowPressed]}
+                  onPress={() => router.push(`/company/${c.companyId}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${c.companyName}: ${c.leads} طلب`}
+                  accessibilityHint="يفتح بيانات الشركة"
+                >
                   <View style={styles.companyInfo}>
                     <Text style={styles.companyName} numberOfLines={1}>{c.companyName}</Text>
                     <Text style={styles.companyMeta}>
                       {c.leads} طلب · {c.completed} مكتمل · تحويل {c.conversion}%
                     </Text>
                   </View>
-                </View>
+                  <Text style={styles.companyChevron}>‹</Text>
+                </Pressable>
               ))}
             </View>
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>أحدث الطلبات</Text>
+        <SectionHeader
+          title="أحدث الطلبات"
+          actionLabel="عرض الكل"
+          onAction={() => router.push("/(admin)/leads")}
+        />
         {recentLeads && recentLeads.length > 0 ? (
           <View style={styles.recentList}>
             {recentLeads.map((lead) => (
@@ -173,9 +194,9 @@ function deltaPercent(current: number, previous: number): number | null {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   analyticsCta: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.primary,
@@ -186,21 +207,19 @@ const styles = StyleSheet.create({
   analyticsCtaPressed: { opacity: 0.85 },
   analyticsCtaText: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onPrimary },
   analyticsCtaChevron: { fontSize: type.title.fontSize, color: colors.onPrimary },
-  sectionTitle: {
-    fontSize: type.title.fontSize,
-    fontFamily: "Alexandria_700Bold",
-    color: colors.onSurface,
-    marginTop: 8,
-  },
   companyList: { gap: 8 },
   companyRow: {
-    flexDirection: "row-reverse",
-    backgroundColor: colors.surface,
+    flexDirection: rowStart,
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     borderRadius: 12,
     padding: 12,
   },
+  companyRowPressed: { backgroundColor: colors.surfaceContainer },
+  companyChevron: { fontSize: type.subhead.fontSize, color: colors.outline },
   companyInfo: { flex: 1, gap: 2 },
   companyName: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: "right" },
   companyMeta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: "right" },

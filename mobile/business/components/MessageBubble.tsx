@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import type { MessageSenderValue } from "@alassema/core";
 import { colors, type } from "@alassema/core";
+import { rowStart } from "@alassema/mobile-shared";
 
 function timeLabel(epochMs: number): string {
   return new Date(epochMs).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
@@ -81,7 +82,7 @@ const styles = StyleSheet.create({
   body: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", lineHeight: 21 },
   bodyMine: { color: colors.onPrimary },
   bodyTheirs: { color: colors.onSurface },
-  metaRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginTop: 3, alignSelf: "flex-end" },
+  metaRow: { flexDirection: rowStart, alignItems: "center", gap: 6, marginTop: 3, alignSelf: "flex-end" },
   time: { fontSize: 10, fontFamily: "Cairo_400Regular" },
   timeMine: { color: "rgba(255,255,255,0.75)" },
   timeTheirs: { color: colors.outline },

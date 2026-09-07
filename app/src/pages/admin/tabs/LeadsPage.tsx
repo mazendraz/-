@@ -12,6 +12,7 @@ import {
 } from "../../../lib/availability";
 import { useServerSearch } from "../../../hooks/useServerSearch";
 import { useMutation } from "../../../hooks/useMutation";
+import { useLossReasonGate, type LossPayload } from "../../../components/LossReasonDialog";
 import SearchInput from "../../../components/SearchInput";
 import Pagination from "../../../components/Pagination";
 import { LeadTable, LeadMobileCard, LeadModal, WaitlistDetailModal, type LeadListRow } from "../LeadsTab";
@@ -128,8 +129,8 @@ export default function LeadsPage() {
   // `selectedWaitlist` (the open detail modal shows the new status the
   // instant it's picked, not after the refetch) — a failure restores the
   // modal's previous value too, so it can't disagree with the table.
-  const leadStatusMutation = useMutation<{ id: string; status: LeadStatus }>({
-    mutate: ({ id, status }) => updateLeadStatus(id, status),
+  const leadStatusMutation = useMutation<{ id: string; status: LeadStatus; loss?: LossPayload }>({
+    mutate: ({ id, status, loss }) => updateLeadStatus(id, status, loss),
     optimisticUpdate: ({ id, status }) => {
       const prev = selectedLead;
       if (prev?.id === id) setSelectedLead({ ...prev, status });
@@ -173,7 +174,12 @@ export default function LeadsPage() {
     onSuccess: () => waitlistSearch.refresh(),
     errorMessage: t(locale, "admin_delete_failed"),
   });
-  const handleLeadStatus = (id: string, status: LeadStatus) => { void leadStatusMutation.run({ id, status }); };
+  // Cancelling asks why first — the API refuses a cancellation with no reason,
+  // so collecting it afterwards would only ever surface as a failed save.
+  const lossGate = useLossReasonGate((id, status, loss) => {
+    void leadStatusMutation.run({ id, status, loss });
+  });
+  const handleLeadStatus = lossGate.onStatusChange;
   const handleLeadDelete = (id: string) => { void leadDeleteMutation.run(id); };
   const handleWaitlistStatus = (entry: WaitlistEntry, status: WaitlistStatus) => { void waitlistStatusMutation.run({ entry, status }); };
   const handleWaitlistDelete = (entry: WaitlistEntry) => { void waitlistDeleteMutation.run(entry); };
@@ -269,6 +275,7 @@ export default function LeadsPage() {
           onDelete={() => { handleWaitlistDelete(selectedWaitlist); setSelectedWaitlist(null); }}
         />
       )}
+      {lossGate.dialog}
     </div>
   );
 }

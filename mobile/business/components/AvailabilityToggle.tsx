@@ -1,6 +1,6 @@
 import { StyleSheet, Switch, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 export default function AvailabilityToggle({
   busy,
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
   },
-  row: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  row: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", gap: 12 },
   textCol: { flex: 1, gap: 3 },
   title: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   subtitle: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },

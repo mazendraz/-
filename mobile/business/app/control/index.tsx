@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import { useStaffAuth } from "../../lib/staffAuth";
 import { hasDesktopPermission, hasAnyDesktopPermission, type DesktopPermission } from "../../lib/permissions";
 import { EmptyCard } from "../../components/ListStates";
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16 },
   list: { borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant, overflow: "hidden" },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,

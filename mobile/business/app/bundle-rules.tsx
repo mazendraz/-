@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiBundleRule } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchBundleRules, createBundleRule } from "../lib/bundleRules";
 import Button from "../components/Button";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../components/ListStates";
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   form: { gap: 10, marginBottom: 8 },
   formTitle: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
   hint: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart, lineHeight: 18 },
-  formRow: { flexDirection: "row-reverse", gap: 10 },
+  formRow: { flexDirection: rowStart, gap: 10 },
   formField: { flex: 1, gap: 4 },
   label: { fontSize: type.label.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant, textAlign: textStart },
   input: {
@@ -165,13 +165,13 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   listTitle: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, marginTop: 14, textAlign: textStart },
   separator: { height: 10 },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
-  cardTop: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  card: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  cardTop: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardLabel: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   cardMeta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },
   cardInactive: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.error, textAlign: textStart },

@@ -36,7 +36,7 @@ export default function ProjectCard({ project, onDelete }: { project: ApiProject
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     borderRadius: 14,

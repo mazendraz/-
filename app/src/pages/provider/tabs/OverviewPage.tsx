@@ -21,6 +21,7 @@ export default function OverviewPage() {
   const {
     selectedLead, setSelectedLead, selectedWaitlist, setSelectedWaitlist, openRow,
     handleLeadStatus, handleWaitlistStatus, handleWaitlistDelete,
+    lossReasonDialog,
   } = useProviderLeadActions();
 
   const busyNow = isBusy(company);
@@ -124,6 +125,7 @@ export default function OverviewPage() {
         onDelete={() => { handleWaitlistDelete(selectedWaitlist); setSelectedWaitlist(null); }}
       />
     )}
+    {lossReasonDialog}
     </>
   );
 }

@@ -30,6 +30,26 @@ enum LeadStatus {
   CANCELLED
 }
 
+// Why a request was cancelled. CANCELLED was the only way a lead could end
+// badly and nothing recorded what "badly" meant, so a month of cancellations
+// was a count with no explanation attached — and every theory about it ("they
+// think we're expensive", "nobody answered") was a guess with no column behind
+// it. Kept short on purpose: a long list gets answered with whichever option is
+// first, and a free-text-only field gets answered with "".
+//
+// The labels, and the rule that OTHER must carry a note, live in
+// @alassema/core lossReasons.ts so the API and all three clients agree.
+enum LeadLossReason {
+  PRICE
+  NO_RESPONSE
+  CHOSE_COMPETITOR
+  TIMING
+  OUT_OF_SCOPE
+  DUPLICATE
+  CUSTOMER_CHANGED_MIND
+  OTHER
+}
+
 enum UserRole {
   ADMIN
   PROVIDER
@@ -214,6 +234,16 @@ model Company {
   // CategoryPricingMode's default. Set only when a specific provider needs a
   // different rate than the platform default (see finance.service.ts).
   commissionPercent   Decimal?      @db.Decimal(5, 2)
+  // A FIXED amount in EGP per closed job, instead of a percentage. Set only
+  // one of the two: whichever is non-null wins, and the endpoint that writes
+  // them clears the other, because "which one applies" must never be a
+  // question anyone has to work out from two populated columns.
+  //
+  // Both fields honour 0. Zero is a real, deliberate rate — the providers Al
+  // Asima takes nothing from — and is why the resolution chain tests for null
+  // rather than falsiness: `if (percent)` would silently bill those providers
+  // at the platform default.
+  commissionFlat      Int?
   // "YYYY-MM" of the last calendar month this company was sent its monthly
   // summary email (notifications.reengagement.service.ts's sweepProviderMonthlySummaries)
   // — a period string, not a timestamp, because the idempotency question is
@@ -427,6 +457,14 @@ model Lead {
   budget        String
   description   String     @db.Text
   status        LeadStatus @default(NEW)
+  // Set with the move to CANCELLED, which the API refuses without one (see
+  // leads.service.updateStatus). Nullable for the only two cases where a
+  // cancelled lead legitimately has none: the rows cancelled before this
+  // column existed, and every lead that was never cancelled at all.
+  lossReason    LeadLossReason?
+  // The detail the fixed list can't hold. Required alongside OTHER — without
+  // that rule OTHER is just the "" this column exists to replace.
+  lossNote      String?    @db.Text
   // Set once the customer leaves a (verified) review for this lead — gates the
   // one-time review flow so a completed request can be reviewed exactly once.
   reviewedAt    DateTime?
@@ -483,6 +521,9 @@ model Lead {
   @@index([status])
   @@index([createdAt])
   @@index([clientId])
+  // Serves the whole point of the column: "what did we lose to, and when" —
+  // WHERE lossReason IS NOT NULL [AND lossReason=?] ORDER BY createdAt.
+  @@index([lossReason, createdAt])
   // Serves "my requests" for a signed-in customer: WHERE customerId=?
   // ORDER BY createdAt DESC — filter + sort from one index, same shape as the
   // companyId one below.
@@ -1581,4 +1622,46 @@ model Transaction {
   @@index([occurredAt])
   @@index([accountId])
   @@index([categoryId])
+}
+
+// ── First-party funnel analytics ─────────────────────────────────────────────
+// One row per meaningful step a visitor takes on the site, so "how many people
+// came in, and where exactly did they stop" stops being a guess. Written by the
+// public POST /api/track (siteEvents.service.ts), read only in aggregate by
+// GET /api/admin/analytics/funnel.
+//
+// Deliberately anonymous: no IP, no user agent, no customer id, no cookie. The
+// only identifier is `sessionId` — a random string the browser tab generates
+// for itself and forgets when it closes (sessionStorage). That is enough to
+// count *people* rather than *page loads* and to see one visit's path through
+// the funnel, and it is not enough to follow anyone between visits. Keeping it
+// that way is what lets this ship without a consent banner, and it is why this
+// table is first-party at all instead of a third-party script: the drop-off
+// data is the business's own, and it never leaves the server.
+//
+// Retention: rows are only useful in aggregate and only recent ones matter —
+// prune anything older than ~180 days (a cron/manual DELETE), don't let this
+// grow forever.
+model SiteEvent {
+  id String @id @default(uuid())
+  // Per-tab random id from the browser (sessionStorage). NOT a user id.
+  sessionId String @db.VarChar(40)
+  // One of the names in validation/siteEvents.ts — an allowlist, so a bot
+  // POSTing junk can't invent event types and pollute the funnel.
+  name String @db.VarChar(48)
+  // Route the event happened on, query string stripped client-side.
+  path String @db.VarChar(300)
+  // Where the visit came from (referrer host, or the utm_source/ref param) —
+  // host only, never a full URL, so this can't carry someone's private link.
+  source String? @db.VarChar(120)
+  // What the event is ABOUT when that isn't the path: a company slug on a
+  // profile view, a category slug on a category view.
+  target    String?  @db.VarChar(160)
+  createdAt DateTime @default(now())
+
+  // Serves the funnel aggregate: WHERE name=? AND createdAt BETWEEN ?
+  @@index([name, createdAt])
+  // Serves "how many distinct sessions in this window", and the prune.
+  @@index([createdAt])
+  @@index([sessionId, createdAt])
 }

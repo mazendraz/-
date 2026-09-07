@@ -3,13 +3,14 @@ import { Alert, Linking, ScrollView, StyleSheet, Text, View } from "react-native
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiFeedback } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { colors, type } from "@alassema/core";
 import { setFeedbackRead, deleteFeedback, fetchPendingFeedback, FEEDBACK_TYPE_LABEL } from "../../../lib/approvals";
 import { feedbackQueue } from "../../../lib/approvalsStore";
 import Button from "../../../components/Button";
 import WaitingFor from "../../../components/WaitingFor";
 import { ListSkeleton, ErrorCard } from "../../../components/ListStates";
+import { displayPhone } from "../../../lib/phone";
 
 /** No single-feedback GET route — same list-is-the-only-read pattern. */
 export default function FeedbackDetail() {
@@ -96,7 +97,7 @@ export default function FeedbackDetail() {
                   {item.name ? <Text style={styles.contactRow}>الاسم: {item.name}</Text> : null}
                   {item.phone ? (
                     <Text style={styles.contactRow} onPress={() => Linking.openURL(`tel:${item.phone}`).catch(() => {})}>
-                      الهاتف: {item.phone}
+                      الهاتف: {displayPhone(item.phone)}
                     </Text>
                   ) : null}
                 </View>
@@ -121,14 +122,14 @@ export default function FeedbackDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 24 },
-  header: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  header: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   type: { flex: 1, fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
   company: { fontSize: type.body.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.primary, textAlign: textStart },
   message: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, textAlign: textStart, lineHeight: 22 },
   contactCard: { backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, gap: 6 },
   contactRow: { fontSize: type.body.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurface, textAlign: textStart },
   actionsBar: { padding: 16, borderTopWidth: 1, borderTopColor: colors.outlineVariant, backgroundColor: colors.surface },
-  actionsRow: { flexDirection: "row-reverse", gap: 10 },
+  actionsRow: { flexDirection: rowStart, gap: 10 },
   deleteBtn: { flex: 1 },
   readBtn: { flex: 1 },
 });

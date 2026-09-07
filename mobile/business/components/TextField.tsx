@@ -39,7 +39,7 @@ const styles = StyleSheet.create({
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
     textAlign: textStart,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   inputError: { borderColor: colors.error },
   error: {

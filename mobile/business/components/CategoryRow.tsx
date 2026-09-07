@@ -18,7 +18,7 @@ export default function CategoryRow({ category, onPress }: { category: ApiAdminC
 }
 
 const styles = StyleSheet.create({
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14 },
   pressed: { opacity: 0.7 },
   info: { gap: 3 },
   label: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },

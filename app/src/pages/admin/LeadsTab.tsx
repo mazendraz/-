@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LEAD_LOSS_REASON_LABELS_AR, LEAD_LOSS_REASON_LABELS_EN } from "@alassema/core";
 import { type Lead, type LeadStatus, LEAD_STATUSES, STATUS_COLORS, LEAD_STATUS_KEYS } from "../../lib/requests";
 import {
   type WaitlistEntry, type WaitlistStatus,
@@ -214,6 +215,19 @@ export function LeadModal({ lead, onClose, onStatusChange, onDelete, onComplete 
           </button>
         )}
         {lead.completion && <FinalPriceSummary completion={lead.completion} locale={locale} />}
+        {/* Shown on the cancelled leads that HAVE a reason. Leads cancelled
+            before the field existed have none, and the modal says nothing
+            rather than inventing one — an empty row here is honest history,
+            not a gap to fill in. */}
+        {lead.status === "Cancelled" && lead.lossReason && (
+          <div className="bg-error-container/30 border border-error/20 rounded-xl p-4">
+            <p className="text-caption font-bold text-error mb-1">{t(locale, "loss_reason_label")}</p>
+            <p className="text-label font-bold text-on-surface">
+              {(locale === "ar" ? LEAD_LOSS_REASON_LABELS_AR : LEAD_LOSS_REASON_LABELS_EN)[lead.lossReason]}
+            </p>
+            {lead.lossNote && <p className="text-label text-on-surface-variant leading-relaxed mt-1.5">{lead.lossNote}</p>}
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <InfoField label={t(locale, "admin_lead_name")} val={lead.name} /><InfoField label={t(locale, "admin_lead_phone")} val={lead.phone} />
           <InfoField label={t(locale, "admin_lead_company")} val={lead.companyName} /><InfoField label={t(locale, "admin_lead_service")} val={lead.service} />

@@ -61,6 +61,7 @@ export default function LeadsPage() {
   const {
     selectedLead, setSelectedLead, selectedWaitlist, setSelectedWaitlist, openRow: handleOpenRow,
     handleLeadStatus, handleWaitlistStatus, handleWaitlistDelete,
+    lossReasonDialog,
   } = useProviderLeadActions({
     // Patch the row in place first — instant feedback instead of waiting on a
     // full re-fetch — then refresh so filter membership/sort stay correct
@@ -196,6 +197,7 @@ export default function LeadsPage() {
         onDelete={() => { handleWaitlistDelete(selectedWaitlist); setSelectedWaitlist(null); }}
       />
     )}
+    {lossReasonDialog}
     </>
   );
 }

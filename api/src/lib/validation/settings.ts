@@ -1,6 +1,7 @@
 // Zod schema for PUT /admin/settings. All keys optional (partial update). Emails
 // and social URLs accept "" (to clear) or a valid value. Values are HTML-stripped.
 import { z } from "zod";
+import { checkEmailTemplate, type EmailTemplateField } from "@alassema/core";
 import { stripHtml } from "@/lib/utils/sanitize";
 
 const text = (max: number) => z.string().transform(stripHtml).pipe(z.string().max(max));
@@ -42,6 +43,13 @@ export const updateSettingsSchema = z
     favicon_url: urlOrEmpty,
     logo_scale: scaleOrEmpty,
     hero_image_url: urlOrEmpty,
+    // Meta pixel ids are numeric (15-16 digits today). Checked rather than
+    // accepted as free text because a wrong value here is silent: the pixel
+    // just never reports, and the first sign is a campaign that never learns.
+    meta_pixel_id: z
+      .string()
+      .trim()
+      .refine((v) => v === "" || /^\d{8,20}$/.test(v), "Must be a numeric Pixel ID, or blank"),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, { message: "At least one setting is required" });
@@ -49,6 +57,18 @@ export const updateSettingsSchema = z
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
 // PUT /admin/email-templates. Plain text with {{tokens}}; blank = built-in default.
+//
+// These four fields OVERRIDE the built-in provider/admin new-lead emails
+// (notifications.service.ts). They used to be validated as nothing but
+// length-capped text, which is how a subject of "what" over a body of
+// "fuafjasfja" reached production and became the ONLY thing every provider was
+// told about every lead. Length was never the property that mattered: a lead
+// notification is useless unless it carries the reference, and the provider's
+// copy is useless unless it carries the customer's contact details.
+//
+// The rule itself lives in @alassema/core so the admin screen can show the same
+// message inline instead of surfacing it only as a failed save. THIS is the
+// gate, though — a direct PUT must not get past it.
 export const updateEmailTemplatesSchema = z
   .object({
     providerSubject: text(200),
@@ -57,7 +77,14 @@ export const updateEmailTemplatesSchema = z
     adminBody: text(5000),
   })
   .partial()
-  .refine((o) => Object.keys(o).length > 0, { message: "At least one template field is required" });
+  .refine((o) => Object.keys(o).length > 0, { message: "At least one template field is required" })
+  .superRefine((o, ctx) => {
+    for (const [field, value] of Object.entries(o)) {
+      if (typeof value !== "string") continue;
+      const problem = checkEmailTemplate(field as EmailTemplateField, value);
+      if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [field], message: problem });
+    }
+  });
 
 export type UpdateEmailTemplatesInput = z.infer<typeof updateEmailTemplatesSchema>;
 

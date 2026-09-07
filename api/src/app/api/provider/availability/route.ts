@@ -11,5 +11,8 @@ export const dynamic = "force-dynamic";
 export const PATCH = providerOnly(async (request: NextRequest, _ctx, user) => {
   if (!user.companyId) throw new ValidationError("Your account isn't linked to a company yet.");
   const input = availabilitySchema.parse(await request.json());
-  return ok(await companiesService.setAvailability(user.companyId, input));
+  // "provider" audience: the admin payload carries Al Asima's commission rate
+  // and the ratingOverridden flag, neither of which is a provider's to read.
+  // See setAvailability's comment.
+  return ok(await companiesService.setAvailability(user.companyId, input, "provider"));
 });

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiLead, ApiLeadStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useLiveEvents } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useLiveEvents } from "@alassema/mobile-shared";
 import { fetchLead, updateLeadStatus } from "../../lib/leads";
 import { fetchConversationForLead } from "../../lib/chat";
 import { fetchAdminLead, deleteAdminLead } from "../../lib/adminLeads";
@@ -13,10 +13,12 @@ import { isAdmin } from "../../lib/permissions";
 import { useStaffAuth } from "../../lib/staffAuth";
 import StatusPill from "../../components/StatusPill";
 import StatusSheet from "../../components/StatusSheet";
+import LossReasonSheet, { type LossPayload } from "../../components/LossReasonSheet";
 import ItemsTable from "../../components/ItemsTable";
 import Icon from "../../components/Icon";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
 import { formatEgp } from "../../lib/money";
+import { displayPhone } from "../../lib/phone";
 
 /**
  * Shared between the provider and admin tab groups (both link here as
@@ -33,6 +35,7 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [lossVisible, setLossVisible] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -63,12 +66,24 @@ export default function LeadDetail() {
     }
   });
 
+  // Cancelling asks why first. Not a UI preference: the server refuses a move
+  // to CANCELLED without a reason, so going straight to the PATCH would return
+  // a 400 the provider has no way to answer from this screen.
   async function handleStatusSelect(status: ApiLeadStatus) {
     if (!lead) return;
     setSheetVisible(false);
+    if (status === "Cancelled") {
+      setLossVisible(true);
+      return;
+    }
+    await applyStatus(status);
+  }
+
+  async function applyStatus(status: ApiLeadStatus, loss?: LossPayload) {
+    if (!lead) return;
     setStatusBusy(true);
     try {
-      setLead(await updateLeadStatus(lead.id, status));
+      setLead(await updateLeadStatus(lead.id, status, loss));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحديث الحالة. جرّب تاني.");
     } finally {
@@ -149,7 +164,7 @@ export default function LeadDetail() {
             <Section title="العميل">
               <InfoRow label="الاسم" value={lead.name} />
               <InfoRow label="الحي" value={lead.district} />
-              <InfoRow label="الهاتف" value={lead.phone} />
+              <InfoRow label="الهاتف" value={displayPhone(lead.phone)} />
               {/* Two channels only, both first-party: the in-app thread and the
                   device dialer. WhatsApp used to sit between them, which sent
                   the conversation somewhere the platform cannot see — no
@@ -260,6 +275,18 @@ export default function LeadDetail() {
             onClose={() => setSheetVisible(false)}
           />
         ) : null}
+
+        {lead ? (
+          <LossReasonSheet
+            visible={lossVisible}
+            busy={statusBusy}
+            onConfirm={(loss) => {
+              setLossVisible(false);
+              void applyStatus("Cancelled", loss);
+            }}
+            onClose={() => setLossVisible(false)}
+          />
+        ) : null}
       </SafeAreaView>
     </>
   );
@@ -292,18 +319,18 @@ function verificationLabel(status: string): string {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 16, paddingBottom: 100 },
-  headerRow: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  headerRow: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", gap: 8 },
   service: { flex: 1, fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
   ref: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.outline, textAlign: textStart },
   section: { gap: 8 },
   sectionTitle: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurfaceVariant, textAlign: textStart },
-  infoRow: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 8 },
+  infoRow: { flexDirection: rowStart, justifyContent: "space-between", gap: 8 },
   infoLabel: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant },
   infoValue: { fontSize: type.body.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurface },
-  contactRow: { flexDirection: "row-reverse", gap: 10, marginTop: 10 },
+  contactRow: { flexDirection: rowStart, gap: 10, marginTop: 10 },
   contactBtn: {
     flex: 1,
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
@@ -327,7 +354,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.outlineVariant,
     backgroundColor: colors.surface,
   },
-  actionsRow: { flexDirection: "row-reverse", gap: 10 },
+  actionsRow: { flexDirection: rowStart, gap: 10 },
   statusBtn: { flex: 1, backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   statusBtnLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },
   deleteBtn: { backgroundColor: colors.errorContainer, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, alignItems: "center" },

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 /**
  * Simple by design — phase-11's own framing: long-form editing belongs on a
@@ -98,7 +98,7 @@ function renderInline(line: string) {
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
-  toolbar: { flexDirection: "row-reverse", gap: 8 },
+  toolbar: { flexDirection: rowStart, gap: 8 },
   toolBtn: { backgroundColor: colors.surfaceContainer, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
   toolBtnActive: { backgroundColor: colors.primary },
   toolBtnText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
@@ -111,10 +111,10 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
-  previewBox: { borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 10, padding: 12, backgroundColor: colors.surface, gap: 6 },
+  previewBox: { borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 10, padding: 12, backgroundColor: colors.surfaceContainerLowest, gap: 6 },
   h1: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
   h2: { fontSize: type.headline.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   paragraph: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, textAlign: textStart, lineHeight: 22 },

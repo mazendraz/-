@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { colors, type } from "@alassema/core";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import {
   fetchCompanyDetail,
   setCompanyAvailability,
@@ -16,6 +16,7 @@ import Button from "../../../components/Button";
 import AvailabilityToggle from "../../../components/AvailabilityToggle";
 import BusyWindowRow from "../../../components/BusyWindowRow";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../../components/ListStates";
+import FormScroll from "../../../components/FormScroll";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -117,7 +118,7 @@ export default function CompanyAvailability() {
         ) : error ? (
           <ErrorCard message={error} onRetry={() => load()} />
         ) : (
-          <ScrollView contentContainerStyle={styles.content}>
+          <FormScroll contentContainerStyle={styles.content}>
             <AvailabilityToggle busy={busy} busyUntil={busyUntil} onToggle={handleToggle} disabled={toggling} />
 
             <Text style={styles.sectionTitle}>فترات انشغال مجدولة</Text>
@@ -155,7 +156,7 @@ export default function CompanyAvailability() {
               </View>
               <Button label="جدولة" onPress={handleSchedule} busy={scheduling} />
             </View>
-          </ScrollView>
+          </FormScroll>
         )}
       </SafeAreaView>
     </>
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
   windowsList: { gap: 8 },
   scheduleForm: { backgroundColor: colors.surfaceContainer, borderRadius: 14, padding: 16, gap: 12, marginTop: 8 },
   formTitle: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
-  formRow: { flexDirection: "row-reverse", gap: 10 },
+  formRow: { flexDirection: rowStart, gap: 10 },
   formField: { flex: 1 },
   formLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant, marginBottom: 4 },
   formInput: {
@@ -180,6 +181,6 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
 });

@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { sanitizedText, sanitizedOptionalText } from "@/lib/utils/sanitize";
 import { isValidE164Phone } from "@/lib/utils/phone";
+import { LEAD_LOSS_REASONS } from "@alassema/core";
 
 /**
  * One selected line. NO PRICES: the server looks them up from the catalogue.
@@ -43,8 +44,19 @@ export const createLeadSchema = z.object({
 
 export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 
+/**
+ * PATCH /leads/:id.
+ *
+ * `lossReason` is shaped optional here and REQUIRED by the service when the
+ * target is "Cancelled" — the check needs to know the target status, which is
+ * a cross-field rule, and putting it in the service keeps one place deciding
+ * (leads.service.updateStatus) rather than a schema and a service that can
+ * disagree about when a cancellation is complete.
+ */
 export const leadStatusSchema = z.object({
   status: z.enum(["New", "Contacted", "In Progress", "Completed", "Cancelled"]),
+  lossReason: z.enum(LEAD_LOSS_REASONS).optional(),
+  lossNote: sanitizedOptionalText(500),
 });
 
 // Public lead tracking (GET /leads/track?ref=&token=&phone=). The ref plus a

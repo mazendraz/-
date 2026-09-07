@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 export default function Composer({
   value,
@@ -16,7 +16,9 @@ export default function Composer({
   const canSend = value.trim().length > 0 && !sending;
 
   return (
-    <View style={styles.row}>
+    <View
+      style={styles.row}
+    >
       <TextInput
         style={styles.input}
         value={value}
@@ -39,7 +41,7 @@ export default function Composer({
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "flex-end",
     gap: 8,
     padding: 10,

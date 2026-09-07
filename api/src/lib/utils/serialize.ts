@@ -384,7 +384,11 @@ export function serializeCompanyAdmin(c: CompanyWithRelations): ApiCompany {
     ...(c._count ? { leadCount: c._count.leads } : {}),
     // Business Control Center only — null means "use the platform default",
     // see finance.service.ts resolveCommissionPercent.
+    // `!= null`, not a truthiness check: 0 is a real rate (the providers Al
+    // Asima takes nothing from) and must survive the round trip as 0, not
+    // collapse to "no override set".
     commissionPercent: c.commissionPercent != null ? Number(c.commissionPercent) : null,
+    commissionFlat: c.commissionFlat != null ? Number(c.commissionFlat) : null,
   };
 }
 
@@ -503,6 +507,11 @@ export function serializeLead(l: LeadWithCompany): ApiLead {
     budget: l.budget,
     description: l.description,
     status: leadStatusToLabel(l.status),
+    // Null on anything that was never cancelled, and on the leads cancelled
+    // before the column existed — the API refuses a new cancellation without a
+    // reason, so those are the only two ways this is ever empty.
+    lossReason: l.lossReason ?? null,
+    lossNote: l.lossNote ?? null,
     reviewed: l.reviewedAt != null, // true only when a review date is set
     createdAt: toEpochMs(l.createdAt),
     // Feature C. Prices here are snapshots from submission — never recomputed.

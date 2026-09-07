@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useLocalSearchParams } from "expo-router";
 import type { ApiTransaction } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { fetchTransactions, setTransactionStatus } from "../../../../lib/controlFinance";
 import { formatEgp } from "../../../../lib/money";
 import PermissionGate from "../../../../components/PermissionGate";
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 10, paddingBottom: 24 },
   amount: { fontSize: type.headline.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: "center" },
   type: { fontSize: type.body.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant, textAlign: "center", marginBottom: 8 },
-  infoRow: { flexDirection: "row-reverse", justifyContent: "space-between" },
+  infoRow: { flexDirection: rowStart, justifyContent: "space-between" },
   infoLabel: { fontSize: type.label.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
   infoValue: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
   note: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, textAlign: textStart, marginTop: 4 },

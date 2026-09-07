@@ -77,7 +77,6 @@ export default function NewRequest() {
   const [district, setDistrict] = useState("");
   const [service, setService] = useState("");
   const [description, setDescription] = useState("");
-  const [districtPickerOpen, setDistrictPickerOpen] = useState(false);
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
   const [company, setCompany] = useState<ApiCompany | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -228,7 +227,7 @@ export default function NewRequest() {
   // so without it the press can only ever produce a 400. Disabled-until-loaded
   // is an honest wait; a button that looks ready and silently fails is not.
   const canSubmit =
-    name.trim().length >= 2 && phoneE164 !== null && district !== "" && Boolean(companyName?.trim());
+    name.trim().length >= 2 && phoneE164 !== null && district.trim() !== "" && Boolean(companyName?.trim());
 
   // Is this company booked out right now? The ONE thing it changes about this
   // screen: the finished request is queued on their waiting list instead of
@@ -261,7 +260,7 @@ export default function NewRequest() {
           service: serviceText,
           // The waiting list stores the job description in `note`.
           note: description.trim(),
-          district,
+          district: district.trim(),
           items,
         });
         setSubmitted({ kind: "queued", entry });
@@ -272,7 +271,7 @@ export default function NewRequest() {
           service: serviceText,
           name: name.trim(),
           phone: phoneE164,
-          district,
+          district: district.trim(),
           description: description.trim(),
           items,
         });
@@ -313,16 +312,23 @@ export default function NewRequest() {
             size={40}
             color={queued ? colors.warning : colors.success}
           />
-          <Text style={styles.successTitle}>{queued ? "تم حجز دورك" : "اتبعت طلبك"}</Text>
+          <Text style={styles.successTitle}>{queued ? "تم حجز دورك" : "تمام — طلبك وصلنا."}</Text>
           {queued ? (
             <Text style={styles.successBody}>
               {companyName} مشغولة دلوقتي. طلبك اتسجّل كامل بكل التفاصيل والسعر،
               وهيتحوّل لطلب عادي برقم مرجعي أول ما يقبلوه.
             </Text>
           ) : (
+            /* Named, with a time. "هتتواصل معاك قريب" is indistinguishable
+               from a form that did nothing: it names no moment the customer
+               can hold anyone to. The reference, the company and the actual
+               window turn this into a receipt for a process that is running —
+               kept word-for-word in step with the website's
+               form_success_named (app/src/lib/i18n.ts). */
             <Text style={styles.successBody}>
-              {companyName} هتتواصل معاك قريب. رقم طلبك{" "}
-              <Text style={styles.ref}>{submitted.lead.refNumber}</Text>
+              يا {name.trim()}، طلبك رقم{" "}
+              <Text style={styles.ref}>{submitted.lead.refNumber}</Text> وصلنا.
+              {"\n"}حوّلناه لـ{companyName}، وهنكلمك خلال ١٥ دقيقة في مواعيد الشغل (١٠ ص – ١٠ م).
             </Text>
           )}
 
@@ -475,14 +481,35 @@ export default function NewRequest() {
               </View>
             </View>
 
+            {/* Typed, not picked — same change as the website's RequestForm.
+                A fixed list produced "Other" on 12 of the first 16 requests,
+                because the names on it were English on an Arabic form. The API
+                has always taken free text here (createLeadSchema:
+                sanitizedText(1, 100)); the list was only ever a UI constraint.
+                The known names stay as taps below the input: a shortcut for the
+                people they fit, never a wall for the people they don't. */}
             <View style={styles.field}>
               <Text style={styles.label}>الحي</Text>
-              <Pressable style={styles.districtButton} onPress={() => setDistrictPickerOpen(true)}>
-                <Text style={district ? styles.districtValue : styles.districtPlaceholder}>
-                  {district || "اختر حيّك"}
-                </Text>
-                <Icon name="expand_more" size={20} color={colors.outline} />
-              </Pressable>
+              <TextInput
+                value={district}
+                onChangeText={(v) => { contactTouched.current = true; setDistrict(v); }}
+                placeholder="اكتب حيّك — مثلاً R7، الحي الدبلوماسي، التجمع…"
+                placeholderTextColor={colors.outline}
+                maxLength={100}
+                style={styles.districtInput}
+                textAlign="right"
+              />
+              <View style={styles.districtChips}>
+                {districts.map((d) => (
+                  <Pressable
+                    key={d}
+                    style={styles.districtChip}
+                    onPress={() => { contactTouched.current = true; setDistrict(d); }}
+                  >
+                    <Text style={styles.districtChipText}>{d}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           </View>
 
@@ -566,26 +593,6 @@ export default function NewRequest() {
         </Pressable>
       </Modal>
 
-      <Modal visible={districtPickerOpen} transparent animationType="slide" onRequestClose={() => setDistrictPickerOpen(false)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setDistrictPickerOpen(false)}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>اختر حيّك</Text>
-            {districts.map((d) => (
-              <Pressable
-                key={d}
-                style={styles.sheetRow}
-                onPress={() => {
-                  contactTouched.current = true;
-                  setDistrict(d);
-                  setDistrictPickerOpen(false);
-                }}
-              >
-                <Text style={styles.sheetRowText}>{d}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -700,6 +707,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     backgroundColor: colors.surfaceContainerLowest,
+  },
+  districtInput: {
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontFamily: "Cairo_400Regular",
+    fontSize: type.body.fontSize,
+    color: colors.onSurface,
+  },
+  districtChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  districtChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceContainer,
+  },
+  districtChipText: {
+    fontFamily: "Cairo_600SemiBold",
+    fontSize: type.caption.fontSize,
+    color: colors.onSurfaceVariant,
   },
   districtValue: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.onSurface, textAlign: "right" },
   districtPlaceholder: { flex: 1, fontFamily: "Cairo_400Regular", fontSize: type.body.fontSize, color: colors.outline, textAlign: "right" },

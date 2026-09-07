@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiLead } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { completeLead, fetchLead } from "../../../lib/leads";
 import Button from "../../../components/Button";
 import MoneyField from "../../../components/MoneyField";
 import { ListSkeleton, ErrorCard } from "../../../components/ListStates";
 import { formatEgp } from "../../../lib/money";
+import FormScroll from "../../../components/FormScroll";
 
 /**
  * The only path a provider has to "Completed" — see api's PATCH /leads/[id]
@@ -148,7 +149,7 @@ export default function CompleteLead() {
         ) : loadError ? (
           <ErrorCard message={loadError} onRetry={() => void load()} />
         ) : (
-          <ScrollView
+          <FormScroll
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -261,7 +262,7 @@ export default function CompleteLead() {
               disabled={!canSubmit}
               style={styles.submit}
             />
-          </ScrollView>
+          </FormScroll>
         )}
       </SafeAreaView>
     </>
@@ -273,7 +274,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 14, paddingBottom: 40 },
 
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
@@ -288,7 +289,7 @@ const styles = StyleSheet.create({
   },
 
   sourceRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.surfaceContainer,
@@ -309,12 +310,12 @@ const styles = StyleSheet.create({
   },
 
   toggleRow: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
   },
-  toggleButtons: { flexDirection: "row-reverse", gap: 8 },
+  toggleButtons: { flexDirection: rowStart, gap: 8 },
   toggleBtn: {
     minWidth: 64,
     minHeight: 40,
@@ -354,7 +355,7 @@ const styles = StyleSheet.create({
   },
 
   summary: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.primaryContainer,

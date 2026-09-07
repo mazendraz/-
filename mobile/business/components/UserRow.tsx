@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ApiAdminUser } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 export default function UserRow({ user, onPress }: { user: ApiAdminUser; onPress: () => void }) {
   return (
@@ -27,11 +27,11 @@ export default function UserRow({ user, onPress }: { user: ApiAdminUser; onPress
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     borderRadius: 14,

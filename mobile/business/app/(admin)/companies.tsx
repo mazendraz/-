@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchAdminCompanies, type CompanyStatusValue } from "../../lib/adminCompanies";
 import Button from "../../components/Button";
 import ScreenHeader from "../../components/ScreenHeader";
+import { ChipBar, Chip } from "../../components/ChipBar";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
 
 const PAGE_SIZE = 20;
@@ -96,25 +97,33 @@ export default function AdminCompanies() {
       <ScreenHeader title="الشركات" />
       <View style={styles.filterWrap}>
         <TextInput
-          style={styles.search}
+          style={[styles.search, styles.filterInset]}
           value={search}
           onChangeText={setSearch}
           placeholder="بحث باسم الشركة"
           placeholderTextColor={colors.onSurfaceVariant}
           textAlign={textStart === "right" ? "right" : "left"}
         />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        {/* ChipBar, not a hand-rolled ScrollView of pills — it owns the two
+            bugs that shape has here: chips stretching into lozenges when the
+            list below is empty, and the bar opening scrolled past its own
+            first (default, active) chip. See ChipBar's own header comment. */}
+        <ChipBar style={styles.chips}>
           {STATUSES.map((s) => (
-            <Pressable
+            <Chip
               key={s.label}
+              label={s.label}
+              active={status === s.value}
               onPress={() => setStatus(s.value)}
-              style={[styles.chip, status === s.value && styles.chipActive]}
-            >
-              <Text style={[styles.chipLabel, status === s.value && styles.chipLabelActive]}>{s.label}</Text>
-            </Pressable>
+            />
           ))}
-        </ScrollView>
-        <Button label="+ إضافة شركة" variant="secondary" onPress={() => router.push("/company/new")} />
+        </ChipBar>
+        <Button
+          label="+ إضافة شركة"
+          variant="secondary"
+          onPress={() => router.push("/company/new")}
+          style={styles.filterInset}
+        />
       </View>
 
       {loading ? (
@@ -141,7 +150,8 @@ export default function AdminCompanies() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  filterWrap: { gap: 10, paddingHorizontal: 16, paddingTop: 12 },
+  filterWrap: { gap: 10, paddingTop: 12 },
+  filterInset: { marginHorizontal: 16 },
   search: {
     borderWidth: 1,
     borderColor: colors.outlineVariant,
@@ -151,20 +161,16 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
-  chips: { flexDirection: "row-reverse", gap: 8, paddingBottom: 4 },
-  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: colors.surfaceContainer },
-  chipActive: { backgroundColor: colors.primary },
-  chipLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
-  chipLabelActive: { color: colors.onPrimary },
+  chips: { paddingVertical: 2 },
   list: { padding: 16, paddingTop: 12 },
   separator: { height: 10 },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  card: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
   cardPressed: { opacity: 0.7 },
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   meta: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },
-  statsRow: { flexDirection: "row-reverse", gap: 10, flexWrap: "wrap", marginTop: 4 },
+  statsRow: { flexDirection: rowStart, gap: 10, flexWrap: "wrap", marginTop: 4 },
   stat: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant },
   busyTag: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.error },
 });

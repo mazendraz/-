@@ -23,6 +23,7 @@ import MenuButton from "../../components/MenuButton";
 import AvailabilityBadge from "../../components/AvailabilityBadge";
 import CompanyGallery from "../../components/CompanyGallery";
 import OfferingGroup from "../../components/OfferingGroup";
+import SafetyBox from "../../components/SafetyBox";
 import { fetchCompany } from "../../lib/companyDetail";
 import { useRefreshOnFocus, ApiError, assetUri, firstAssetUri, rowStart, displayLine } from "@alassema/mobile-shared";
 import { useIsSaved } from "../../lib/saved";
@@ -277,8 +278,16 @@ export default function CompanyProfile() {
               <Text style={styles.ratingStars}>{"★".repeat(Math.round(company.rating))}</Text>
               <Text style={styles.ratingValue}>{company.rating.toFixed(1)}</Text>
               <Text style={styles.statMuted}>({company.reviewCount} تقييم)</Text>
-              <Text style={styles.statDot}>·</Text>
-              <Text style={styles.statMuted}>{company.completedProjects} مشروع منجز</Text>
+              {/* Hidden at 0 rather than printed — "0 مشروع منجز" announces
+                  the emptiest thing about a company on the screen whose job is
+                  to make hiring them feel safe. Same rule as the website's
+                  CompanyProfile.tsx. */}
+              {company.completedProjects > 0 ? (
+                <>
+                  <Text style={styles.statDot}>·</Text>
+                  <Text style={styles.statMuted}>{company.completedProjects} مشروع منجز</Text>
+                </>
+              ) : null}
             </View>
 
             <View style={styles.trustRow}>
@@ -391,6 +400,12 @@ export default function CompanyProfile() {
                   </View>
                 </>
               )}
+
+              {/* Directly under the prices, because this is where "that's
+                  expensive" gets decided. A number next to a photo is just a
+                  number; the same number under four specific commitments is a
+                  price for something. Mirrors the website's CompanyProfile. */}
+              <SafetyBox style={styles.safetyBox} />
             </View>
           )}
 
@@ -675,6 +690,7 @@ const styles = StyleSheet.create({
   credentialChip: { flexDirection: rowStart, alignItems: "center", gap: 5, backgroundColor: `${colors.primary}14`, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
   credentialChipText: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.primary },
 
+  safetyBox: { marginTop: 20 },
   offeringGroup: { marginBottom: 20 },
   offeringList: { gap: 12 },
   legacyChips: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },

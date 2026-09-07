@@ -190,7 +190,14 @@ export default function GuidedStart() {
                           {formatRating(locale, c.rating)}
                         </span>
                         <span className="text-outline">· {c.reviewCount} {t(locale, "common_reviews")}</span>
-                        <span className="text-outline">· {c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>
+                        {/* Hidden at 0 rather than printed. "0 projects" is not a neutral
+                            fact on a card whose job is to make someone feel safe hiring
+                            this company — it announces the emptiest thing about them,
+                            and it is what 26 of the companies here currently say. Saying
+                            nothing is honest; announcing the zero is self-harm. */}
+                        {c.completedProjects > 0 && (
+                          <span className="text-outline">· {c.completedProjects} {tCount(locale, "noun_project", c.completedProjects)}</span>
+                        )}
                       </div>
                     </div>
                     <Icon name="arrow_forward" className="text-outline group-hover:text-primary group-hover:translate-x-1 transition flex-shrink-0 rtl-flip" />

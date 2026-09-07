@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 /** Horizontally scrollable inside its own container — the page body must
  *  never scroll sideways (phase-12's own risk note). */
@@ -29,9 +29,9 @@ const CELL_WIDTH = 130;
 
 const styles = StyleSheet.create({
   outer: { borderRadius: 12, borderWidth: 1, borderColor: colors.outlineVariant },
-  headerRow: { flexDirection: "row-reverse", backgroundColor: colors.surfaceContainer },
+  headerRow: { flexDirection: rowStart, backgroundColor: colors.surfaceContainer },
   headerCell: { width: CELL_WIDTH, padding: 10, fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurfaceVariant, textAlign: textStart },
-  row: { flexDirection: "row-reverse", backgroundColor: colors.surface },
+  row: { flexDirection: rowStart, backgroundColor: colors.surface },
   rowAlt: { backgroundColor: colors.surfaceContainer },
   cell: { width: CELL_WIDTH, padding: 10, fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, textAlign: textStart },
 });

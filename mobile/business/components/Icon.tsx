@@ -63,6 +63,21 @@ const MATERIAL_ICON_NAME = {
   logout: "logout",
   chat: "chat",              // in-app conversation
   call: "call",              // native dialer
+
+  // ── Forms, pickers and media ─────────────────────────────────────────────
+  // Every one of these was checked against the installed glyph map before
+  // being added, per this file's own rule — an unmapped Symbols name renders
+  // as a blank box with no error.
+  close: "close",                       // remove a chip / dismiss
+  add: "add",                           // add an option from a picker list
+  cloud_upload: "cloud-upload",         // the empty upload dropzone
+  upload: "upload",                     // the "choose a file" action
+  sync: "sync",                         // replace an already-uploaded file
+  delete: "delete",                     // remove an uploaded file
+  videocam: "videocam",                 // a gallery item that is a video
+  play_arrow: "play-arrow",             // the play affordance over a video
+  photo_camera: "photo-camera",         // take a photo instead of picking one
+  fullscreen: "fullscreen",             // expand a chart to its own screen
 } as const;
 
 export type IconName = keyof typeof MATERIAL_ICON_NAME;

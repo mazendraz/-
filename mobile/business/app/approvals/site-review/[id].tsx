@@ -3,7 +3,7 @@ import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiSiteReview } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { colors, type } from "@alassema/core";
 import { setSiteReviewVisible, deleteSiteReview, fetchPendingSiteReviews } from "../../../lib/approvals";
 import { siteReviewQueue } from "../../../lib/approvalsStore";
@@ -108,7 +108,7 @@ export default function SiteReviewDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 10, paddingBottom: 24 },
-  header: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  header: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   author: { flex: 1, fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
   meta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },
   text: { fontSize: type.body.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurface, textAlign: textStart, lineHeight: 22 },

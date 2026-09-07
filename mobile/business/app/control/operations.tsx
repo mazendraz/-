@@ -3,7 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import type { ApiLead, ApiLeadStatus, ApiOperationsSummary } from "@alassema/core";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchControlLeads, fetchOperationsSummary } from "../../lib/controlOperations";
 import PermissionGate from "../../components/PermissionGate";
 import KpiTile from "../../components/KpiTile";
@@ -114,7 +114,7 @@ export default function ControlOperations() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   kpiGrid: { padding: 16, paddingBottom: 0, gap: 12 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   list: { padding: 16, paddingTop: 12 },
   separator: { height: 10 },
 });

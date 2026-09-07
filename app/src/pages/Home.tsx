@@ -5,7 +5,6 @@ import { useCompanies, useCategoriesWithCounts, useCatalogStatus, useFeaturedPro
 import { isBusy } from "../lib/availability";
 import { CompanyCardSkeleton } from "../components/Skeleton";
 import { useSiteReviews, useReviewsEnabled, addSiteReview } from "../lib/siteReviews";
-import { useCountUp } from "../hooks/useCountUp";
 import { useReveal } from "../hooks/useReveal";
 import { useScrollDots } from "../hooks/useScrollDots";
 import Stars from "../components/Stars";
@@ -20,6 +19,7 @@ import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import { useSettings } from "../lib/settings";
 import Icon from "../components/Icon";
+import SafetyBox from "../components/SafetyBox";
 
 // ── Generic reveal wrapper ────────────────────────────────────────────────
 function Reveal({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
@@ -60,12 +60,6 @@ export default function Home() {
   const heroTitleOverride = (locale === "ar" ? settings.hero_title_ar : settings.hero_title_en).trim();
   const heroSubOverride = (locale === "ar" ? settings.hero_subtitle_ar : settings.hero_subtitle_en).trim();
   const heroImage = settings.hero_image_url.trim() || HERO;
-
-  // Average customer rating — derived from live company ratings (×10 so the
-  // counter can animate an integer), not a hardcoded number.
-  const avgRating10 = COMPANIES.length
-    ? Math.round((COMPANIES.reduce((s, c) => s + c.rating, 0) / COMPANIES.length) * 10)
-    : 0;
 
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -193,20 +187,41 @@ export default function Home() {
       </header>
 
       {/* ═══════════════════════════════════════════════════
-          STATS — animated counters
+          PROMISES — what we do, not how many we've done
       ═══════════════════════════════════════════════════ */}
+      {/* This was four animated counters: partners, total projects, average
+          rating, categories. Two of the four were not real numbers. The
+          projects total summed Company.completedProjects, which is a figure an
+          admin types in by hand and nothing verifies; the rating averaged
+          Company.rating, which on every company here was an admin override
+          (ratingOverridden) sitting on an empty Review table. A visitor read
+          the most confident thing on the page — big numbers, counting up — and
+          what they were reading was typed in.
+
+          Numbers also work against a platform this young even when they ARE
+          true: "26 partners" and a small project count tell a visitor they are
+          early, which is the opposite of the reassurance a counter is there to
+          give.
+
+          So: promises instead. Each line below is a thing Al Assema does, and
+          a customer can hold us to every one of them. Swap them back for
+          counters once the numbers are both real and large enough to help —
+          the honest source for that is COMPLETED leads with verified
+          completions, not these two columns. */}
       <section
         id="stats"
         className="bg-surface-container-lowest border-b border-surface-dim/20
-                   relative rounded-t-3xl -mt-6 z-10 py-10 md:py-14"
+                   relative rounded-t-3xl -mt-6 z-10 py-8 md:py-12"
       >
         <div className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-10 text-center">
-            <StatCounter target={COMPANIES.length} label={t(locale, "home_stat_partners")} />
-            <StatCounter target={COMPANIES.reduce((s, c) => s + c.completedProjects, 0)} label={t(locale, "home_stat_projects")} />
-            <StatCounter target={avgRating10} label={t(locale, "home_stat_rating")} displayFn={(n) => (n / 10).toFixed(1)} icon="star" />
-            <StatCounter target={SERVICE_CATEGORIES.length} label={t(locale, "home_stat_categories")} />
-          </div>
+          <ul className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8">
+            {(["home_promise_1", "home_promise_2", "home_promise_3"] as const).map((key) => (
+              <li key={key} className="flex items-start gap-3">
+                <Icon name="check_circle" className="text-primary text-subhead shrink-0 mt-0.5" />
+                <span className="text-label font-bold text-on-surface leading-relaxed">{t(locale, key)}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -422,6 +437,16 @@ export default function Home() {
         </section>
 
         {/* ═══════════════════════════════════════════════════
+            HOW WE PROTECT YOU
+        ═══════════════════════════════════════════════════ */}
+        {/* Above "Why Al Assema" on purpose: that section says what kind of
+            platform this is, this one answers the question a visitor is
+            actually holding — "what happens to me if this goes wrong". */}
+        <section className="py-10 md:py-14 border-t border-surface-dim/20">
+          <SafetyBox />
+        </section>
+
+        {/* ═══════════════════════════════════════════════════
             WHY AL ASSEMA
         ═══════════════════════════════════════════════════ */}
         <section id="about" className="scroll-mt-20 md:scroll-mt-24 py-14 md:py-20 border-t border-surface-dim/20">
@@ -535,33 +560,6 @@ export default function Home() {
         <SiteReviewModal onClose={() => setReviewModalOpen(false)} />
       )}
       </div>{/* /container */}
-    </div>
-  );
-}
-
-// ── Animated stat counter ─────────────────────────────────────────────────
-function StatCounter({
-  target, suffix = "", label, displayFn, icon,
-}: {
-  target: number;
-  suffix?: string;
-  label: string;
-  displayFn?: (n: number) => string;
-  /** HOME-04: was a "★" glyph concatenated into the number string — not
-   *  localizable, and a screen reader read the whole thing as "4.8 black
-   *  star". A real icon next to the number instead. */
-  icon?: string;
-}) {
-  const { ref, count } = useCountUp(target);
-  const display = displayFn ? displayFn(count) : `${count}${suffix}`;
-  return (
-    <div ref={ref} className="fade-up">
-      <div className="text-primary font-black tabular-nums leading-none mb-2
-                      text-[2.2rem] md:text-[3rem] tracking-tight flex items-center justify-center gap-1.5">
-        {display}
-        {icon && <Icon name={icon} className="text-[1.5rem] md:text-[2rem]" fill />}
-      </div>
-      <div className="text-outline font-bold text-caption ltr:uppercase ltr:tracking-[0.1em] leading-tight">{label}</div>
     </div>
   );
 }

@@ -4,9 +4,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiWaitlistEntry } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchPlatformWaitlist } from "../lib/adminWaitlist";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../components/ListStates";
+import { displayPhone } from "../lib/phone";
 
 const PAGE_SIZE = 30;
 
@@ -25,7 +26,7 @@ function EntryRow({ entry }: { entry: ApiWaitlistEntry }) {
         <Text style={styles.status}>{STATUS_LABEL[entry.status]}</Text>
       </View>
       <Text style={styles.meta}>{entry.companyName} · {entry.service ?? "—"}</Text>
-      <Text style={styles.phone}>{entry.phone}</Text>
+      <Text style={styles.phone}>{displayPhone(entry.phone)}</Text>
     </View>
   );
 }
@@ -121,12 +122,12 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   list: { padding: 16, paddingTop: 4 },
   separator: { height: 10 },
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
-  top: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  top: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   name: { flex: 1, fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   status: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   meta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },

@@ -12,6 +12,10 @@ import NotificationToggle from "../../components/NotificationToggle";
 import AdminChatNotifyToggle from "../../components/AdminChatNotifyToggle";
 import TelegramConnect from "../../components/TelegramConnect";
 import { LField } from "./components/ModalShell";
+import {
+  EMAIL_TEMPLATE_TOKENS, checkEmailTemplate, checkEmailTemplatePair,
+  type EmailTemplateField,
+} from "@alassema/core";
 import { TagField, ImageUpload } from "./components/fields";
 import { ConfirmAction } from "./components/confirm";
 import { useLocale } from "../../context/LocaleContext";
@@ -116,10 +120,41 @@ export const SETTINGS_TABS: { id: SettingsSubTab; labelKey: StringKey }[] = [
 export const linesToTags = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
 export const tagsToLines = (t: string[]) => t.join("\n");
 
-export const EMAIL_TOKENS = [
-  "{{company}}", "{{refNumber}}", "{{service}}", "{{customer}}", "{{phone}}",
-  "{{district}}", "{{budget}}", "{{details}}", "{{receivedAt}}",
-];
+// Derived from the shared list rather than re-typed. The two had already
+// drifted apart once — this file listed the chips an admin can insert, while
+// the API decided separately which tokens it would substitute, so a chip could
+// exist for a token that resolved to nothing.
+export const EMAIL_TOKENS = EMAIL_TEMPLATE_TOKENS.map((tok) => `{{${tok}}}`);
+
+/**
+ * Every reason the current templates can't be saved, keyed by field.
+ *
+ * The API is the gate (validation/settings.ts + settings.service) — this is the
+ * same rule run locally so the admin sees the problem while typing rather than
+ * as a failed save with no field attached. Both sides call the same functions
+ * in @alassema/core, so they cannot disagree.
+ */
+export function emailTemplateErrors(email: EmailTemplates | null): Partial<Record<keyof EmailTemplates, string>> {
+  if (!email) return {};
+  const errors: Partial<Record<keyof EmailTemplates, string>> = {};
+  for (const field of ["providerSubject", "providerBody", "adminSubject", "adminBody"] as const) {
+    const problem = checkEmailTemplate(field as EmailTemplateField, email[field]);
+    if (problem) errors[field] = problem;
+  }
+  // Cross-field: a subject with no body (or the reverse) is silently ignored by
+  // the API, so saving it looks like it worked and changes nothing.
+  for (const [subjectKey, bodyKey] of [
+    ["providerSubject", "providerBody"],
+    ["adminSubject", "adminBody"],
+  ] as const) {
+    const pair = checkEmailTemplatePair(email[subjectKey], email[bodyKey]);
+    if (pair) {
+      const key = pair.field === "subject" ? subjectKey : bodyKey;
+      errors[key] ??= pair.message;
+    }
+  }
+  return errors;
+}
 
 export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
   const { locale } = useLocale();
@@ -167,6 +202,14 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
   const tabDirty = (id: SettingsSubTab) =>
     id === "email" ? emailDirty : id === "legal" ? legalDirty : platformDirty;
 
+  // A template that fails the shared rule cannot be saved. Blocking the button
+  // (rather than letting the API refuse) is the difference between "you can see
+  // which field is wrong and why" and "Save failed" — and the whole point of
+  // this check is that a broken provider email is invisible once it ships.
+  const emailErrors = emailTemplateErrors(email);
+  const emailBlocked = Object.keys(emailErrors).length > 0;
+  const saveBlocked = emailDirty && emailBlocked;
+
   async function saveAll() {
     setSaving(true);
     setErrorKey(null);
@@ -205,7 +248,7 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
       <div className="p-5 space-y-4">
         {active === "general" && <GeneralSettings form={platform} setP={setP} />}
         {active === "branding" && <BrandingSettings form={platform} setP={setP} />}
-        {active === "email" && <EmailSettings email={email} setE={setE} />}
+        {active === "email" && <EmailSettings email={email} setE={setE} errors={emailErrors} />}
         {active === "legal" && <LegalSettings legal={legal} setL={setL} />}
         {error && <p className="text-label text-error font-bold">{error}</p>}
       </div>
@@ -214,8 +257,10 @@ export function SettingsPanel({ onSaved }: { onSaved: (msg: string) => void }) {
       {/* DM-04: `sticky bottom-0` put the Save button itself under the home
           indicator in standalone mode. */}
       <div className="sticky bottom-0 flex items-center justify-end gap-3 px-5 py-3 dashboard-bottom-safe rounded-b-2xl bg-surface-container-lowest/95 backdrop-blur border-t border-outline-variant/20">
-        {anyDirty && <span className="me-auto text-caption font-bold text-secondary">{t(locale, "admin_set_unsaved")}</span>}
-        <button onClick={saveAll} disabled={saving || !anyDirty}
+        {saveBlocked
+          ? <span className="me-auto text-caption font-bold text-error">{t(locale, "admin_set_email_blocked")}</span>
+          : anyDirty && <span className="me-auto text-caption font-bold text-secondary">{t(locale, "admin_set_unsaved")}</span>}
+        <button onClick={saveAll} disabled={saving || !anyDirty || saveBlocked}
           className="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-bold text-label hover:bg-primary-container transition-colors touch-press btn-press disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
           {saving && <Icon name="progress_activity" className="text-subhead animate-spin" />}
           {t(locale, saving ? "admin_saving" : "admin_save_changes")}
@@ -268,6 +313,10 @@ export function GeneralSettings({ form, setP }: { form: PlatformSettings; setP: 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-outline-variant/15">
         <TagField label={t(locale, "admin_set_districts")} tags={linesToTags(form.districts)} onChange={(v) => setP("districts", tagsToLines(v))} placeholder={t(locale, "admin_set_districts_ph")} />
         <TagField label={t(locale, "admin_set_budgets")} tags={linesToTags(form.budgets)} onChange={(v) => setP("budgets", tagsToLines(v))} placeholder={t(locale, "admin_set_budgets_ph")} />
+        {/* Blank is the default and means the pixel is not loaded AT ALL — no
+            script, no cookies. Only fill this in while ads are running; see
+            lib/metaPixel.ts for what turning it on costs. */}
+        <TextField label={t(locale, "admin_set_meta_pixel")} value={form.meta_pixel_id} onChange={(v) => setP("meta_pixel_id", v)} placeholder={t(locale, "admin_set_meta_pixel_ph")} />
       </div>
 
       {/* Homepage hero copy, per locale — blank uses the built-in translations. */}
@@ -344,7 +393,12 @@ export function HighlightTextarea({ value, onChange, onFocus, rows = 4, placehol
   );
 }
 
-export function EmailSettings({ email, setE }: { email: EmailTemplates | null; setE: (k: keyof EmailTemplates, v: string) => void }) {
+export function EmailSettings({ email, setE, errors = {} }: {
+  email: EmailTemplates | null;
+  setE: (k: keyof EmailTemplates, v: string) => void;
+  /** Per-field reasons this template can't be saved — see emailTemplateErrors. */
+  errors?: Partial<Record<keyof EmailTemplates, string>>;
+}) {
   const { locale } = useLocale();
   // Track the last-focused field so a token chip inserts at its caret. The chip
   // buttons use onMouseDown→preventDefault so clicking them doesn't blur/clear it.
@@ -386,12 +440,12 @@ export function EmailSettings({ email, setE }: { email: EmailTemplates | null; s
       </div>
 
       <p className="text-caption font-bold text-outline pt-2 border-t border-outline-variant/15">{t(locale, "admin_set_provider_email")}</p>
-      <LField label={t(locale, "admin_set_subject")}><input className="field-input" value={email.providerSubject} onFocus={track("providerSubject")} onChange={(e) => setE("providerSubject", e.target.value)} placeholder={t(locale, "admin_set_provider_subject_ph")} /></LField>
-      <LField label={t(locale, "admin_set_body")}><HighlightTextarea value={email.providerBody} onChange={(v) => setE("providerBody", v)} onFocus={track("providerBody")} rows={5} placeholder={t(locale, "admin_set_blank_default")} /></LField>
+      <LField label={t(locale, "admin_set_subject")} error={errors.providerSubject}><input className="field-input" value={email.providerSubject} onFocus={track("providerSubject")} onChange={(e) => setE("providerSubject", e.target.value)} placeholder={t(locale, "admin_set_provider_subject_ph")} /></LField>
+      <LField label={t(locale, "admin_set_body")} error={errors.providerBody}><HighlightTextarea value={email.providerBody} onChange={(v) => setE("providerBody", v)} onFocus={track("providerBody")} rows={5} placeholder={t(locale, "admin_set_blank_default")} /></LField>
 
       <p className="text-caption font-bold text-outline pt-2 border-t border-outline-variant/15">{t(locale, "admin_set_admin_email")}</p>
-      <LField label={t(locale, "admin_set_subject")}><input className="field-input" value={email.adminSubject} onFocus={track("adminSubject")} onChange={(e) => setE("adminSubject", e.target.value)} placeholder={t(locale, "admin_set_admin_subject_ph")} /></LField>
-      <LField label={t(locale, "admin_set_body")}><HighlightTextarea value={email.adminBody} onChange={(v) => setE("adminBody", v)} onFocus={track("adminBody")} rows={4} placeholder={t(locale, "admin_set_blank_default_admin")} /></LField>
+      <LField label={t(locale, "admin_set_subject")} error={errors.adminSubject}><input className="field-input" value={email.adminSubject} onFocus={track("adminSubject")} onChange={(e) => setE("adminSubject", e.target.value)} placeholder={t(locale, "admin_set_admin_subject_ph")} /></LField>
+      <LField label={t(locale, "admin_set_body")} error={errors.adminBody}><HighlightTextarea value={email.adminBody} onChange={(v) => setE("adminBody", v)} onFocus={track("adminBody")} rows={4} placeholder={t(locale, "admin_set_blank_default_admin")} /></LField>
     </div>
   );
 }

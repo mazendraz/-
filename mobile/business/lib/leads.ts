@@ -4,7 +4,7 @@
  * on the server is strict role equality, so an ADMIN 403s on every one of
  * these — see lib/permissions.ts's header comment.
  */
-import type { ApiLead, ApiLeadCompletionPayload, ApiLeadStats, ApiLeadStatus, ApiPage } from "@alassema/core";
+import type { ApiLead, ApiLeadCompletionPayload, ApiLeadLossReason, ApiLeadStats, ApiLeadStatus, ApiPage } from "@alassema/core";
 import { apiGet, apiPatch, apiPost } from "@alassema/mobile-shared";
 
 export interface LeadListQuery {
@@ -48,8 +48,15 @@ export function fetchLead(id: string): Promise<ApiLead> {
  * in the first place (see StatusSheet), so this is a second, server-side
  * backstop, not the primary defense.
  */
-export function updateLeadStatus(id: string, status: ApiLeadStatus): Promise<ApiLead> {
-  return apiPatch<ApiLead>(`/leads/${id}`, { status });
+export function updateLeadStatus(
+  id: string,
+  status: ApiLeadStatus,
+  // Required by the server when status is "Cancelled": a cancellation with no
+  // recorded reason is what the field exists to prevent, so it is rejected
+  // rather than stored as a null. LossReasonSheet collects it before the call.
+  loss?: { lossReason: ApiLeadLossReason; lossNote?: string },
+): Promise<ApiLead> {
+  return apiPatch<ApiLead>(`/leads/${id}`, { status, ...(loss ?? {}) });
 }
 
 /** POST /provider/leads/[id]/complete — the only path to "Completed" for a

@@ -26,6 +26,8 @@ export interface PlatformSettings {
   logo_scale: string;
   // Homepage hero background image; "" = the built-in skyline render.
   hero_image_url: string;
+  /** Meta Pixel id. Blank = the pixel is not loaded at all. */
+  meta_pixel_id: string;
 }
 
 export const SETTINGS_DEFAULTS: PlatformSettings = {
@@ -47,6 +49,7 @@ export const SETTINGS_DEFAULTS: PlatformSettings = {
   favicon_url: "",
   logo_scale: "",
   hero_image_url: "",
+  meta_pixel_id: "",
 };
 
 /** Split a newline-separated settings value into a trimmed list, or the fallback

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import type { ApiSearchCategory, ApiSearchResult } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { globalSearch } from "../lib/adminSearch";
 import { ErrorCard } from "../components/ListStates";
 
@@ -120,15 +120,15 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   list: { padding: 16, paddingTop: 4 },
   separator: { height: 10 },
   emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   emptyText: { fontSize: type.body.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant },
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, padding: 12, gap: 3 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 12, padding: 12, gap: 3 },
   rowPressed: { opacity: 0.7 },
-  rowTop: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  rowTop: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   categoryTag: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.primary },
   openHint: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.outline },
   title: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },

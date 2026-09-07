@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import { DESKTOP_PERMISSIONS, type DesktopPermission } from "../lib/permissions";
 
 /** What each grant actually unlocks in the desktop Business Control Center
@@ -50,7 +50,7 @@ export default function PermissionChecklist({
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.surfaceContainer,

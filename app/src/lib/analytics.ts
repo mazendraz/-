@@ -99,8 +99,13 @@ export function conversionFunnel(leads: Lead[], locale: Locale = "en"): Segment[
   return [
     { label: t(locale, "chart_funnel_received"), value: total, color: "#005578" },
     { label: t(locale, "lead_status_contacted"), value: contacted, color: "#0b6e99" },
-    { label: t(locale, "lead_status_in_progress"), value: inProgress, color: "#ea580c" },
-    { label: t(locale, "lead_status_completed"), value: completed, color: "#16a34a" },
+    // The two stages that name a real lead STATUS take that status's own
+    // colour, so the funnel and the status breakdown on the same dashboard
+    // never show "In Progress" in two different oranges. The first two stages
+    // have no single status behind them ("received" is every lead) and stay on
+    // the brand ramp.
+    { label: t(locale, "lead_status_in_progress"), value: inProgress, color: STATUS_HEX["In Progress"] },
+    { label: t(locale, "lead_status_completed"), value: completed, color: STATUS_HEX.Completed },
   ];
 }
 
@@ -218,8 +223,8 @@ export function statsFunnel(stats: ApiLeadStats, locale: Locale): Segment[] {
   const COLOR = {
     received: "#005578",
     contacted: "#0b6e99",
-    inProgress: "#ea580c",
-    completed: "#16a34a",
+    inProgress: STATUS_HEX["In Progress"],
+    completed: STATUS_HEX.Completed,
   } as const;
   return coreFunnel(stats).map((stage) => ({
     label: t(locale, LABEL[stage.key]),

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiCashFlow } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchCashFlow } from "../../../lib/controlFinance";
 import { formatEgp } from "../../../lib/money";
 import PermissionGate from "../../../components/PermissionGate";
@@ -88,6 +88,6 @@ export default function CashFlow() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 14 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   sectionTitle: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, marginBottom: 8 },
 });

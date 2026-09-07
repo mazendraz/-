@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiMaintenanceStatus } from "@alassema/core";
@@ -9,6 +9,7 @@ import { fetchMaintenanceStatus, updateMaintenanceStatus } from "../../lib/admin
 import Button from "../../components/Button";
 import DangerConfirm from "../../components/DangerConfirm";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
+import FormScroll from "../../components/FormScroll";
 
 export default function Maintenance() {
   const [status, setStatus] = useState<ApiMaintenanceStatus | null>(null);
@@ -63,7 +64,7 @@ export default function Maintenance() {
         ) : error ? (
           <ErrorCard message={error} />
         ) : status ? (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View style={[styles.statusCard, status.enabled ? styles.statusOn : styles.statusOff]}>
               <Text style={styles.statusTitle}>{status.enabled ? "الموقع في وضع الصيانة" : "الموقع شغّال عادي"}</Text>
               <Text style={styles.statusSubtitle}>
@@ -97,7 +98,7 @@ export default function Maintenance() {
             </View>
 
             <Button label={saving ? "بيتحفظ..." : "حفظ الرسالة"} onPress={handleSaveText} busy={saving} />
-          </ScrollView>
+          </FormScroll>
         ) : null}
 
         <DangerConfirm
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },

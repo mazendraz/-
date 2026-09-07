@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -13,6 +13,7 @@ import { uploadAdminImage } from "../../../lib/adminUpload";
 import Button from "../../../components/Button";
 import ProjectCard from "../../../components/ProjectCard";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../../components/ListStates";
+import FormScroll from "../../../components/FormScroll";
 
 export default function CompanyProjects() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -118,7 +119,7 @@ export default function CompanyProjects() {
         ) : error ? (
           <ErrorCard message={error} onRetry={() => load()} />
         ) : (
-          <ScrollView contentContainerStyle={styles.content}>
+          <FormScroll contentContainerStyle={styles.content}>
             <View style={styles.form}>
               <Text style={styles.formTitle}>إضافة مشروع للمعرض</Text>
               <Text style={styles.formHint}>مشاريع الأدمن بتتنشر مباشرة، من غير ما تستنى مراجعة.</Text>
@@ -147,7 +148,7 @@ export default function CompanyProjects() {
             ) : (
               <EmptyCard title="لسه مفيش مشاريع" message="ضيف أول مشروع من الفورم فوق." />
             )}
-          </ScrollView>
+          </FormScroll>
         )}
       </SafeAreaView>
     </>
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   preview: { width: "100%", height: "100%" },
   pickLabel: { fontFamily: "Cairo_600SemiBold", fontSize: type.body.fontSize, color: colors.onSurfaceVariant },
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
   grid: { gap: 12 },

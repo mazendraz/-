@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 export default function CompanySectionNav({
   sections,
@@ -22,7 +22,7 @@ export default function CompanySectionNav({
 const styles = StyleSheet.create({
   wrap: { borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant, overflow: "hidden" },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,

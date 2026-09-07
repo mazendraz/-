@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { updateLeadStatus, type Lead, type LeadStatus } from "../../lib/requests";
+import { useLossReasonGate, type LossPayload } from "../../components/LossReasonDialog";
 import {
   setWaitlistStatus, deleteWaitlistEntry,
   type WaitlistEntry, type WaitlistStatus,
@@ -38,8 +39,8 @@ export function useProviderLeadActions({ onLeadChanged, onWaitlistChanged, onWai
     else setSelectedWaitlist(row.data);
   };
 
-  const leadStatusMutation = useMutation<{ id: string; status: LeadStatus }>({
-    mutate: ({ id, status }) => updateLeadStatus(id, status),
+  const leadStatusMutation = useMutation<{ id: string; status: LeadStatus; loss?: LossPayload }>({
+    mutate: ({ id, status, loss }) => updateLeadStatus(id, status, loss),
     // Keep an open detail modal in step with the change it just made, and put
     // it back if the request fails — otherwise the modal and the row behind it
     // disagree about the status.
@@ -50,6 +51,10 @@ export function useProviderLeadActions({ onLeadChanged, onWaitlistChanged, onWai
     },
     onSuccess: ({ id, status }) => onLeadChanged?.(id, status),
     errorMessage: t(locale, "admin_mutation_failed"),
+  });
+
+  const lossGate = useLossReasonGate((id, status, loss) => {
+    void leadStatusMutation.run({ id, status, loss });
   });
 
   const waitlistStatusMutation = useMutation<{ entry: WaitlistEntry; status: WaitlistStatus }>({
@@ -73,7 +78,10 @@ export function useProviderLeadActions({ onLeadChanged, onWaitlistChanged, onWai
     selectedLead, setSelectedLead,
     selectedWaitlist, setSelectedWaitlist,
     openRow,
-    handleLeadStatus: (id: string, status: LeadStatus) => { void leadStatusMutation.run({ id, status }); },
+    // Cancelling routes through the gate first: the API refuses a cancellation
+    // with no reason, so asking after the fact would just be an error toast.
+    handleLeadStatus: lossGate.onStatusChange,
+    lossReasonDialog: lossGate.dialog,
     handleWaitlistStatus: (entry: WaitlistEntry, status: WaitlistStatus) => { void waitlistStatusMutation.run({ entry, status }); },
     handleWaitlistDelete: (entry: WaitlistEntry) => { void waitlistDeleteMutation.run(entry); },
   };

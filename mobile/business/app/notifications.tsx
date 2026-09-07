@@ -3,7 +3,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "rea
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useLiveEvents, useRefreshOnFocus } from "@alassema/mobile-shared";
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   rowUnread: { backgroundColor: colors.surfaceContainer },
   // row-reverse, not `flexDirection: "row"` — this app forces RTL, and the
   // unread dot belongs at the inline START (the right, in Arabic).
-  rowInner: { flexDirection: "row-reverse", alignItems: "flex-start", gap: 8 },
+  rowInner: { flexDirection: rowStart, alignItems: "flex-start", gap: 8 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary, marginTop: 6 },
   dotSpacer: { width: 8 },
   texts: { flex: 1, gap: 2 },

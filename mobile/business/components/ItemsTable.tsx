@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import type { ApiLeadItem } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import { formatEgp } from "../lib/money";
 
 /**
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,

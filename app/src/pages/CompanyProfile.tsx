@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { track } from "../lib/tracking";
 import { useState, useEffect } from "react";
 import { useReveal } from "../hooks/useReveal";
 import Stars from "../components/Stars";
@@ -24,6 +25,7 @@ import Captcha from "../components/Captcha";
 import { captchaConfigured } from "../lib/captcha";
 import PhoneInput from "../components/PhoneInput";
 import Icon from "../components/Icon";
+import SafetyBox from "../components/SafetyBox";
 
 export default function CompanyProfile() {
   const { slug } = useParams<{ slug: string }>();
@@ -43,6 +45,14 @@ export default function CompanyProfile() {
     company?.metaDescription || company?.tagline
   );
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+
+  // Funnel stage: this visit reached a provider. Fired on the SLUG, not on
+  // `company`, so a profile that fails to load still counts as an attempt to
+  // view one — a provider whose page keeps erroring should show up as traffic
+  // that goes nowhere, not as traffic that never arrived.
+  useEffect(() => {
+    if (slug) track("company_view", { target: slug });
+  }, [slug]);
 
   // A search result for a product/service (Offering) links here with
   // `?offering=<id>` so the visitor lands on the priced cards, not just the
@@ -262,8 +272,17 @@ export default function CompanyProfile() {
                   <Stars n={Math.round(company.rating)} size="text-body" />
                   <span className="font-display text-label text-on-surface">{formatRating(locale, company.rating)}</span>
                   <span className="text-outline text-caption">({company.reviewCount} {t(locale, "common_reviews")})</span>
-                  <span className="text-outline">·</span>
-                  <span className="text-outline text-caption">{company.completedProjects} {t(locale, "profile_completed_projects")}</span>
+                  {/* Hidden at 0 rather than printed. "0 projects" is not a neutral
+                      fact on a card whose job is to make someone feel safe hiring
+                      this company — it announces the emptiest thing about them,
+                      and it is what 26 of the companies here currently say. Saying
+                      nothing is honest; announcing the zero is self-harm. */}
+                  {company.completedProjects > 0 && (
+                    <>
+                      <span className="text-outline">·</span>
+                      <span className="text-outline text-caption">{company.completedProjects} {t(locale, "profile_completed_projects")}</span>
+                    </>
+                  )}
                 </div>
                 {/* Trust pills */}
                 <div className="flex items-center gap-2 flex-wrap mt-3">
@@ -378,6 +397,12 @@ export default function CompanyProfile() {
               <Icon name="arrow_forward" className="text-body rtl-flip" />
             </Link>
           )}
+
+          {/* Directly under the prices, because this is where "that's
+              expensive" gets decided. A number next to a photo is just a
+              number; the same number under four specific commitments is a
+              price for something. */}
+          <SafetyBox className="mt-6" />
         </section>
 
         {/* Gallery — auto-visible, no tab click required. */}

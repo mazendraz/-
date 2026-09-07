@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, type } from "@alassema/core";
+import { rowStart } from "@alassema/mobile-shared";
 
 export default function ApproveRejectBar({
   onApprove,
@@ -27,7 +28,7 @@ export default function ApproveRejectBar({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row-reverse", gap: 10 },
+  row: { flexDirection: rowStart, gap: 10 },
   btn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   approve: { backgroundColor: colors.primary },
   approveLabel: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimary },

@@ -17,6 +17,11 @@
  * Vite and Metro alike.
  */
 
+// The cancellation-reason union lives with its labels and its validation in
+// lossReasons.ts — a runtime module, which is why it is imported rather than
+// declared here (this file is re-exported as `export type *`).
+import type { ApiLeadLossReason } from "./lossReasons";
+
 // ── Offering catalogue vocabulary ───────────────────────────────────────────
 // Named unions, recovered from the frontend's copy during the core extraction.
 // The API had the SAME unions written out inline at each use — identical values,
@@ -185,6 +190,10 @@ export interface ApiCompany {
   // null = falls back to the platform default (see finance.service.ts
   // resolveCommissionPercent). Present only in admin payloads.
   commissionPercent?: number | null;
+  /** A flat EGP amount per closed job, instead of a percentage. Mutually
+   *  exclusive with commissionPercent — at most one is ever non-null. 0 is a
+   *  real value, meaning "no commission from this provider". */
+  commissionFlat?: number | null;
 }
 
 // ── Availability + waiting list ─────────────────────────────────────────────────
@@ -332,6 +341,15 @@ export interface ApiLead {
   budget: string;
   description: string;
   status: ApiLeadStatus;
+  /**
+   * Why this request was cancelled. Null on every lead that is not CANCELLED,
+   * and on the ones cancelled before this field existed — those are the only
+   * two reasons it is ever absent, since a new cancellation cannot be recorded
+   * without one. See @alassema/core lossReasons.ts.
+   */
+  lossReason?: ApiLeadLossReason | null;
+  /** The detail the fixed reason list can't hold. Required alongside OTHER. */
+  lossNote?: string | null;
   reviewed: boolean; // true once the customer has left a review for this lead
   // High-entropy secret for public tracking/review — returned ONLY on creation
   // (stored client-side), never in admin/provider list payloads.
@@ -385,6 +403,14 @@ export interface ApiLeadPayload {
 /** PATCH /leads/:id — body shape */
 export interface ApiLeadStatusPatch {
   status: ApiLeadStatus;
+  /**
+   * Required when status is "Cancelled" — the API refuses the transition
+   * without it. Ignored for every other status: a reason only means something
+   * about a request that ended.
+   */
+  lossReason?: ApiLeadLossReason;
+  /** Optional, except alongside lossReason "OTHER". */
+  lossNote?: string;
 }
 
 // ── Lead completion + final price verification ─────────────────────────────────
@@ -651,6 +677,8 @@ export interface ApiPlatformSettings {
   logo_scale: string;
   // Homepage hero background image URL; "" = the built-in skyline render.
   hero_image_url: string;
+  /** Meta Pixel id. Blank = the pixel is not loaded at all. */
+  meta_pixel_id: string;
 }
 
 // ── Email templates (admin-only) ───────────────────────────────────────────────

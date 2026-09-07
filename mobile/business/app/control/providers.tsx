@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiProviderPerformance, ApiProviderPerformanceSummary } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchProviderPerformance, fetchProviderPerformanceSummary } from "../../lib/controlProviders";
 import { formatEgp } from "../../lib/money";
 import PermissionGate from "../../components/PermissionGate";
@@ -142,7 +142,7 @@ export default function ControlProviders() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   kpiGrid: { padding: 16, paddingBottom: 0, gap: 12 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   searchWrap: { padding: 16, paddingBottom: 8 },
   search: {
     borderWidth: 1,
@@ -153,12 +153,12 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   list: { padding: 16, paddingTop: 4 },
   separator: { height: 10 },
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
-  rowTop: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  rowTop: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   name: { flex: 1, fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   category: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.primary, textAlign: textStart },
   meta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },

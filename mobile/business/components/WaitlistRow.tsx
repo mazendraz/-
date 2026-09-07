@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ApiWaitlistEntry, ApiWaitlistStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 
 const STATUS_LABEL: Record<ApiWaitlistStatus, string> = {
   WAITING: "بانتظار الدور",
@@ -51,7 +51,7 @@ export default function WaitlistRow({
 
 const styles = StyleSheet.create({
   row: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     borderRadius: 14,
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   name: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   service: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },
   status: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.primary, textAlign: textStart },
-  actions: { flexDirection: "row-reverse", gap: 8 },
+  actions: { flexDirection: rowStart, gap: 8 },
   actionBtn: { backgroundColor: colors.primaryContainer, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
   actionLabel: { fontFamily: "Cairo_700Bold", fontSize: type.caption.fontSize, color: colors.onPrimaryContainer },
   removeBtn: { backgroundColor: colors.errorContainer, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },

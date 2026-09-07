@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import type { ApiCompany } from "@alassema/core";
@@ -13,6 +13,7 @@ import RoleSelector from "../../components/RoleSelector";
 import PermissionChecklist from "../../components/PermissionChecklist";
 import DangerConfirm from "../../components/DangerConfirm";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
+import FormScroll from "../../components/FormScroll";
 
 export default function UserEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -35,6 +36,7 @@ export default function UserEditor() {
   const [companyName, setCompanyName] = useState<string | null>(null);
 
   const [companyQuery, setCompanyQuery] = useState("");
+  const scrollRef = useRef<ScrollView>(null);
   const [companyResults, setCompanyResults] = useState<ApiCompany[]>([]);
 
   const [dangerAction, setDangerAction] = useState<"deactivate" | "delete" | null>(null);
@@ -64,18 +66,43 @@ export default function UserEditor() {
     void load();
   }, [load]);
 
+  // Companies to choose from. The query is OPTIONAL: with the field still
+  // empty this lists the first few, so the picker opens with real choices
+  // instead of an empty box that asks you to guess what is searchable. Typing
+  // narrows the same list. (Same behaviour as the category picker, and as the
+  // website's own searchable selects.)
   useEffect(() => {
-    if (!companyQuery.trim()) {
-      setCompanyResults([]);
-      return;
-    }
-    const timer = setTimeout(() => {
-      fetchAdminCompanies({ search: companyQuery.trim(), pageSize: 6 })
-        .then((res) => setCompanyResults(res.data))
-        .catch(() => setCompanyResults([]));
-    }, 300);
+    const query = companyQuery.trim();
+    const timer = setTimeout(
+      () => {
+        fetchAdminCompanies({ search: query || undefined, pageSize: 6 })
+          .then((res) => setCompanyResults(res.data))
+          .catch(() => setCompanyResults([]));
+      },
+      // No debounce for the initial, un-typed list — it should already be
+      // there by the time the field is reached.
+      query ? 300 : 0,
+    );
     return () => clearTimeout(timer);
   }, [companyQuery]);
+
+  // The company field sits at the bottom of the form, so its results render
+  // below the fold of the keyboard-shrunken viewport. Bring them into view
+  // rather than leaving the user to discover a list they cannot see.
+  //
+  // Keyed on the KEYBOARD, not on the results. The results arrive when the
+  // screen mounts (the picker lists companies before you type — see above), so
+  // an effect watching them fires once, while the form still fits and there is
+  // nothing to scroll. What actually changes the viewport is the keyboard
+  // opening, and that is what has to trigger the scroll.
+  useEffect(() => {
+    if (!isNew || role !== "PROVIDER") return;
+    const show = Keyboard.addListener("keyboardDidShow", () => {
+      // After the lift has been applied and the viewport has settled.
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+    });
+    return () => show.remove();
+  }, [isNew, role]);
 
   const canSave = isNew
     ? name.trim().length >= 2 && email.trim().length > 0 && password.trim().length >= 8
@@ -175,7 +202,7 @@ export default function UserEditor() {
         ) : error ? (
           <ErrorCard message={error} onRetry={load} />
         ) : (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll scrollRef={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <View>
               <Text style={styles.label}>الاسم</Text>
               <TextInput style={styles.input} value={name} onChangeText={setName} placeholderTextColor={colors.onSurfaceVariant} />
@@ -260,7 +287,7 @@ export default function UserEditor() {
                 <Button label="حذف الحساب" variant="danger" onPress={handleDelete} style={styles.deleteBtn} />
               </>
             ) : null}
-          </ScrollView>
+          </FormScroll>
         )}
 
         <DangerConfirm
@@ -302,7 +329,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   companyChip: { alignSelf: "flex-start", backgroundColor: colors.primaryContainer, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },

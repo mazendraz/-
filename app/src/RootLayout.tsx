@@ -11,9 +11,11 @@ import { LocaleProvider, useLocale } from "./context/LocaleContext";
 import { ToastProvider } from "./context/ToastContext";
 import StatusScreen from "./components/StatusScreen";
 import PriceVerificationGate from "./components/priceVerification/PriceVerificationGate";
-import { useMaintenance } from "./lib/settings";
+import { useMaintenance, useSettings } from "./lib/settings";
+import { initMetaPixel } from "./lib/metaPixel";
 import { useBackendHealth } from "./hooks/useBackendHealth";
 import { useHashScroll } from "./hooks/useHashScroll";
+import { usePageTracking } from "./hooks/usePageTracking";
 import { useSaved } from "./hooks/useSaved";
 import { getCurrentUser } from "./lib/auth";
 import { useMyLeads, useMyLeadsHydrated } from "./lib/requests";
@@ -35,6 +37,17 @@ export default function RootLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
   useHashScroll();
+  // Counts the visit. Mounted here so every route is covered by one call —
+  // see hooks/usePageTracking.ts and lib/analytics.ts.
+  usePageTracking();
+  // Meta Pixel, if one is configured. Mounted next to usePageTracking for the
+  // same reason: one place where the whole site is counted. A blank setting —
+  // the default — loads nothing at all, so this line costs nothing until ads
+  // are actually running. See lib/metaPixel.ts.
+  const siteSettings = useSettings();
+  useEffect(() => {
+    initMetaPixel(siteSettings.meta_pixel_id);
+  }, [siteSettings.meta_pixel_id]);
   const { status: maintenance, loading: maintenanceLoading } = useMaintenance();
   const backendOffline = useBackendHealth();
 

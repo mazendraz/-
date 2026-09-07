@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { ApiTransaction } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import { formatEgp } from "../lib/money";
 
 const TYPE_LABEL: Record<ApiTransaction["type"], string> = {
@@ -49,9 +49,9 @@ export default function TransactionRow({ transaction, onPress }: { transaction: 
 }
 
 const styles = StyleSheet.create({
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
   pressed: { opacity: 0.7 },
-  top: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center" },
+  top: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center" },
   type: { fontSize: type.label.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
   amount: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.success },
   amountNegative: { color: colors.error },

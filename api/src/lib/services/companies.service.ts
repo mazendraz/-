@@ -520,19 +520,35 @@ export async function remove(id: string): Promise<void> {
 }
 
 /**
- * Business Control Center only: set (or clear) this company's commission %
- * override. A separate, small endpoint rather than folding into the general
- * update() above — that function already carries a lot of delicate
- * replace-all logic (projects/categories) and this field has nothing to do
- * with any of it. null clears the override, falling back to the platform
- * default (see finance.service.ts resolveCommissionPercent).
+ * Business Control Center only: set (or clear) this company's commission
+ * override — a percentage of each job, or a flat EGP amount per job.
+ *
+ * A separate, small endpoint rather than folding into the general update()
+ * above: that function already carries a lot of delicate replace-all logic
+ * (projects/categories) and this field has nothing to do with any of it.
+ *
+ * Writes BOTH columns on every call, so setting one always clears the other.
+ * That is what keeps "which rate applies" a fact rather than a deduction —
+ * the pair can never both be populated, whatever order they were set in.
+ * Both null clears the override entirely and the company falls back to the
+ * platform default (finance.service.ts resolveCommission).
+ *
+ * 0 is a real value on both and is stored as one: it is how a provider Al
+ * Asima takes no commission from is recorded, and the resolution chain tests
+ * for null rather than falsiness so it survives the round trip.
  */
-export async function setCommissionPercent(id: string, percent: number | null): Promise<ApiCompany> {
+export async function setCommission(
+  id: string,
+  { percent, flat }: { percent: number | null; flat?: number | null },
+): Promise<ApiCompany> {
   const existing = await prisma.company.findUnique({ where: { id } });
   if (!existing) throw new NotFoundError("Company");
   const company = await prisma.company.update({
     where: { id },
-    data: { commissionPercent: percent },
+    data: {
+      commissionPercent: flat != null ? null : percent,
+      commissionFlat: flat ?? null,
+    },
     include: companyInclude,
   });
   return serializeCompanyAdmin(company);
@@ -551,9 +567,31 @@ export interface AvailabilityInput {
  * accepted as epoch ms (or null); the effective busy state is resolved at read time
  * (see serialize.isEffectivelyBusy), so no scheduling is needed.
  */
+/**
+ * Set a company's busy state.
+ *
+ * `audience` decides which serializer answers, and it is not cosmetic: this is
+ * the ONE company-mutating function reachable by a PROVIDER
+ * (PATCH /provider/availability), and it used to answer with
+ * serializeCompanyAdmin for every caller. That payload carries
+ * `commissionPercent` (and now `commissionFlat`) and `ratingOverridden` —
+ * so a provider toggling their own "busy" switch was handed back what Al
+ * Asima charges them and whether their own rating is an admin override. Both
+ * are Al Asima's internal business data; neither is a provider's to read, and
+ * `ratingOverridden: true` in particular tells them the number on their
+ * profile is not from customers.
+ *
+ * Nothing broke visibly, which is why it survived: both callers
+ * (app/src/lib/availability.ts and mobile/business/lib/availability.ts) return
+ * Promise<void> and re-fetch, so the extra fields were never read — only sent.
+ *
+ * The provider now gets exactly what GET /provider/profile already gives them,
+ * which is the public shape. Admin callers are unchanged.
+ */
 export async function setAvailability(
   id: string,
   input: AvailabilityInput,
+  audience: "admin" | "provider" = "admin",
 ): Promise<ApiCompany> {
   const existing = await prisma.company.findUnique({
     where: { id },
@@ -579,7 +617,7 @@ export async function setAvailability(
     },
     include: companyInclude,
   });
-  return serializeCompanyAdmin(company);
+  return audience === "provider" ? serializeCompany(company) : serializeCompanyAdmin(company);
 }
 
 /** Admin: change visibility status. */

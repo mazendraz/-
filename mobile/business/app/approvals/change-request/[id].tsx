@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { colors, type } from "@alassema/core";
 import { fetchChangeRequest, reviewChangeRequest, CHANGE_ENTITY_LABEL } from "../../../lib/approvals";
 import type { ApiChangeRequest } from "../../../lib/profile";
@@ -131,7 +131,7 @@ export default function ChangeRequestDetail() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12, paddingBottom: 24 },
-  header: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  header: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   title: { flex: 1, fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
   company: { fontSize: type.body.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.primary, textAlign: textStart },
   note: { fontSize: type.label.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart, lineHeight: 20 },

@@ -3,10 +3,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import Button from "./Button";
 import ScreenHeader from "./ScreenHeader";
 import Icon, { type IconName } from "./Icon";
+import Avatar from "./Avatar";
 import { signOut, useStaffAuth } from "../lib/staffAuth";
 import { isProvider, hasAnyDesktopPermission } from "../lib/permissions";
 import { useUnreadNotificationCount } from "../lib/notifications";
@@ -150,9 +151,7 @@ export default function MoreScreen() {
             on purpose — a full-bleed profile header would push the actual
             navigation below the fold. */}
         <View style={styles.card}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{user?.name?.trim().charAt(0) || "?"}</Text>
-          </View>
+          <Avatar name={user?.name} size={48} />
           <View style={styles.identity}>
             <Text style={styles.name} numberOfLines={1}>{user?.name}</Text>
             <Text style={styles.email} numberOfLines={1}>{user?.email}</Text>
@@ -220,26 +219,12 @@ const styles = StyleSheet.create({
   body: { padding: 20, gap: 18, paddingBottom: 40 },
 
   card: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 14,
     backgroundColor: colors.surfaceContainer,
     borderRadius: 16,
     padding: 16,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: type.subhead.fontSize,
-    fontFamily: "Alexandria_700Bold",
-    color: colors.onPrimary,
-    textAlign: "center",
   },
   identity: { flex: 1, gap: 1 },
   name: { fontSize: type.subhead.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, textAlign: textStart },
@@ -248,7 +233,7 @@ const styles = StyleSheet.create({
   pendingPill: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -270,10 +255,10 @@ const styles = StyleSheet.create({
     borderColor: colors.outlineVariant,
     borderRadius: 14,
     overflow: "hidden",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   menuItem: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     gap: 12,
     // 52px total — comfortably past the 44px minimum touch target.
@@ -300,7 +285,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold", color: colors.onError },
+  badgeText: {
+    fontSize: type.caption.fontSize,
+    fontFamily: "Cairo_700Bold",
+    color: colors.onError,
+    // Centres the digit in the 20px circle — Android's default font padding
+    // otherwise pushes it high enough to read as a misaligned badge.
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlign: "center",
+  },
   chevron: { fontSize: type.subhead.fontSize, color: colors.outline },
 
   signOut: { marginTop: 6 },

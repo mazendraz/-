@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import type { ApiTransaction, ApiTransactionStatus, ApiTransactionType } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchTransactions } from "../../../../lib/controlFinance";
 import PermissionGate from "../../../../components/PermissionGate";
 import TransactionRow from "../../../../components/TransactionRow";
@@ -144,9 +144,9 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
-  chips: { flexDirection: "row-reverse", gap: 8, paddingBottom: 4 },
+  chips: { flexDirection: rowStart, gap: 8, paddingBottom: 4 },
   chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: colors.surfaceContainer },
   chipActive: { backgroundColor: colors.primary },
   chipLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },

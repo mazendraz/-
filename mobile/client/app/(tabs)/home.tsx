@@ -17,6 +17,7 @@ import { router } from "expo-router";
 import type { ApiCategory, ApiCompany, ApiSiteReview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import Icon, { toIconName } from "../../components/Icon";
+import SafetyBox from "../../components/SafetyBox";
 import Logo from "../../components/Logo";
 import SiteReviewModal from "../../components/SiteReviewModal";
 import ReviewsMarquee from "../../components/ReviewsMarquee";
@@ -32,7 +33,6 @@ import {
   firstAssetUri, displayLine } from "@alassema/mobile-shared";
 import { fetchFeaturedProjects, type FeaturedProject } from "../../lib/projects";
 import { fetchSiteReviews, fetchSiteReviewSettings } from "../../lib/siteReviews";
-import { useCountUp } from "../../lib/useCountUp";
 
 // The mobile app's own hero photo — a tall tower render, bundled into the
 // binary. Used whenever the admin hasn't set a custom hero_image_url, same
@@ -68,6 +68,16 @@ const HERO_MAX_HEIGHT = 900;
 // Same 4 reasons, same copy as the website's home_why_1..4 i18n strings
 // (i18n.ts) — previously 3 hand-written reasons that drifted from both the
 // website's count and its wording.
+// The strip under the hero. Each line is a thing Al Assema DOES, so a
+// customer can hold us to it — unlike a counter, which is a claim about the
+// past that the reader has no way to check. Kept word-for-word in step with
+// the website's home_promise_1..3 (app/src/lib/i18n.ts).
+const PROMISES = [
+  "شركات متحقّق منها بسجل تجاري",
+  "سعر مكتوب قبل ما الشغل يبدأ",
+  "متابعة من العاصمة لحد التسليم",
+];
+
 const REASONS = [
   { icon: "verified_user" as const, title: "اختيار منتقى", desc: "كل شركة يتم تدقيقها يدويًا. بدون تسجيل مفتوح، بدون مجهولين." },
   { icon: "workspace_premium" as const, title: "جودة متميزة", desc: "فقط شركات بسجل أداء مثبت في العاصمة الجديدة." },
@@ -174,7 +184,6 @@ export default function Home() {
   // computes these from its full in-memory catalog (useCompanies()); mobile
   // has no such global cache, so this holds just enough (partner count, sum
   // of completed projects, average rating) from the same /companies response.
-  const [stats, setStats] = useState({ partners: 0, projects: 0, avgRating10: 0 });
   const [projects, setProjects] = useState<FeaturedProject[]>([]);
   const [reviews, setReviews] = useState<ApiSiteReview[]>([]);
   const [reviewsEnabled, setReviewsEnabled] = useState(false);
@@ -213,19 +222,12 @@ export default function Home() {
           setCategories([]);
         }
       });
-    // pageSize 100: comfortably covers the whole catalog in one request (the
-    // website's own home page loads its full catalog into memory the same
-    // way, via useCompanies()) so the stat counters below reflect every
-    // active company, not just the 6 shown in the carousel.
+    // pageSize 100 is more than the 6 cards in the carousel need — kept
+    // because it is one request either way and the extra rows cost nothing.
+    // (It used to be sized to feed the stat counters, which are gone.)
     fetchCompanies(undefined, { pageSize: 100 })
       .then((page) => {
         setFeatured(page.data.slice(0, 6));
-        const totalRating = page.data.reduce((s, c) => s + c.rating, 0);
-        setStats({
-          partners: page.meta.total,
-          projects: page.data.reduce((s, c) => s + c.completedProjects, 0),
-          avgRating10: page.data.length ? Math.round((totalRating / page.data.length) * 10) : 0,
-        });
       })
       .catch(() => {
         if (__DEV__) {
@@ -279,7 +281,7 @@ export default function Home() {
           <View style={styles.heroScrim} />
           <View style={[styles.heroContent, { paddingTop: insets.top + 56 }]}>
             <Text style={styles.heroTitle}>
-              {heroTitleOverride || <>كل خدمة موثوقة{"\n"}في العاصمة الجديدة</>}
+              {heroTitleOverride || <>مش هنسيبك لوحدك{"\n"}مع الشركة.</>}
             </Text>
             <Text style={styles.heroSub}>
               {/* No "بدون حساب" (guest checkout) claim — new-request/[slug].tsx
@@ -290,7 +292,7 @@ export default function Home() {
                   behavior while the app enforces the stricter one — matches
                   the website's own home_hero_sub string now (i18n.ts), which
                   never carried that clause either. */}
-              {heroSubOverride || "شركات موثّقة، جودة متميزة، وراحة بال كاملة."}
+              {heroSubOverride || "منصة العاصمة بتوصّلك بشركات تشطيب وديكور ونقل في العاصمة الإدارية — وبتفضل معاك من أول عرض السعر لحد ما الشغل يخلّص."}
             </Text>
             {/* Primary CTA first, outline second — same DOM order as the
                 website's `flex-col items-center sm:flex-row` button group,
@@ -315,20 +317,32 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Same 4 counters as the website's Home.tsx STATS section, in the
-            same position (right after the hero, before "why" reasons) —
-            previously missing entirely from this screen. */}
-        <View style={styles.statsRow}>
-          <StatCounter target={stats.partners} label="شريك موثّق" />
-          <StatCounter target={stats.projects} label="مشروع منجز" />
-          <StatCounter
-            target={stats.avgRating10}
-            label="تقييم العملاء"
-            displayFn={(n) => (n / 10).toFixed(1)}
-            icon="star"
-          />
-          <StatCounter target={categories?.length ?? 0} label="فئة خدمات" />
+        {/* Promises, not counters — the same replacement the website made in
+            Home.tsx, kept in step so the two surfaces don't say different
+            things about the same business.
+
+            Two of the four counters here were not real numbers: "مشروع منجز"
+            summed Company.completedProjects, a figure an admin types in by
+            hand, and "تقييم العملاء" averaged Company.rating, which on every
+            company was an admin override sitting on an empty Review table. The
+            most confident element on the screen was the made-up one. Counters
+            also work against a platform this young even when honest — a small
+            number tells the visitor they are early, which is the opposite of
+            what a stats strip is for. */}
+        <View style={styles.promisesCard}>
+          {PROMISES.map((line) => (
+            <View key={line} style={styles.promiseRow}>
+              <Icon name="check_circle" size={18} color={colors.primary} />
+              <Text style={styles.promiseText}>{line}</Text>
+            </View>
+          ))}
         </View>
+
+        {/* Above the "why" reasons, same order as the website: that section
+            says what kind of platform this is, this one answers the question
+            a visitor is actually holding — "what happens to me if this goes
+            wrong". */}
+        <SafetyBox style={styles.safetyBox} />
 
         <View style={styles.reasonsRow}>
           {REASONS.map((r) => (
@@ -449,7 +463,13 @@ export default function Home() {
                   <Text style={styles.companyCardTagline} numberOfLines={2}>{item.tagline}</Text>
                 ) : null}
                 <View style={styles.companyCardFooter}>
-                  <Text style={styles.companyCardProjects}>{item.completedProjects} مشروع</Text>
+                  {/* Hidden at 0 rather than printed — "0 مشروع" announces
+                      the emptiest thing about a company on the card whose job
+                      is to make hiring them feel safe. Same rule as the
+                      website's Companies.tsx. */}
+                  {item.completedProjects > 0 ? (
+                    <Text style={styles.companyCardProjects}>{item.completedProjects} مشروع</Text>
+                  ) : null}
                   <View style={styles.companyCardView}>
                     <Text style={styles.companyCardViewText}>عرض</Text>
                     <Icon name="arrow_back" size={12} color={colors.primary} />
@@ -574,33 +594,6 @@ export default function Home() {
           loadReviews();
         }}
       />
-    </View>
-  );
-}
-
-// ── Animated stat counter ─────────────────────────────────────────────────
-// Mobile counterpart of the website's own StatCounter in Home.tsx — same
-// idea (count up from 0 via useCountUp), simplified to what RN needs.
-function StatCounter({
-  target,
-  label,
-  displayFn,
-  icon,
-}: {
-  target: number;
-  label: string;
-  displayFn?: (n: number) => string;
-  icon?: "star";
-}) {
-  const count = useCountUp(target);
-  const display = displayFn ? displayFn(count) : String(count);
-  return (
-    <View style={styles.statItem}>
-      <View style={styles.statValueRow}>
-        <Text style={styles.statValue}>{display}</Text>
-        {icon && <Icon name={icon} size={18} color={colors.primary} />}
-      </View>
-      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -764,22 +757,31 @@ const styles = StyleSheet.create({
   heroCtaText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: "#fff" },
   heroScrollHint: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, alignSelf: "center", marginTop: 16 },
   heroScrollHintText: { fontFamily: "Cairo_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.85)" },
-  statsRow: {
-    flexDirection: rowStart,
+  safetyBox: { marginHorizontal: 20, marginTop: 20 },
+  promisesCard: {
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: 20,
     marginHorizontal: 20,
     marginTop: -24,
-    paddingVertical: 20,
-    paddingHorizontal: 8,
-    // Pulls the stats card up over the hero's bottom edge, matching the
-    // website's `-mt-6 rounded-t-3xl` treatment on its own stats section.
-    zIndex: 2,
+    paddingVertical: 18,
+    paddingHorizontal: 18,
+    gap: 12,
+    // Same lift over the hero's bottom edge the stats card had.
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  statItem: { flex: 1, alignItems: "center", gap: 4 },
-  statValueRow: { flexDirection: rowStart, alignItems: "center", gap: 4 },
-  statValue: { fontFamily: "Alexandria_800ExtraBold", fontSize: 22, lineHeight: displayLine(22), color: colors.primary },
-  statLabel: { fontFamily: "Cairo_700Bold", fontSize: 10, color: colors.outline, textAlign: "center" },
+  promiseRow: { flexDirection: rowStart, alignItems: "center", gap: 10 },
+  promiseText: {
+    flex: 1,
+    fontFamily: "Cairo_600SemiBold",
+    fontSize: type.label.fontSize,
+    lineHeight: 22,
+    color: colors.onSurface,
+    textAlign: "right",
+  },
   // 2×2 grid, not a 4-across row (website's own mobile breakpoint is
   // grid-cols-1 for this same section) — 4 cards squeezed into one row left
   // almost no room for the description text to breathe.

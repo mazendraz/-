@@ -45,6 +45,7 @@ const DEFAULTS: ApiPlatformSettings = {
   favicon_url: "",
   logo_scale: "",
   hero_image_url: "",
+  meta_pixel_id: "",
 };
 
 let cached: ApiPlatformSettings | null = null;

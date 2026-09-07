@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
-import { ApiError, textStart } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import { colors, type } from "@alassema/core";
 import { fetchAdminNotificationSettings, setAdminChatNotifyEnabled } from "../../lib/adminSettings";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12 },
   row: {
-    flexDirection: "row-reverse",
+    flexDirection: rowStart,
     alignItems: "center",
     justifyContent: "space-between",
     backgroundColor: colors.surfaceContainer,

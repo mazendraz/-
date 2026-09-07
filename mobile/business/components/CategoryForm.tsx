@@ -1,6 +1,6 @@
 import { Switch, TextInput, View, Text, StyleSheet } from "react-native";
 import { colors, type } from "@alassema/core";
-import { textStart } from "@alassema/mobile-shared";
+import { rowStart, textStart } from "@alassema/mobile-shared";
 import type { CategoryInput } from "../lib/adminCategories";
 import PricingModeSelector from "./PricingModeSelector";
 
@@ -73,9 +73,9 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
-  switchRow: { flexDirection: "row-reverse", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12 },
+  switchRow: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12 },
 });

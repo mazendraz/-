@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import type { ApiFinanceOverview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchFinanceOverview } from "../../../lib/controlFinance";
 import { formatEgp } from "../../../lib/money";
 import PermissionGate from "../../../components/PermissionGate";
@@ -102,13 +102,13 @@ export default function ControlFinanceOverview() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 12 },
-  navRow: { flexDirection: "row-reverse", gap: 10, marginBottom: 4 },
+  navRow: { flexDirection: rowStart, gap: 10, marginBottom: 4 },
   navLink: { flex: 1, backgroundColor: colors.primaryContainer, borderRadius: 10, padding: 12, alignItems: "center" },
   navLinkText: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onPrimaryContainer },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   pipelineCard: { backgroundColor: colors.surfaceContainer, borderRadius: 14, padding: 16, gap: 8, marginTop: 8 },
   pipelineTitle: { fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
-  pipelineRow: { flexDirection: "row-reverse", justifyContent: "space-between" },
+  pipelineRow: { flexDirection: rowStart, justifyContent: "space-between" },
   pipelineLabel: { fontSize: type.label.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant },
   pipelineValue: { fontSize: type.label.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface },
 });

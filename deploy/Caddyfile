@@ -17,6 +17,29 @@
 your-domain.com {
 	encode zstd gzip
 
+	# ── Access log ───────────────────────────────────────────────────────────
+	# Off until Sept 2026, which meant the server kept no record of a single
+	# visit: there was no way to answer "how many people came to the site" even
+	# approximately, and no way to check the in-app funnel (SiteEvent) against an
+	# independent count.
+	#
+	# This is the backstop for that funnel, not a duplicate of it: it sees the
+	# visitors JavaScript never does — blocked scripts, crawlers, bots, and the
+	# people who leave before the bundle finishes loading — so a big gap between
+	# these hits and page_view rows is itself the finding.
+	#
+	# Rolled at 10MB with 7 files kept and a 30-day cap, so it can't fill the
+	# disk. Analyse with:
+	#   jq -r '.request.uri' /var/log/caddy/access.log | sort | uniq -c | sort -rn | head -30
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MB
+			roll_keep 7
+			roll_keep_for 720h
+		}
+		format json
+	}
+
 	# API → Next.js backend (PM2 on :3000)
 	handle /api/* {
 		# Reject oversized request bodies at the edge — the outer layer of the
@@ -133,7 +156,30 @@ your-domain.com {
 		# ⚠ IF TEXT SUDDENLY RENDERS IN A SYSTEM FONT after deploying this: a
 		# @font-face url in app/src/fonts.css is pointing off-origin. Fix the file,
 		# don't widen the policy back.
-		header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self'; img-src 'self' data: https://*.supabase.co https://*.googleusercontent.com; media-src 'self' https://*.supabase.co; connect-src 'self' https://accounts.google.com/gsi/; frame-src https://challenges.cloudflare.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+		#
+		# ── The connect.facebook.net / facebook.com allowances ────────────────
+		# These are here ONLY for the Meta Pixel, and the pixel is off unless an
+		# admin has set `meta_pixel_id` in Settings — with it blank (the default)
+		# no script is injected and no facebook host is ever contacted, so these
+		# entries sit unused. They are in the policy rather than added at the
+		# moment ads start because the alternative is editing and reloading the
+		# webserver to turn on a setting, which is how a CSP change gets made
+		# under time pressure and something else gets widened by accident.
+		#
+		# The first-party funnel (app/src/lib/tracking.ts) is unaffected either
+		# way and remains the source of truth for "how many people came and where
+		# did they stop". The pixel is not a second analytics system — it exists
+		# so Meta can optimise ad delivery toward real conversions. See
+		# app/src/lib/metaPixel.ts, which states what turning it on costs.
+		#
+		#   • script-src  connect.facebook.net — fbevents.js
+		#   • connect-src www.facebook.com     — where the pixel reports
+		#   • img-src     www.facebook.com     — the no-JS tracking pixel image
+		#
+		# To remove the surface entirely: clear meta_pixel_id in Settings (the
+		# pixel stops immediately, no deploy), and delete the three entries below
+		# on the next Caddyfile change.
+		header Content-Security-Policy "default-src 'self'; script-src 'self' https://accounts.google.com/gsi/client https://connect.facebook.net; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; font-src 'self'; img-src 'self' data: https://*.supabase.co https://*.googleusercontent.com https://www.facebook.com; media-src 'self' https://*.supabase.co; connect-src 'self' https://accounts.google.com/gsi/ https://www.facebook.com; frame-src https://challenges.cloudflare.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
 
 		# ── Deep-link association files ──────────────────────────────────────
 		# `apple-app-site-association` has NO file extension, so Caddy guesses

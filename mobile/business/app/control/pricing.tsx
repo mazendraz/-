@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiPricingAnalytics, ApiPricingIntelligence } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchPricingAnalytics, fetchPricingIntelligence } from "../../lib/controlPricing";
 import { formatEgp } from "../../lib/money";
 import PermissionGate from "../../components/PermissionGate";
@@ -149,14 +149,14 @@ export default function ControlPricing() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16, gap: 14 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   sectionTitle: { fontSize: type.title.fontSize, fontFamily: "Alexandria_700Bold", color: colors.onSurface, marginBottom: 8 },
   tableList: { gap: 8 },
-  tableRow: { flexDirection: "row-reverse", justifyContent: "space-between", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 10, padding: 10, gap: 8 },
+  tableRow: { flexDirection: rowStart, justifyContent: "space-between", backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 10, padding: 10, gap: 8 },
   tableLabel: { flex: 1, fontSize: type.label.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurface, textAlign: textStart },
   tableValue: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant },
-  varianceRow: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 10, padding: 10, gap: 4 },
-  varianceTop: { flexDirection: "row-reverse", justifyContent: "space-between", gap: 8 },
+  varianceRow: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 10, padding: 10, gap: 4 },
+  varianceTop: { flexDirection: rowStart, justifyContent: "space-between", gap: 8 },
   deltaText: { fontSize: type.caption.fontSize, fontFamily: "Cairo_700Bold" },
   deltaUp: { color: colors.error },
   deltaDown: { color: colors.success },

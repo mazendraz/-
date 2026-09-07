@@ -1,7 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { StyleSheet, TextInput, View } from "react-native";
 import type { ApiLeadStatus } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { textStart } from "@alassema/mobile-shared";
+import { ChipBar, Chip } from "./ChipBar";
 
 const STATUS_LABELS: Record<ApiLeadStatus, string> = {
   New: "جديد",
@@ -13,6 +14,17 @@ const STATUS_LABELS: Record<ApiLeadStatus, string> = {
 
 const ALL_STATUSES: ApiLeadStatus[] = ["New", "Contacted", "In Progress", "Completed", "Cancelled"];
 
+/**
+ * The leads list's search + status filter.
+ *
+ * The chips are ChipBar/Chip rather than a hand-rolled ScrollView of pills.
+ * This screen was one of the ones ChipBar's own header comment was written
+ * about, and it carried both of the bugs that component exists to prevent: a
+ * bar that stretches its chips into lozenges when the list below is empty, and
+ * — because "الكل" is laid at the start edge while the scroll view measures
+ * from the other one — a bar that opened with its own ACTIVE filter scrolled
+ * off screen. Nothing here draws a pill any more; it only says which pills.
+ */
 export default function FilterBar({
   status,
   onStatusChange,
@@ -34,45 +46,34 @@ export default function FilterBar({
         placeholderTextColor={colors.onSurfaceVariant}
         textAlign={textStart === "right" ? "right" : "left"}
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+      <ChipBar style={styles.chips}>
         <Chip label="الكل" active={!status} onPress={() => onStatusChange(undefined)} />
         {ALL_STATUSES.map((s) => (
-          <Chip key={s} label={STATUS_LABELS[s]} active={status === s} onPress={() => onStatusChange(s)} />
+          <Chip
+            key={s}
+            label={STATUS_LABELS[s]}
+            active={status === s}
+            onPress={() => onStatusChange(s)}
+          />
         ))}
-      </ScrollView>
+      </ChipBar>
     </View>
   );
 }
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
-      <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
-  wrap: { gap: 10, paddingHorizontal: 16, paddingTop: 12 },
+  wrap: { paddingTop: 12 },
   search: {
+    marginHorizontal: 16,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
-  chips: { flexDirection: "row-reverse", gap: 8, paddingBottom: 4 },
-  chip: {
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    backgroundColor: colors.surfaceContainer,
-  },
-  chipActive: { backgroundColor: colors.primary },
-  chipLabel: { fontSize: type.caption.fontSize, fontFamily: "Cairo_600SemiBold", color: colors.onSurfaceVariant },
-  chipLabelActive: { color: colors.onPrimary },
+  chips: { paddingVertical: 10 },
 });

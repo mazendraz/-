@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
 import type { ApiPlatformSettings } from "@alassema/core";
@@ -9,6 +9,7 @@ import { fetchPlatformSettings, updatePlatformSettings } from "../../lib/adminSe
 import Button from "../../components/Button";
 import CompanySectionNav from "../../components/CompanySectionNav";
 import { ListSkeleton, ErrorCard } from "../../components/ListStates";
+import FormScroll from "../../components/FormScroll";
 
 const FIELDS: { key: keyof ApiPlatformSettings; label: string; multiline?: boolean }[] = [
   { key: "site_name", label: "اسم الموقع" },
@@ -67,7 +68,7 @@ export default function PlatformSettings() {
         ) : error ? (
           <ErrorCard message={error} />
         ) : value ? (
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FormScroll contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <CompanySectionNav
               sections={[
                 { label: "وضع الصيانة", onPress: () => router.push("/settings/maintenance") },
@@ -90,7 +91,7 @@ export default function PlatformSettings() {
             ))}
 
             <Button label={saving ? "بيتحفظ..." : "حفظ"} onPress={handleSave} busy={saving} />
-          </ScrollView>
+          </FormScroll>
         ) : null}
       </SafeAreaView>
     </>
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },

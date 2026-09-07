@@ -4,12 +4,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack } from "expo-router";
 import type { ApiClient, ApiClientOverview } from "@alassema/core";
 import { colors, type } from "@alassema/core";
-import { ApiError, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
+import { ApiError, rowStart, textStart, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchClientOverview, fetchClients } from "../../lib/controlClients";
 import { formatEgp } from "../../lib/money";
 import PermissionGate from "../../components/PermissionGate";
 import KpiTile from "../../components/KpiTile";
 import { ListSkeleton, EmptyCard, ErrorCard } from "../../components/ListStates";
+import { displayPhone } from "../../lib/phone";
 
 const PAGE_SIZE = 30;
 
@@ -22,7 +23,7 @@ function ClientRow({ client }: { client: ApiClient }) {
           <Text style={styles.statusText}>{client.status === "ACTIVE" ? "نشط" : "غير نشط"}</Text>
         </View>
       </View>
-      <Text style={styles.phone}>{client.phone}</Text>
+      <Text style={styles.phone}>{displayPhone(client.phone)}</Text>
       <Text style={styles.meta}>
         {client.totalRequests} طلب · {client.successfulServices} خدمة ناجحة · {formatEgp(client.totalValue)}
       </Text>
@@ -139,7 +140,7 @@ export default function ControlClients() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   kpiGrid: { padding: 16, paddingBottom: 0, gap: 12 },
-  kpiRow: { flexDirection: "row-reverse", gap: 12 },
+  kpiRow: { flexDirection: rowStart, gap: 12 },
   searchWrap: { padding: 16, paddingBottom: 8 },
   search: {
     borderWidth: 1,
@@ -150,12 +151,12 @@ const styles = StyleSheet.create({
     fontSize: type.body.fontSize,
     fontFamily: "Cairo_400Regular",
     color: colors.onSurface,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLowest,
   },
   list: { padding: 16, paddingTop: 4 },
   separator: { height: 10 },
-  row: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
-  rowTop: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", gap: 8 },
+  row: { backgroundColor: colors.surfaceContainerLowest, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: 14, padding: 14, gap: 4 },
+  rowTop: { flexDirection: rowStart, justifyContent: "space-between", alignItems: "center", gap: 8 },
   name: { flex: 1, fontSize: type.body.fontSize, fontFamily: "Cairo_700Bold", color: colors.onSurface, textAlign: textStart },
   phone: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart },
   meta: { fontSize: type.caption.fontSize, fontFamily: "Cairo_500Medium", color: colors.onSurfaceVariant, textAlign: textStart },
