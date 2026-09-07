@@ -230,9 +230,6 @@ const STRINGS = {
 
     // ── Company profile ──
     profile_back: "Back",
-    profile_responds: "Responds",
-    profile_responds_fast: "Replies fast",
-    profile_response_fast: "Replies quickly to requests",
     profile_years_experience: "years experience",
     profile_verified_since: "Verified since",
     profile_completed_projects: "completed projects",
@@ -249,7 +246,6 @@ const STRINGS = {
     profile_stat_completed: "Completed Projects",
     profile_self_reported: "Self-reported by the company",
     profile_stat_experience: "Experience",
-    profile_stat_response: "Replies",
     profile_stat_location: "Location",
     profile_years: "years",
     profile_ready_title: "Ready to work together?",
@@ -1912,9 +1908,6 @@ const STRINGS = {
 
     // ── Company profile ──
     profile_back: "رجوع",
-    profile_responds: "يرد",
-    profile_responds_fast: "بيرد بسرعة",
-    profile_response_fast: "بيرد على طلبك بسرعة",
     profile_years_experience: "سنوات خبرة",
     profile_verified_since: "موثّقة منذ",
     profile_completed_projects: "مشروع منجز",
@@ -1931,7 +1924,6 @@ const STRINGS = {
     profile_stat_completed: "المشاريع المنجزة",
     profile_self_reported: "وفقًا لبيانات الشركة",
     profile_stat_experience: "الخبرة",
-    profile_stat_response: "الرد على طلبك",
     profile_stat_location: "الموقع",
     profile_years: "سنوات",
     profile_ready_title: "مستعد للعمل معًا؟",

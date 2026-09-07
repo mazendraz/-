@@ -23,7 +23,6 @@ export function availabilityLabel(c: {
   busyUntil?: number | null;
   nextAvailableAt?: number | null;
   upcomingBusyFrom?: number | null;
-  responseTime?: string;
 }): { state: AvailabilityState; text: string } {
   if (c.busy) {
     const back = c.nextAvailableAt ?? c.busyUntil ?? null;
@@ -34,9 +33,6 @@ export function availabilityLabel(c: {
     return { state: "upcoming", text: `مشغول من ${formatReopenDate(c.upcomingBusyFrom)}` };
   }
 
-  // The provider's raw responseTime is admin-typed free text stored in English
-  // ("within 24 hours"), so it read as untranslated noise inside an Arabic
-  // badge — and "24 hours" is a slower promise than the platform wants to make.
-  // Same wording as the website (app/src/lib/availability.ts).
-  return { state: "free", text: "متاح · بيرد بسرعة" };
+  // Available, and that is the whole claim — see the website's availability.ts.
+  return { state: "free", text: "متاح" };
 }

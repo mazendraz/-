@@ -470,7 +470,6 @@ export function availabilityLabel(
     nextAvailableAt?: number | null;
     upcomingBusyFrom?: number | null;
     busyReason?: string | null;
-    responseTime?: string;
   },
   locale: "en" | "ar",
 ): { state: "busy" | "upcoming" | "free"; text: string } {
@@ -499,15 +498,11 @@ export function availabilityLabel(
     };
   }
 
-  return {
-    state: "free",
-    // The provider's raw responseTime string ("within 24 hours") is admin-typed
-    // free text in English, so it read as untranslated noise inside an Arabic
-    // badge — and "24 hours" is a slower promise than the platform wants to
-    // make. The badge now says the thing that matters without quoting a figure
-    // nobody measures.
-    text: ar ? "متاح · بيرد بسرعة" : "Available · replies fast",
-  };
+  // Available, and that is the whole claim. This used to append the provider's
+  // responseTime ("متاح · بيرد within 24 hours") — admin-typed English free
+  // text that nothing measures, promising on a provider's behalf something the
+  // platform cannot keep. The badge's job is busy-or-free; it says that.
+  return { state: "free", text: ar ? "متاح" : "Available" };
 }
 
 /** Range label for a scheduled period. */

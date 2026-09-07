@@ -294,10 +294,6 @@ export default function CompanyProfile() {
                 <Icon name="workspace_premium" size={13} color={colors.onSurfaceVariant} />
                 <Text style={styles.trustPillText}>{company.yearsExperience} سنوات خبرة</Text>
               </View>
-              <View style={[styles.trustPill, styles.trustPillGreen]}>
-                <Icon name="bolt" size={13} color="#15803d" />
-                <Text style={[styles.trustPillText, styles.trustPillGreenText]}>بيرد بسرعة</Text>
-              </View>
               <View style={styles.trustPill}>
                 <Icon name="verified_user" size={13} color={colors.onSurfaceVariant} />
                 <Text style={styles.trustPillText}>موثّقة منذ {company.verifiedSince}</Text>
@@ -492,13 +488,6 @@ export default function CompanyProfile() {
                   <Text style={styles.contactValue}>{company.location}</Text>
                 </View>
               </View>
-              <View style={styles.contactRow}>
-                <Icon name="bolt" size={20} color={colors.primary} />
-                <View>
-                  <Text style={styles.contactLabel}>الرد على طلبك</Text>
-                  <Text style={styles.contactValue}>بيرد على طلبك بسرعة</Text>
-                </View>
-              </View>
               <AvailabilityBadge company={company} />
               <Pressable style={styles.reportBtn} onPress={() => setFeedbackOpen(true)}>
                 <Icon name="report_problem" size={18} color={colors.error} />
@@ -649,9 +638,7 @@ const styles = StyleSheet.create({
   statDot: { color: colors.outline },
   trustRow: { flexDirection: rowStart, flexWrap: "wrap", gap: 8 },
   trustPill: { flexDirection: rowStart, alignItems: "center", gap: 5, backgroundColor: colors.surfaceContainer, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
-  trustPillGreen: { backgroundColor: "#dcfce7" },
   trustPillText: { fontFamily: "Cairo_700Bold", fontSize: 11, color: colors.onSurfaceVariant },
-  trustPillGreenText: { color: "#15803d" },
   busyBanner: { flexDirection: rowStart, alignItems: "flex-start", gap: 10, backgroundColor: colors.warningContainer, borderRadius: 14, padding: 12 },
   busyTextWrap: { flex: 1, gap: 2 },
   busyTitle: { fontFamily: "Cairo_700Bold", fontSize: type.label.fontSize, color: colors.onWarningContainer, textAlign: "right" },
