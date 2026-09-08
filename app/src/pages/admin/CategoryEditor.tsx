@@ -141,29 +141,37 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
 
         {/* Homepage hero curation — same idea as CompanyEditor's "Featured"
             toggle, but an order instead of a bool: the admin asked to fix
-            WHICH position a category shows in, not just whether it does. */}
-        <label className="flex items-center gap-3 bg-surface-container rounded-xl p-3.5 cursor-pointer">
-          <input
-            type="checkbox"
-            className="w-5 h-5 accent-primary"
-            checked={heroOrder !== null}
-            onChange={(e) => setHeroOrder(e.target.checked ? heroOrder ?? 0 : null)}
-          />
-          <div className="flex-1">
-            <p className="font-bold text-label text-on-surface">{t(locale, "admin_cat_hero")}</p>
-            <p className="text-caption text-outline">{t(locale, "admin_cat_hero_hint")}</p>
-          </div>
-          {heroOrder !== null && (
+            WHICH position a category shows in, not just whether it does.
+            Stacked, not a single flex row with the checkbox/text/number input
+            side by side — cramming a native number spinner into an RTL flex
+            row alongside a flex-1 text block collapsed the label text into a
+            near-zero-width column instead of wrapping it normally. */}
+        <div className="bg-surface-container rounded-xl p-3.5">
+          <label className="flex items-center gap-3 cursor-pointer">
             <input
-              type="number"
-              className="field-input w-16 text-center flex-shrink-0"
-              value={heroOrder}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => setHeroOrder(Number(e.target.value) || 0)}
-              aria-label={t(locale, "admin_cat_hero_order")}
+              type="checkbox"
+              className="w-5 h-5 accent-primary flex-shrink-0"
+              checked={heroOrder !== null}
+              onChange={(e) => setHeroOrder(e.target.checked ? heroOrder ?? 0 : null)}
             />
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-label text-on-surface">{t(locale, "admin_cat_hero")}</p>
+              <p className="text-caption text-outline">{t(locale, "admin_cat_hero_hint")}</p>
+            </div>
+          </label>
+          {heroOrder !== null && (
+            <div className="flex items-center gap-2 mt-3 ps-8">
+              <span className="text-caption text-outline">{t(locale, "admin_cat_hero_order")}</span>
+              <input
+                type="number"
+                className="field-input w-20 text-center"
+                value={heroOrder}
+                onChange={(e) => setHeroOrder(Number(e.target.value) || 0)}
+                aria-label={t(locale, "admin_cat_hero_order")}
+              />
+            </div>
           )}
-        </label>
+        </div>
 
         {/* SEO overrides — optional; blank uses the label/description defaults. */}
         <LField label={t(locale, "admin_cat_meta_title")}><input className="field-input" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder={t(locale, "admin_cat_meta_title_ph")} /></LField>

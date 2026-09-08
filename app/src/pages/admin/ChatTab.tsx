@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   listAdminConversations, fetchAdminThread, sendAdminMessage,
-  setMessageHidden, setConversationClosed, type Conversation,
+  setMessageHidden, setConversationClosed, POLL_IDLE_MS, type Conversation,
 } from "../../lib/chat";
+import { useVisiblePoll } from "../../hooks/useVisiblePoll";
 import { isApiConfigured } from "../../lib/api";
 import { useCompanies } from "../../lib/catalog";
 import SearchInput from "../../components/SearchInput";
@@ -74,9 +75,12 @@ export function ChatTab() {
   const errorText = error?.text ?? (error?.key ? t(locale, error.key) : "");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
+  // `quiet` suppresses the skeleton for refreshes the admin did not ask for.
+  // Without it the background poll below would blank the list it is refreshing
+  // every 30 seconds, which looks like the dashboard reloading itself.
+  const load = useCallback((opts?: { quiet?: boolean }) => {
     if (!isApiConfigured()) { setLoading(false); return; }
-    setLoading(true);
+    if (!opts?.quiet) setLoading(true);
     listAdminConversations({ q: query.trim() || undefined, companyId: companyId || undefined })
       .then((p) => { setItems(p.data); setError(null); })
       .catch((e) => setError(
@@ -89,6 +93,12 @@ export function ChatTab() {
     const id = setTimeout(load, query ? 300 : 0); // debounce typing
     return () => clearTimeout(id);
   }, [load, query]);
+
+  // Same reason as the provider's own Messages tab (components/ProviderChat.tsx):
+  // this list was fetched on mount and on a filter change only, so a thread that
+  // arrived while an admin sat on the tab never appeared. Quiet, so it refreshes
+  // the list in place rather than blanking it, and only while the tab is visible.
+  useVisiblePoll(() => load({ quiet: true }), POLL_IDLE_MS);
 
   // Stable identities so ChatThread's effects don't restart every render.
   const loadThread = useCallback(

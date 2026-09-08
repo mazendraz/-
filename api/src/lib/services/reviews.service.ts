@@ -32,7 +32,7 @@ async function notifyAdminsNewReview(companyId: string, rating: number, author: 
     await Promise.allSettled([
       pushAdmins({
         type: StaffNotificationType.REVIEW_SUBMITTED,
-        title: "New review to approve",
+        title: "تقييم جديد للموافقة",
         body: `${companyName} — ${"★".repeat(rating)} from ${author}`,
         url: "/admin",
         tag: `review-${companyId}-${Date.now()}`,

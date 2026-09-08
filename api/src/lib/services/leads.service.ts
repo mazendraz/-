@@ -316,14 +316,14 @@ export async function createLeadRecord(input: CreateLeadRecordInput): Promise<Ap
           // the dashboard for the full record.
           pushCompanyProviders(company.id, {
             type: StaffNotificationType.LEAD_NEW,
-            title: "New lead — Al Assema",
+            title: "طلب جديد — Al Assema",
             body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
             url: "/provider",
             tag: `lead-${serialized.id}`,
           }),
           pushAdmins({
             type: StaffNotificationType.LEAD_NEW,
-            title: `New lead — ${company.name}`,
+            title: `طلب جديد — ${company.name}`,
             body: `${serialized.service} · ${serialized.district} · ${serialized.refNumber}`,
             url: "/admin",
             tag: `lead-${serialized.id}`,

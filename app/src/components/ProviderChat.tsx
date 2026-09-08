@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   listProviderConversations, fetchProviderThread, sendProviderMessage,
-  type Conversation,
+  POLL_IDLE_MS, type Conversation,
 } from "../lib/chat";
+import { useVisiblePoll } from "../hooks/useVisiblePoll";
 import { isApiConfigured } from "../lib/api";
 import { useLocale } from "../context/LocaleContext";
 import { t, type StringKey } from "../lib/i18n";
@@ -76,6 +77,22 @@ export default function ProviderChat() {
       .finally(() => setLoading(false));
   }, [page]);
   useEffect(load, [load]);
+
+  // ── Why the LIST polls too, not just the open thread ──────────────────────
+  // ChatThread polls the conversation someone is reading, so a reply arrives on
+  // its own. The list around it did not, and it is fetched only on mount and on
+  // a page change — so a provider who left the Messages tab open saw no new
+  // conversation appear, ever. A lead opens its thread eagerly on submission,
+  // which means "a new request arrived" and "a new row belongs in this list"
+  // are the same event: the one thing this screen exists to surface was the one
+  // thing it could not tell you without a manual refresh.
+  //
+  // The idle cadence (30s), not the active one: an open thread is a
+  // back-and-forth where 8s is the difference between a conversation and a
+  // form, while this list only has to answer "did something new show up?".
+  // `load` already leaves `loading` untouched after the first run, so a poll
+  // never flashes the skeleton over a list that is already on screen.
+  useVisiblePoll(load, POLL_IDLE_MS);
 
   // Stable identity so ChatThread's effects don't re-run every render.
   const loadThread = useCallback(

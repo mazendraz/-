@@ -32,7 +32,7 @@ async function notifyAdminsPendingProject(project: ApiProject, companyId: string
     await Promise.allSettled([
       pushAdmins({
         type: StaffNotificationType.PROJECT_SUBMITTED,
-        title: "New project for review",
+        title: "مشروع جديد للمراجعة",
         body: `${companyName}: “${project.title}” needs approval`,
         url: "/admin",
         tag: `project-${project.id}`,
