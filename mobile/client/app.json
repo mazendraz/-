@@ -76,10 +76,22 @@
               "pathPrefix": "/account"
             }
           ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "com.alassema.client"
+            }
+          ]
         }
       ],
       "allowBackup": false,
-      "versionCode": 7
+      "versionCode": 8
     },
     "web": {
       "favicon": "./assets/favicon.png"

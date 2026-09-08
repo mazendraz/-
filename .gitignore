@@ -94,3 +94,4 @@ desktop/
 *.certSigningRequest
 google-play-service-account*.json
 fcm-service-account*.json
+Claude outputs/
