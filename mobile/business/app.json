@@ -59,10 +59,14 @@
     ],
     "scheme": "alassemabiz",
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "9f9db7b8-98a0-43d9-b9a4-338ae0e7a4c2"
+      }
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    }
+    },
+    "owner": "mazendraz"
   }
 }
