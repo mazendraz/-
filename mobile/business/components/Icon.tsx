@@ -52,6 +52,14 @@ const MATERIAL_ICON_NAME = {
   group: "group",               // admin "team" (web uses `badge`, absent here)
   category: "category",         // admin "services" on the web
   event_busy: "event-busy",     // provider "availability" on the web
+  event_available: "event-available", // the "open for orders" state of the same screen
+
+  // Header back affordance. In an Arabic (RTL) UI "back / up a level" points
+  // RIGHT — so `arrow_forward` is the back button and `arrow_back` is
+  // "onward / into this". Same convention, and the same reason, as
+  // mobile/client's Icon.tsx.
+  arrow_forward: "arrow-forward",
+  arrow_back: "arrow-back",
   hourglass_top: "hourglass-top",
   devices: "devices",
   description: "description",

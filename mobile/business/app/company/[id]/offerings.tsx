@@ -66,7 +66,7 @@ export default function CompanyOfferings() {
         </View>
 
         <View style={styles.addRow}>
-          <Button label="+ إضافة خدمة" onPress={() => router.push(`/company/${id}/offering/new`)} />
+          <Button label="+ إضافة خدمة أو منتج" onPress={() => router.push(`/company/${id}/offering/new`)} />
         </View>
 
         {loading ? (

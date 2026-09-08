@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import type { ApiOffering, ApiPriceUnit, ApiPricingModel } from "@alassema/core";
+import type { ApiOffering, ApiOfferingKind, ApiPriceUnit, ApiPricingModel } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, rowStart, textStart } from "@alassema/mobile-shared";
 import {
@@ -17,6 +17,7 @@ import {
 } from "../../lib/offerings";
 import { uploadProjectImage } from "../../lib/projects";
 import Button from "../../components/Button";
+import KindSelector from "../../components/KindSelector";
 import PriceFields from "../../components/PriceFields";
 import MediaPicker from "../../components/MediaPicker";
 import TierRow from "../../components/TierRow";
@@ -35,6 +36,7 @@ export default function OfferingEditor() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [kind, setKind] = useState<ApiOfferingKind>("SERVICE");
   const [pricingModel, setPricingModel] = useState<ApiPricingModel>("FIXED");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
@@ -60,6 +62,7 @@ export default function OfferingEditor() {
       setOffering(found);
       setName(found.name);
       setDescription(found.description ?? "");
+      setKind(found.kind);
       setPricingModel(found.pricingModel);
       setPriceMin(found.priceMin != null ? String(found.priceMin) : "");
       setPriceMax(found.priceMax != null ? String(found.priceMax) : "");
@@ -80,6 +83,7 @@ export default function OfferingEditor() {
     return {
       name: name.trim(),
       description: description.trim() || null,
+      kind,
       pricingModel,
       priceMin: pricingModel === "ON_INSPECTION" ? null : priceMin ? Number(priceMin) : null,
       priceMax: pricingModel === "FIXED" || pricingModel === "ON_INSPECTION" ? null : priceMax ? Number(priceMax) : null,
@@ -199,7 +203,18 @@ export default function OfferingEditor() {
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: true, title: isNew ? "خدمة جديدة" : "تعديل الخدمة" }} />
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: isNew
+            ? kind === "PRODUCT"
+              ? "منتج جديد"
+              : "خدمة جديدة"
+            : kind === "PRODUCT"
+              ? "تعديل المنتج"
+              : "تعديل الخدمة",
+        }}
+      />
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         {loading ? (
           <ListSkeleton rows={4} />
@@ -239,6 +254,8 @@ export default function OfferingEditor() {
               onChange={setImage}
               upload={uploadProjectImage}
             />
+
+            <KindSelector value={kind} onChange={setKind} />
 
             <PriceFields
               pricingModel={pricingModel}

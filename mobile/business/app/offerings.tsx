@@ -52,7 +52,7 @@ export default function Offerings() {
       <Stack.Screen options={{ headerShown: true, title: "قائمة الأسعار" }} />
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <View style={styles.addRow}>
-          <Button label="+ إضافة خدمة" onPress={() => router.push("/offering/new")} />
+          <Button label="+ إضافة خدمة أو منتج" onPress={() => router.push("/offering/new")} />
         </View>
 
         {loading ? (
