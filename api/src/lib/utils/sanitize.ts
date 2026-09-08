@@ -49,6 +49,22 @@ export function sanitizedText(min: number, max: number) {
 }
 
 /** Optional sanitized text with a max bound (min 0); empty allowed. */
+/**
+ * ⚠ "Optional" here means the value may be EMPTY, not that the key may be
+ * ABSENT. This returns a required `z.string()` — omit the field entirely and
+ * Zod fails with "expected string, received undefined".
+ *
+ * So a genuinely optional field must say so itself, and which suffix depends
+ * on the column behind it:
+ *   - nullable column  → `sanitizedOptionalText(n).optional()`
+ *   - NOT NULL column  → `sanitizedOptionalText(n).default("")`
+ *
+ * This is not a hypothetical. `leadStatusSchema.lossNote` was declared without
+ * either, which made a loss note mandatory on EVERY status change — so the one
+ * action the provider dashboard and the Business App exist to perform ("mark
+ * this request Contacted") answered 400 on both surfaces, blaming a field
+ * neither had any reason to send.
+ */
 export function sanitizedOptionalText(max: number) {
   return z
     .string()

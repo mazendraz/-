@@ -35,9 +35,18 @@ export const createLeadSchema = z.object({
   // No longer collected on the request form (customer choice — the field
   // stays required on the Lead/DB shape, so the client sends ""); older
   // leads still carry a real value.
-  budget: sanitizedOptionalText(100),
-  // Optional: a customer may submit with no project details at all.
-  description: sanitizedOptionalText(2000),
+  //
+  // `.default("")`, not a bare sanitizedOptionalText: that helper's name is
+  // misleading — it returns a plain `z.string()` pipe, so "optional" there
+  // means "may be empty", NOT "the key may be absent". Without the default, a
+  // caller that simply omits `budget` (the natural reading of a field the form
+  // no longer collects) got a 400 naming a field it was never asked for. The
+  // default keeps the non-null DB column satisfied.
+  budget: sanitizedOptionalText(100).default(""),
+  // Optional: a customer may submit with no project details at all — which
+  // means the key can be absent, so this needs the same default as `budget`
+  // above rather than only tolerating "".
+  description: sanitizedOptionalText(2000).default(""),
   // Feature C. Absent → the classic single-service request, unchanged.
   items: z.array(requestedItem).min(1).max(25).optional(),
 });
@@ -56,7 +65,17 @@ export type CreateLeadInput = z.infer<typeof createLeadSchema>;
 export const leadStatusSchema = z.object({
   status: z.enum(["New", "Contacted", "In Progress", "Completed", "Cancelled"]),
   lossReason: z.enum(LEAD_LOSS_REASONS).optional(),
-  lossNote: sanitizedOptionalText(500),
+  // `.optional()` is load-bearing, and its absence broke every status change
+  // this endpoint exists to serve. sanitizedOptionalText() returns a REQUIRED
+  // `z.string()` (see its own note in utils/sanitize.ts), so a plain
+  // `{ status: "Contacted" }` — exactly what both the Business App and the web
+  // dashboard send for any non-cancellation — was rejected with
+  // "lossNote: expected string, received undefined". A loss note is meaningless
+  // outside a cancellation, so an absent key is the normal case, not an error.
+  // updateStatus already declares `lossNote?: string`, and checkLossReason()
+  // already takes `string | null | undefined`: the schema was the only layer
+  // demanding it.
+  lossNote: sanitizedOptionalText(500).optional(),
 });
 
 // Public lead tracking (GET /leads/track?ref=&token=&phone=). The ref plus a

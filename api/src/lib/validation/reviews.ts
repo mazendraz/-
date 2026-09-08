@@ -28,7 +28,13 @@ export const submitReviewSchema = z
     // secret compared via phoneTail(), not a stored value — length check only.
     phone: z.string().trim().min(8).max(20).optional(),
     rating: z.number().int().min(1).max(5),
-    text: sanitizedOptionalText(2000),
+    // `.optional()` for the reason the comment above already claims: a rating
+    // with no words is a complete review. Without it the key was mandatory,
+    // which is the same trap that broke lead status changes — see
+    // utils/sanitize.ts. Matches customerReview.ts, the signed-in counterpart
+    // of this route, which pairs `.optional()` with a `?? ""` at the route
+    // because Review.text is NOT NULL.
+    text: sanitizedOptionalText(2000).optional(),
   })
   .refine((o) => Boolean(o.token) || Boolean(o.phone), {
     message: "A tracking token or phone number is required",

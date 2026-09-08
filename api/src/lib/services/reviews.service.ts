@@ -377,7 +377,9 @@ export async function submitFromLead(input: SubmitReviewInput): Promise<ApiRevie
   if (!lead || !leadSecretMatches(lead, { token: input.token, phone: input.phone })) {
     throw new NotFoundError("Lead");
   }
-  return claimAndCreate(lead, input.rating, input.text);
+  // `?? ""` because Review.text is NOT NULL while a text-less review is valid —
+  // the same coalesce the signed-in route does (customer/leads/[id]/review).
+  return claimAndCreate(lead, input.rating, input.text ?? "");
 }
 
 /**
