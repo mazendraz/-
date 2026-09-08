@@ -131,6 +131,15 @@ model Category {
   // the label/description-derived defaults.
   metaTitle       String?
   metaDescription String?
+  // Curates the homepage hero's service picker: null (the default, every
+  // existing row) keeps a category out of the hero entirely — it still shows
+  // everywhere else (Services page, search, ...), unaffected by this. A
+  // non-null value both opts a category IN and fixes its position there,
+  // ascending, e.g. moving=0 to show it first. Mirrors Company.featured (a
+  // curation flag the full listing ignores) but as an order, not a bool,
+  // because the admin asked to fix WHICH order the hero shows them in, not
+  // just which ones.
+  heroOrder       Int?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
@@ -140,6 +149,7 @@ model Category {
 
   @@index([slug])
   @@index([isActive])
+  @@index([heroOrder])
 }
 
 // A company may belong to multiple categories/services (e.g. a company that does

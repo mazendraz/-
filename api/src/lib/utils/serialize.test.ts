@@ -102,6 +102,7 @@ describe("serializeCategory", () => {
       metaDescription: null,
       labelAr: null,
       descriptionAr: null,
+      heroOrder: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -117,6 +118,7 @@ describe("serializeCategory", () => {
       metaDescription: null,
       labelAr: null,
       descriptionAr: null,
+      heroOrder: null,
     });
   });
 });

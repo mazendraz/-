@@ -292,6 +292,12 @@ export interface ApiCategory {
   labelAr?: string | null;
   descriptionAr?: string | null;
   /**
+   * Homepage hero curation. null (every category by default) = not shown in
+   * the hero — it still appears everywhere else (Services page, search, ...).
+   * A number both opts a category IN and fixes its position there, ascending.
+   */
+  heroOrder?: number | null;
+  /**
    * How many companies would be affected by turning this category's pricing
    * catalog off. ADMIN payloads only — absent everywhere else, which is why it
    * is optional here and read with `?? 0` at the one call site (CategoryEditor).

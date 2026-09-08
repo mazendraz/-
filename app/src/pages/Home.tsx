@@ -39,10 +39,19 @@ export default function Home() {
   usePageMeta();
   const { locale } = useLocale();
   const COMPANIES = useCompanies();
-  const SERVICE_CATEGORIES = useCategoriesWithCounts();
+  const CATEGORIES = useCategoriesWithCounts();
   const status = useCatalogStatus();
   const loadingEmpty = status === "loading" && COMPANIES.length === 0;
   const featuredCompanies = COMPANIES.filter((c) => c.featured !== false);
+  // Hero curation, admin-set (CategoryEditor's "Show in homepage hero"): only
+  // categories with a heroOrder show here, in that order — everything else
+  // (Services page, search, ...) still sees the full, alphabetical list from
+  // useCategoriesWithCounts unfiltered. Falls back to the full list so an
+  // empty catalog of curated categories doesn't leave the hero blank.
+  const curatedCategories = CATEGORIES
+    .filter((c) => c.heroOrder != null)
+    .sort((a, b) => (a.heroOrder as number) - (b.heroOrder as number));
+  const SERVICE_CATEGORIES = curatedCategories.length > 0 ? curatedCategories : CATEGORIES;
   // RESP-04: scroll-position dots for the two mobile horizontal-scroll strips below.
   const categoriesScroll = useScrollDots<HTMLDivElement>(SERVICE_CATEGORIES.length);
   const companiesScroll = useScrollDots<HTMLDivElement>(loadingEmpty ? 3 : featuredCompanies.length);

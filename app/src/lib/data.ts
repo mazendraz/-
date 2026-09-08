@@ -105,6 +105,9 @@ export type ServiceCategory = {
   pricingMode?: CategoryPricingMode;
   // Admin only — see ApiAdminCategory.publishedOfferingCompanyCount.
   publishedOfferingCompanyCount?: number;
+  // Homepage hero curation — see ApiCategory.heroOrder. null/absent = not
+  // shown in the hero; a number opts in and fixes the display position.
+  heroOrder?: number | null;
   // Optional per-page SEO overrides (admin-set); blank → label/description defaults.
   metaTitle?: string;
   metaDescription?: string;

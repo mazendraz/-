@@ -35,6 +35,7 @@ export interface CategoryInput {
   metaDescription?: string;
   labelAr?: string;
   descriptionAr?: string;
+  heroOrder?: number | null;
 }
 
 /**
@@ -110,6 +111,7 @@ export async function create(input: CategoryInput): Promise<ApiAdminCategory> {
       metaDescription: input.metaDescription ?? null,
       labelAr: input.labelAr ?? null,
       descriptionAr: input.descriptionAr ?? null,
+      heroOrder: input.heroOrder ?? null,
     },
   });
   // A brand-new category has no companies yet, so nothing can have a
@@ -141,6 +143,7 @@ export async function update(
       metaDescription: input.metaDescription === undefined ? undefined : input.metaDescription,
       labelAr: input.labelAr === undefined ? undefined : input.labelAr,
       descriptionAr: input.descriptionAr === undefined ? undefined : input.descriptionAr,
+      heroOrder: input.heroOrder === undefined ? undefined : input.heroOrder,
     },
     include: { _count: { select: { companies: true } } },
   });

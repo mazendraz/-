@@ -19,6 +19,9 @@ export const upsertCategorySchema = z.object({
   // convention as metaTitle/metaDescription above, not required on every save.
   labelAr: sanitizedOptionalText(100).optional(),
   descriptionAr: sanitizedOptionalText(1000).optional(),
+  // Homepage hero curation: null/omitted = not shown in the hero. See the
+  // field's own comment on the Category model for the full contract.
+  heroOrder: z.number().int().nullable().optional(),
 });
 
 export type UpsertCategoryInput = z.infer<typeof upsertCategorySchema>;

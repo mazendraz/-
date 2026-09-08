@@ -11,6 +11,7 @@ import {
 import { apiFetch, apiGet, apiPost, apiPut, apiDelete, isApiConfigured, reportHydrationFailure } from "./api";
 import { getCurrentUser, isAuthenticated } from "./auth";
 import { useAsyncData } from "../hooks/useAsyncData";
+import { normalizeIconName } from "@alassema/core";
 
 export type { Company, ServiceCategory, Project, Review };
 
@@ -458,7 +459,14 @@ export function deleteReview(companyId: string, index: number) {
 
 // ── Categories ──────────────────────────────────────────────────────────────
 export function getCategories(): ServiceCategory[] {
-  return readJSON<ServiceCategory[]>(categoriesKey(), SEED_CATEGORIES);
+  // Normalize on read, not just at the admin write path: a category's `icon`
+  // can carry decoration (emoji, NBSP, a stray space) from before that
+  // cleanup existed, or from a direct DB edit — see normalizeIconName's own
+  // comment for why an unnormalized value renders as a broken icon.
+  return readJSON<ServiceCategory[]>(categoriesKey(), SEED_CATEGORIES).map((cat) => ({
+    ...cat,
+    icon: normalizeIconName(cat.icon),
+  }));
 }
 
 export function getCategory(slug: string): ServiceCategory | undefined {
@@ -501,6 +509,7 @@ export function addCategory(cat: Omit<ServiceCategory, "count">): ServiceCategor
       pricingMode: cat.pricingMode,
       metaTitle: cat.metaTitle?.trim() || undefined,
       metaDescription: cat.metaDescription?.trim() || undefined,
+      heroOrder: cat.heroOrder ?? null,
     })
       .catch((err) => console.error("Create category failed:", err))
       .finally(() => refreshCatalogFromApi());
@@ -521,6 +530,7 @@ export function updateCategory(slug: string, patch: Partial<ServiceCategory>) {
         pricingMode: patch.pricingMode,
         metaTitle: patch.metaTitle?.trim() || undefined,
         metaDescription: patch.metaDescription?.trim() || undefined,
+        heroOrder: patch.heroOrder === undefined ? undefined : patch.heroOrder,
       })
         .catch((err) => console.error("Update category failed:", err))
         .finally(() => refreshCatalogFromApi());

@@ -256,6 +256,7 @@ export function serializeCategory(c: Category, count: number): ApiCategory {
     metaDescription: c.metaDescription ?? null,
     labelAr: c.labelAr ?? null,
     descriptionAr: c.descriptionAr ?? null,
+    heroOrder: c.heroOrder ?? null,
   };
 }
 

@@ -11,6 +11,7 @@ import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { useLocale } from "../../context/LocaleContext";
 import { t, tCount } from "../../lib/i18n";
 import Icon from "../../components/Icon";
+import { normalizeIconName } from "@alassema/core";
 
 // ══════════════════════════════════════════════════════════════════════════
 //  CATEGORY EDITOR
@@ -30,6 +31,7 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
   const [confirmingSwitch, setConfirmingSwitch] = useState(false);
   const [metaTitle, setMetaTitle] = useState(category?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(category?.metaDescription ?? "");
+  const [heroOrder, setHeroOrder] = useState<number | null>(category?.heroOrder ?? null);
 
   // UX-09: no per-field `set()` helper here (each field owns its own
   // `useState`), so dirty-tracking just diffs the live values against what
@@ -40,11 +42,13 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
     cover: category?.cover ?? "", pricingMode: category?.pricingMode ?? "QUOTE_ONLY",
     metaTitle: category?.metaTitle ?? "", metaDescription: category?.metaDescription ?? "",
     labelAr: category?.labelAr ?? "", descriptionAr: category?.descriptionAr ?? "",
+    heroOrder: category?.heroOrder ?? null,
   }).current;
   const dirty = label !== initial.label || icon !== initial.icon || description !== initial.description
     || cover !== initial.cover || pricingMode !== initial.pricingMode
     || metaTitle !== initial.metaTitle || metaDescription !== initial.metaDescription
-    || labelAr !== initial.labelAr || descriptionAr !== initial.descriptionAr;
+    || labelAr !== initial.labelAr || descriptionAr !== initial.descriptionAr
+    || heroOrder !== initial.heroOrder;
   const [confirmingClose, setConfirmingClose] = useState(false);
   const navBlocker = useUnsavedChangesGuard(dirty);
 
@@ -69,7 +73,10 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
 
   function save() {
     if (!label.trim()) { alert(t(locale, "admin_cat_label_required")); return; }
-    const fields = { label, labelAr, icon, description, descriptionAr, cover, pricingMode, metaTitle, metaDescription };
+    const fields = {
+      label, labelAr, icon: normalizeIconName(icon), description, descriptionAr, cover, pricingMode, metaTitle, metaDescription,
+      heroOrder,
+    };
     if (category) updateCategory(category.slug, fields);
     else addCategory({ slug: "", ...fields });
     onClose();
@@ -128,9 +135,36 @@ export function CategoryEditor({ category, onClose }: { category: ServiceCategor
 
         <ImageUpload label={t(locale, "admin_cat_cover")} value={cover} onChange={setCover} shape="wide" maxDim={1200} bucket="covers" />
         <div className="flex items-center gap-2 bg-surface-container rounded-xl p-3">
-          <span className="material-symbols-outlined text-primary text-title" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{icon || "category"}</span>
+          <span className="material-symbols-outlined text-primary text-title" style={{ fontVariationSettings: "'FILL' 1" }} aria-hidden="true" translate="no">{normalizeIconName(icon)}</span>
           <span className="text-caption text-outline">{t(locale, "admin_cat_icon_preview")}</span>
         </div>
+
+        {/* Homepage hero curation — same idea as CompanyEditor's "Featured"
+            toggle, but an order instead of a bool: the admin asked to fix
+            WHICH position a category shows in, not just whether it does. */}
+        <label className="flex items-center gap-3 bg-surface-container rounded-xl p-3.5 cursor-pointer">
+          <input
+            type="checkbox"
+            className="w-5 h-5 accent-primary"
+            checked={heroOrder !== null}
+            onChange={(e) => setHeroOrder(e.target.checked ? heroOrder ?? 0 : null)}
+          />
+          <div className="flex-1">
+            <p className="font-bold text-label text-on-surface">{t(locale, "admin_cat_hero")}</p>
+            <p className="text-caption text-outline">{t(locale, "admin_cat_hero_hint")}</p>
+          </div>
+          {heroOrder !== null && (
+            <input
+              type="number"
+              className="field-input w-16 text-center flex-shrink-0"
+              value={heroOrder}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setHeroOrder(Number(e.target.value) || 0)}
+              aria-label={t(locale, "admin_cat_hero_order")}
+            />
+          )}
+        </label>
+
         {/* SEO overrides — optional; blank uses the label/description defaults. */}
         <LField label={t(locale, "admin_cat_meta_title")}><input className="field-input" value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} placeholder={t(locale, "admin_cat_meta_title_ph")} /></LField>
         <LField label={t(locale, "admin_cat_meta_desc")}><textarea className="field-input resize-none" rows={2} value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} placeholder={t(locale, "admin_cat_meta_desc_ph")} /></LField>
