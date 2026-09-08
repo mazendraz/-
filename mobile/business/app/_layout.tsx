@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
-import { Stack } from "expo-router";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -18,6 +18,8 @@ import {
   setReportingRole,
 } from "@alassema/mobile-shared";
 import { bootstrapSession, useStaffAuth } from "../lib/staffAuth";
+import Icon from "../components/Icon";
+import IntroVideo from "../components/IntroVideo";
 import OfflineScreen from "../components/OfflineScreen";
 import UpdateRequiredScreen from "../components/UpdateRequiredScreen";
 import CrashScreen from "../components/CrashScreen";
@@ -55,6 +57,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 export default function RootLayout() {
   const fontsLoaded = useAppFonts();
+  const router = useRouter();
+  // The logo reveal that covers the app while it boots — see
+  // components/IntroVideo.tsx. Starts already DONE on web: that build has no
+  // splash/video handoff to cover, and holding a 3.5s animation in front of
+  // it would slow every load down for no one's benefit.
+  const [introDone, setIntroDone] = useState(Platform.OS === "web");
   const [sessionReady, setSessionReady] = useState(false);
   const { user, loading: authLoading } = useStaffAuth();
 
@@ -116,7 +124,11 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, sessionReady]);
 
-  if (!fontsLoaded || !sessionReady || authLoading) return null;
+  // A FLAG rather than an early `return null`. The intro overlay has to keep
+  // its place in the tree across the moment boot finishes: returning early
+  // would unmount it and restart the video from frame zero — see
+  // IntroVideo.tsx's header.
+  const booting = !fontsLoaded || !sessionReady || authLoading;
 
   // Auth routing (sign-in vs. each role's tab group, and the redirect
   // between them) is handled by expo-router itself — see app/index.tsx and
@@ -125,7 +137,7 @@ export default function RootLayout() {
   // manually-rendered screen component instead of letting the Stack own
   // navigation would break deep-linking and the back button for no benefit,
   // since <Redirect> already does this correctly.
-  const content = updateRequired ? (
+  const content = booting ? null : updateRequired ? (
     <UpdateRequiredScreen status={updateRequired} />
   ) : backendOffline ? (
     <OfflineScreen />
@@ -134,25 +146,60 @@ export default function RootLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.surface },
+        // The native-stack header's own back button does not respond to
+        // taps under this app's forced-RTL layout (I18nManager.forceRTL +
+        // swapLeftAndRightInRTL(false) — see @alassema/mobile-shared's
+        // rtl.ts). mobile/client sidesteps it by drawing every header
+        // itself; here the ~50 screens that DO use the native header get a
+        // custom headerLeft instead — a plain Pressable that calls
+        // router.back(), which works regardless of layout direction. This
+        // also drops the route-group name ("(admin)") that the default back
+        // button was showing as its label.
+        headerBackVisible: false,
+        headerLeft: ({ canGoBack }) =>
+          canGoBack ? (
+            <Pressable
+              onPress={() => router.back()}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="رجوع"
+              style={styles.headerBack}
+            >
+              <Icon name="arrow_forward" size={24} color={colors.onSurface} />
+            </Pressable>
+          ) : null,
       }}
     />
   );
 
   return (
-    <SafeAreaProvider>
-      {Platform.OS === "web" ? (
-        <View style={styles.webBackdrop}>
-          <View style={styles.webFrame}>{content}</View>
-        </View>
-      ) : (
-        content
+    <>
+      {/* Mounted only once boot is done — the same "nothing on screen until
+          every hold clears" contract the early return used to provide, now
+          expressed as a condition so the intro overlay below can outlive the
+          transition. */}
+      {!booting && (
+        <SafeAreaProvider>
+          {Platform.OS === "web" ? (
+            <View style={styles.webBackdrop}>
+              <View style={styles.webFrame}>{content}</View>
+            </View>
+          ) : (
+            content
+          )}
+          <StatusBar style="dark" />
+        </SafeAreaProvider>
       )}
-      <StatusBar style="dark" />
-    </SafeAreaProvider>
+      {/* LAST child, so it paints over everything above it — including the
+          forced-update / offline screens, which are allowed to resolve
+          underneath the animation rather than racing it. */}
+      {!introDone && <IntroVideo onDone={() => setIntroDone(true)} />}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  headerBack: { paddingHorizontal: 4, paddingVertical: 4 },
   webBackdrop: {
     flex: 1,
     alignItems: "center",
