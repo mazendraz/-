@@ -99,6 +99,16 @@ describe("sending", () => {
     expect(sentTo).toEqual(["ExponentPushToken[ccc]"]);
   });
 
+  it("sends at high priority so FCM/APNs deliver immediately, not on the next device wake", async () => {
+    const fetchMock = mockExpo((tokens) => tokens.map(() => ({ status: "ok" })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await svc.notifyUserDevices("u1", PAYLOAD);
+    const messages = JSON.parse(fetchMock.mock.calls[0]![1]!.body) as { priority?: string }[];
+    expect(messages.length).toBeGreaterThan(0);
+    for (const m of messages) expect(m.priority).toBe("high");
+  });
+
   it("carries the deep-link url through as data the app reads on tap", async () => {
     const fetchMock = mockExpo((tokens) => tokens.map(() => ({ status: "ok" })));
     vi.stubGlobal("fetch", fetchMock);

@@ -59,6 +59,15 @@ async function sendToTokens(tokens: string[], payload: PushPayload): Promise<num
       // counterpart of the service worker's notificationclick URL.
       data: payload.url ? { url: payload.url } : undefined,
       sound: "default",
+      // Deliver NOW, not "eventually". Without this Expo sends at its
+      // default priority, which becomes FCM `normal` (Android holds these
+      // until the device next wakes — minutes to hours on a dozing phone)
+      // and APNs priority 5 (iOS may batch them for power). Both produce the
+      // exact report this addresses: a reply push that arrives so late it
+      // reads as never sent. Every push this backend sends is a direct
+      // response to something a person just did, so "high" is always right
+      // here — there is no low-urgency push in this product.
+      priority: "high" as const,
       // Android 8+ gives the CHANNEL, not the message, the final say over
       // whether a notification may show a banner or make a sound. A message
       // with no channelId lands on expo-notifications' unnamed fallback
