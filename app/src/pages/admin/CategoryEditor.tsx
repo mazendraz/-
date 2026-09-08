@@ -264,7 +264,7 @@ export function CategoryCardActions({ cat, onEdit }: { cat: ServiceCategory; onE
       <button onClick={onEdit} className="flex-1 bg-surface-container py-2 min-h-[44px] rounded-lg text-caption font-bold text-on-surface hover:bg-surface-container-high transition-colors">{t(locale, "admin_edit")}</button>
       <button onClick={() => setConfirming(true)}
         aria-label={`${t(locale, "admin_delete")} ${cat.label}`}
-        className="flex items-center justify-center gap-1 border border-error/30 text-error rounded-lg font-bold hover:bg-error/5 transition-colors w-11 h-11 -m-2.5 text-caption">
+        className="flex items-center justify-center gap-1 border border-error/30 text-error rounded-lg font-bold hover:bg-error/5 transition-colors w-11 h-11 text-caption">
         <Icon name="delete" className="text-body" />
       </button>
       {confirming && (
