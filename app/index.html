@@ -34,6 +34,23 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#005578" />
     <link rel="preload" as="image" href="/img/seed-16.jpg" />
+    <!-- Material Symbols is a large (~1.1MB) VARIABLE font (see fonts.css's own
+         note on why it's never subset), and @font-face resources are normally
+         fetched lazily — only once the browser lays out an element that needs
+         them, which on this SPA means after HTML → JS → React render, not at
+         first paint. `font-display: block` only hides the icon-name fallback
+         text for ~3s; a slow network/device can genuinely take longer than
+         that to fetch AND shape a font this size, and the reported "broken
+         icon" screenshots (a category icon, then the hardcoded delete icon —
+         both verified to have correct ligature data in the font itself) are
+         consistent with exactly that window. Preloading starts the byte fetch
+         immediately, in parallel with the JS bundle, instead of waiting for
+         React to mount before the browser even knows the font is needed.
+         `crossorigin` is required even for a same-origin font — browsers
+         always fetch fonts in CORS mode, and without it the preload and the
+         real fetch are treated as different requests, doubling the download
+         instead of reusing it. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/material-symbols-outlined-fallback-100_700.woff2" crossorigin />
     <!-- Locale init: apply saved dir/lang before React hydrates to prevent FOUC.
          External (not inline) so the CSP can drop 'unsafe-inline' from script-src. -->
     <script src="/locale-init.js"></script>
