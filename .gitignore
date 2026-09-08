@@ -81,6 +81,12 @@ desktop/
 # deliverables/
 # app/inspect.mjs
 
+# ── لقطات QA المؤقتة ──
+# scripts/ship.sh بيعمل git add -A، فأي screenshot يتحط جوه deliverables/_qa*/screens
+# أثناء جلسة QA بيتسحب معاه من غير قصد (زي ما حصل في 93720bc و18068cb —
+# 23 صورة). القرار: تفضل على الجهاز للمراجعة، متتبّعش في git.
+deliverables/_qa*/screens/
+
 # ── مفاتيح التوقيع والنشر (Apple / Google) ──
 # المفاتيح الحقيقية متخزّنة **بره الريبو** في C:\Users\CM\.alassema-secrets\.
 # القواعد دي خط دفاع تاني: `ship.sh` بيعمل `git add -A`، فأي مفتاح يتنسخ جوه
