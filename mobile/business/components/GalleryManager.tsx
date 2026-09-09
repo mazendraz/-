@@ -4,7 +4,6 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { colors, type } from "@alassema/core";
 import { ApiError, assetUri, rowStart } from "@alassema/mobile-shared";
-import { uploadAdminImage } from "../lib/adminUpload";
 import Icon from "./Icon";
 
 /** Mirrors upload.service.ts's own MAX_UPLOAD_BYTES / MAX_VIDEO_UPLOAD_BYTES.
@@ -38,11 +37,28 @@ function isVideoUrl(url: string): boolean {
  * The two size caps mirror the server's exactly, and are checked before the
  * file goes over the wire so an oversized upload fails in a sentence rather
  * than after a long progress bar.
+ *
+ * `upload` is injected rather than imported, for the same reason MediaPicker
+ * injects its own: admins post to /admin/upload and providers to
+ * /provider/upload, and /admin/upload 403s for a provider account. Passing the
+ * function in is what lets the provider's own profile screen reuse this
+ * component instead of growing a second gallery editor beside it.
  */
-export default function GalleryManager({ images, onChange }: { images: string[]; onChange: (next: string[]) => void }) {
+export default function GalleryManager({
+  images,
+  onChange,
+  upload,
+  disabled,
+}: {
+  images: string[];
+  onChange: (next: string[]) => void;
+  upload: (file: { uri: string; name: string; type: string }) => Promise<string>;
+  disabled?: boolean;
+}) {
   const [uploading, setUploading] = useState(false);
 
   async function addMedia() {
+    if (disabled || uploading) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
       Alert.alert("محتاجين إذن الصور", "من غير إذن الوصول للصور مش هنقدر نرفع ملفات.");
@@ -67,7 +83,7 @@ export default function GalleryManager({ images, onChange }: { images: string[];
 
     setUploading(true);
     try {
-      const url = await uploadAdminImage("gallery", {
+      const url = await upload({
         uri: asset.uri,
         name: asset.fileName ?? `gallery-${Date.now()}.${video ? "mp4" : "jpg"}`,
         type: asset.mimeType ?? (video ? "video/mp4" : "image/jpeg"),
@@ -113,19 +129,19 @@ export default function GalleryManager({ images, onChange }: { images: string[];
             <Image source={{ uri: assetUri(uri) }} style={styles.thumb} contentFit="cover" />
           )}
           <View style={styles.actions}>
-            <Pressable style={styles.actionBtn} disabled={i === 0} onPress={() => move(i, -1)}>
+            <Pressable style={styles.actionBtn} disabled={disabled || i === 0} onPress={() => move(i, -1)}>
               <Text style={[styles.actionText, i === 0 && styles.actionTextDisabled]}>▲</Text>
             </Pressable>
-            <Pressable style={styles.actionBtn} disabled={i === images.length - 1} onPress={() => move(i, 1)}>
+            <Pressable style={styles.actionBtn} disabled={disabled || i === images.length - 1} onPress={() => move(i, 1)}>
               <Text style={[styles.actionText, i === images.length - 1 && styles.actionTextDisabled]}>▼</Text>
             </Pressable>
-            <Pressable style={styles.removeBtn} onPress={() => remove(i)}>
+            <Pressable style={styles.removeBtn} disabled={disabled} onPress={() => remove(i)}>
               <Text style={styles.removeText}>حذف</Text>
             </Pressable>
           </View>
         </View>
       ))}
-      <Pressable style={styles.addBtn} onPress={addMedia} disabled={uploading}>
+      <Pressable style={styles.addBtn} onPress={addMedia} disabled={disabled || uploading}>
         <Text style={styles.addText}>{uploading ? "بيترفع..." : "+ إضافة صورة أو فيديو"}</Text>
       </Pressable>
       <Text style={styles.limitHint}>الصور لحد 5 ميجا · الفيديو لحد 50 ميجا (MP4 / WebM / MOV)</Text>

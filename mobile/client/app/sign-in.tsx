@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -300,10 +299,14 @@ export default function SignIn() {
           </Pressable>
         </View>
       )}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.flex}
-      >
+      {/* `behavior="padding"` on ANDROID too — see app/chat/[leadId].tsx and
+          app/forgot-password.tsx for the full reasoning: this app is
+          edge-to-edge (android/gradle.properties' `edgeToEdgeEnabled=true`),
+          so the window no longer resizes for the IME and the Activity's
+          `windowSoftInputMode="adjustResize"` can no longer lift a field on
+          its own. Without this, tapping the email field on Android leaves the
+          keyboard covering the password field and the submit button. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             <Logo size={56} />

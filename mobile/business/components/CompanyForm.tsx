@@ -128,7 +128,11 @@ export default function CompanyForm({
       />
 
       <Field label="معرض الصور والفيديو">
-        <GalleryManager images={value.gallery} onChange={(v) => set("gallery", v)} />
+        <GalleryManager
+          images={value.gallery}
+          onChange={(v) => set("gallery", v)}
+          upload={(file) => uploadAdminImage("gallery", file)}
+        />
       </Field>
 
       <TagList label="الخدمات المعروضة" values={value.services} onChange={(v) => set("services", v)} />

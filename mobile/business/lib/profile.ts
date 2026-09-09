@@ -49,12 +49,19 @@ export function fetchProfile(): Promise<ProfileResponse> {
 
 /**
  * The fields a provider may edit at all — api's changeRequests.service.ts
- * EDITABLE_FIELDS for the COMPANY entity, mirrored here. Deliberately a
- * SUBSET is exposed on this screen (tagline, about, phone, whatsapp, email,
- * location, responseTime): logo/cover/gallery need the upload flow and
- * name/nameAr/yearsExperience/badges/metaTitle/metaDescription are lower-
- * value on a phone. Anything not sent here is simply not editable from this
- * screen yet — not silently dropped, just not built.
+ * EDITABLE_FIELDS for the COMPANY entity, mirrored here. Still a SUBSET:
+ * name/nameAr/yearsExperience/badges/metaTitle/metaDescription are lower-value
+ * on a phone, and logo/cover are held back for a reason that is not laziness —
+ * `imageRef` (validation/shared.ts) has no representation for "no image", so a
+ * MediaPicker's Remove would submit `""` and come back a 400. Replacing them
+ * needs a picker that cannot clear; that is its own change.
+ *
+ * `gallery` IS here. It was the gap that made the app unusable for the job it
+ * exists for: a provider photographs their work ON THE PHONE, and the only
+ * surface that could put those photos on their profile was the website.
+ * "معرض الأعمال" (`/projects`) is a different thing entirely — titled portfolio
+ * entries with one image each, reviewed one by one — so the app looked like it
+ * already covered this and did not.
  */
 export interface CompanyEditableFields {
   tagline?: string;
@@ -64,6 +71,8 @@ export interface CompanyEditableFields {
   email?: string;
   location?: string;
   responseTime?: string;
+  /** Ordered — the public profile renders it in exactly this sequence. */
+  gallery?: string[];
 }
 
 /** POST /provider/change-requests — files (or merges into an existing

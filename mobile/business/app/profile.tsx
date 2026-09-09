@@ -6,12 +6,20 @@ import type { ApiCompany } from "@alassema/core";
 import { colors, type } from "@alassema/core";
 import { ApiError, useRefreshOnFocus } from "@alassema/mobile-shared";
 import { fetchProfile, submitProfileChange, type ApiChangeRequest, type CompanyEditableFields } from "../lib/profile";
+import { uploadProviderMedia } from "../lib/providerUpload";
 import Button from "../components/Button";
+import GalleryManager from "../components/GalleryManager";
 import TextField from "../components/TextField";
 import PendingChangeBanner from "../components/PendingChangeBanner";
 import CompanySectionNav from "../components/CompanySectionNav";
+import SectionHeader from "../components/SectionHeader";
 import { ListSkeleton, ErrorCard } from "../components/ListStates";
 import FormScroll from "../components/FormScroll";
+
+/** The text half of CompanyEditableFields — `gallery` is a list and is
+ *  compared separately in changedFields(), since `!==` on two arrays only ever
+ *  asks whether they are the same object. */
+const TEXT_KEYS = ["tagline", "about", "phone", "whatsapp", "email", "location", "responseTime"] as const;
 
 export default function Profile() {
   const [company, setCompany] = useState<ApiCompany | null>(null);
@@ -38,6 +46,7 @@ export default function Profile() {
         email: profile.contact.email ?? "",
         location: profile.company.location,
         responseTime: profile.company.responseTime,
+        gallery: profile.company.gallery ?? [],
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "تعذّر تحميل بيانات الشركة. جرّب تاني.");
@@ -57,7 +66,7 @@ export default function Profile() {
   // change is required") and avoids re-filing the same value as a no-op edit.
   function changedFields(): CompanyEditableFields {
     if (!company || !contact) return {};
-    const original: Record<string, string> = {
+    const original: Record<(typeof TEXT_KEYS)[number], string> = {
       tagline: company.tagline,
       about: company.about,
       phone: company.phone,
@@ -67,10 +76,20 @@ export default function Profile() {
       responseTime: company.responseTime,
     };
     const out: CompanyEditableFields = {};
-    (Object.keys(fields) as (keyof CompanyEditableFields)[]).forEach((key) => {
+    TEXT_KEYS.forEach((key) => {
       const value = fields[key] ?? "";
       if (value !== (original[key] ?? "")) out[key] = value;
     });
+
+    // Element-wise, and order-sensitive on purpose: reordering the gallery
+    // changes no member of it, only the sequence the profile renders them in,
+    // and that reorder is exactly the edit a provider comes here to make.
+    const gallery = fields.gallery ?? [];
+    const originalGallery = company.gallery ?? [];
+    const galleryChanged =
+      gallery.length !== originalGallery.length || gallery.some((url, i) => url !== originalGallery[i]);
+    if (galleryChanged) out.gallery = gallery;
+
     return out;
   }
 
@@ -131,6 +150,22 @@ export default function Profile() {
               numberOfLines={4}
               style={styles.textArea}
             />
+            {/* The company's own photo/video gallery — NOT "معرض الأعمال" in
+                the nav above, which is the titled project portfolio. Both are
+                called a معرض in Arabic and they are two different records, so
+                the hint under the title says which one this is. */}
+            <SectionHeader title="معرض الصور والفيديو" />
+            <Text style={styles.sectionHint}>
+              دي الصور والفيديوهات اللي بتظهر في صفحة شركتك. الترتيب هنا هو نفس ترتيب العرض، وأي تعديل بيروح
+              للمراجعة زي باقي البيانات.
+            </Text>
+            <GalleryManager
+              images={fields.gallery ?? []}
+              onChange={(gallery) => setFields((f) => ({ ...f, gallery }))}
+              upload={(file) => uploadProviderMedia("gallery", file)}
+              disabled={submitting}
+            />
+
             <TextField label="رقم الهاتف" value={fields.phone ?? ""} onChangeText={(v) => setFields((f) => ({ ...f, phone: v }))} keyboardType="phone-pad" />
             <TextField label="واتساب" value={fields.whatsapp ?? ""} onChangeText={(v) => setFields((f) => ({ ...f, whatsapp: v }))} keyboardType="phone-pad" />
             <TextField label="البريد الإلكتروني" value={fields.email ?? ""} onChangeText={(v) => setFields((f) => ({ ...f, email: v }))} keyboardType="email-address" autoCapitalize="none" />
@@ -161,6 +196,12 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
   },
   textArea: { minHeight: 90, textAlignVertical: "top" },
+  sectionHint: {
+    fontSize: type.caption.fontSize,
+    fontFamily: "Cairo_400Regular",
+    color: colors.onSurfaceVariant,
+    marginTop: -8,
+  },
   submit: { marginTop: 4 },
   noChangesHint: {
     fontSize: type.caption.fontSize,

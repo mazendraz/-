@@ -18,9 +18,29 @@ export const dynamic = "force-dynamic";
 // MAX_TRACKED_WINDOW_MS (1h) or the sweeper would forget entries mid-window.
 const UPLOAD_RATE_LIMIT = { limit: 60, windowMs: 15 * 60_000 };
 
-// POST /api/provider/upload (multipart: file) → { url }
-// Providers can upload images for their portfolio projects only; the bucket is
-// forced to "projects" regardless of any client-supplied value.
+// Which buckets a provider may target. Every field behind them is one a
+// provider can already edit for their OWN company through the change-request
+// queue (changeRequests.service.ts EDITABLE_FIELDS: logo, cover, gallery) or
+// own outright (project.img) — so this grants no reach the account did not
+// have, it only stores the bytes in the folder that matches the field.
+const PROVIDER_BUCKETS = new Set(["projects", "gallery", "logos", "covers"]);
+
+// The default is "projects" because that is what this route did unconditionally
+// before, and mobile/business's uploadProjectImage still sends no bucket at all.
+const DEFAULT_BUCKET = "projects";
+
+// POST /api/provider/upload (multipart: file, bucket?) → { url }
+//
+// `bucket` used to be ignored and forced to "projects". That silently broke two
+// things the product otherwise offers:
+//   • the website's provider GalleryManager has always POSTed bucket="gallery"
+//     here, so every provider gallery upload has been landing in the projects
+//     folder instead;
+//   • upload.service.ts allows video in the "gallery" bucket ONLY, so a provider
+//     adding a clip to their gallery got "Video is only supported in the
+//     gallery" — for an upload that was, in fact, for the gallery.
+// Honouring a value from a fixed allowlist fixes both without widening what a
+// provider can reach: an unknown bucket is still rejected, not passed through.
 export const POST = providerOnly(async (request: NextRequest, _ctx, user) => {
   const rl = await rateLimit(`upload:${user.id}`, UPLOAD_RATE_LIMIT);
   if (!rl.ok) {
@@ -30,6 +50,7 @@ export const POST = providerOnly(async (request: NextRequest, _ctx, user) => {
 
   const form = await request.formData();
   const file = form.get("file");
+  const requested = String(form.get("bucket") ?? "") || DEFAULT_BUCKET;
 
   if (!(file instanceof File)) {
     throw new ValidationError("Missing file", {
@@ -37,5 +58,11 @@ export const POST = providerOnly(async (request: NextRequest, _ctx, user) => {
     });
   }
 
-  return ok(await uploadService.upload(file, "projects"));
+  if (!PROVIDER_BUCKETS.has(requested)) {
+    throw new ValidationError("Unknown bucket", {
+      bucket: [`"${requested}" is not a bucket providers can upload to`],
+    });
+  }
+
+  return ok(await uploadService.upload(file, requested));
 });
