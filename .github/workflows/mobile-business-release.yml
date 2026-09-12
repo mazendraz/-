@@ -1,0 +1,126 @@
+# بناء ورفع تطبيق البروفيدر (mobile/business) على المتاجر عن طريق EAS.
+# بيتشغّل يدويًا من تبويب Actions ← "Run workflow".
+#
+# الأسرار المطلوبة (Settings ← Secrets and variables ← Actions):
+#   EXPO_TOKEN                        — Access token من expo.dev/settings/access-tokens
+#   ANDROID_KEYSTORE_BASE64           — محتوى mobile/business/ci/upload-keystore.jks.base64
+#   ANDROID_KEYSTORE_PASSWORD         — الباسورد اللي في mobile/business/ci/KEYSTORE-PASSWORD.txt
+#   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON  — محتوى google-play-service-account.json (للرفع على Play فقط)
+#   ASC_API_KEY_BASE64                — base64 لملف AuthKey_69TH75M6BG.p8 (للرفع على App Store فقط)
+
+name: Mobile Business — Build & Submit
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "المنصة"
+        type: choice
+        options: [android, ios]
+        default: android
+      profile:
+        description: "بروفايل البناء"
+        type: choice
+        options: [production, preview]
+        default: production
+      submit:
+        description: "ارفع على المتجر بعد البناء"
+        type: boolean
+        default: false
+
+concurrency:
+  group: mobile-business-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: ${{ inputs.platform }} · ${{ inputs.profile }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: mobile/business
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies (monorepo root)
+        working-directory: .
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Write Android signing credentials
+        if: inputs.platform == 'android'
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_B64}" ] || [ -z "${KEYSTORE_PW}" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 أو ANDROID_KEYSTORE_PASSWORD مش متظبطين في أسرار الريبو"
+            exit 1
+          fi
+          mkdir -p ci
+          printf '%s' "${KEYSTORE_B64}" | base64 -d > ci/upload-keystore.jks
+          node -e '
+            const fs = require("fs");
+            const pw = process.env.KEYSTORE_PW;
+            fs.writeFileSync("credentials.json", JSON.stringify({
+              android: { keystore: {
+                keystorePath: "ci/upload-keystore.jks",
+                keystorePassword: pw,
+                keyAlias: "upload",
+                keyPassword: pw,
+              } }
+            }, null, 2) + "\n");
+          '
+          keytool -list -keystore ci/upload-keystore.jks -storepass "${KEYSTORE_PW}" >/dev/null
+          echo "keystore ok"
+
+      - name: Build (EAS)
+        run: eas build --platform ${{ inputs.platform }} --profile ${{ inputs.profile }} --non-interactive --wait
+
+      - name: Write store submit credentials
+        if: ${{ inputs.submit }}
+        env:
+          PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          ASC_KEY_B64: ${{ secrets.ASC_API_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          mkdir -p ci
+          if [ "${{ inputs.platform }}" = "android" ]; then
+            if [ -z "${PLAY_JSON}" ]; then
+              echo "::error::GOOGLE_PLAY_SERVICE_ACCOUNT_JSON مش متظبط"
+              exit 1
+            fi
+            printf '%s' "${PLAY_JSON}" > ci/google-play-service-account.json
+          else
+            if [ -z "${ASC_KEY_B64}" ]; then
+              echo "::error::ASC_API_KEY_BASE64 مش متظبط"
+              exit 1
+            fi
+            printf '%s' "${ASC_KEY_B64}" | base64 -d > ci/AuthKey_69TH75M6BG.p8
+          fi
+
+      - name: Submit to store
+        if: ${{ inputs.submit }}
+        run: eas submit --platform ${{ inputs.platform }} --profile production --latest --non-interactive
+
+      - name: Clean up secrets from runner
+        if: always()
+        run: rm -rf ci credentials.json

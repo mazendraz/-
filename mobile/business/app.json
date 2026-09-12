@@ -67,6 +67,9 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "owner": "mazendraz"
+    "owner": "mazendraz",
+    "updates": {
+      "url": "https://u.expo.dev/9f9db7b8-98a0-43d9-b9a4-338ae0e7a4c2"
+    }
   }
 }

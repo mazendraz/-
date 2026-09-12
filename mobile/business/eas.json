@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 13.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -21,6 +21,10 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "android": {
+        "credentialsSource": "local",
+        "buildType": "apk"
       }
     },
     "production": {
@@ -29,6 +33,24 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://al-assema.tech/api/v1",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
+      "android": {
+        "credentialsSource": "local"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./ci/google-play-service-account.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      },
+      "ios": {
+        "appleTeamId": "SS923F3FW8",
+        "ascApiKeyId": "69TH75M6BG",
+        "ascApiKeyIssuerId": "26d81207-dbbb-42ad-8cd0-f2c22ca04538",
+        "ascApiKeyPath": "./ci/AuthKey_69TH75M6BG.p8"
       }
     }
   }

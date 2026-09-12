@@ -46,3 +46,7 @@ yarn-error.*
 
 # Local env — see .env.example
 .env
+
+# CI signing material — generated locally / in CI, never committed
+/ci/
+credentials.json

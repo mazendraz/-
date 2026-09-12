@@ -550,8 +550,14 @@ npm run bundle:check
 
 ## Build & release
 
-**Phase 14 has not been done.** There is no `eas.json` in this directory yet and no EAS
-project. What phase 14 specifies:
+**Phase 14 is in progress.** `eas.json` and the EAS project
+(`9f9db7b8-98a0-43d9-b9a4-338ae0e7a4c2`, slug `alassema-business`) now exist, and builds
+run from CI — see [`.github/workflows/mobile-business-release.yml`](../../.github/workflows/mobile-business-release.yml)
+(manual `workflow_dispatch`: pick platform, profile, and whether to submit). Android is
+signed from a **local** upload keystore held in CI secrets (`ANDROID_KEYSTORE_BASE64` /
+`ANDROID_KEYSTORE_PASSWORD`); the backup lives outside the repo alongside the other
+credentials. `appVersionSource` is `remote`, so EAS owns `versionCode`/`buildNumber` —
+do not hand-edit them in `app.json`. What phase 14 specifies:
 
 | Item | Client app (shipped) | Business app |
 |------|---------------------|--------------|
