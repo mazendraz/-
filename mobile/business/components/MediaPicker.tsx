@@ -37,6 +37,20 @@ export type MediaShape = "logo" | "cover";
  * and providers to `/provider/upload`, and admin/upload 403s for a provider.
  * Passing the function in is what lets one component serve both without
  * knowing which role is using it.
+ *
+ * ── `clearable` ────────────────────────────────────────────────────────────
+ * Remove used to be unconditional, and for a Company's logo and cover it was a
+ * button that could not work: both columns are non-null (schema.prisma) and
+ * validated with `imageRef` (validation/shared.ts), which accepts a URL, a data
+ * URL, or a site-relative path and nothing else. So Remove wrote `""`, and the
+ * save came back a 400 reading "Must be a URL, data URL, or site-relative
+ * path" — for a field the person had deliberately emptied. (The website's own
+ * provider ImagePicker still has this; same `onChange("")`.)
+ *
+ * There is no "no logo" state to reach, so the honest fix is not to offer the
+ * door: `clearable={false}` leaves Replace, which is what changing a logo
+ * actually means. The prop stays because not every image field is required —
+ * a Category's cover is `String?` and can genuinely be cleared.
  */
 export default function MediaPicker({
   label,
@@ -45,6 +59,8 @@ export default function MediaPicker({
   shape,
   upload,
   disabled,
+  clearable = true,
+  hint,
 }: {
   label: string;
   value: string;
@@ -52,6 +68,11 @@ export default function MediaPicker({
   shape: MediaShape;
   upload: (file: { uri: string; name: string; type: string }) => Promise<string>;
   disabled?: boolean;
+  /** False for a column the API requires — see the note above. */
+  clearable?: boolean;
+  /** Overrides the shape's default recommended-dimensions caption, for a use
+   *  of "logo" (square) that isn't actually logo-sized — a favicon, say. */
+  hint?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -155,15 +176,17 @@ export default function MediaPicker({
             <Icon name="sync" size={16} color={colors.onSurface} />
             <Text style={styles.actionText}>استبدال</Text>
           </Pressable>
-          <Pressable
-            onPress={() => onChange("")}
-            disabled={disabled}
-            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
-            accessibilityRole="button"
-          >
-            <Icon name="delete" size={16} color={colors.error} />
-            <Text style={[styles.actionText, styles.actionTextDanger]}>إزالة</Text>
-          </Pressable>
+          {clearable ? (
+            <Pressable
+              onPress={() => onChange("")}
+              disabled={disabled}
+              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+              accessibilityRole="button"
+            >
+              <Icon name="delete" size={16} color={colors.error} />
+              <Text style={[styles.actionText, styles.actionTextDanger]}>إزالة</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -180,9 +203,10 @@ export default function MediaPicker({
       ) : null}
 
       <Text style={styles.recommended}>
-        {shape === "logo"
-          ? "المقاس المناسب: 512×512 بكسل، مربع · لحد 5 ميجا"
-          : "المقاس المناسب: 1200×400 بكسل · لحد 5 ميجا"}
+        {hint ??
+          (shape === "logo"
+            ? "المقاس المناسب: 512×512 بكسل، مربع · لحد 5 ميجا"
+            : "المقاس المناسب: 1200×400 بكسل · لحد 5 ميجا")}
       </Text>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -202,8 +226,14 @@ export default function MediaPicker({
             keyboardType="url"
           />
           <Pressable
+            // An empty draft is the same `""` that Remove is withheld for on a
+            // required field — applying it would swap a working image for a
+            // value the API rejects. Nothing to apply, so nothing happens.
+            disabled={disabled || !urlDraft.trim()}
             onPress={() => {
-              onChange(urlDraft.trim());
+              const next = urlDraft.trim();
+              if (!next) return;
+              onChange(next);
               setUrlDraft("");
               setShowUrl(false);
             }}

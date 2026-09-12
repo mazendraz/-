@@ -21,6 +21,7 @@ const BLANK: CategoryInput = {
   icon: "",
   isActive: true,
   pricingMode: "QUOTE_ONLY",
+  heroOrder: null,
 };
 
 export default function CategoryEditor() {

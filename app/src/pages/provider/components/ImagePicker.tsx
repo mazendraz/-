@@ -11,9 +11,22 @@ import Icon from "../../../components/Icon";
  * explicit Upload/Replace/Remove controls that work on touch (not hover-only),
  * and a recommended-dimensions caption. Same underlying `uploadImage()`
  * primitive, just aimed at "/provider/upload" instead of the admin endpoint.
+ *
+ * ── `clearable` ────────────────────────────────────────────────────────────
+ * Remove used to be unconditional, and on a Company's logo and cover it was a
+ * button that could not work. Both columns are non-null (schema.prisma) and
+ * validated with `imageRef` (api validation/shared.ts), which takes a URL, a
+ * data URL, or a site-relative path and nothing else — so Remove wrote `""`,
+ * and the change request came back a 400 reading "Must be a URL, data URL, or
+ * site-relative path" for a field the provider had just deliberately emptied.
+ *
+ * There is no "company with no logo" state to reach, so the fix is not to
+ * offer the door. The prop exists rather than the button being deleted because
+ * an Offering's `image` IS nullable (validation/offerings.ts `nullish()`), and
+ * OfferingsEditor's Remove is a real, working control.
  */
 export default function ImagePicker({
-  label, value, onChange, shape, bucket, maxDim, disabled,
+  label, value, onChange, shape, bucket, maxDim, disabled, clearable = true,
 }: {
   label: string;
   value: string;
@@ -22,6 +35,8 @@ export default function ImagePicker({
   bucket: UploadBucket;
   maxDim: number;
   disabled?: boolean;
+  /** False for a column the API requires — see the note above. */
+  clearable?: boolean;
 }) {
   const { locale } = useLocale();
   const ref = useRef<HTMLInputElement>(null);
@@ -53,7 +68,12 @@ export default function ImagePicker({
   }
 
   function applyUrl() {
-    onChange(urlDraft.trim());
+    // An empty draft is the same `""` that Remove is withheld for on a required
+    // field — applying it would swap a working image for a value the API
+    // rejects. Nothing to apply, so nothing happens.
+    const next = urlDraft.trim();
+    if (!next) return;
+    onChange(next);
     setUrlDraft("");
     setShowUrl(false);
   }
@@ -115,17 +135,19 @@ export default function ImagePicker({
               <Icon name="sync" className="text-label" />
               {shape !== "logo" && t(locale, "prov_img_replace")}
             </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); if (!disabled) onChange(""); }}
-              disabled={disabled}
-              aria-label={t(locale, "prov_img_remove")}
-              title={shape === "logo" ? t(locale, "prov_img_remove") : undefined}
-              className="flex items-center gap-1 bg-white/95 text-error px-2.5 py-1.5 rounded-lg text-caption font-bold hover:bg-white transition-colors touch-press"
-            >
-              <Icon name="delete" className="text-label" />
-              {shape !== "logo" && t(locale, "prov_img_remove")}
-            </button>
+            {clearable && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); if (!disabled) onChange(""); }}
+                disabled={disabled}
+                aria-label={t(locale, "prov_img_remove")}
+                title={shape === "logo" ? t(locale, "prov_img_remove") : undefined}
+                className="flex items-center gap-1 bg-white/95 text-error px-2.5 py-1.5 rounded-lg text-caption font-bold hover:bg-white transition-colors touch-press"
+              >
+                <Icon name="delete" className="text-label" />
+                {shape !== "logo" && t(locale, "prov_img_remove")}
+              </button>
+            )}
           </div>
         )}
       </div>

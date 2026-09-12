@@ -248,14 +248,19 @@ export default function ProfileEditor() {
         </SectionBlock>
 
         <SectionBlock icon="image" title={t(locale, "prov_profile_section_images_title")} desc={t(locale, "prov_profile_section_images_desc")}>
+          {/* `clearable={false}`: both columns are required (schema.prisma,
+              and `imageRef` in the API's validation/shared.ts), so Remove
+              submitted "" and the change request came back a 400. See
+              ImagePicker's own note — an Offering's image IS nullable and
+              keeps its Remove. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <ImagePicker
               label={t(locale, "prov_field_logo")} shape="logo" bucket="logos" maxDim={512} disabled={saving}
-              value={String(form.logo ?? "")} onChange={(v) => set("logo", v)}
+              value={String(form.logo ?? "")} onChange={(v) => set("logo", v)} clearable={false}
             />
             <ImagePicker
               label={t(locale, "prov_field_cover")} shape="cover" bucket="covers" maxDim={1600} disabled={saving}
-              value={String(form.cover ?? "")} onChange={(v) => set("cover", v)}
+              value={String(form.cover ?? "")} onChange={(v) => set("cover", v)} clearable={false}
             />
           </div>
         </SectionBlock>

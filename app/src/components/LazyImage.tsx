@@ -13,7 +13,8 @@ interface Props extends React.ImgHTMLAttributes<HTMLImageElement> {
  * All off-screen images load lazily. Pass `eager` for hero / LCP images.
  */
 /**
- * How long a still-loading image is given before it is treated as failed.
+ * How long a still-loading image is given, once it is near the viewport and the
+ * browser has begun fetching it, before it is treated as failed.
  *
  * `onLoad` and `onError` were the ONLY two exits from the "loading" state, and a
  * response that stalls mid-body fires neither — so the shimmer ran forever. On a
@@ -36,6 +37,7 @@ export default function LazyImage({
 }: Props) {
   const [state, setState] = useState<"loading" | "loaded" | "error">("loading");
   const imgRef = useRef<HTMLImageElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Reset on a NEW src. Without this the component inherited the previous
@@ -43,16 +45,54 @@ export default function LazyImage({
     // popped in with no placeholder) or kept "error" (so a perfectly good image
     // rendered as a failure until its own onLoad happened to fire).
     const img = imgRef.current;
-    const alreadyDecoded = Boolean(img?.complete && img.naturalHeight !== 0);
+    if (!img) return;
+    const alreadyDecoded = img.complete && img.naturalHeight !== 0;
     setState(alreadyDecoded ? "loaded" : "loading");
     if (alreadyDecoded) return;
 
-    const timer = window.setTimeout(() => setState("error"), IMAGE_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [src]);
+    let timer = 0;
+    // Ask the element, don't assume. `onLoad` fires once and does not clear this
+    // timer, so the timer used to fire afterwards and overwrite "loaded" with
+    // "error" — every image on the page went grey 15s in, having loaded and
+    // rendered perfectly, with no second `onLoad` left to bring it back. A cache
+    // hit that completes between render and this callback lands here too.
+    const settle = () => {
+      setState(img.complete && img.naturalHeight !== 0 ? "loaded" : "error");
+    };
+    // The clock may only start once the browser has a reason to fetch the image.
+    // It used to start on mount, but a `loading="lazy"` image is not requested
+    // until it nears the viewport, so cards far down the page were timed out
+    // before their request was ever sent.
+    const arm = () => {
+      if (!timer) timer = window.setTimeout(settle, IMAGE_TIMEOUT_MS);
+    };
+
+    if (eager || typeof IntersectionObserver === "undefined") {
+      arm();
+      return () => window.clearTimeout(timer);
+    }
+
+    // Fires well after the browser's own lazy-load threshold, so the image has
+    // already been in flight for a while by the time the clock starts. The
+    // wrapper is watched rather than the <img>, which is still 0x0 in callers
+    // that size it only through the loaded bitmap.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        observer.disconnect();
+        arm();
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(wrapperRef.current ?? img);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, [src, eager]);
 
   return (
-    <div className={`relative overflow-hidden ${wrapperClassName}`} style={style}>
+    <div ref={wrapperRef} className={`relative overflow-hidden ${wrapperClassName}`} style={style}>
       {/* Skeleton shown while loading */}
       {state === "loading" && (
         <div className="absolute inset-0 skeleton-shimmer" aria-hidden />

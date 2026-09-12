@@ -50,6 +50,34 @@ export default function CategoryForm({
         <Switch value={value.isActive} onValueChange={(v) => set("isActive", v)} />
       </View>
 
+      {/* Homepage hero curation — same idea as the website's CategoryEditor:
+          an order, not just a bool, because the ask was to fix WHICH position
+          a category shows in among the others, not only whether it does. */}
+      <View style={styles.heroBox}>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.label}>إظهار في هيرو الصفحة الرئيسية</Text>
+            <Text style={styles.hint}>اعرض الفئة دي في هيرو الرئيسية، وحدد ترتيبها بين الباقي</Text>
+          </View>
+          <Switch
+            value={value.heroOrder != null}
+            onValueChange={(on) => set("heroOrder", on ? value.heroOrder ?? 0 : null)}
+          />
+        </View>
+        {value.heroOrder != null && (
+          <View style={styles.heroOrderRow}>
+            <Text style={styles.label}>الترتيب</Text>
+            <TextInput
+              style={[styles.input, styles.heroOrderInput]}
+              value={String(value.heroOrder)}
+              onChangeText={(v) => set("heroOrder", Number(v.replace(/[^0-9-]/g, "")) || 0)}
+              keyboardType="number-pad"
+              placeholderTextColor={colors.onSurfaceVariant}
+            />
+          </View>
+        )}
+      </View>
+
       <Field label="عنوان SEO (اختياري)">
         <TextInput style={styles.input} value={value.metaTitle ?? ""} onChangeText={(v) => set("metaTitle", v || null)} placeholderTextColor={colors.onSurfaceVariant} />
       </Field>
@@ -77,5 +105,9 @@ const styles = StyleSheet.create({
     textAlign: textStart,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
-  switchRow: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12 },
+  switchRow: { flexDirection: rowStart, alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surfaceContainer, borderRadius: 12, padding: 12, gap: 12 },
+  heroBox: { backgroundColor: colors.surfaceContainer, borderRadius: 12 },
+  hint: { fontSize: type.caption.fontSize, fontFamily: "Cairo_400Regular", color: colors.onSurfaceVariant, textAlign: textStart, marginTop: 2 },
+  heroOrderRow: { flexDirection: rowStart, alignItems: "center", gap: 10, paddingHorizontal: 12, paddingBottom: 12 },
+  heroOrderInput: { width: 72, textAlign: "center", paddingVertical: 8 },
 });

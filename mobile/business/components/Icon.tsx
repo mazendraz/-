@@ -78,6 +78,7 @@ const MATERIAL_ICON_NAME = {
   // as a blank box with no error.
   close: "close",                       // remove a chip / dismiss
   add: "add",                           // add an option from a picker list
+  remove: "remove",                     // the logo-scale stepper's decrement
   cloud_upload: "cloud-upload",         // the empty upload dropzone
   upload: "upload",                     // the "choose a file" action
   sync: "sync",                         // replace an already-uploaded file

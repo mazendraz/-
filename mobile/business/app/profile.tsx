@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, Stack } from "expo-router";
@@ -9,6 +9,7 @@ import { fetchProfile, submitProfileChange, type ApiChangeRequest, type CompanyE
 import { uploadProviderMedia } from "../lib/providerUpload";
 import Button from "../components/Button";
 import GalleryManager from "../components/GalleryManager";
+import MediaPicker from "../components/MediaPicker";
 import TextField from "../components/TextField";
 import PendingChangeBanner from "../components/PendingChangeBanner";
 import CompanySectionNav from "../components/CompanySectionNav";
@@ -19,7 +20,7 @@ import FormScroll from "../components/FormScroll";
 /** The text half of CompanyEditableFields — `gallery` is a list and is
  *  compared separately in changedFields(), since `!==` on two arrays only ever
  *  asks whether they are the same object. */
-const TEXT_KEYS = ["tagline", "about", "phone", "whatsapp", "email", "location", "responseTime"] as const;
+const TEXT_KEYS = ["tagline", "about", "phone", "whatsapp", "email", "location", "responseTime", "logo", "cover"] as const;
 
 export default function Profile() {
   const [company, setCompany] = useState<ApiCompany | null>(null);
@@ -31,6 +32,10 @@ export default function Profile() {
   const [fields, setFields] = useState<CompanyEditableFields>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Kept in a ref because load() is a stable useCallback that must still be
+  // able to ask "is anything unsaved right now?" — see its use below.
+  const dirty = useRef(false);
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setError(null);
     try {
@@ -38,6 +43,14 @@ export default function Profile() {
       setCompany(profile.company);
       setContact(profile.contact);
       setPending(profile.pending);
+      // A SILENT refresh must not overwrite unsaved edits. useRefreshOnFocus
+      // fires one whenever the app returns to the foreground — and adding a
+      // gallery photo means leaving the app for the system picker, so coming
+      // back with the new image staged is exactly the moment this runs. It
+      // used to reset the form and the picked media was simply gone.
+      // `company` above is still refreshed, so the comparison in
+      // changedFields() is always against the current server state.
+      if (silent && dirty.current) return;
       setFields({
         tagline: profile.company.tagline,
         about: profile.company.about,
@@ -46,6 +59,8 @@ export default function Profile() {
         email: profile.contact.email ?? "",
         location: profile.company.location,
         responseTime: profile.company.responseTime,
+        logo: profile.company.logo,
+        cover: profile.company.cover,
         gallery: profile.company.gallery ?? [],
       });
     } catch (err) {
@@ -74,6 +89,8 @@ export default function Profile() {
       email: contact.email ?? "",
       location: company.location,
       responseTime: company.responseTime,
+      logo: company.logo,
+      cover: company.cover,
     };
     const out: CompanyEditableFields = {};
     TEXT_KEYS.forEach((key) => {
@@ -95,6 +112,7 @@ export default function Profile() {
 
   const changes = changedFields();
   const hasChanges = Object.keys(changes).length > 0;
+  dirty.current = hasChanges;
 
   async function handleSubmit() {
     if (!company || !hasChanges || submitting) return;
@@ -150,6 +168,35 @@ export default function Profile() {
               numberOfLines={4}
               style={styles.textArea}
             />
+            {/* ── Images ───────────────────────────────────────────────────
+                The whole reason this screen needed a second pass: a provider
+                shoots their logo, their cover and their work on the phone, and
+                every one of those had to go through the website to reach the
+                profile.
+
+                No Remove on these two — the columns are required, so `""` is a
+                400 and not an "empty logo" (MediaPicker's `clearable`). The
+                gallery below is a list and CAN be emptied. */}
+            <SectionHeader title="صور الشركة" />
+            <MediaPicker
+              label="اللوجو"
+              shape="logo"
+              value={fields.logo ?? ""}
+              onChange={(v) => setFields((f) => ({ ...f, logo: v }))}
+              upload={(file) => uploadProviderMedia("logos", file)}
+              disabled={submitting}
+              clearable={false}
+            />
+            <MediaPicker
+              label="صورة الغلاف"
+              shape="cover"
+              value={fields.cover ?? ""}
+              onChange={(v) => setFields((f) => ({ ...f, cover: v }))}
+              upload={(file) => uploadProviderMedia("covers", file)}
+              disabled={submitting}
+              clearable={false}
+            />
+
             {/* The company's own photo/video gallery — NOT "معرض الأعمال" in
                 the nav above, which is the titled project portfolio. Both are
                 called a معرض in Arabic and they are two different records, so

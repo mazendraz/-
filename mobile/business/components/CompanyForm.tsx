@@ -111,13 +111,18 @@ export default function CompanyForm({
 
       {/* Real uploaders, not URL boxes. These two fields used to be plain text
           inputs asking for an image URL — unusable on the device that actually
-          holds the picture. */}
+          holds the picture.
+
+          `clearable={false}`: both columns are required (schema.prisma, and
+          `imageRef` in validation/shared.ts), so Remove wrote "" and the save
+          came straight back a 400. See MediaPicker's own note. */}
       <MediaPicker
         label="اللوجو"
         shape="logo"
         value={value.logo}
         onChange={(v) => set("logo", v)}
         upload={(file) => uploadAdminImage("logos", file)}
+        clearable={false}
       />
       <MediaPicker
         label="صورة الغلاف"
@@ -125,6 +130,7 @@ export default function CompanyForm({
         value={value.cover}
         onChange={(v) => set("cover", v)}
         upload={(file) => uploadAdminImage("covers", file)}
+        clearable={false}
       />
 
       <Field label="معرض الصور والفيديو">

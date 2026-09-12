@@ -51,17 +51,19 @@ export function fetchProfile(): Promise<ProfileResponse> {
  * The fields a provider may edit at all — api's changeRequests.service.ts
  * EDITABLE_FIELDS for the COMPANY entity, mirrored here. Still a SUBSET:
  * name/nameAr/yearsExperience/badges/metaTitle/metaDescription are lower-value
- * on a phone, and logo/cover are held back for a reason that is not laziness —
- * `imageRef` (validation/shared.ts) has no representation for "no image", so a
- * MediaPicker's Remove would submit `""` and come back a 400. Replacing them
- * needs a picker that cannot clear; that is its own change.
+ * on a phone and are not offered yet.
  *
- * `gallery` IS here. It was the gap that made the app unusable for the job it
- * exists for: a provider photographs their work ON THE PHONE, and the only
- * surface that could put those photos on their profile was the website.
- * "معرض الأعمال" (`/projects`) is a different thing entirely — titled portfolio
- * entries with one image each, reviewed one by one — so the app looked like it
- * already covered this and did not.
+ * Every image field IS here now — logo, cover and gallery. They were the gap
+ * that made the app unusable for the job it exists for: a provider photographs
+ * their work ON THE PHONE, and the only surface that could put those pictures
+ * on their profile was the website. "معرض الأعمال" (`/projects`) is a different
+ * record entirely — titled portfolio entries with one image each, reviewed one
+ * by one — so the app looked like it already covered this and did not.
+ *
+ * logo/cover carry a constraint gallery does not: both columns are non-null and
+ * validated with `imageRef`, which has no representation for "no image". They
+ * can be REPLACED but never emptied, which is why the screen renders them with
+ * `clearable={false}` (see MediaPicker).
  */
 export interface CompanyEditableFields {
   tagline?: string;
@@ -71,6 +73,10 @@ export interface CompanyEditableFields {
   email?: string;
   location?: string;
   responseTime?: string;
+  /** Never `""` — see the note above. */
+  logo?: string;
+  /** Never `""` — see the note above. */
+  cover?: string;
   /** Ordered — the public profile renders it in exactly this sequence. */
   gallery?: string[];
 }

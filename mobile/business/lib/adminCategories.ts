@@ -15,6 +15,8 @@ export interface CategoryInput {
   metaDescription?: string | null;
   labelAr?: string | null;
   descriptionAr?: string | null;
+  /** Homepage hero curation — null/absent = not featured. See ApiCategory.heroOrder. */
+  heroOrder?: number | null;
 }
 
 export function categoryToInput(c: ApiAdminCategory): CategoryInput {
@@ -29,6 +31,7 @@ export function categoryToInput(c: ApiAdminCategory): CategoryInput {
     metaDescription: c.metaDescription ?? null,
     labelAr: c.labelAr ?? null,
     descriptionAr: c.descriptionAr ?? null,
+    heroOrder: c.heroOrder ?? null,
   };
 }
 
